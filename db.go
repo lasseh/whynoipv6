@@ -170,6 +170,12 @@ func getASNList(order string) []Asn {
 	return s
 }
 
+func getASN(asn int) Asn {
+	var s Asn
+	db.Table("asn").Where("asn = ?", asn).Find(&s)
+	return s
+}
+
 // PercentOf calculate [number1] is what percent of [number2]
 func PercentOf(current int, all int) float64 {
 	percent := (float64(current) * float64(100)) / float64(all)

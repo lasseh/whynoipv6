@@ -14,12 +14,13 @@ type apiResource struct{}
 func (rs apiResource) Routes() chi.Router {
 	r := chi.NewRouter()
 
-	r.Get("/", rs.List)                   // GET / - list all sites
-	r.Get("/country", rs.CountryList)     // GET /country - list top 50 countries without ipv6
-	r.Get("/country/{id}", rs.Country)    // GET /country/:id - list all sites for :country
-	r.Get("/stats", rs.Stats)             // GET /stats - list stats for all
-	r.Get("/stats/{id}", rs.CountryStats) // GET /stats/{id} - lists stats for country
-	r.Get("/search", rs.Search)           // GET /search - search for site on hostname
+	r.Get("/", rs.List)                           // GET / - list all sites
+	r.Get("/country", rs.CountryList)             // GET /country - list top 50 countries without ipv6
+	r.Get("/country/{id}", rs.Country)            // GET /country/:id - list all sites for :country
+	r.Get("/stats/country", rs.CountryStatList)   // GET /stats/country - list stats for all
+	r.Get("/stats/country/{id}", rs.CountryStats) // GET /stats/country/{id} - lists stats for country
+	r.Get("/stats/asn", rs.AsnList)               // GET /stats/asn - list asn
+	r.Get("/stats/asn/{id}", rs.AsnStats)         // GET /stats/asn/{id} - lists stats for asn
 
 	return r
 }
@@ -64,7 +65,7 @@ func (rs apiResource) CountryList(w http.ResponseWriter, r *http.Request) {
 }
 
 // Lists stats for all sites
-func (rs apiResource) Stats(w http.ResponseWriter, r *http.Request) {
+func (rs apiResource) CountryStatList(w http.ResponseWriter, r *http.Request) {
 	s := getStats()
 	render.JSON(w, r, s)
 }
@@ -76,7 +77,19 @@ func (rs apiResource) CountryStats(w http.ResponseWriter, r *http.Request) {
 	render.JSON(w, r, s)
 }
 
-// Search for site by hostname
-func (rs apiResource) Search(w http.ResponseWriter, r *http.Request) {
-	w.Write([]byte("not implemented"))
+//
+func (rs apiResource) AsnList(w http.ResponseWriter, r *http.Request) {
+	s := getASNList("asn")
+	render.JSON(w, r, s)
+}
+
+// Lists stats for country
+func (rs apiResource) AsnStats(w http.ResponseWriter, r *http.Request) {
+	asn := chi.URLParam(r, "id")
+
+	// Convert query params to int
+	a, _ := strconv.Atoi(asn)
+
+	s := getASN(a)
+	render.JSON(w, r, s)
 }
