@@ -26,32 +26,32 @@ type Stats struct {
 	SitesWithNSV6 int     `json:"sites_with_nsv6"`
 	Top1kV6       int     `json:"top_1k_v6"`
 	Top1kNSV6     int     `json:"top_1k_nsv6"`
-	V6Percent     float64 `json:"v6_percent"`
+	V6Percent     float64 `json:"percent_v6"`
 }
 
 // CountryStat gets data from the countries table
 type CountryStat struct {
-	CountryName string
-	CountryCode string
-	Sites       int
-	V6sites     int
-	Percent     float64
+	CountryName string  `json:"countryname"`
+	CountryCode string  `json:"countrycode"`
+	Sites       int     `json:"sites"`
+	V6sites     int     `json:"sites_v6"`
+	Percent     float64 `json:"percent"`
 }
 
 // Country is a map of country codes to country names
 type Country struct {
-	CountryName string
-	CountryCode string
+	CountryName string `json:"countryname"`
+	CountryCode string `json:"countrycode"`
 }
 
 // Asn is a aggregate of sites per as number and how many sites belong to them
 type Asn struct {
-	Asn       int
-	Asname    string
-	CountV4   int
-	CountV6   int
-	PercentV4 float64
-	PercentV6 float64
+	Asn       int     `json:"asn"`
+	Asname    string  `json:"asname"`
+	CountV4   int     `json:"count_v4"`
+	CountV6   int     `json:"count_v6"`
+	PercentV4 float64 `json:"percent_v4"`
+	PercentV6 float64 `json:"percent_v6"`
 }
 
 // getStats returns stats for all sites
