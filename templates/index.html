@@ -6,13 +6,15 @@
 {{ template "header" }}
 
 <body>
-{{ template "sidebar" }}
+    {{ template "sidebar" }}
 
     <main class="container">
         <h1><a href="/" class="noline">Why No IPv6?</a></h1>
         <p>
-            It’s currently 2018 and it has been nearly 25 years since the work began on the IPv6 protocol specifications. We have come
-            a long way since then, surpassing milestones like allocating the last, big IPV4 address blocks in 2011 to IEFT
+            It’s currently 2019 and it has been nearly 25 years since the work began on the IPv6 protocol
+            specifications. We have come
+            a long way since then, surpassing milestones like allocating the last, big IPV4 address blocks in 2011 to
+            IEFT
             declaring IPv6 as an Internet Standard in 2017. Sadly, only a fraction of the top one million websites today
             is IPv6-compliant.
         </p>
@@ -25,239 +27,410 @@
         <hr />
         <h2>Alexa Top 1 Million Websites - tagged by IPv6-compatibility </h2>
         <p>
-            As a part of this shaming-strategy, we supply all interested parties with an updated list over Alexa’s top 1 million websites
+            As a part of this shaming-strategy, we supply all interested parties with an updated list over Alexa’s top 1
+            million websites
             and their corresponding (lack of) IPv6 support clearly stated.
             <br>
-            Each of the listed websites (top 100) lack an AAAA-record. In addition the nameserver-support for IPv6 is displayed.
+            Each of the listed websites (top 100) lack an AAAA-record. In addition the nameserver-support for IPv6 is
+            displayed.
         </p>
         <hr />
 
         <h2>Some statistics</h2>
         <p>
-            Out of the top 1000 Alexa sites, only {{ .Stats.Top1kV6 }} has IPv6 enabled, and {{ .Stats.Top1kNSV6 }} of them use nameservers with IPv6 enabled.
+            Out of the top 1000 Alexa sites, only {{ .Stats.Top1kV6 }} has IPv6 enabled, and {{ .Stats.Top1kNSV6 }} of
+            them use nameservers with IPv6 enabled.
             <br>
             Of the total {{ .Stats.Sites }} sites only {{ .Stats.V6Percent }}% of them have IPv6. This is a huge shame!
         </p>
         <hr />
-            <div class="row justify-content-md-center">
-                <div class="col-md-auto">
+        <div class="row justify-content-md-center">
+            <div class="col-md-auto">
 
-                    <table class="table table-borderless">
-                        <thead class="thead-light">
-                            <tr>
-                                <th scope="col">Alexa Rank</th>
-                                <th scope="col">Website</th>
-                                <th scope="col" data-toggle="tooltip" data-placement="top" title="If the site has an AAAA record">IPv6</th>
-                                <th scope="col" data-toggle="tooltip" data-placement="top" title="If one or more of the nameserver for the site has AAAA record. 
+                <table class="table table-borderless">
+                    <thead class="thead-light">
+                        <tr>
+                            <th scope="col">Alexa Rank</th>
+                            <th scope="col">Website</th>
+                            <th scope="col" data-toggle="tooltip" data-placement="top"
+                                title="If the site has an AAAA record">IPv6</th>
+                            <th scope="col" data-toggle="tooltip" data-placement="top" title="If one or more of the nameserver for the site has AAAA record. 
                                 This is a required step towards proper IPv6 setup.">NS IPv6</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {{ range .Site }}
-                            <tr>
-                                <td class="number">{{ .Rank }}</td>
-                                <td class="site">
-                                    {{ if .Country }}
-                                    <img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/{{ .Country | ToLower }}.svg">
-                                    {{ end }}
-                                    {{ .Hostname }}
-                                </td>
-                                <td class="icon">
-                                    {{ if .IPv6 }}
-                                    <i data-feather="check" class="feather-sign text-success"></i>
-                                    {{ else }}
-                                    <i data-feather="x" class="feather-sign text-danger"></i>
-                                    {{ end }}
-                                </td>
-                                <td class="icon">
-                                    {{ if .NSIPv6 }}
-                                    <i data-feather="check" class="feather-sign text-success"></i>
-                                    {{ else }}
-                                    <i data-feather="x" class="feather-sign text-danger"></i>
-                                    {{ end }}
-                                </td>
-                            </tr>
-                            {{ end }}
-                        </tbody>
-                    </table>
-                </div>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{ range .Site }}
+                        <tr>
+                            <td class="number">{{ .Rank }}</td>
+                            <td class="site">
+                                {{ if .Country }}
+                                <img
+                                    src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/{{ .Country | ToLower }}.svg">
+                                {{ end }}
+                                {{ .Hostname }}
+                            </td>
+                            <td class="icon">
+                                {{ if .IPv6 }}
+                                <i data-feather="check" class="feather-sign text-success"></i>
+                                {{ else }}
+                                <i data-feather="x" class="feather-sign text-danger"></i>
+                                {{ end }}
+                            </td>
+                            <td class="icon">
+                                {{ if .NSIPv6 }}
+                                <i data-feather="check" class="feather-sign text-success"></i>
+                                {{ else }}
+                                <i data-feather="x" class="feather-sign text-danger"></i>
+                                {{ end }}
+                            </td>
+                        </tr>
+                        {{ end }}
+                    </tbody>
+                </table>
             </div>
+        </div>
 
         <hr />
         <h2 id="country">Reports by Country</h2>
         <p>
-          Each of the following countries has a localised report of the top 50 websites without IPv6.
+            Each of the following countries has a localised report of the top 50 websites without IPv6.
         </p>
         <p class="countries">
-            <a href="country/ae"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/ae.svg" alt="United Arab Emirates" /> AE</a>
-            <a href="country/af"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/af.svg" alt="Afghanistan" /> AF</a>
-            <a href="country/al"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/al.svg" alt="Albania" /> AL</a>
-            <a href="country/am"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/am.svg" alt="Armenia" /> AM</a>
-            <a href="country/ao"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/ao.svg" alt="Angola" /> AO</a>
-            <a href="country/ar"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/ar.svg" alt="Argentina" /> AR</a>
-            <a href="country/at"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/at.svg" alt="Austria" /> AT</a>
-            <a href="country/au"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/au.svg" alt="Australia" /> AU</a>
-            <a href="country/az"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/az.svg" alt="Azerbaijan" /> AZ</a>
-            <a href="country/ba"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/ba.svg" alt="Bosnia and Herzegovina" /> BA</a>
-            <a href="country/bb"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/bb.svg" alt="Barbados" /> BB</a>
-            <a href="country/bd"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/bd.svg" alt="Bangladesh" /> BD</a>
-            <a href="country/be"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/be.svg" alt="Belgium" /> BE</a>
-            <a href="country/bf"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/bf.svg" alt="Burkina Faso" /> BF</a>
-            <a href="country/bg"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/bg.svg" alt="Bulgaria" /> BG</a>
-            <a href="country/bh"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/bh.svg" alt="Bahrain" /> BH</a>
-            <a href="country/bj"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/bj.svg" alt="Benin" /> BJ</a>
-            <a href="country/bm"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/bm.svg" alt="Bermuda" /> BM</a>
-            <a href="country/bn"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/bn.svg" alt="Brunei Darussalam" /> BN</a>
-            <a href="country/bo"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/bo.svg" alt="Bolivia, Plurinational State of" /> BO</a>
-            <a href="country/br"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/br.svg" alt="Brazil" /> BR</a>
-            <a href="country/bs"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/bs.svg" alt="Bahamas" /> BS</a>
-            <a href="country/bt"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/bt.svg" alt="Bhutan" /> BT</a>
-            <a href="country/bw"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/bw.svg" alt="Botswana" /> BW</a>
-            <a href="country/by"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/by.svg" alt="Belarus" /> BY</a>
-            <a href="country/ca"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/ca.svg" alt="Canada" /> CA</a>
-            <a href="country/cd"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/cd.svg" alt="Congo, the Democratic Republic of the" /> CD</a>
-            <a href="country/cg"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/cg.svg" alt="Congo" /> CG</a>
-            <a href="country/ch"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/ch.svg" alt="Switzerland" /> CH</a>
-            <a href="country/ci"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/ci.svg" alt="C&#244;te d&#39;Ivoire" /> CI</a>
-            <a href="country/cl"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/cl.svg" alt="Chile" /> CL</a>
-            <a href="country/cm"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/cm.svg" alt="Cameroon" /> CM</a>
-            <a href="country/cn"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/cn.svg" alt="China" /> CN</a>
-            <a href="country/co"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/co.svg" alt="Colombia" /> CO</a>
-            <a href="country/cr"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/cr.svg" alt="Costa Rica" /> CR</a>
-            <a href="country/cu"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/cu.svg" alt="Cuba" /> CU</a>
-            <a href="country/cy"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/cy.svg" alt="Cyprus" /> CY</a>
-            <a href="country/cz"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/cz.svg" alt="Czechia" /> CZ</a>
-            <a href="country/de"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/de.svg" alt="Germany" /> DE</a>
-            <a href="country/dk"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/dk.svg" alt="Denmark" /> DK</a>
-            <a href="country/do"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/do.svg" alt="Dominican Republic" /> DO</a>
-            <a href="country/dz"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/dz.svg" alt="Algeria" /> DZ</a>
-            <a href="country/ec"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/ec.svg" alt="Ecuador" /> EC</a>
-            <a href="country/ee"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/ee.svg" alt="Estonia" /> EE</a>
-            <a href="country/eg"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/eg.svg" alt="Egypt" /> EG</a>
-            <a href="country/es"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/es.svg" alt="Spain" /> ES</a>
-            <a href="country/et"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/et.svg" alt="Ethiopia" /> ET</a>
-            <a href="country/fi"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/fi.svg" alt="Finland" /> FI</a>
-            <a href="country/fj"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/fj.svg" alt="Fiji" /> FJ</a>
-            <a href="country/fo"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/fo.svg" alt="Faroe Islands" /> FO</a>
-            <a href="country/fr"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/fr.svg" alt="France" /> FR</a>
-            <a href="country/ga"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/ga.svg" alt="Gabon" /> GA</a>
-            <a href="country/gb"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/gb.svg" alt="United Kingdom of Great Britain and Northern Ireland" /> GB</a>
-            <a href="country/ge"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/ge.svg" alt="Georgia" /> GE</a>
-            <a href="country/gh"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/gh.svg" alt="Ghana" /> GH</a>
-            <a href="country/gi"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/gi.svg" alt="Gibraltar" /> GI</a>
-            <a href="country/gr"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/gr.svg" alt="Greece" /> GR</a>
-            <a href="country/gt"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/gt.svg" alt="Guatemala" /> GT</a>
-            <a href="country/gy"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/gy.svg" alt="Guyana" /> GY</a>
-            <a href="country/hk"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/hk.svg" alt="Hong Kong" /> HK</a>
-            <a href="country/hn"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/hn.svg" alt="Honduras" /> HN</a>
-            <a href="country/hr"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/hr.svg" alt="Croatia" /> HR</a>
-            <a href="country/ht"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/ht.svg" alt="Haiti" /> HT</a>
-            <a href="country/hu"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/hu.svg" alt="Hungary" /> HU</a>
-            <a href="country/id"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/id.svg" alt="Indonesia" /> ID</a>
-            <a href="country/ie"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/ie.svg" alt="Ireland" /> IE</a>
-            <a href="country/il"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/il.svg" alt="Israel" /> IL</a>
-            <a href="country/in"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/in.svg" alt="India" /> IN</a>
-            <a href="country/iq"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/iq.svg" alt="Iraq" /> IQ</a>
-            <a href="country/ir"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/ir.svg" alt="Iran, Islamic Republic of" /> IR</a>
-            <a href="country/is"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/is.svg" alt="Iceland" /> IS</a>
-            <a href="country/it"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/it.svg" alt="Italy" /> IT</a>
-            <a href="country/jm"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/jm.svg" alt="Jamaica" /> JM</a>
-            <a href="country/jo"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/jo.svg" alt="Jordan" /> JO</a>
-            <a href="country/jp"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/jp.svg" alt="Japan" /> JP</a>
-            <a href="country/ke"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/ke.svg" alt="Kenya" /> KE</a>
-            <a href="country/kg"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/kg.svg" alt="Kyrgyzstan" /> KG</a>
-            <a href="country/kh"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/kh.svg" alt="Cambodia" /> KH</a>
-            <a href="country/kr"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/kr.svg" alt="Korea, Republic of" /> KR</a>
-            <a href="country/kw"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/kw.svg" alt="Kuwait" /> KW</a>
-            <a href="country/ky"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/ky.svg" alt="Cayman Islands" /> KY</a>
-            <a href="country/kz"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/kz.svg" alt="Kazakhstan" /> KZ</a>
-            <a href="country/lb"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/lb.svg" alt="Lebanon" /> LB</a>
-            <a href="country/li"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/li.svg" alt="Liechtenstein" /> LI</a>
-            <a href="country/lk"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/lk.svg" alt="Sri Lanka" /> LK</a>
-            <a href="country/lr"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/lr.svg" alt="Liberia" /> LR</a>
-            <a href="country/lt"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/lt.svg" alt="Lithuania" /> LT</a>
-            <a href="country/lu"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/lu.svg" alt="Luxembourg" /> LU</a>
-            <a href="country/lv"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/lv.svg" alt="Latvia" /> LV</a>
-            <a href="country/ly"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/ly.svg" alt="Libya" /> LY</a>
-            <a href="country/ma"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/ma.svg" alt="Morocco" /> MA</a>
-            <a href="country/md"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/md.svg" alt="Moldova, Republic of" /> MD</a>
-            <a href="country/me"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/me.svg" alt="Montenegro" /> ME</a>
-            <a href="country/mg"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/mg.svg" alt="Madagascar" /> MG</a>
-            <a href="country/mk"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/mk.svg" alt="Macedonia, the former Yugoslav Republic of" /> MK</a>
-            <a href="country/ml"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/ml.svg" alt="Mali" /> ML</a>
-            <a href="country/mm"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/mm.svg" alt="Myanmar" /> MM</a>
-            <a href="country/mn"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/mn.svg" alt="Mongolia" /> MN</a>
-            <a href="country/mo"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/mo.svg" alt="Macao" /> MO</a>
-            <a href="country/mr"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/mr.svg" alt="Mauritania" /> MR</a>
-            <a href="country/mt"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/mt.svg" alt="Malta" /> MT</a>
-            <a href="country/mu"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/mu.svg" alt="Mauritius" /> MU</a>
-            <a href="country/mv"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/mv.svg" alt="Maldives" /> MV</a>
-            <a href="country/mw"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/mw.svg" alt="Malawi" /> MW</a>
-            <a href="country/mx"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/mx.svg" alt="Mexico" /> MX</a>
-            <a href="country/my"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/my.svg" alt="Malaysia" /> MY</a>
-            <a href="country/mz"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/mz.svg" alt="Mozambique" /> MZ</a>
-            <a href="country/na"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/na.svg" alt="Namibia" /> NA</a>
-            <a href="country/ng"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/ng.svg" alt="Nigeria" /> NG</a>
-            <a href="country/ni"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/ni.svg" alt="Nicaragua" /> NI</a>
-            <a href="country/nl"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/nl.svg" alt="Netherlands" /> NL</a>
-            <a href="country/no"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/no.svg" alt="Norway" /> NO</a>
-            <a href="country/np"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/np.svg" alt="Nepal" /> NP</a>
-            <a href="country/nz"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/nz.svg" alt="New Zealand" /> NZ</a>
-            <a href="country/om"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/om.svg" alt="Oman" /> OM</a>
-            <a href="country/pa"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/pa.svg" alt="Panama" /> PA</a>
-            <a href="country/pe"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/pe.svg" alt="Peru" /> PE</a>
-            <a href="country/pf"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/pf.svg" alt="French Polynesia" /> PF</a>
-            <a href="country/pg"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/pg.svg" alt="Papua New Guinea" /> PG</a>
-            <a href="country/ph"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/ph.svg" alt="Philippines" /> PH</a>
-            <a href="country/pk"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/pk.svg" alt="Pakistan" /> PK</a>
-            <a href="country/pl"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/pl.svg" alt="Poland" /> PL</a>
-            <a href="country/pr"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/pr.svg" alt="Puerto Rico" /> PR</a>
-            <a href="country/ps"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/ps.svg" alt="Palestine, State of" /> PS</a>
-            <a href="country/pt"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/pt.svg" alt="Portugal" /> PT</a>
-            <a href="country/py"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/py.svg" alt="Paraguay" /> PY</a>
-            <a href="country/qa"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/qa.svg" alt="Qatar" /> QA</a>
-            <a href="country/re"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/re.svg" alt="R&#233;union" /> RE</a>
-            <a href="country/ro"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/ro.svg" alt="Romania" /> RO</a>
-            <a href="country/rs"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/rs.svg" alt="Serbia" /> RS</a>
-            <a href="country/ru"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/ru.svg" alt="Russian Federation" /> RU</a>
-            <a href="country/rw"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/rw.svg" alt="Rwanda" /> RW</a>
-            <a href="country/sa"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/sa.svg" alt="Saudi Arabia" /> SA</a>
-            <a href="country/sd"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/sd.svg" alt="Sudan" /> SD</a>
-            <a href="country/se"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/se.svg" alt="Sweden" /> SE</a>
-            <a href="country/sg"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/sg.svg" alt="Singapore" /> SG</a>
-            <a href="country/si"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/si.svg" alt="Slovenia" /> SI</a>
-            <a href="country/sk"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/sk.svg" alt="Slovakia" /> SK</a>
-            <a href="country/sn"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/sn.svg" alt="Senegal" /> SN</a>
-            <a href="country/sr"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/sr.svg" alt="Suriname" /> SR</a>
-            <a href="country/sv"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/sv.svg" alt="El Salvador" /> SV</a>
-            <a href="country/sy"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/sy.svg" alt="Syrian Arab Republic" /> SY</a>
-            <a href="country/tg"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/tg.svg" alt="Togo" /> TG</a>
-            <a href="country/th"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/th.svg" alt="Thailand" /> TH</a>
-            <a href="country/tj"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/tj.svg" alt="Tajikistan" /> TJ</a>
-            <a href="country/tl"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/tl.svg" alt="Timor-Leste" /> TL</a>
-            <a href="country/tm"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/tm.svg" alt="Turkmenistan" /> TM</a>
-            <a href="country/tn"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/tn.svg" alt="Tunisia" /> TN</a>
-            <a href="country/tr"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/tr.svg" alt="Turkey" /> TR</a>
-            <a href="country/tt"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/tt.svg" alt="Trinidad and Tobago" /> TT</a>
-            <a href="country/tw"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/tw.svg" alt="Taiwan, Province of China" /> TW</a>
-            <a href="country/tz"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/tz.svg" alt="Tanzania, United Republic of" /> TZ</a>
-            <a href="country/ua"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/ua.svg" alt="Ukraine" /> UA</a>
-            <a href="country/ug"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/ug.svg" alt="Uganda" /> UG</a>
-            <a href="country/us"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/us.svg" alt="United States of America" /> US</a>
-            <a href="country/uy"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/uy.svg" alt="Uruguay" /> UY</a>
-            <a href="country/uz"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/uz.svg" alt="Uzbekistan" /> UZ</a>
-            <a href="country/ve"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/ve.svg" alt="Venezuela, Bolivarian Republic of" /> VE</a>
-            <a href="country/vn"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/vn.svg" alt="Viet Nam" /> VN</a>
-            <a href="country/vu"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/vu.svg" alt="Vanuatu" /> VU</a>
-            <a href="country/ws"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/ws.svg" alt="Samoa" /> WS</a>
-            <a href="country/ye"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/ye.svg" alt="Yemen" /> YE</a>
-            <a href="country/za"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/za.svg" alt="South Africa" /> ZA</a>
-            <a href="country/zm"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/zm.svg" alt="Zambia" /> ZM</a>
-            <a href="country/zw"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/zw.svg" alt="Zimbabwe" /> ZW</a>
+            <a href="country/ae"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/ae.svg"
+                    alt="United Arab Emirates" /> AE</a>
+            <a href="country/af"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/af.svg"
+                    alt="Afghanistan" /> AF</a>
+            <a href="country/al"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/al.svg"
+                    alt="Albania" /> AL</a>
+            <a href="country/am"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/am.svg"
+                    alt="Armenia" /> AM</a>
+            <a href="country/ao"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/ao.svg"
+                    alt="Angola" /> AO</a>
+            <a href="country/ar"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/ar.svg"
+                    alt="Argentina" /> AR</a>
+            <a href="country/at"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/at.svg"
+                    alt="Austria" /> AT</a>
+            <a href="country/au"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/au.svg"
+                    alt="Australia" /> AU</a>
+            <a href="country/az"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/az.svg"
+                    alt="Azerbaijan" /> AZ</a>
+            <a href="country/ba"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/ba.svg"
+                    alt="Bosnia and Herzegovina" /> BA</a>
+            <a href="country/bb"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/bb.svg"
+                    alt="Barbados" /> BB</a>
+            <a href="country/bd"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/bd.svg"
+                    alt="Bangladesh" /> BD</a>
+            <a href="country/be"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/be.svg"
+                    alt="Belgium" /> BE</a>
+            <a href="country/bf"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/bf.svg"
+                    alt="Burkina Faso" /> BF</a>
+            <a href="country/bg"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/bg.svg"
+                    alt="Bulgaria" /> BG</a>
+            <a href="country/bh"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/bh.svg"
+                    alt="Bahrain" /> BH</a>
+            <a href="country/bj"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/bj.svg"
+                    alt="Benin" /> BJ</a>
+            <a href="country/bm"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/bm.svg"
+                    alt="Bermuda" /> BM</a>
+            <a href="country/bn"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/bn.svg"
+                    alt="Brunei Darussalam" /> BN</a>
+            <a href="country/bo"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/bo.svg"
+                    alt="Bolivia, Plurinational State of" /> BO</a>
+            <a href="country/br"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/br.svg"
+                    alt="Brazil" /> BR</a>
+            <a href="country/bs"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/bs.svg"
+                    alt="Bahamas" /> BS</a>
+            <a href="country/bt"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/bt.svg"
+                    alt="Bhutan" /> BT</a>
+            <a href="country/bw"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/bw.svg"
+                    alt="Botswana" /> BW</a>
+            <a href="country/by"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/by.svg"
+                    alt="Belarus" /> BY</a>
+            <a href="country/ca"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/ca.svg"
+                    alt="Canada" /> CA</a>
+            <a href="country/cd"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/cd.svg"
+                    alt="Congo, the Democratic Republic of the" /> CD</a>
+            <a href="country/cg"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/cg.svg"
+                    alt="Congo" /> CG</a>
+            <a href="country/ch"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/ch.svg"
+                    alt="Switzerland" /> CH</a>
+            <a href="country/ci"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/ci.svg"
+                    alt="C&#244;te d&#39;Ivoire" /> CI</a>
+            <a href="country/cl"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/cl.svg"
+                    alt="Chile" /> CL</a>
+            <a href="country/cm"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/cm.svg"
+                    alt="Cameroon" /> CM</a>
+            <a href="country/cn"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/cn.svg"
+                    alt="China" /> CN</a>
+            <a href="country/co"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/co.svg"
+                    alt="Colombia" /> CO</a>
+            <a href="country/cr"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/cr.svg"
+                    alt="Costa Rica" /> CR</a>
+            <a href="country/cu"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/cu.svg"
+                    alt="Cuba" /> CU</a>
+            <a href="country/cy"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/cy.svg"
+                    alt="Cyprus" /> CY</a>
+            <a href="country/cz"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/cz.svg"
+                    alt="Czechia" /> CZ</a>
+            <a href="country/de"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/de.svg"
+                    alt="Germany" /> DE</a>
+            <a href="country/dk"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/dk.svg"
+                    alt="Denmark" /> DK</a>
+            <a href="country/do"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/do.svg"
+                    alt="Dominican Republic" /> DO</a>
+            <a href="country/dz"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/dz.svg"
+                    alt="Algeria" /> DZ</a>
+            <a href="country/ec"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/ec.svg"
+                    alt="Ecuador" /> EC</a>
+            <a href="country/ee"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/ee.svg"
+                    alt="Estonia" /> EE</a>
+            <a href="country/eg"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/eg.svg"
+                    alt="Egypt" /> EG</a>
+            <a href="country/es"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/es.svg"
+                    alt="Spain" /> ES</a>
+            <a href="country/et"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/et.svg"
+                    alt="Ethiopia" /> ET</a>
+            <a href="country/fi"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/fi.svg"
+                    alt="Finland" /> FI</a>
+            <a href="country/fj"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/fj.svg"
+                    alt="Fiji" /> FJ</a>
+            <a href="country/fo"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/fo.svg"
+                    alt="Faroe Islands" /> FO</a>
+            <a href="country/fr"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/fr.svg"
+                    alt="France" /> FR</a>
+            <a href="country/ga"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/ga.svg"
+                    alt="Gabon" /> GA</a>
+            <a href="country/gb"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/gb.svg"
+                    alt="United Kingdom of Great Britain and Northern Ireland" /> GB</a>
+            <a href="country/ge"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/ge.svg"
+                    alt="Georgia" /> GE</a>
+            <a href="country/gh"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/gh.svg"
+                    alt="Ghana" /> GH</a>
+            <a href="country/gi"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/gi.svg"
+                    alt="Gibraltar" /> GI</a>
+            <a href="country/gr"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/gr.svg"
+                    alt="Greece" /> GR</a>
+            <a href="country/gt"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/gt.svg"
+                    alt="Guatemala" /> GT</a>
+            <a href="country/gy"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/gy.svg"
+                    alt="Guyana" /> GY</a>
+            <a href="country/hk"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/hk.svg"
+                    alt="Hong Kong" /> HK</a>
+            <a href="country/hn"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/hn.svg"
+                    alt="Honduras" /> HN</a>
+            <a href="country/hr"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/hr.svg"
+                    alt="Croatia" /> HR</a>
+            <a href="country/ht"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/ht.svg"
+                    alt="Haiti" /> HT</a>
+            <a href="country/hu"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/hu.svg"
+                    alt="Hungary" /> HU</a>
+            <a href="country/id"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/id.svg"
+                    alt="Indonesia" /> ID</a>
+            <a href="country/ie"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/ie.svg"
+                    alt="Ireland" /> IE</a>
+            <a href="country/il"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/il.svg"
+                    alt="Israel" /> IL</a>
+            <a href="country/in"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/in.svg"
+                    alt="India" /> IN</a>
+            <a href="country/iq"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/iq.svg"
+                    alt="Iraq" /> IQ</a>
+            <a href="country/ir"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/ir.svg"
+                    alt="Iran, Islamic Republic of" /> IR</a>
+            <a href="country/is"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/is.svg"
+                    alt="Iceland" /> IS</a>
+            <a href="country/it"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/it.svg"
+                    alt="Italy" /> IT</a>
+            <a href="country/jm"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/jm.svg"
+                    alt="Jamaica" /> JM</a>
+            <a href="country/jo"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/jo.svg"
+                    alt="Jordan" /> JO</a>
+            <a href="country/jp"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/jp.svg"
+                    alt="Japan" /> JP</a>
+            <a href="country/ke"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/ke.svg"
+                    alt="Kenya" /> KE</a>
+            <a href="country/kg"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/kg.svg"
+                    alt="Kyrgyzstan" /> KG</a>
+            <a href="country/kh"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/kh.svg"
+                    alt="Cambodia" /> KH</a>
+            <a href="country/kr"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/kr.svg"
+                    alt="Korea, Republic of" /> KR</a>
+            <a href="country/kw"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/kw.svg"
+                    alt="Kuwait" /> KW</a>
+            <a href="country/ky"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/ky.svg"
+                    alt="Cayman Islands" /> KY</a>
+            <a href="country/kz"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/kz.svg"
+                    alt="Kazakhstan" /> KZ</a>
+            <a href="country/lb"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/lb.svg"
+                    alt="Lebanon" /> LB</a>
+            <a href="country/li"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/li.svg"
+                    alt="Liechtenstein" /> LI</a>
+            <a href="country/lk"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/lk.svg"
+                    alt="Sri Lanka" /> LK</a>
+            <a href="country/lr"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/lr.svg"
+                    alt="Liberia" /> LR</a>
+            <a href="country/lt"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/lt.svg"
+                    alt="Lithuania" /> LT</a>
+            <a href="country/lu"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/lu.svg"
+                    alt="Luxembourg" /> LU</a>
+            <a href="country/lv"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/lv.svg"
+                    alt="Latvia" /> LV</a>
+            <a href="country/ly"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/ly.svg"
+                    alt="Libya" /> LY</a>
+            <a href="country/ma"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/ma.svg"
+                    alt="Morocco" /> MA</a>
+            <a href="country/md"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/md.svg"
+                    alt="Moldova, Republic of" /> MD</a>
+            <a href="country/me"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/me.svg"
+                    alt="Montenegro" /> ME</a>
+            <a href="country/mg"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/mg.svg"
+                    alt="Madagascar" /> MG</a>
+            <a href="country/mk"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/mk.svg"
+                    alt="Macedonia, the former Yugoslav Republic of" /> MK</a>
+            <a href="country/ml"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/ml.svg"
+                    alt="Mali" /> ML</a>
+            <a href="country/mm"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/mm.svg"
+                    alt="Myanmar" /> MM</a>
+            <a href="country/mn"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/mn.svg"
+                    alt="Mongolia" /> MN</a>
+            <a href="country/mo"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/mo.svg"
+                    alt="Macao" /> MO</a>
+            <a href="country/mr"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/mr.svg"
+                    alt="Mauritania" /> MR</a>
+            <a href="country/mt"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/mt.svg"
+                    alt="Malta" /> MT</a>
+            <a href="country/mu"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/mu.svg"
+                    alt="Mauritius" /> MU</a>
+            <a href="country/mv"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/mv.svg"
+                    alt="Maldives" /> MV</a>
+            <a href="country/mw"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/mw.svg"
+                    alt="Malawi" /> MW</a>
+            <a href="country/mx"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/mx.svg"
+                    alt="Mexico" /> MX</a>
+            <a href="country/my"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/my.svg"
+                    alt="Malaysia" /> MY</a>
+            <a href="country/mz"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/mz.svg"
+                    alt="Mozambique" /> MZ</a>
+            <a href="country/na"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/na.svg"
+                    alt="Namibia" /> NA</a>
+            <a href="country/ng"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/ng.svg"
+                    alt="Nigeria" /> NG</a>
+            <a href="country/ni"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/ni.svg"
+                    alt="Nicaragua" /> NI</a>
+            <a href="country/nl"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/nl.svg"
+                    alt="Netherlands" /> NL</a>
+            <a href="country/no"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/no.svg"
+                    alt="Norway" /> NO</a>
+            <a href="country/np"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/np.svg"
+                    alt="Nepal" /> NP</a>
+            <a href="country/nz"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/nz.svg"
+                    alt="New Zealand" /> NZ</a>
+            <a href="country/om"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/om.svg"
+                    alt="Oman" /> OM</a>
+            <a href="country/pa"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/pa.svg"
+                    alt="Panama" /> PA</a>
+            <a href="country/pe"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/pe.svg"
+                    alt="Peru" /> PE</a>
+            <a href="country/pf"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/pf.svg"
+                    alt="French Polynesia" /> PF</a>
+            <a href="country/pg"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/pg.svg"
+                    alt="Papua New Guinea" /> PG</a>
+            <a href="country/ph"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/ph.svg"
+                    alt="Philippines" /> PH</a>
+            <a href="country/pk"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/pk.svg"
+                    alt="Pakistan" /> PK</a>
+            <a href="country/pl"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/pl.svg"
+                    alt="Poland" /> PL</a>
+            <a href="country/pr"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/pr.svg"
+                    alt="Puerto Rico" /> PR</a>
+            <a href="country/ps"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/ps.svg"
+                    alt="Palestine, State of" /> PS</a>
+            <a href="country/pt"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/pt.svg"
+                    alt="Portugal" /> PT</a>
+            <a href="country/py"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/py.svg"
+                    alt="Paraguay" /> PY</a>
+            <a href="country/qa"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/qa.svg"
+                    alt="Qatar" /> QA</a>
+            <a href="country/re"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/re.svg"
+                    alt="R&#233;union" /> RE</a>
+            <a href="country/ro"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/ro.svg"
+                    alt="Romania" /> RO</a>
+            <a href="country/rs"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/rs.svg"
+                    alt="Serbia" /> RS</a>
+            <a href="country/ru"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/ru.svg"
+                    alt="Russian Federation" /> RU</a>
+            <a href="country/rw"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/rw.svg"
+                    alt="Rwanda" /> RW</a>
+            <a href="country/sa"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/sa.svg"
+                    alt="Saudi Arabia" /> SA</a>
+            <a href="country/sd"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/sd.svg"
+                    alt="Sudan" /> SD</a>
+            <a href="country/se"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/se.svg"
+                    alt="Sweden" /> SE</a>
+            <a href="country/sg"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/sg.svg"
+                    alt="Singapore" /> SG</a>
+            <a href="country/si"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/si.svg"
+                    alt="Slovenia" /> SI</a>
+            <a href="country/sk"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/sk.svg"
+                    alt="Slovakia" /> SK</a>
+            <a href="country/sn"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/sn.svg"
+                    alt="Senegal" /> SN</a>
+            <a href="country/sr"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/sr.svg"
+                    alt="Suriname" /> SR</a>
+            <a href="country/sv"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/sv.svg"
+                    alt="El Salvador" /> SV</a>
+            <a href="country/sy"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/sy.svg"
+                    alt="Syrian Arab Republic" /> SY</a>
+            <a href="country/tg"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/tg.svg"
+                    alt="Togo" /> TG</a>
+            <a href="country/th"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/th.svg"
+                    alt="Thailand" /> TH</a>
+            <a href="country/tj"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/tj.svg"
+                    alt="Tajikistan" /> TJ</a>
+            <a href="country/tl"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/tl.svg"
+                    alt="Timor-Leste" /> TL</a>
+            <a href="country/tm"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/tm.svg"
+                    alt="Turkmenistan" /> TM</a>
+            <a href="country/tn"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/tn.svg"
+                    alt="Tunisia" /> TN</a>
+            <a href="country/tr"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/tr.svg"
+                    alt="Turkey" /> TR</a>
+            <a href="country/tt"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/tt.svg"
+                    alt="Trinidad and Tobago" /> TT</a>
+            <a href="country/tw"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/tw.svg"
+                    alt="Taiwan, Province of China" /> TW</a>
+            <a href="country/tz"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/tz.svg"
+                    alt="Tanzania, United Republic of" /> TZ</a>
+            <a href="country/ua"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/ua.svg"
+                    alt="Ukraine" /> UA</a>
+            <a href="country/ug"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/ug.svg"
+                    alt="Uganda" /> UG</a>
+            <a href="country/us"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/us.svg"
+                    alt="United States of America" /> US</a>
+            <a href="country/uy"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/uy.svg"
+                    alt="Uruguay" /> UY</a>
+            <a href="country/uz"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/uz.svg"
+                    alt="Uzbekistan" /> UZ</a>
+            <a href="country/ve"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/ve.svg"
+                    alt="Venezuela, Bolivarian Republic of" /> VE</a>
+            <a href="country/vn"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/vn.svg"
+                    alt="Viet Nam" /> VN</a>
+            <a href="country/vu"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/vu.svg"
+                    alt="Vanuatu" /> VU</a>
+            <a href="country/ws"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/ws.svg"
+                    alt="Samoa" /> WS</a>
+            <a href="country/ye"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/ye.svg"
+                    alt="Yemen" /> YE</a>
+            <a href="country/za"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/za.svg"
+                    alt="South Africa" /> ZA</a>
+            <a href="country/zm"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/zm.svg"
+                    alt="Zambia" /> ZM</a>
+            <a href="country/zw"><img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/flags/4x3/zw.svg"
+                    alt="Zimbabwe" /> ZW</a>
         </p>
 
         {{ template "footer" }}
     </main>
 </body>
+
 </html>
 {{ end }}
