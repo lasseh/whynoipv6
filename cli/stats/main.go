@@ -141,6 +141,9 @@ func main() {
 		// Count v6 for current asn
 		db.Table("sites").Select("count(asn) as count_v6").Where("ipv6 = TRUE AND asn = ?", v.Asn).Group("asn").First(&v)
 
+		// Get current asname
+		db.Table("asn").Select("asname").Where("asn = ?", v.Asn).First(&v)
+
 		sum := v.CountV4 + v.CountV6
 
 		// Calculate v4 percent for current asn
@@ -150,7 +153,13 @@ func main() {
 		v.PercentV6 = PercentOf(v.CountV6, sum)
 
 		// Get ASN Name
-		v.Asname = asName(v.Asn)
+		if len(v.Asname) == 0 {
+			v.Asname, err = asName(v.Asn)
+			if err != nil {
+				fmt.Println("Error getting ASN, skipping for now")
+				v.Asname = ""
+			}
+		}
 
 		// Update
 		r := db.Exec("UPDATE asn SET count_v4 = ?, count_v6 = ?, percent_v4 = ?, percent_v6 = ?, asname = ? WHERE asn = ?", v.CountV4, v.CountV6, v.PercentV4, v.PercentV6, v.Asname, v.Asn)
@@ -170,7 +179,7 @@ func PercentOf(current int, all int) float64 {
 	return percent
 }
 
-func asName(asn int) string {
+func asName(asn int) (string, error) {
 	// HTTP Client
 	var netTransport = &http.Transport{
 		Dial: (&net.Dialer{
@@ -187,6 +196,7 @@ func asName(asn int) string {
 
 	if err != nil {
 		fmt.Println("Errored when sending request to the server")
+		return "", err
 	}
 
 	defer resp.Body.Close()
@@ -202,5 +212,5 @@ func asName(asn int) string {
 	// Sleep so we dont get banned from bgpview.io
 	time.Sleep(1 * time.Second)
 
-	return info.Data.DescriptionShort
+	return info.Data.DescriptionShort, nil
 }
