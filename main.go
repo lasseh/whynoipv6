@@ -37,7 +37,6 @@ func main() {
 		fmt.Println("Error connecting to database:", err)
 	}
 	defer db.Close()
-
 	db.LogMode(true)
 
 	// Create a new router
@@ -63,7 +62,6 @@ func main() {
 		middleware.Logger,          // Log API request calls
 		middleware.Recoverer,       // Recover from panics without crashing server
 		middleware.RequestID,       // Injects a request ID into the context of each request
-		middleware.DefaultCompress, // Compress results, mostly gzipping assets and json
 		middleware.RedirectSlashes, // Redirect slashes to no slash URL versions
 		cors.Handler,               // Handle CORS headers
 	)
