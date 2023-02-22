@@ -1,0 +1,13 @@
+[database]
+host = "localhost"
+port = 5432
+user = "username"
+password = "password"
+dbname = "database"
+sslmode = "disable"
+#sslmode = "verify-full"
+
+[updater]
+#interval = "1h"
+#jittermin = 0
+#jittermax = 300
