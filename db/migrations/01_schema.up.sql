@@ -14,6 +14,9 @@ CREATE TABLE "sites" (
   UNIQUE (list_id, rank),
   UNIQUE (list_id, site)
 );
+CREATE INDEX idx_sites_rank ON sites(rank);
+CREATE INDEX idx_sites_site ON sites(site);
+
 
 CREATE TABLE "changelog" (
   "id" BIGSERIAL PRIMARY KEY, -- 
@@ -21,12 +24,15 @@ CREATE TABLE "changelog" (
   "domain_id" int NOT NULL, -- Site, ref: sites.site
   "message" text NOT NULL -- Message
 );
+CREATE INDEX idx_changelog_domain_id ON changelog(domain_id);
 
 CREATE TABLE "asn" (
   "id" BIGSERIAL PRIMARY KEY,
   "number" int NOT NULL, -- AS Number
   "name" text NOT NULL -- AS Name
 );
+CREATE INDEX idx_asn_id ON asn(id);
+
 
 DROP TYPE IF EXISTS "continents";
 CREATE TYPE "continents" AS ENUM (
@@ -49,6 +55,9 @@ CREATE TABLE "country" (
   "v6sites" integer NOT NULL DEFAULT 0, -- number of sites in this country with v6
   "percent" numeric(4,1) NOT NULL DEFAULT 0 -- percent of sites in this country
 );
+CREATE INDEX idx_country_id ON country(id);
+CREATE UNIQUE INDEX idx_country_country_code ON country(country_code);
+
 
 CREATE TABLE "domain" (
   "id" BIGSERIAL PRIMARY KEY,
@@ -71,6 +80,17 @@ CREATE TABLE "domain" (
 ALTER TABLE "domain" ADD FOREIGN KEY ("asn_id") REFERENCES "asn" ("id");
 ALTER TABLE "domain" ADD FOREIGN KEY ("country_id") REFERENCES "country" ("id");
 ALTER TABLE "changelog" ADD FOREIGN KEY ("domain_id") REFERENCES "domain" ("id");
+CREATE INDEX idx_domain_site ON domain(site);
+CREATE INDEX idx_domain_check_aaaa ON domain(check_aaaa);
+CREATE INDEX idx_domain_check_www ON domain(check_www);
+CREATE INDEX idx_domain_check_ns ON domain(check_ns);
+CREATE INDEX idx_domain_check_aaaa_www ON domain(check_aaaa, check_www);
+CREATE INDEX idx_domain_check_aaaa_www_ns ON domain(check_aaaa, check_www, check_ns);
+CREATE INDEX idx_domain_country_check_aaaa_www_ns ON domain(country_id, check_aaaa, check_www, check_ns);
+CREATE INDEX idx_domain_asn_id ON domain(asn_id);
+CREATE INDEX idx_domain_country_id ON domain(country_id);
+CREATE INDEX idx_domain_ts_check ON domain(ts_check);
+CREATE INDEX idx_domain_disabled ON domain(disabled);
 
 CREATE TABLE "stats_asn" (
   "id" BIGSERIAL PRIMARY KEY,
@@ -92,6 +112,8 @@ CREATE TABLE "campaign" (
   "description" text NOT NULL,
   "disabled" boolean NOT NULL DEFAULT FALSE
 );
+CREATE INDEX idx_campaign_domain_uuid ON campaign(uuid);
+CREATE INDEX idx_campaign_disabled ON campaign(disabled);
 
 CREATE TABLE "campaign_changelog" (
   "id" BIGSERIAL PRIMARY KEY, -- 
@@ -100,6 +122,8 @@ CREATE TABLE "campaign_changelog" (
   "campaign_id" UUID NOT NULL REFERENCES campaign(uuid),
   "message" text NOT NULL -- Message
 );
+CREATE INDEX idx_campaign_changelog_domain_id ON campaign_changelog(domain_id);
+CREATE INDEX idx_campaign_changelog_campaignid ON campaign_changelog(campaign_id);
 
 CREATE TABLE "campaign_domain" (
   "id" BIGSERIAL PRIMARY KEY,
@@ -122,6 +146,16 @@ CREATE TABLE "campaign_domain" (
 );
 ALTER TABLE "campaign_domain" ADD FOREIGN KEY ("asn_id") REFERENCES "asn" ("id");
 ALTER TABLE "campaign_changelog" ADD FOREIGN KEY ("domain_id") REFERENCES "campaign_domain" ("id");
+CREATE INDEX idx_campaign_domain_campaign_id ON campaign_domain(campaign_id, site);
+CREATE INDEX idx_campaign_domain_check_aaaa ON campaign_domain(check_aaaa);
+CREATE INDEX idx_campaign_domain_check_www ON campaign_domain(check_www);
+CREATE INDEX idx_campaign_domain_check_ns ON campaign_domain(check_ns);
+CREATE INDEX idx_campaign_domain_check_aaaa_www ON campaign_domain(check_aaaa, check_www);
+CREATE INDEX idx_campaign_domain_check_aaaa_www_ns ON campaign_domain(check_aaaa, check_www, check_ns);
+CREATE INDEX idx_campaign_domain_asn_id ON campaign_domain(asn_id);
+CREATE INDEX idx_campaign_domain_country_id ON campaign_domain(country_id);
+CREATE INDEX idx_campaign_domain_ts_check ON campaign_domain(ts_check);
+CREATE INDEX idx_campaign_domain_disabled ON campaign_domain(disabled);
 
 CREATE TABLE "metrics" (
     id BIGSERIAL PRIMARY KEY,
@@ -158,7 +192,6 @@ LEFT JOIN country ON domain.country_id = country.id
 WHERE domain.disabled = FALSE AND check_aaaa = FALSE OR check_www = FALSE
 ORDER BY sites.rank LIMIT 100;
 
--- CREATE MATERIALIZED VIEW domain_view_heroes AS
 CREATE VIEW domain_view_heroes AS
 SELECT 
  domain.*, 
@@ -195,7 +228,3 @@ campaign_domain.site
 FROM campaign_changelog
 JOIN campaign_domain on campaign_changelog.domain_id = campaign_domain.id
 ORDER BY campaign_changelog.id DESC;
-
--- Index
-CREATE UNIQUE INDEX "index_country_code" ON "country" USING btree ("country_code");
-CREATE INDEX "index_changelog_domain" ON "changelog" USING btree ("domain_id");
