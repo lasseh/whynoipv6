@@ -20,6 +20,13 @@ type Asn struct {
 
 // ASNInfo Checks the ASN of an Domain
 func (s *Service) ASNInfo(domain string) (Asn, error) {
+
+	var err error
+	domain, err = IDNADomain(domain)
+	if err != nil {
+		return Asn{}, err
+	}
+
 	// Lookup the Domain (fails on IPv6 only domains)
 	result, err := s.localQuery(domain, dns.TypeA)
 	if err != nil {
@@ -94,6 +101,12 @@ func (s *Service) GetTLDFromDomain(domain string) (string, error) {
 // CountryCode loops over A records and returns the first country code
 func (s *Service) CountryCode(domain string) (string, error) {
 	q := QueryResult{}
+
+	var err error
+	domain, err = IDNADomain(domain)
+	if err != nil {
+		return "", err
+	}
 
 	result, err := s.localQuery(domain, dns.TypeA)
 	if err != nil {

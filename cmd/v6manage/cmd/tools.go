@@ -6,6 +6,7 @@ import (
 	"log"
 	"time"
 	"whynoipv6/internal/core"
+	"whynoipv6/internal/toolbox"
 
 	"github.com/jackc/pgx/v4"
 )
@@ -27,6 +28,11 @@ func prettyDuration(d time.Duration) string {
 // getASNInfo gets ASN info from geoip
 func getASNInfo(domain string) (int64, error) {
 	ctx := context.Background()
+
+	domain, err = toolbox.IDNADomain(domain)
+	if err != nil {
+		return 0, err
+	}
 
 	// Get ASN for domain
 	asn, err := toolboxService.ASNInfo(domain)
