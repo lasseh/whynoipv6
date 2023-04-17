@@ -5,9 +5,8 @@ import (
 	"time"
 )
 
-// TODO: Pls help, i don't know what i'm doing!
-
-// TimeNull is a wrapper for sql.NullTime.
+// TimeNull converts a sql.NullTime value to a time.Time value.
+// If the sql.NullTime value is not valid, it returns the zero value of time.Time.
 func TimeNull(t sql.NullTime) time.Time {
 	if t.Valid {
 		return t.Time
@@ -15,7 +14,8 @@ func TimeNull(t sql.NullTime) time.Time {
 	return time.Time{}
 }
 
-// NullTime is a wrapper for sql.NullTime.
+// NullTime converts a time.Time value to a sql.NullTime value.
+// If the time.Time value is zero, it returns an invalid sql.NullTime value.
 func NullTime(t time.Time) sql.NullTime {
 	if t.IsZero() {
 		return sql.NullTime{}
@@ -26,7 +26,8 @@ func NullTime(t time.Time) sql.NullTime {
 	}
 }
 
-// NullString is a wrapper for sql.NullString.
+// NullString converts a string value to a sql.NullString value.
+// It always returns a valid sql.NullString value.
 func NullString(s string) sql.NullString {
 	return sql.NullString{
 		String: s,
@@ -34,7 +35,8 @@ func NullString(s string) sql.NullString {
 	}
 }
 
-// StringNull is a wrapper for sql.NullString.
+// StringNull converts a sql.NullString value to a string value.
+// If the sql.NullString value is not valid, it returns an empty string.
 func StringNull(s sql.NullString) string {
 	if s.Valid {
 		return s.String
@@ -42,7 +44,8 @@ func StringNull(s sql.NullString) string {
 	return ""
 }
 
-// IntNull is a wrapper for sql.NullInt64.
+// IntNull converts a sql.NullInt64 value to an int64 value.
+// If the sql.NullInt64 value is not valid, it returns 0.
 func IntNull(i sql.NullInt64) int64 {
 	if i.Valid {
 		return i.Int64
@@ -50,7 +53,8 @@ func IntNull(i sql.NullInt64) int64 {
 	return 0
 }
 
-// NullInt is a wrapper for sql.NullInt64.
+// NullInt converts an int64 value to a sql.NullInt64 value.
+// It always returns a valid sql.NullInt64 value.
 func NullInt(i int64) sql.NullInt64 {
 	return sql.NullInt64{
 		Int64: i,
@@ -58,7 +62,8 @@ func NullInt(i int64) sql.NullInt64 {
 	}
 }
 
-// BoolNull is a wrapper for sql.NullBool.
+// BoolNull converts a sql.NullBool value to a bool value.
+// If the sql.NullBool value is not valid, it returns false.
 func BoolNull(b sql.NullBool) bool {
 	if b.Valid {
 		return b.Bool
@@ -66,7 +71,8 @@ func BoolNull(b sql.NullBool) bool {
 	return false
 }
 
-// NullBool is a wrapper for sql.NullBool.
+// NullBool converts a bool value to a sql.NullBool value.
+// It always returns a valid sql.NullBool value.
 func NullBool(b bool) sql.NullBool {
 	return sql.NullBool{
 		Bool:  b,

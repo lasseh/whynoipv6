@@ -11,21 +11,29 @@ import (
 	"github.com/jackc/pgx/v4"
 )
 
+// prettyDuration converts a time.Duration value into a human-readable format
+// by rounding it to the nearest second and formatting it as "HH:mm:ss".
 func prettyDuration(d time.Duration) string {
+	// Round the duration to the nearest second to avoid fractional seconds.
 	d = d.Round(time.Second)
 
+	// Extract the number of hours, and subtract them from the total duration.
 	hours := int(d.Hours())
 	d -= time.Duration(hours) * time.Hour
 
+	// Extract the number of minutes, and subtract them from the remaining duration.
 	minutes := int(d.Minutes())
 	d -= time.Duration(minutes) * time.Minute
 
+	// Extract the number of seconds from the remaining duration.
 	seconds := int(d.Seconds())
 
+	// Format the hours, minutes, and seconds as a string in the "HH:mm:ss" format.
 	return fmt.Sprintf("%02d:%02d:%02d", hours, minutes, seconds)
 }
 
-// getASNInfo gets ASN info from geoip
+// getASNInfo retrieves ASN information for a given domain using the toolboxService.
+// If the ASN is not present in the database, it creates a new entry and returns the ASN ID.
 func getASNInfo(domain string) (int64, error) {
 	ctx := context.Background()
 
@@ -34,7 +42,7 @@ func getASNInfo(domain string) (int64, error) {
 		return 0, err
 	}
 
-	// Get ASN for domain
+	// Retrieve ASN information for the domain using the toolboxService.
 	asn, err := toolboxService.ASNInfo(domain)
 	if err != nil {
 		log.Printf("[%s] GeoASNInfo Error: %s", domain, err)
@@ -43,18 +51,19 @@ func getASNInfo(domain string) (int64, error) {
 		log.Printf("[%s] ASN: '%s' (AS%d)", domain, asn.Name, asn.Number)
 	}
 
-	// Check if ASN exists in database
+	// If a valid ASN number is found, check if it exists in the database.
 	if asn.Number != 0 {
-		dbasn, err := asnService.GetASByNumber(ctx, asn.Number)
+		dbAsn, err := asnService.GetASByNumber(ctx, asn.Number)
 		if err != nil && err != pgx.ErrNoRows {
 			log.Printf("[%s] GetASByNumber Error: %s\n", domain, err)
 		}
+
+		// If the ASN is not present in the database, create a new entry.
 		if err == pgx.ErrNoRows {
 			if verbose {
 				log.Printf("[%s] AS%d does not exist in database", domain, asn.Number)
 			}
 
-			// Create ASN in db
 			newAsn, err := asnService.CreateAsn(ctx, asn.Number, asn.Name)
 			if err != nil {
 				log.Printf("[%s] CreateAsn Error: %s\n", domain, err)
@@ -62,89 +71,75 @@ func getASNInfo(domain string) (int64, error) {
 			if verbose {
 				log.Printf("[%s] Added %s(AS%d) to database\n", domain, newAsn.Name, newAsn.Number)
 			}
-			dbasn = newAsn
+			dbAsn = newAsn
 		}
 
-		// Compare ASN and changelog it if needed
-		// This is super spammy because of anycast, so disabled for now
-		if asn.Name != dbasn.Name {
-			if verbose {
-				log.Printf("[%s] AS changed from '%s' TO '%s'", domain, asn.Name, dbasn.Name)
-			}
-			// _, err := changelogService.Create(context.Background(), core.ChangelogModel{
-			// 	DomainID: int32(domain.ID),
-			// 	Message:  fmt.Sprintf("AS changed from: '%s' To: '%s'", domain.AsName, dbasn.Name),
-			// })
-			// if err != nil {
-			// 	log.Printf("[%s] Error writing changelog: %s\n", domain.Site, err)
-			// }
-		}
-		// Return ASN ID
-		return dbasn.ID, nil
+		// Return ASN ID for the found or created ASN.
+		return dbAsn.ID, nil
 	}
 
-	// Ugly hack, i'm sorry!
-	// If we dont find asn, static map it to AsnID 1 - Unknown
+	// If no ASN is found, return a default ASN ID (1 - Unknown) as a fallback.
 	return 1, nil
 }
 
+// getCountryInfo retrieves country information for a given domain using the toolboxService.
+// It returns the country ID associated with the domain's TLD or Geo Country Code.
 func getCountryInfo(domain string) (int64, error) {
 	ctx := context.Background()
 
-	// Regex out TLD from Domain
+	// Extract the TLD from the domain.
 	tld, err := toolboxService.GetTLDFromDomain(domain)
 	if err != nil {
 		log.Printf("[%s] GetTLDFromDomain Error: %s\n", domain, err)
-		return 251, nil // See uglu hack below
+		return 251, nil // See the fallback explanation below.
 	}
 
-	// Check if tld is empty
+	// If the TLD is empty, return a default country ID (251 - Unknown).
 	if tld == "" {
 		log.Printf("[%s] TLD is empty: %s\n", domain, tld)
-		return 251, nil // See uglu hack below
+		return 251, nil // See the fallback explanation below.
 	}
 
-	// Check if TLD is a Country bound TLD
-	// Ignore if we dont find a mapping
-	dbtld, _ := countryService.GetCountryTld(ctx, fmt.Sprintf(".%s", tld))
+	// Check if the TLD is country-bound in the database.
+	// Ignore if no mapping is found.
+	dbTld, _ := countryService.GetCountryTld(ctx, fmt.Sprintf(".%s", tld))
 
-	// Return Country ID if we found a mapping in database
-	if dbtld != (core.CountryModel{}) {
+	// Return the country ID if a mapping is found in the database.
+	if dbTld != (core.CountryModel{}) {
 		if verbose {
-			log.Printf("[%s] TLD is bound to country: %s", domain, dbtld.CountryTld)
+			log.Printf("[%s] TLD is bound to country: %s", domain, dbTld.CountryTld)
 		}
-		return dbtld.ID, nil
+		return dbTld.ID, nil
 	}
 
-	// TODO: Check if domain is hosted on a CDN, if so, map it to a new catagory, CDN
+	// TODO: Check if the domain is hosted on a CDN, if so, map it to a new category, CDN.
 
-	// Since we did not find a mapping to country, check Geo Database
-	geocc, err := toolboxService.CountryCode(domain)
+	// If no TLD mapping is found, check the Geo Database for the country code.
+	geoCc, err := toolboxService.CountryCode(domain)
 	if err != nil {
 		log.Printf("[%s] CountryCode Error: %s", domain, err)
 	}
-	if len(geocc) == 0 {
+	if len(geoCc) == 0 {
 		if verbose {
 			log.Printf("[%s] GEO CountryCode is empty, setting to Unknown", domain)
 		}
-		return 251, nil // See uglu hack below
+		return 251, nil // See the fallback explanation below.
 	}
 	if verbose {
-		log.Printf("[%s] GEO CountryCode is %s", domain, geocc)
+		log.Printf("[%s] GEO CountryCode is %s", domain, geoCc)
 	}
 
-	// Check if Geo Country Code exists in DB
-	dbtld, _ = countryService.GetCountryTld(ctx, fmt.Sprintf(".%s", geocc))
+	// Check if the Geo Country Code exists in the database.
+	dbTld, _ = countryService.GetCountryTld(ctx, fmt.Sprintf(".%s", geoCc))
 
-	// Return Country ID if we found a mapping in database
-	if dbtld != (core.CountryModel{}) {
+	// Return the country ID if a mapping is found in the database.
+	if dbTld != (core.CountryModel{}) {
 		if verbose {
-			log.Printf("[%s] Domain is GEO mapped to %s", domain, dbtld.Country)
+			log.Printf("[%s] Domain is GEO mapped to %s", domain, dbTld.Country)
 		}
-		return dbtld.ID, nil
+		return dbTld.ID, nil
 	}
 
-	// Ugly hack, i'm sorry!
-	// If we dont find country code, static map it to CountryID 251 - Unknown
+	// Fallback: if no country code is found, return a default country ID (251 - Unknown).
 	return 251, nil
 }

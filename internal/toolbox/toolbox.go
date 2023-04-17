@@ -126,7 +126,7 @@ func (s *Service) ValidateDomain(domain string) error {
 	}
 
 	// Check nameserver
-	resultns, err := s.localQuery(domain, dns.TypeANY)
+	resultns, err := s.localQuery(domain, dns.TypeTXT)
 	if err != nil {
 		// no name server to answer the question
 		// disable return err here

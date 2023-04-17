@@ -27,175 +27,211 @@ type ChangelogResponse struct {
 
 // Routes returns a router with all changelog endpoints mounted.
 func (rs ChangelogHandler) Routes() chi.Router {
+	// Create a new Chi router instance
 	r := chi.NewRouter()
-	r.With(httpin.NewInput(PaginationInput{})).Get("/", rs.ChangelogList)                                     // GET /changelog - list all changelog entries
-	r.With(httpin.NewInput(PaginationInput{})).Get("/{domain}", rs.ChangelogByDomain)                         // GET /changelog/{domain} - read all changelog entries for a domain
-	r.With(httpin.NewInput(PaginationInput{})).Get("/campaign/{uuid}", rs.ChangelogByCampaign)                // GET /changelog/campaign/{uuid} - read all changelog entries for a campaign uuid
-	r.With(httpin.NewInput(PaginationInput{})).Get("/campaign/{uuid}/{domain}", rs.ChangelogByCampaignDomain) // GET /changelog/campaign/{uuid} - read all changelog entries for a domain in a campaign uuid
+
+	// Mount the changelog endpoints
+	r.With(httpin.NewInput(PaginationInput{})).Get("/", rs.ChangelogList)                                     // GET /changelog - List all changelog entries
+	r.With(httpin.NewInput(PaginationInput{})).Get("/{domain}", rs.ChangelogByDomain)                         // GET /changelog/{domain} - List all changelog entries for a specific domain
+	r.With(httpin.NewInput(PaginationInput{})).Get("/campaign/{uuid}", rs.ChangelogByCampaign)                // GET /changelog/campaign/{uuid} - List all changelog entries for a specific campaign UUID
+	r.With(httpin.NewInput(PaginationInput{})).Get("/campaign/{uuid}/{domain}", rs.ChangelogByCampaignDomain) // GET /changelog/campaign/{uuid}/{domain} - List all changelog entries for a specific domain within a campaign UUID
+
+	// Return the router with the mounted endpoints
 	return r
 }
 
-// ChangelogList lists all changelog entries.
+// ChangelogList lists all changelog entries with pagination.
 func (rs ChangelogHandler) ChangelogList(w http.ResponseWriter, r *http.Request) {
-	// Handle query params
-	input := r.Context().Value(httpin.Input).(*PaginationInput)
-	if input.Limit > 100 {
-		input.Limit = 100
+	// Retrieve pagination input from context
+	paginationInput := r.Context().Value(httpin.Input).(*PaginationInput)
+
+	// Limit the maximum number of entries per page to 100
+	if paginationInput.Limit > 100 {
+		paginationInput.Limit = 100
 	}
 
-	changelogs, err := rs.Repo.List(r.Context(), int32(input.Offset), int32(input.Limit))
+	// Fetch changelogs from the repository
+	changelogs, err := rs.Repo.List(r.Context(), int32(paginationInput.Offset), int32(paginationInput.Limit))
 	if err != nil {
+		// Handle any errors while fetching changelogs
 		render.Status(r, http.StatusInternalServerError)
 		render.JSON(w, r, render.M{"error": "internal server error"})
 		return
 	}
-	var changeloglist []ChangelogResponse
+
+	// Convert changelogs to ChangelogResponse objects
+	var changelogList []ChangelogResponse
 	for _, changelog := range changelogs {
-		changeloglist = append(changeloglist, ChangelogResponse{
+		changelogList = append(changelogList, ChangelogResponse{
 			ID:      changelog.ID,
 			Ts:      changelog.Ts,
 			Domain:  changelog.Site,
 			Message: changelog.Message,
 		})
 	}
-	render.JSON(w, r, changeloglist)
+
+	// Send the changelog list as JSON
+	render.JSON(w, r, changelogList)
 }
 
-// ChangelogByDomain gets a changelog entry by id.
+// ChangelogByDomain lists all changelog entries for a specific domain with pagination.
 func (rs ChangelogHandler) ChangelogByDomain(w http.ResponseWriter, r *http.Request) {
-	// Handle query params
-	input := r.Context().Value(httpin.Input).(*PaginationInput)
-	if input.Limit > 100 {
-		input.Limit = 100
+	// Retrieve pagination input from context
+	paginationInput := r.Context().Value(httpin.Input).(*PaginationInput)
+
+	// Limit the maximum number of entries per page to 100
+	if paginationInput.Limit > 100 {
+		paginationInput.Limit = 100
 	}
 
 	// Get domain from path
 	site := chi.URLParam(r, "domain")
 
-	// Check if site is a valid domain
+	// Validate domain
+	// TODO: Move this to core package
 	if !regexp.MustCompile(`^([a-z0-9]+(-[a-z0-9]+)*\.)+[a-z]{2,}$`).MatchString(site) {
 		render.Status(r, http.StatusBadRequest)
 		render.JSON(w, r, render.M{"error": "Invalid domain"})
 		return
 	}
 
-	changelogs, err := rs.Repo.GetChangelogByDomain(r.Context(), site, int32(input.Offset), int32(input.Limit))
+	// Fetch changelogs for the domain from the repository
+	changelogs, err := rs.Repo.GetChangelogByDomain(r.Context(), site, int32(paginationInput.Offset), int32(paginationInput.Limit))
 	if err != nil {
 		render.Status(r, http.StatusNotFound)
-		render.JSON(w, r, render.M{"error": "Unable to find changelog entry for " + site})
-		return
-	}
-	// If empty, return 404
-	if len(changelogs) == 0 {
-		render.Status(r, http.StatusNotFound)
-		render.JSON(w, r, render.M{"error": "Unable to find changelog entry for " + site})
+		render.JSON(w, r, render.M{"error": "Unable to find changelog entries for " + site})
 		return
 	}
 
-	var changeloglist []ChangelogResponse
+	// If no changelogs are found, return 404
+	if len(changelogs) == 0 {
+		render.Status(r, http.StatusNotFound)
+		render.JSON(w, r, render.M{"error": "No changelog entries found for " + site})
+		return
+	}
+
+	// Convert changelogs to ChangelogResponse objects
+	var changelogList []ChangelogResponse
 	for _, changelog := range changelogs {
-		changeloglist = append(changeloglist, ChangelogResponse{
+		changelogList = append(changelogList, ChangelogResponse{
 			ID:      changelog.ID,
 			Ts:      changelog.Ts,
 			Domain:  changelog.Site,
 			Message: changelog.Message,
 		})
 	}
-	render.JSON(w, r, changeloglist)
+
+	// Send the changelog list as JSON
+	render.JSON(w, r, changelogList)
 }
 
-// ChangelogByCampaign gets a changelog entry by uuid.
+// ChangelogByCampaign lists all changelog entries for a specific campaign UUID with pagination.
 func (rs ChangelogHandler) ChangelogByCampaign(w http.ResponseWriter, r *http.Request) {
-	// Handle query params
-	input := r.Context().Value(httpin.Input).(*PaginationInput)
-	if input.Limit > 100 {
-		input.Limit = 100
+	// Retrieve pagination input from context
+	paginationInput := r.Context().Value(httpin.Input).(*PaginationInput)
+
+	// Limit the maximum number of entries per page to 100
+	if paginationInput.Limit > 100 {
+		paginationInput.Limit = 100
 	}
 
-	// Get domain from path
+	// Get campaign UUID from path
 	campaign := chi.URLParam(r, "uuid")
 
-	// Convert to uuid.UUID
+	// Validate and parse the UUID
 	uuid, err := uuid.Parse(campaign)
 	if err != nil {
 		render.Status(r, http.StatusBadRequest)
-		render.JSON(w, r, render.M{"error": "Invalid uuid"})
+		render.JSON(w, r, render.M{"error": "Invalid UUID"})
 		return
 	}
 
-	changelogs, err := rs.Repo.GetChangelogByCampaign(r.Context(), uuid, int32(input.Offset), int32(input.Limit))
+	// Fetch changelogs for the campaign from the repository
+	changelogs, err := rs.Repo.GetChangelogByCampaign(r.Context(), uuid, int32(paginationInput.Offset), int32(paginationInput.Limit))
 	if err != nil {
 		render.Status(r, http.StatusNotFound)
-		render.JSON(w, r, render.M{"error": "Unable to find changelog entry for " + campaign})
-		return
-	}
-	// If empty, return 404
-	if len(changelogs) == 0 {
-		render.Status(r, http.StatusNotFound)
-		render.JSON(w, r, render.M{"error": "Unable to find changelog entry for " + campaign})
+		render.JSON(w, r, render.M{"error": "Unable to find changelog entries for campaign " + campaign})
 		return
 	}
 
-	var changeloglist []ChangelogResponse
+	// If no changelogs are found, return 404
+	if len(changelogs) == 0 {
+		render.Status(r, http.StatusNotFound)
+		render.JSON(w, r, render.M{"error": "No changelog entries found for campaign " + campaign})
+		return
+	}
+
+	// Convert changelogs to ChangelogResponse objects
+	var changelogList []ChangelogResponse
 	for _, changelog := range changelogs {
-		changeloglist = append(changeloglist, ChangelogResponse{
+		changelogList = append(changelogList, ChangelogResponse{
 			ID:      changelog.ID,
 			Ts:      changelog.Ts,
 			Domain:  changelog.Site,
 			Message: changelog.Message,
 		})
 	}
-	render.JSON(w, r, changeloglist)
+
+	// Send the changelog list as JSON
+	render.JSON(w, r, changelogList)
 }
 
-// ChangelogByCampaignDomain gets a changelog entry by uuid and domain.
+// ChangelogByCampaignDomain lists all changelog entries for a specific campaign UUID and domain with pagination.
 func (rs ChangelogHandler) ChangelogByCampaignDomain(w http.ResponseWriter, r *http.Request) {
-	// Handle query params
-	input := r.Context().Value(httpin.Input).(*PaginationInput)
-	if input.Limit > 100 {
-		input.Limit = 100
+	// Retrieve pagination input from context
+	paginationInput := r.Context().Value(httpin.Input).(*PaginationInput)
+
+	// Limit the maximum number of entries per page to 100
+	if paginationInput.Limit > 100 {
+		paginationInput.Limit = 100
 	}
 
-	// Get domain from path
+	// Get campaign UUID and domain from path
 	campaign := chi.URLParam(r, "uuid")
 	site := chi.URLParam(r, "domain")
 
-	// Check if site is a valid domain
+	// Validate the domain
+	// TODO: Move this to core package
 	if !regexp.MustCompile(`^([a-z0-9]+(-[a-z0-9]+)*\.)+[a-z]{2,}$`).MatchString(site) {
 		render.Status(r, http.StatusBadRequest)
 		render.JSON(w, r, render.M{"error": "Invalid domain"})
 		return
 	}
 
-	// Convert to uuid.UUID
+	// Validate and parse the UUID
 	uuid, err := uuid.Parse(campaign)
 	if err != nil {
 		render.Status(r, http.StatusBadRequest)
-		render.JSON(w, r, render.M{"error": "Invalid uuid"})
+		render.JSON(w, r, render.M{"error": "Invalid UUID"})
 		return
 	}
 
-	changelogs, err := rs.Repo.GetChangelogByCampaignDomain(r.Context(), uuid, site, int32(input.Offset), int32(input.Limit))
+	// Fetch changelogs for the campaign and domain from the repository
+	changelogs, err := rs.Repo.GetChangelogByCampaignDomain(r.Context(), uuid, site, int32(paginationInput.Offset), int32(paginationInput.Limit))
 	if err != nil {
 		render.Status(r, http.StatusNotFound)
-		render.JSON(w, r, render.M{"error": "Unable to find changelog entry for " + campaign})
-		return
-	}
-	// If empty, return 404
-	if len(changelogs) == 0 {
-		render.Status(r, http.StatusNotFound)
-		render.JSON(w, r, render.M{"error": "Unable to find changelog entry for " + campaign})
+		render.JSON(w, r, render.M{"error": "Unable to find changelog entries for campaign " + campaign + " and domain " + site})
 		return
 	}
 
-	var changeloglist []ChangelogResponse
+	// If no changelogs are found, return 404
+	if len(changelogs) == 0 {
+		render.Status(r, http.StatusNotFound)
+		render.JSON(w, r, render.M{"error": "No changelog entries found for campaign " + campaign + " and domain " + site})
+		return
+	}
+
+	// Convert changelogs to ChangelogResponse objects
+	var changelogList []ChangelogResponse
 	for _, changelog := range changelogs {
-		changeloglist = append(changeloglist, ChangelogResponse{
+		changelogList = append(changelogList, ChangelogResponse{
 			ID:      changelog.ID,
 			Ts:      changelog.Ts,
 			Domain:  changelog.Site,
 			Message: changelog.Message,
 		})
 	}
-	render.JSON(w, r, changeloglist)
+
+	// Send the changelog list as JSON
+	render.JSON(w, r, changelogList)
 }

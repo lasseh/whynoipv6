@@ -43,26 +43,34 @@ type CampaignListResponse struct {
 	Count       int64     `json:"count"`
 }
 
-// Routes returns a router with all domain endpoints mounted.
+// Routes returns a router with all campaign endpoints mounted.
 func (rs CampaignHandler) Routes() chi.Router {
+	// Create a new Chi router instance
 	r := chi.NewRouter()
+
+	// Mount the campaign endpoints
 	r.Get("/", rs.CampaignList)                                                   // GET /campaign - List all campaigns
-	r.Get("/domain/{domain}", rs.ViewCampaignDomain)                              // GET /campaign/domain/domain.com - View single domain
-	r.With(httpin.NewInput(PaginationInput{})).Get("/{uuid}", rs.CampaignDomains) // GET /campaign/{uuid} - list all domains for a campaign uuid
+	r.Get("/domain/{domain}", rs.ViewCampaignDomain)                              // GET /campaign/domain/{domain} - View details of a single domain
+	r.With(httpin.NewInput(PaginationInput{})).Get("/{uuid}", rs.CampaignDomains) // GET /campaign/{uuid} - List all domains for a given campaign UUID
+
+	// Return the router with the mounted endpoints
 	return r
 }
 
-// CampaignList lists all domains.
+// CampaignList retrieves and lists all campaigns.
 func (rs CampaignHandler) CampaignList(w http.ResponseWriter, r *http.Request) {
-	campaigns, err := rs.Repo.ListCampaign(r.Context())
+	// Retrieve all campaigns from the repository
+	allCampaigns, err := rs.Repo.ListCampaign(r.Context())
 	if err != nil {
 		render.Status(r, http.StatusInternalServerError)
-		render.JSON(w, r, render.M{"error": "internal server error"})
+		render.JSON(w, r, render.M{"error": "Internal server error"})
 		return
 	}
-	var campaignlist []CampaignListResponse
-	for _, campaign := range campaigns {
-		campaignlist = append(campaignlist, CampaignListResponse{
+
+	// Prepare the response with campaign details
+	var campaignList []CampaignListResponse
+	for _, campaign := range allCampaigns {
+		campaignList = append(campaignList, CampaignListResponse{
 			ID:          campaign.ID,
 			UUID:        campaign.UUID,
 			Name:        campaign.Name,
@@ -70,43 +78,46 @@ func (rs CampaignHandler) CampaignList(w http.ResponseWriter, r *http.Request) {
 			Count:       campaign.Count,
 		})
 	}
-	render.JSON(w, r, campaignlist)
+
+	// Send campaign list as JSON response
+	render.JSON(w, r, campaignList)
 }
 
 // CampaignDomains lists all domains in a campaign.
 func (rs CampaignHandler) CampaignDomains(w http.ResponseWriter, r *http.Request) {
 	// Handle query params
-	input := r.Context().Value(httpin.Input).(*PaginationInput)
-	if input.Limit > 100 {
-		input.Limit = 100
+	paginationInput := r.Context().Value(httpin.Input).(*PaginationInput)
+	if paginationInput.Limit > 100 {
+		paginationInput.Limit = 100
 	}
 
-	// Get domain from path
-	campaign := chi.URLParam(r, "uuid")
+	// Get campaign UUID from path
+	campaignUUID := chi.URLParam(r, "uuid")
 
-	// Convert to uuid.UUID
-	uuid, err := uuid.Parse(campaign)
+	// Convert campaignUUID to uuid.UUID
+	parsedUUID, err := uuid.Parse(campaignUUID)
 	if err != nil {
 		render.Status(r, http.StatusBadRequest)
-		render.JSON(w, r, render.M{"error": "Invalid uuid"})
+		render.JSON(w, r, render.M{"error": "Invalid UUID"})
 		return
 	}
 
-	domains, err := rs.Repo.ListCampaignDomain(r.Context(), uuid, int32(input.Offset), int32(input.Limit))
+	// Retrieve domains associated with the campaign
+	domains, err := rs.Repo.ListCampaignDomain(r.Context(), parsedUUID, int32(paginationInput.Offset), int32(paginationInput.Limit))
 	if err != nil {
 		render.Status(r, http.StatusInternalServerError)
-		render.JSON(w, r, render.M{"error": "internal server error"})
+		render.JSON(w, r, render.M{"error": "Internal server error"})
 		return
 	}
 	if len(domains) == 0 {
 		render.Status(r, http.StatusNotFound)
-		render.JSON(w, r, render.M{"error": "campaign not found"})
+		render.JSON(w, r, render.M{"error": "Campaign not found"})
 		return
 	}
 
-	var domainlist []CampaignResponse
+	var domainList []CampaignResponse
 	for _, domain := range domains {
-		domainlist = append(domainlist, CampaignResponse{
+		domainList = append(domainList, CampaignResponse{
 			Domain:    domain.Site,
 			CheckAAAA: domain.CheckAAAA,
 			CheckWWW:  domain.CheckWWW,
@@ -122,32 +133,36 @@ func (rs CampaignHandler) CampaignDomains(w http.ResponseWriter, r *http.Request
 			TsUpdated: domain.TsUpdated,
 		})
 	}
-	render.JSON(w, r, domainlist)
+	render.JSON(w, r, domainList)
 }
 
-// ViewCampaignDomain lists a sigle domain in a campaign.
+// ViewCampaignDomain retrieves a single domain in a campaign.
 func (rs CampaignHandler) ViewCampaignDomain(w http.ResponseWriter, r *http.Request) {
 	// Get domain from path
-	paramdomain := chi.URLParam(r, "domain")
-	domain, err := rs.Repo.ViewCampaignDomain(r.Context(), paramdomain)
+	paramDomain := chi.URLParam(r, "domain")
+
+	// Retrieve domain details from the repository
+	domainDetails, err := rs.Repo.ViewCampaignDomain(r.Context(), paramDomain)
 	if err != nil {
 		render.Status(r, http.StatusNotFound)
-		render.JSON(w, r, render.M{"error": "domain not found"})
+		render.JSON(w, r, render.M{"error": "Domain not found"})
 		return
 	}
+
+	// Send domain details as JSON response
 	render.JSON(w, r, CampaignResponse{
-		Domain:    domain.Site,
-		CheckAAAA: domain.CheckAAAA,
-		CheckWWW:  domain.CheckWWW,
-		CheckNS:   domain.CheckNS,
-		CheckCurl: domain.CheckCurl,
-		AsName:    domain.AsName,
-		Country:   domain.Country,
-		TsAAAA:    domain.TsAAAA,
-		TsWWW:     domain.TsWWW,
-		TsNS:      domain.TsNS,
-		TsCurl:    domain.TsCurl,
-		TsCheck:   domain.TsCheck,
-		TsUpdated: domain.TsUpdated,
+		Domain:    domainDetails.Site,
+		CheckAAAA: domainDetails.CheckAAAA,
+		CheckWWW:  domainDetails.CheckWWW,
+		CheckNS:   domainDetails.CheckNS,
+		CheckCurl: domainDetails.CheckCurl,
+		AsName:    domainDetails.AsName,
+		Country:   domainDetails.Country,
+		TsAAAA:    domainDetails.TsAAAA,
+		TsWWW:     domainDetails.TsWWW,
+		TsNS:      domainDetails.TsNS,
+		TsCurl:    domainDetails.TsCurl,
+		TsCheck:   domainDetails.TsCheck,
+		TsUpdated: domainDetails.TsUpdated,
 	})
 }
