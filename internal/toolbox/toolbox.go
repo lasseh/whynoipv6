@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/miekg/dns"
+	"golang.org/x/net/idna"
 )
 
 // Service is a service for managing v6 tools
@@ -204,4 +205,15 @@ func (s *Service) CheckCurl(domain string) (bool, error) {
 func (s *Service) PercentOf(current int, all int) float64 {
 	percent := (float64(current) * float64(100)) / float64(all)
 	return percent
+}
+
+// IDNADomain returns the domain name in internationalized format.
+// If it already is in the internationalized format, it returns the
+// same value it got.
+func IDNADomain(domain string) (string, error) {
+	if domain, err = idna.ToASCII(domain); err != nil {
+		return "", err
+	} else {
+		return domain, nil
+	}
 }
