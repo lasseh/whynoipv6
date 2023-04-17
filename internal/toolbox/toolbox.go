@@ -29,6 +29,12 @@ func NewToolboxService(gdb, ns string) *Service {
 func (s *Service) CheckTLD(domain string) (QueryResult, error) {
 	q := QueryResult{}
 
+	var err error
+	domain, err = IDNADomain(domain)
+	if err != nil {
+		return q, err
+	}
+
 	result, err := s.localQuery(domain, dns.TypeAAAA)
 	if err != nil {
 		return QueryResult{}, err
@@ -60,6 +66,12 @@ func (s *Service) CheckTLD(domain string) (QueryResult, error) {
 // CheckNS checks if a domain has an AAAA record in the NS records and returns true on first hit
 func (s *Service) CheckNS(domain string) (QueryResult, error) {
 	q := QueryResult{}
+
+	var err error
+	domain, err = IDNADomain(domain)
+	if err != nil {
+		return q, err
+	}
 
 	result, err := s.localQuery(domain, dns.TypeNS)
 	if err != nil {
@@ -106,6 +118,12 @@ func (s *Service) CheckNS(domain string) (QueryResult, error) {
 func (s *Service) ValidateDomain(domain string) error {
 	// Check for lookup errors
 	var aError, wwwError bool
+
+	var err error
+	domain, err = IDNADomain(domain)
+	if err != nil {
+		return err
+	}
 
 	// Check nameserver
 	resultns, err := s.localQuery(domain, dns.TypeTXT)

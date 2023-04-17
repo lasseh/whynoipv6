@@ -6,6 +6,7 @@ import (
 	"log"
 	"time"
 	"whynoipv6/internal/core"
+	"whynoipv6/internal/toolbox"
 
 	"github.com/jackc/pgx/v4"
 )
@@ -35,6 +36,11 @@ func prettyDuration(d time.Duration) string {
 // If the ASN is not present in the database, it creates a new entry and returns the ASN ID.
 func getASNInfo(domain string) (int64, error) {
 	ctx := context.Background()
+
+	domain, err = toolbox.IDNADomain(domain)
+	if err != nil {
+		return 0, err
+	}
 
 	// Retrieve ASN information for the domain using the toolboxService.
 	asn, err := toolboxService.ASNInfo(domain)
