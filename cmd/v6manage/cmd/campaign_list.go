@@ -17,7 +17,7 @@ var listCmd = &cobra.Command{
 	Long:  `Lists all campaigns`,
 	Run: func(cmd *cobra.Command, args []string) {
 		campaignService = *core.NewCampaignService(db)
-		listCampain()
+		listCampaign()
 	},
 }
 
@@ -25,15 +25,21 @@ func init() {
 	campaignCmd.AddCommand(listCmd)
 }
 
-func listCampain() {
+// listCampaign displays a table of campaigns with their UUID, name, and domain count.
+func listCampaign() {
 	ctx := context.Background()
+
+	// Create a new table with simpletable package.
 	table := simpletable.New()
 
+	// Fetch campaigns using the campaignService.
 	campaigns, err := campaignService.ListCampaign(ctx)
 	if err != nil {
-		fmt.Println(err)
+		fmt.Printf("Error fetching campaigns: %v\n", err)
+		return
 	}
 
+	// Set table header.
 	table.Header = &simpletable.Header{
 		Cells: []*simpletable.Cell{
 			{Align: simpletable.AlignCenter, Text: "UUID"},
@@ -42,28 +48,32 @@ func listCampain() {
 		},
 	}
 
-	var total = 0
+	// Initialize a variable to store the total domain count.
+	var totalDomainCount = 0
 
-	for _, row := range campaigns {
-		r := []*simpletable.Cell{
-			{Text: row.UUID.String()},
-			{Text: row.Name},
-			{Align: simpletable.AlignRight, Text: fmt.Sprintf("%d", row.Count)},
+	// Iterate through the campaigns and add rows to the table.
+	for _, campaign := range campaigns {
+		row := []*simpletable.Cell{
+			{Text: campaign.UUID.String()},
+			{Text: campaign.Name},
+			{Align: simpletable.AlignRight, Text: fmt.Sprintf("%d", campaign.Count)},
 		}
 
-		table.Body.Cells = append(table.Body.Cells, r)
+		table.Body.Cells = append(table.Body.Cells, row)
 
-		total += int(row.Count)
+		totalDomainCount += int(campaign.Count)
 	}
+
+	// Set table footer with the total domain count.
 	table.Footer = &simpletable.Footer{
 		Cells: []*simpletable.Cell{
 			{},
 			{Align: simpletable.AlignRight, Text: "Total"},
-			{Align: simpletable.AlignRight, Text: fmt.Sprintf("%d", total)},
+			{Align: simpletable.AlignRight, Text: fmt.Sprintf("%d", totalDomainCount)},
 		},
 	}
 
+	// Set table style and print it.
 	table.SetStyle(simpletable.StyleDefault)
 	fmt.Println(table.String())
-
 }

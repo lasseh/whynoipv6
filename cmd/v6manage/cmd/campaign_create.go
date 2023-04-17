@@ -26,24 +26,39 @@ func init() {
 	campaignCmd.AddCommand(createCmd)
 }
 
+// createCampaign reads campaign name and description from stdin and creates a new campaign.
 func createCampaign() {
 	ctx := context.Background()
 
-	// Read input from stdin
+	// Create a new buffered reader for reading input from stdin.
 	reader := bufio.NewReader(os.Stdin)
-	fmt.Print("Campaign Name: ")
-	name, _ := reader.ReadString('\n')
-	fmt.Print("Campaign Description: ")
-	description, _ := reader.ReadString('\n')
 
-	// Create campaign
-	n, err := campaignService.CreateCampaign(ctx, strings.TrimSpace(name), strings.TrimSpace(description))
+	// Read campaign name from stdin.
+	fmt.Print("Campaign Name: ")
+	name, err := reader.ReadString('\n')
 	if err != nil {
-		fmt.Println(err)
+		fmt.Printf("Error reading campaign name: %v\n", err)
+		return
 	}
 
+	// Read campaign description from stdin.
+	fmt.Print("Campaign Description: ")
+	description, err := reader.ReadString('\n')
+	if err != nil {
+		fmt.Printf("Error reading campaign description: %v\n", err)
+		return
+	}
+
+	// Create a new campaign using the campaignService.
+	newCampaign, err := campaignService.CreateCampaign(ctx, strings.TrimSpace(name), strings.TrimSpace(description))
+	if err != nil {
+		fmt.Printf("Error creating campaign: %v\n", err)
+		return
+	}
+
+	// Display the created campaign's details.
 	fmt.Println("")
 	fmt.Println("Campaign created successfully.")
-	fmt.Println("UUID: ", n.UUID)
-	fmt.Println("Name: ", n.Name)
+	fmt.Println("UUID: ", newCampaign.UUID)
+	fmt.Println("Name: ", newCampaign.Name)
 }

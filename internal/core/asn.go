@@ -7,28 +7,28 @@ import (
 	"github.com/jackc/pgx/v4"
 )
 
-// ASNService is a service for BGP AS Numbers.
+// ASNService provides methods to interact with BGP Autonomous System Numbers (ASNs).
 type ASNService struct {
-	q *db.Queries
+	queries *db.Queries
 }
 
-// NewASNService creates a new AsnService.
+// NewASNService creates a new ASNService instance.
 func NewASNService(d db.DBTX) *ASNService {
 	return &ASNService{
-		q: db.New(d),
+		queries: db.New(d),
 	}
 }
 
-// ASNModel represents a BGP AS Number.
+// ASNModel represents a BGP Autonomous System Number (ASN) and its associated information.
 type ASNModel struct {
 	ID     int64  `json:"id"`
 	Number int32  `json:"asn"`
 	Name   string `json:"name"`
 }
 
-// CreateAsn creates a new BGP AS Number.
+// CreateAsn creates a new BGP ASN record with the specified number and name.
 func (s *ASNService) CreateAsn(ctx context.Context, number int32, name string) (ASNModel, error) {
-	asn, err := s.q.CreateASN(ctx, db.CreateASNParams{
+	asn, err := s.queries.CreateASN(ctx, db.CreateASNParams{
 		Number: number,
 		Name:   name,
 	})
@@ -42,9 +42,9 @@ func (s *ASNService) CreateAsn(ctx context.Context, number int32, name string) (
 	}, nil
 }
 
-// GetASByNumber gets a BGP Info by AS Number.
+// GetASByNumber retrieves the BGP ASN record with the specified AS number.
 func (s *ASNService) GetASByNumber(ctx context.Context, number int32) (ASNModel, error) {
-	a, err := s.q.GetASByNumber(ctx, number)
+	asnRecord, err := s.queries.GetASByNumber(ctx, number)
 	if err == pgx.ErrNoRows {
 		return ASNModel{}, pgx.ErrNoRows
 	}
@@ -52,8 +52,8 @@ func (s *ASNService) GetASByNumber(ctx context.Context, number int32) (ASNModel,
 		return ASNModel{}, err
 	}
 	return ASNModel{
-		ID:     a.ID,
-		Number: a.Number,
-		Name:   a.Name,
+		ID:     asnRecord.ID,
+		Number: asnRecord.Number,
+		Name:   asnRecord.Name,
 	}, nil
 }
