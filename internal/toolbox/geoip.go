@@ -12,26 +12,27 @@ import (
 	"github.com/miekg/dns"
 )
 
-// Asn is a ASN record
+// Asn represents an Autonomous System Number (ASN) record.
 type Asn struct {
 	Number int32
 	Name   string
 }
 
-// ASNInfo Checks the ASN of an Domain
+// ASNInfo retrieves the ASN information for a given domain.
 func (s *Service) ASNInfo(domain string) (Asn, error) {
-
 	var err error
 	domain, err = IDNADomain(domain)
 	if err != nil {
 		return Asn{}, err
 	}
 
-	// Lookup the Domain (fails on IPv6 only domains)
+	// Attempt to retrieve the A record for the domain (this will fail for IPv6-only domains).
 	result, err := s.localQuery(domain, dns.TypeA)
 	if err != nil {
 		log.Printf("[%s] [ASNInfo] No A record for domain. Error: %s", domain, err)
 	}
+
+	// If the A record is found, iterate through the records and look up the ASN information.
 	if err == nil {
 		for _, r := range result.Answer {
 			switch r.Header().Rrtype {
@@ -68,7 +69,7 @@ func (s *Service) ASNInfo(domain string) (Asn, error) {
 	return Asn{}, nil
 }
 
-// IPtoASN checks the geolite database for ASN info
+// IPtoASN retrieves the ASN information for a given IP address from the GeoLite2 database.
 func (s *Service) IPtoASN(ip string) (Asn, error) {
 	reader, err := geoip2.NewASNReaderFromFile(s.GeoDB + "GeoLite2-ASN.mmdb")
 	if err != nil {
@@ -88,7 +89,7 @@ func (s *Service) IPtoASN(ip string) (Asn, error) {
 
 // CountryCode Section
 
-// GetTLDFromDomain returns the TLD from a domain
+// GetTLDFromDomain extracts the Top-Level Domain (TLD) from a given domain.
 func (s *Service) GetTLDFromDomain(domain string) (string, error) {
 	re := regexp.MustCompile(`(?i)([a-z0-9-]+)\.([a-z]{2,})$`)
 	match := re.FindStringSubmatch(domain)
@@ -98,7 +99,7 @@ func (s *Service) GetTLDFromDomain(domain string) (string, error) {
 	return strings.ToUpper(match[2]), nil
 }
 
-// CountryCode loops over A records and returns the first country code
+// CountryCode retrieves the country code for a given domain by looking up the A records and their corresponding IP addresses.
 func (s *Service) CountryCode(domain string) (string, error) {
 	q := QueryResult{}
 
@@ -119,7 +120,7 @@ func (s *Service) CountryCode(domain string) (string, error) {
 		return "", fmt.Errorf("Rcode: %s", dns.RcodeToString[result.Rcode])
 	}
 
-	// Loop over result and check country code for each ip
+	// Loop over result and check country code for each IP address
 	for _, r := range result.Answer {
 		switch r.Header().Rrtype {
 		case dns.TypeA:
@@ -139,7 +140,7 @@ func (s *Service) CountryCode(domain string) (string, error) {
 	return "", nil
 }
 
-// GeoCountryCode checks the geolite database ip mapping
+// geoCountryCode retrieves the country code for a given IP address from the GeoLite2 database.
 func (s *Service) geoCountryCode(ip string) (string, error) {
 	reader, err := geoip2.NewCountryReaderFromFile(s.GeoDB + "GeoLite2-Country.mmdb")
 	if err != nil {

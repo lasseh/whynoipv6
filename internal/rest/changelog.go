@@ -27,16 +27,17 @@ type ChangelogResponse struct {
 
 // Routes returns a router with all changelog endpoints mounted.
 func (rs ChangelogHandler) Routes() chi.Router {
-	// Create a new Chi router instance
 	r := chi.NewRouter()
 
-	// Mount the changelog endpoints
-	r.With(httpin.NewInput(PaginationInput{})).Get("/", rs.ChangelogList)                                     // GET /changelog - List all changelog entries
-	r.With(httpin.NewInput(PaginationInput{})).Get("/{domain}", rs.ChangelogByDomain)                         // GET /changelog/{domain} - List all changelog entries for a specific domain
-	r.With(httpin.NewInput(PaginationInput{})).Get("/campaign/{uuid}", rs.ChangelogByCampaign)                // GET /changelog/campaign/{uuid} - List all changelog entries for a specific campaign UUID
-	r.With(httpin.NewInput(PaginationInput{})).Get("/campaign/{uuid}/{domain}", rs.ChangelogByCampaignDomain) // GET /changelog/campaign/{uuid}/{domain} - List all changelog entries for a specific domain within a campaign UUID
+	// GET /changelog - List all changelog entries
+	r.With(httpin.NewInput(PaginationInput{})).Get("/", rs.ChangelogList)
+	// GET /changelog/{domain} - List all changelog entries for a specific domain
+	r.With(httpin.NewInput(PaginationInput{})).Get("/{domain}", rs.ChangelogByDomain)
+	// GET /changelog/campaign/{uuid} - List all changelog entries for a specific campaign UUID
+	r.With(httpin.NewInput(PaginationInput{})).Get("/campaign/{uuid}", rs.ChangelogByCampaign)
+	// GET /changelog/campaign/{uuid}/{domain} - List all changelog entries for a specific domain within a campaign UUID
+	r.With(httpin.NewInput(PaginationInput{})).Get("/campaign/{uuid}/{domain}", rs.ChangelogByCampaignDomain)
 
-	// Return the router with the mounted endpoints
 	return r
 }
 

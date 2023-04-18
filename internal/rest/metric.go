@@ -10,25 +10,28 @@ import (
 	"github.com/jackc/pgtype"
 )
 
-// MetricHandler is a handler for all metrics.
+// MetricHandler is a handler for managing all metric-related operations.
 type MetricHandler struct {
 	Repo *core.MetricService
 }
 
-// MetricResponse is the response for a domain.
+// MetricResponse is the response structure for a metric.
 type MetricResponse struct {
 	Time time.Time    `json:"time"`
 	Data pgtype.JSONB `json:"data"`
 }
 
-// Routes returns a router with all domain endpoints mounted.
+// Routes returns a router with all metric endpoints mounted.
 func (rs MetricHandler) Routes() chi.Router {
 	r := chi.NewRouter()
-	r.Get("/total", rs.Totals) // GET /metrics/total
+
+	// GET /metrics/total
+	r.Get("/total", rs.Totals)
+
 	return r
 }
 
-// Totals is the status for all domains crawled.
+// Totals returns the aggregated metrics for all crawled domains.
 func (rs MetricHandler) Totals(w http.ResponseWriter, r *http.Request) {
 	metrics, err := rs.Repo.GetMetrics(r.Context(), "domains")
 	if err != nil {
@@ -37,13 +40,13 @@ func (rs MetricHandler) Totals(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var metriclist []MetricResponse
+	var metricList []MetricResponse
 	for _, metric := range metrics {
-		metriclist = append(metriclist, MetricResponse{
+		metricList = append(metricList, MetricResponse{
 			Time: metric.Time,
 			Data: metric.Data,
 		})
 	}
 
-	render.JSON(w, r, metriclist)
+	render.JSON(w, r, metricList)
 }

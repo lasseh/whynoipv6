@@ -9,28 +9,31 @@ import (
 	"github.com/jackc/pgtype"
 )
 
-// MetricService is a service for metrics.
+// MetricService is a service for handling metrics.
 type MetricService struct {
-	q *db.Queries
+	queries *db.Queries
 }
 
-// NewMetricService creates a new MetricService.
+// NewMetricService creates a new MetricService instance.
 func NewMetricService(d db.DBTX) *MetricService {
 	return &MetricService{
-		q: db.New(d),
+		queries: db.New(d),
 	}
 }
 
-// MetricModel represents a metric.
-type MetricModel struct {
+// Metric represents a metric data point.
+type Metric struct {
 	Time time.Time
 	Data pgtype.JSONB
 }
 
-// StoreMetric stores a metric.
-func (s *MetricService) StoreMetric(ctx context.Context, measurement string, data any) error {
+// StoreMetric stores a metric data point with the given measurement name and data.
+func (s *MetricService) StoreMetric(ctx context.Context, measurement string, data interface{}) error {
 	// Encode the data to a []byte
-	dataBytes, _ := json.Marshal(data)
+	dataBytes, err := json.Marshal(data)
+	if err != nil {
+		return err
+	}
 
 	// Create a new pgtype.JSONB struct
 	jsonb := &pgtype.JSONB{}
@@ -40,26 +43,25 @@ func (s *MetricService) StoreMetric(ctx context.Context, measurement string, dat
 		return err
 	}
 
-	return s.q.StoreMetric(ctx, db.StoreMetricParams{
+	return s.queries.StoreMetric(ctx, db.StoreMetricParams{
 		Measurement: measurement,
 		Data:        *jsonb,
 	})
 }
 
-// GetMetrics gets all the metrics for a measurement.
-func (s *MetricService) GetMetrics(ctx context.Context, measurement string) ([]MetricModel, error) {
-	metrics, err := s.q.GetMetric(ctx, measurement)
+// GetMetrics retrieves all the metrics for a specified measurement.
+func (s *MetricService) GetMetrics(ctx context.Context, measurement string) ([]Metric, error) {
+	metrics, err := s.queries.GetMetric(ctx, measurement)
 	if err != nil {
-		return []MetricModel{}, err
+		return nil, err
 	}
 
-	var m []MetricModel
-	for _, d := range metrics {
-		m = append(m, MetricModel{
-			Time: d.Time,
-			Data: d.Data,
+	var metricList []Metric
+	for _, metric := range metrics {
+		metricList = append(metricList, Metric{
+			Time: metric.Time,
+			Data: metric.Data,
 		})
 	}
-	return m, nil
-
+	return metricList, nil
 }

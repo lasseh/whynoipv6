@@ -10,13 +10,13 @@ import (
 )
 
 const (
-	// DefaultTimeout stops slow dns's
+	// DefaultTimeout defines the maximum time to wait for a DNS response.
 	DefaultTimeout = 20 * time.Second
-	// MaxReturnedIPAddressesCount stops overflow
+	// MaxReturnedIPAddressesCount limits the number of returned IP addresses.
 	MaxReturnedIPAddressesCount = 64
 )
 
-// Errors returned by the verification/validation methods at all levels.
+// Common errors returned by the verification/validation methods.
 var (
 	ErrNoResult       = errors.New("requested RR not found")
 	ErrNsNotAvailable = errors.New("no name server to answer the question")
@@ -25,8 +25,8 @@ var (
 
 var resolver *Resolver
 
-// Resolver contains the client configuration for github.com/miekg/dns,
-// the instantiated client and the func that performs the actual queries.
+// Resolver contains the DNS client configuration, the instantiated client,
+// and the function that performs the actual queries.
 // queryFn can be used for mocking the actual DNS lookups in the test suite.
 type Resolver struct {
 	Query           func(string, uint16) (*dns.Msg, error)
@@ -34,8 +34,7 @@ type Resolver struct {
 	dnsClientConfig *dns.ClientConfig
 }
 
-// NewDNSMessage creates and initializes a dns.Msg object.
-// It returns a pointer to the created object.
+// NewDNSMessage creates and initializes a dns.Msg object, returning a pointer to it.
 func (s *Service) NewDNSMessage() *dns.Msg {
 	dnsMessage := &dns.Msg{
 		MsgHdr: dns.MsgHdr{
@@ -84,8 +83,8 @@ func (s *Service) localQuery(qname string, qtype uint16) (*dns.Msg, error) {
 	return nil, ErrNsNotAvailable
 }
 
-// QueryResult is the result from a dns lookup
+// QueryResult represents the result from a DNS lookup.
 type QueryResult struct {
-	IPv6  bool
-	Rcode int
+	IPv6  bool // Indicates whether the result is an IPv6 address.
+	Rcode int  // The response code of the DNS query.
 }

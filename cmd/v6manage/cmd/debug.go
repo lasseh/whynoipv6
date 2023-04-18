@@ -10,11 +10,11 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// statsCmd represents the stats command
+// debugCmd represents the debug command.
 var debugCmd = &cobra.Command{
 	Use:   "debug",
 	Short: "Debug a site",
-	Long:  "Debug",
+	Long:  "Debug a site by checking its IPv6 support, nameservers, ASN and country information.",
 	Run: func(cmd *cobra.Command, args []string) {
 		asnService = *core.NewASNService(db)
 		countryService = *core.NewCountryService(db)
@@ -28,8 +28,9 @@ func init() {
 	rootCmd.AddCommand(debugCmd)
 }
 
+// debugDomain checks the IPv6 support, nameservers, ASN and country information for a list of domains.
 func debugDomain() {
-	// Create array of domain names
+	// List of domain names to be checked.
 	domains := []string{
 		"example.co.uk",
 		"serialssolutions.com",
@@ -46,18 +47,18 @@ func debugDomain() {
 		"finn.no",
 	}
 
-	// Dns Client
-	resolver, err = toolboxService.NewResolver()
+	// Initialize the DNS client.
+	_, err := toolboxService.NewResolver()
 	if err != nil {
-		log.Printf("Could not initalize dns resolver: %s\n", err)
+		log.Printf("Could not initialize DNS resolver: %s\n", err)
 		os.Exit(1)
 	}
 
-	// Loop through domains
+	// Loop through the domains and check their properties.
 	for _, domain := range domains {
 		log.Println("Checking domain:", domain)
 
-		// Validate domain
+		// Validate the domain name.
 		if err := toolboxService.ValidateDomain(domain); err != nil {
 			log.Printf("Invalid domain: %s - %s\n", domain, err)
 			log.Println("Disable domain!")
@@ -65,49 +66,42 @@ func debugDomain() {
 			continue
 		}
 
-		// Check if domain has AAAA record
-		checkAAAA, err := toolboxService.CheckTLD(domain)
-		if err != nil {
-			if verbose {
-				log.Printf("[%s] CheckTLD AAAA error: %s\n", domain, err)
-			}
+		// Check if domain has an AAAA record.
+		hasAAAA, err := toolboxService.CheckTLD(domain)
+		if err != nil && verbose {
+			log.Printf("[%s] CheckTLD AAAA error: %s\n", domain, err)
 		}
-		log.Println("CheckTLD AAAA:", checkAAAA)
+		log.Println("CheckTLD AAAA:", hasAAAA)
 
-		// Check if wwww.domain has AAAA record
-		checkWWW, err := toolboxService.CheckTLD(fmt.Sprintf("www.%s", domain))
-		if err != nil {
-			if verbose {
-				log.Printf("[%s] CheckTLD WWW error: %s\n", domain, err)
-			}
+		// Check if www.domain has an AAAA record.
+		hasWWW, err := toolboxService.CheckTLD(fmt.Sprintf("www.%s", domain))
+		if err != nil && verbose {
+			log.Printf("[%s] CheckTLD WWW error: %s\n", domain, err)
 		}
-		log.Println("CheckTLD WWW:", checkWWW)
+		log.Println("CheckTLD WWW:", hasWWW)
 
-		// Check if domain has AAAA record for nameservers
-		checkNS, err := toolboxService.CheckNS(domain)
-		if err != nil {
-			if verbose {
-				log.Printf("[%s] CheckNS error: %s", domain, err)
-			}
+		// Check if domain has AAAA records for nameservers.
+		hasNS, err := toolboxService.CheckNS(domain)
+		if err != nil && verbose {
+			log.Printf("[%s] CheckNS error: %s", domain, err)
 		}
-		log.Println("CheckNS:", checkNS)
+		log.Println("CheckNS:", hasNS)
 
-		// Map AsnID to ASN Table
-		asnid, err := getASNInfo(domain)
+		// Retrieve ASN information for the domain.
+		asnID, err := getASNInfo(domain)
 		if err != nil {
 			log.Printf("[%s] getASNInfo error: %s\n", domain, err)
 		}
-		log.Println("ASNID:", asnid)
+		log.Println("ASNID:", asnID)
 
-		// Map CountryID to Country Table
-		countryid, err := getCountryInfo(domain)
+		// Retrieve country information for the domain.
+		countryID, err := getCountryInfo(domain)
 		if err != nil {
 			log.Printf("[%s] getCountryID error: %s\n", domain, err)
 		}
-		log.Println("CountryID:", countryid)
+		log.Println("CountryID:", countryID)
 
 		// Done
 		log.Println("")
 	}
-
 }

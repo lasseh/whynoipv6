@@ -26,14 +26,14 @@ var (
 func init() {
 	httpClient = createHTTPClient()
 
-	// Read config
+	// Read the configuration.
 	cfg, err = config.Read()
 	if err != nil {
-		log.Fatal(err.Error())
+		log.Fatal("Failed to read config: ", err)
 	}
 }
 
-// createHTTPClient initiates a http.Client with better defaults
+// createHTTPClient initializes an http.Client with better default settings.
 func createHTTPClient() *http.Client {
 	var netTransport = &http.Transport{
 		Dial: (&net.Dialer{

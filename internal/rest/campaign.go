@@ -45,15 +45,15 @@ type CampaignListResponse struct {
 
 // Routes returns a router with all campaign endpoints mounted.
 func (rs CampaignHandler) Routes() chi.Router {
-	// Create a new Chi router instance
 	r := chi.NewRouter()
 
-	// Mount the campaign endpoints
-	r.Get("/", rs.CampaignList)                                                   // GET /campaign - List all campaigns
-	r.Get("/domain/{domain}", rs.ViewCampaignDomain)                              // GET /campaign/domain/{domain} - View details of a single domain
-	r.With(httpin.NewInput(PaginationInput{})).Get("/{uuid}", rs.CampaignDomains) // GET /campaign/{uuid} - List all domains for a given campaign UUID
+	// GET /campaign - List all campaigns
+	r.Get("/", rs.CampaignList)
+	// GET /campaign/domain/{domain} - View details of a single domain
+	r.Get("/domain/{domain}", rs.ViewCampaignDomain)
+	// GET /campaign/{uuid} - List all domains for a given campaign UUID
+	r.With(httpin.NewInput(PaginationInput{})).Get("/{uuid}", rs.CampaignDomains)
 
-	// Return the router with the mounted endpoints
 	return r
 }
 

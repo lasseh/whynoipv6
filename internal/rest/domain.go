@@ -9,12 +9,12 @@ import (
 	"github.com/go-chi/render"
 )
 
-// DomainHandler is a handler for domain endpoints.
+// DomainHandler is a handler for managing domain-related operations.
 type DomainHandler struct {
 	Repo *core.DomainService
 }
 
-// DomainResponse is the response for a domain.
+// DomainResponse is the response structure for a domain.
 type DomainResponse struct {
 	Rank      int64     `json:"rank"`
 	Domain    string    `json:"domain"`
@@ -32,16 +32,21 @@ type DomainResponse struct {
 	TsUpdated time.Time `json:"ts_updated"`
 }
 
-// Routes returns a router with all domain endpoints mounted.
+// Routes returns a router with all domain-related endpoints mounted.
 func (rs DomainHandler) Routes() chi.Router {
 	r := chi.NewRouter()
-	r.Get("/", rs.DomainList)             // GET /domain - list top 100 domains without IPv6
-	r.Get("/heroes", rs.DomainHeroes)     // GET /domain/heroes - list top 100 domains with IPv6
-	r.Get("/{domain}", rs.DomainByDomain) // GET /domain/{domain} - read a domain by domain
+
+	// GET /domain - list top 100 domains without IPv6
+	r.Get("/", rs.DomainList)
+	// GET /domain/heroes - list top 100 domains with IPv6
+	r.Get("/heroes", rs.DomainHeroes)
+	// GET /domain/{domain} - retrieve a domain by its name
+	r.Get("/{domain}", rs.RetrieveDomain)
+
 	return r
 }
 
-// DomainList lists all domains.
+// DomainList returns the top 100 domains without IPv6 support.
 func (rs DomainHandler) DomainList(w http.ResponseWriter, r *http.Request) {
 	domains, err := rs.Repo.ListDomain(r.Context())
 	if err != nil {
@@ -71,7 +76,7 @@ func (rs DomainHandler) DomainList(w http.ResponseWriter, r *http.Request) {
 	render.JSON(w, r, domainlist)
 }
 
-// DomainHeroes lists all domains with IPv6.
+// DomainHeroes returns the top 100 domains with IPv6 support.
 func (rs DomainHandler) DomainHeroes(w http.ResponseWriter, r *http.Request) {
 	domains, err := rs.Repo.ListDomainHeroes(r.Context())
 	if err != nil {
@@ -101,8 +106,8 @@ func (rs DomainHandler) DomainHeroes(w http.ResponseWriter, r *http.Request) {
 	render.JSON(w, r, domainlist)
 }
 
-// DomainByDomain returns a domain by domain.
-func (rs DomainHandler) DomainByDomain(w http.ResponseWriter, r *http.Request) {
+// RetrieveDomain returns a domain based on the provided domain name.
+func (rs DomainHandler) RetrieveDomain(w http.ResponseWriter, r *http.Request) {
 	d := chi.URLParam(r, "domain")
 	domain, err := rs.Repo.ViewDomain(r.Context(), d)
 	if err != nil {

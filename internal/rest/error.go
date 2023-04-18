@@ -6,11 +6,7 @@ import (
 	"github.com/go-chi/render"
 )
 
-//--
-// Error response payloads & renderers
-//--
-
-// ErrResponse renderer type for handling all sorts of errors.
+// ErrResponse is a custom renderer type for handling various errors.
 type ErrResponse struct {
 	Err            error `json:"-"` // low-level runtime error
 	HTTPStatusCode int   `json:"-"` // http response status code
@@ -20,13 +16,13 @@ type ErrResponse struct {
 	ErrorText  string `json:"error,omitempty"` // application-level error message, for debugging
 }
 
-// Render writes data with custom HTTP status code.
+// Render writes data with a custom HTTP status code.
 func (e *ErrResponse) Render(w http.ResponseWriter, r *http.Request) error {
 	render.Status(r, e.HTTPStatusCode)
 	return nil
 }
 
-// ErrInvalidRequest returns a structured http response for invalid requests
+// ErrInvalidRequest returns a structured HTTP response for invalid requests.
 func ErrInvalidRequest(err error) render.Renderer {
 	return &ErrResponse{
 		Err:            err,
@@ -36,7 +32,7 @@ func ErrInvalidRequest(err error) render.Renderer {
 	}
 }
 
-// ErrRender returns a structured http response in case of rendering errors
+// ErrRender returns a structured HTTP response in case of rendering errors.
 func ErrRender(err error) render.Renderer {
 	return &ErrResponse{
 		Err:            err,
@@ -46,7 +42,7 @@ func ErrRender(err error) render.Renderer {
 	}
 }
 
-// ErrNotFound returns a structured http response if a resource couln't be found
+// ErrNotFound returns a structured HTTP response if a resource could not be found.
 func ErrNotFound() render.Renderer {
 	return &ErrResponse{
 		HTTPStatusCode: http.StatusNotFound,

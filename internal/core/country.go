@@ -12,7 +12,7 @@ type CountryService struct {
 	q *db.Queries
 }
 
-// NewCountryService creates a new CountryService.
+// NewCountryService creates a new CountryService instance.
 func NewCountryService(d db.DBTX) *CountryService {
 	return &CountryService{
 		q: db.New(d),

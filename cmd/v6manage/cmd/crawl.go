@@ -50,28 +50,27 @@ func getSites() {
 	red := "\033[31m"
 	reset := "\033[0m"
 
-	// Dns Client
-	resolver, err = toolboxService.NewResolver()
+	// Initialize DNS client.
+	_, err := toolboxService.NewResolver()
 	if err != nil {
-		log.Printf("Could not initalize dns resolver: %s\n", err)
+		log.Printf("Could not initialize DNS resolver: %s\n", err)
 		os.Exit(1)
 	}
-	log.Println("DNS resolver initialized", resolver)
 
-	// Loop forever
+	// Run the crawler indefinitely.
 	for {
-		t := time.Now()
-		log.Println("Starting crawl at", t.Format("2006-01-02 15:04:05"))
+		currentTime := time.Now()
+		log.Println("Starting crawl at", currentTime.Format("2006-01-02 15:04:05"))
 
 		var offset int32 = 0
-		var limit int32 = 50
-		var updated int32 = 0
-		var totalChecked int32 = 0
+		const limit int32 = 50
+		var updatedDomains int32 = 0
+		var totalCheckedDomains int32 = 0
 		var wg sync.WaitGroup
-		// Main loop
+
+		// Main loop to crawl and update domains.
 		for {
-			// Loop time
-			lt := time.Now()
+			loopStartTime := time.Now()
 
 			domains, err := domainService.CrawlDomain(ctx, offset, limit)
 			if err != nil {
@@ -84,21 +83,19 @@ func getSites() {
 				break
 			}
 
-			// Loop through domains
+			// Loop through domains and check IPv6 support concurrently.
 			for _, domain := range domains {
 				wg.Add(1)
 				go func(domain core.DomainModel) {
 					defer wg.Done()
 
-					check, err := checkDomain(domain)
+					checkResult, err := checkDomain(domain)
 					if err != nil {
 						log.Printf("[%s] checkDomain error: %s\n", domain.Site, err)
-						// Skip next steps
 						return
 					}
 
-					// Update domain
-					err = updateDomain(domain, check)
+					err = updateDomain(domain, checkResult)
 					if err != nil {
 						log.Printf("[%s] updateDomain error: %s\n", domain.Site, err)
 					}
@@ -106,39 +103,38 @@ func getSites() {
 						log.Printf("[%s] Updated\n", domain.Site)
 					}
 
-					// Increment updated
-					updated++
+					updatedDomains++
 				}(domain)
 			}
 			// 🦗
 			wg.Wait()
 
-			// Increment offset
+			// Update the progress.
 			offset += limit
-			totalChecked += int32(len(domains))
+			totalCheckedDomains += int32(len(domains))
 
-			log.Printf(red+"Checked %d sites, took %v [Total: %d/%d]%s", len(domains), prettyDuration(time.Since(lt)), updated, totalChecked, reset)
+			log.Printf(red+"Checked %d sites, took %v [Total: %d/%d]%s", len(domains), prettyDuration(time.Since(loopStartTime)), updatedDomains, totalCheckedDomains, reset)
 		}
 
-		// Collect stats
-		stats, err := statService.Domainstats(ctx)
+		// Collect and store domain statistics.
+		stats, err := statService.DomainStats(ctx)
 		if err != nil {
 			log.Printf("Error getting stats: %s\n", err)
 		}
 
-		log.Printf(red+"Checked/Updated %d/%d sites in %s%s\n", updated, totalChecked, prettyDuration(time.Since(t)), reset)
+		log.Printf(red+"Checked/Updated %d/%d sites in %s%s\n", updatedDomains, totalCheckedDomains, prettyDuration(time.Since(currentTime)), reset)
 
 		// Update healthcheck status
 		toolboxService.HealthCheckUpdate(cfg.HealthcheckCrawler)
 
 		// Notify partyvan
-		toolboxService.NotifyIrc(fmt.Sprintf("[WhyNoIPv6] Crawler checked %d/%d sites in %s", updated, totalChecked, prettyDuration(time.Since(t))))
+		toolboxService.NotifyIrc(fmt.Sprintf("[WhyNoIPv6] Crawler checked %d/%d sites in %s", updatedDomains, totalCheckedDomains, prettyDuration(time.Since(currentTime))))
 
-		// Metrics
+		// Store crawler metrics.
 		crawlData := map[string]interface{}{
-			"duration":      time.Since(t).Seconds(),
-			"total_checked": totalChecked,
-			"updated":       updated,
+			"duration":      time.Since(currentTime).Seconds(),
+			"total_checked": totalCheckedDomains,
+			"updated":       updatedDomains,
 		}
 		if err := metricService.StoreMetric(ctx, "crawler", crawlData); err != nil {
 			log.Printf("Error storing metric: %s\n", err)
@@ -147,192 +143,153 @@ func getSites() {
 			log.Printf("Error storing metric: %s\n", err)
 		}
 
-		// Sleep for 2 hours
-		log.Println("time until next check: 2 hours")
+		// Sleep for 2 hours before starting the next crawl.
+		log.Println("Time until next check: 2 hours")
 		time.Sleep(2 * time.Hour)
 	}
 }
 
-// newCheckDomain runs all the checks on a domain
-func checkDomain(domain core.DomainModel) (core.DomainModel, error) {
-	result := core.DomainModel{}
+// checkDomain runs all the checks on a domain
+func checkDomain(domainToCheck core.DomainModel) (core.DomainModel, error) {
+	checkedDomain := core.DomainModel{}
 
-	// Check if domain is has any dns records, else just disable it before any checks
-	if err := toolboxService.ValidateDomain(domain.Site); err != nil {
+	// Check if domain has any DNS records, else disable it before performing any checks
+	if err := toolboxService.ValidateDomain(domainToCheck.Site); err != nil {
 		if err.Error() == "NXDOMAIN" {
 			// Disable domain
-			if err2 := domainService.DisableDomain(context.Background(), domain.Site); err2 != nil {
-				log.Printf("[%s] Error disabling domain: %s\n", domain.Site, err)
+			if disableErr := domainService.DisableDomain(context.Background(), domainToCheck.Site); disableErr != nil {
+				log.Printf("[%s] Error disabling domain: %s\n", domainToCheck.Site, err)
 			}
-			return result, fmt.Errorf("Disabling domain: %v", err)
+			return checkedDomain, fmt.Errorf("Disabling domain: %v", err)
 		}
-		return result, fmt.Errorf("Validate domain error: %v", err)
-
+		return checkedDomain, fmt.Errorf("Validate domain error: %v", err)
 	}
 
 	// Check if domain has AAAA records
-	checkAAAA, err := toolboxService.CheckTLD(domain.Site)
-	if err != nil {
-		if verbose {
-			log.Printf("[%s] CheckTLD AAAA error: %s\n", domain.Site, err)
-		}
+	aaaaCheck, err := toolboxService.CheckTLD(domainToCheck.Site)
+	if err != nil && verbose {
+		log.Printf("[%s] CheckTLD AAAA error: %s\n", domainToCheck.Site, err)
 	}
-	result.CheckAAAA = checkAAAA.IPv6
+	checkedDomain.CheckAAAA = aaaaCheck.IPv6
 
-	// Check if wwww.domain has AAAA record
-	checkWWW, err := toolboxService.CheckTLD(fmt.Sprintf("www.%s", domain.Site))
-	if err != nil {
-		if verbose {
-			log.Printf("[%s] CheckTLD WWW error: %s\n", domain.Site, err)
-		}
+	// Check if www.domain has AAAA record
+	wwwCheck, err := toolboxService.CheckTLD(fmt.Sprintf("www.%s", domainToCheck.Site))
+	if err != nil && verbose {
+		log.Printf("[%s] CheckTLD WWW error: %s\n", domainToCheck.Site, err)
 	}
-	result.CheckWWW = checkWWW.IPv6
+	checkedDomain.CheckWWW = wwwCheck.IPv6
 
 	// Check if domain has AAAA record for nameservers
-	checkNS, err := toolboxService.CheckNS(domain.Site)
-	if err != nil {
-		if verbose {
-			log.Printf("[%s] CheckNS error: %s", domain.Site, err)
-		}
+	nsCheck, err := toolboxService.CheckNS(domainToCheck.Site)
+	if err != nil && verbose {
+		log.Printf("[%s] CheckNS error: %s", domainToCheck.Site, err)
 	}
-	result.CheckNS = checkNS.IPv6
+	checkedDomain.CheckNS = nsCheck.IPv6
 
 	// --------------------------------------------------------------------------------------------------------------------------
 	// Check if it is possible to connect to domain using IPv6 only
 	//
-	// checkCurl, err := toolboxService.CheckCurl(domain.Site)
-	// if err != nil {
-	// 	if verbose {
-	// 		log.Printf("[%s] CheckCurl error: %s\n", domain.Site, err)
-	// 	}
+	// curlCheck, err := toolboxService.CheckCurl(domainToCheck.Site)
+	// if err != nil && verbose {
+	// 	log.Printf("[%s] CheckCurl error: %s\n", domainToCheck.Site, err)
 	// }
-	// result.CheckCurl = checkCurl
+	// checkedDomain.CheckCurl = curlCheck
 	// --------------------------------------------------------------------------------------------------------------------------
 
 	// Map AsnID to ASN Table
-	asnid, err := getASNInfo(domain.Site)
+	asnID, err := getASNInfo(domainToCheck.Site)
 	if err != nil {
-		log.Printf("[%s] getASNInfo error: %s\n", domain.Site, err)
+		log.Printf("[%s] getASNInfo error: %s\n", domainToCheck.Site, err)
 	}
-	result.AsnID = asnid
+	checkedDomain.AsnID = asnID
 
 	// Map CountryID to Country Table
-	countryid, err := getCountryInfo(domain.Site)
+	countryID, err := getCountryInfo(domainToCheck.Site)
 	if err != nil {
-		log.Printf("[%s] getCountryID error: %s\n", domain.Site, err)
+		log.Printf("[%s] getCountryID error: %s\n", domainToCheck.Site, err)
 	}
-	result.CountryID = countryid
+	checkedDomain.CountryID = countryID
 
-	return result, nil
+	return checkedDomain, nil
 }
 
-func updateDomain(domain, new core.DomainModel) error {
+func updateDomain(existingDomain, newDomain core.DomainModel) error {
 	ctx := context.Background()
 
-	// Compare result for AAAA record
-	// Domain go from no AAAA to AAAA
-	if !domain.CheckAAAA && new.CheckAAAA {
-		domain.CheckAAAA = true
-		domain.TsAAAA = time.Now()
-		domain.TsUpdated = time.Now()
-
-		_, err := changelogService.Create(context.Background(), core.ChangelogModel{
-			DomainID: int32(domain.ID),
-			Message:  fmt.Sprintf("Got AAAA record for %s", domain.Site),
+	// Helper function to create changelog entries
+	createChangelog := func(message string) {
+		_, err := changelogService.Create(ctx, core.ChangelogModel{
+			DomainID: int32(existingDomain.ID),
+			Message:  message,
 		})
 		if err != nil {
-			log.Printf("[%s] Error writing changelog: %s\n", domain.Site, err)
-		}
-	}
-	// Domain go from AAAA to no AAAA
-	if domain.CheckAAAA && !new.CheckAAAA {
-		domain.CheckAAAA = false
-		domain.TsUpdated = time.Now()
-
-		_, err := changelogService.Create(context.Background(), core.ChangelogModel{
-			DomainID: int32(domain.ID),
-			Message:  fmt.Sprintf("Lost AAAA record for %s", domain.Site),
-		})
-		if err != nil {
-			log.Printf("[%s] Error writing changelog: %s", domain.Site, err)
+			log.Printf("[%s] Error writing changelog: %s\n", existingDomain.Site, err)
 		}
 	}
 
-	// WWW Record
-	// Domain go from no WWW to WWW
-	if !domain.CheckWWW && new.CheckWWW {
-		domain.CheckWWW = true
-		domain.TsWWW = time.Now()
-		domain.TsUpdated = time.Now()
+	// Compare AAAA record result
+	// Domain changes from no AAAA to AAAA
+	if !existingDomain.CheckAAAA && newDomain.CheckAAAA {
+		existingDomain.CheckAAAA = true
+		existingDomain.TsAAAA = time.Now()
+		existingDomain.TsUpdated = time.Now()
 
-		_, err := changelogService.Create(context.Background(), core.ChangelogModel{
-			DomainID: int32(domain.ID),
-			Message:  fmt.Sprintf("Got AAAA record for www.%s", domain.Site),
-		})
-		if err != nil {
-			log.Printf("[%s] Error writing changelog: %s\n", domain.Site, err)
-		}
+		createChangelog(fmt.Sprintf("Got AAAA record for %s", existingDomain.Site))
 	}
-	// Domain go from WWW to no WWW
-	if domain.CheckWWW && !new.CheckWWW {
-		domain.CheckWWW = false
-		domain.TsUpdated = time.Now()
+	// Domain changes from AAAA to no AAAA
+	if existingDomain.CheckAAAA && !newDomain.CheckAAAA {
+		existingDomain.CheckAAAA = false
+		existingDomain.TsUpdated = time.Now()
 
-		_, err := changelogService.Create(context.Background(), core.ChangelogModel{
-			DomainID: int32(domain.ID),
-			Message:  fmt.Sprintf("Lost AAAA record for www.%s", domain.Site),
-		})
-		if err != nil {
-			log.Printf("[%s] Error writing changelog: %s\n", domain.Site, err)
-		}
+		createChangelog(fmt.Sprintf("Lost AAAA record for %s", existingDomain.Site))
 	}
 
-	// NS record
-	// Domain go from no NS to NS
-	if !domain.CheckNS && new.CheckNS {
-		domain.CheckNS = true
-		domain.TsNS = time.Now()
-		domain.TsUpdated = time.Now()
+	// Compare WWW record result
+	// Domain changes from no WWW to WWW
+	if !existingDomain.CheckWWW && newDomain.CheckWWW {
+		existingDomain.CheckWWW = true
+		existingDomain.TsWWW = time.Now()
+		existingDomain.TsUpdated = time.Now()
 
-		_, err := changelogService.Create(context.Background(), core.ChangelogModel{
-			DomainID: int32(domain.ID),
-			Message:  fmt.Sprintf("Nameserver got AAAA record for %s", domain.Site),
-		})
-		if err != nil {
-			log.Printf("[%s] Error writing changelog: %s\n", domain.Site, err)
-		}
+		createChangelog(fmt.Sprintf("Got AAAA record for www.%s", existingDomain.Site))
 	}
-	// Domain go from NS to no NS
-	if domain.CheckNS && !new.CheckNS {
-		domain.CheckNS = false
-		domain.TsUpdated = time.Now()
+	// Domain changes from WWW to no WWW
+	if existingDomain.CheckWWW && !newDomain.CheckWWW {
+		existingDomain.CheckWWW = false
+		existingDomain.TsUpdated = time.Now()
 
-		_, err := changelogService.Create(context.Background(), core.ChangelogModel{
-			DomainID: int32(domain.ID),
-			Message:  fmt.Sprintf("Nameserver lost AAAA record for %s", domain.Site),
-		})
-		if err != nil {
-			log.Printf("[%s] Error writing changelog: %s\n", domain.Site, err)
-		}
+		createChangelog(fmt.Sprintf("Lost AAAA record for www.%s", existingDomain.Site))
 	}
 
-	// Curl
-	// Compare curl result
+	// Compare NS record result
+	// Nameserver changes from no NS to NS
+	if !existingDomain.CheckNS && newDomain.CheckNS {
+		existingDomain.CheckNS = true
+		existingDomain.TsNS = time.Now()
+		existingDomain.TsUpdated = time.Now()
 
-	// Set AsnID
-	domain.AsnID = new.AsnID
+		createChangelog(fmt.Sprintf("Nameserver got AAAA record for %s", existingDomain.Site))
+	}
+	// Nameserver changes from NS to no NS
+	if existingDomain.CheckNS && !newDomain.CheckNS {
+		existingDomain.CheckNS = false
+		existingDomain.TsUpdated = time.Now()
 
-	// Set CountryID
-	domain.CountryID = new.CountryID
+		createChangelog(fmt.Sprintf("Nameserver lost AAAA record for %s", existingDomain.Site))
+	}
+
+	// Set AsnID and CountryID
+	existingDomain.AsnID = newDomain.AsnID
+	existingDomain.CountryID = newDomain.CountryID
 
 	// Set check time
-	domain.TsCheck = time.Now()
+	existingDomain.TsCheck = time.Now()
 
 	// Write to database
-	err = domainService.UpdateDomain(ctx, domain)
+	err := domainService.UpdateDomain(ctx, existingDomain)
 	if err != nil {
-		log.Printf("[%s] Error writing to database: %s\n", domain.Site, err)
-		log.Fatalf("FATAL: %+v\n", domain)
+		log.Printf("[%s] Error writing to database: %s\n", existingDomain.Site, err)
+		log.Fatalf("FATAL: %+v\n", existingDomain)
 	}
 
 	return nil

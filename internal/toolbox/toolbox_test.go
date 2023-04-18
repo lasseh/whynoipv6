@@ -5,6 +5,8 @@ import (
 	"whynoipv6/internal/toolbox"
 )
 
+// TestInternationalizeDomains tests the IDNADomain function by converting
+// domain names with special characters to their internationalized format.
 func TestInternationalizeDomains(t *testing.T) {
 	domains := []string{
 		"xn--mgbkt9eckr.net",
@@ -23,7 +25,7 @@ func TestInternationalizeDomains(t *testing.T) {
 			t.Errorf("Failed to internationalize domain '%s': %v", domain, err)
 		}
 		if expected[i] != idna {
-			t.Errorf("Internationalized domain name[0] does not match expected output[1]: '%s' != '%s'", idna, expected)
+			t.Errorf("Internationalized domain name [0] does not match expected output [1]: '%s' != '%s'", idna, expected[i])
 		}
 	}
 }

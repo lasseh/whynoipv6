@@ -43,29 +43,28 @@ func getCampaignSites() {
 	red := "\033[31m"
 	reset := "\033[0m"
 
-	// Dns Client
-	resolver, err = toolboxService.NewResolver()
+	// Initialize DNS client.
+	_, err := toolboxService.NewResolver()
 	if err != nil {
-		log.Printf("Could not initalize dns resolver: %s\n", err)
+		log.Printf("Could not initialize DNS resolver: %s\n", err)
 		os.Exit(1)
 	}
-	log.Println("DNS resolver initialized", resolver)
 
-	// Loop forever
+	// Run the crawler indefinitely.
 	for {
 		// start time
 		t := time.Now()
 		log.Println("Starting crawl at", t.Format("2006-01-02 15:04:05"))
 
 		var offset int32 = 0
-		var limit int32 = 5
-		var updated int32 = 0
-		var totalChecked int32 = 0
+		const limit int32 = 5
+		var updatedDomains int32 = 0
+		var totalCheckedDomains int32 = 0
 		var wg sync.WaitGroup
-		// Main loop
+
+		// Main loop to crawl and update domains.
 		for {
-			// Loop time
-			lt := time.Now()
+			loopStartTime := time.Now()
 
 			domains, err := campaignService.CrawlCampaignDomain(ctx, offset, limit)
 			if err != nil {
@@ -78,21 +77,20 @@ func getCampaignSites() {
 				break
 			}
 
-			// Loop through domains
+			// Loop through domains and check IPv6 support concurrently.
 			for _, domain := range domains {
 				wg.Add(1)
 				go func(domain core.CampaignDomainModel) {
 					defer wg.Done()
 
-					check, err := checkCampaignDomain(domain)
+					checkResult, err := checkCampaignDomain(domain)
 					if err != nil {
 						log.Printf("[%s] checkDomain error: %s\n", domain.Site, err)
-						// Skip next steps
 						return
 					}
 
 					// Update domain
-					err = updateCampaignDomain(domain, check)
+					err = updateCampaignDomain(domain, checkResult)
 					if err != nil {
 						log.Printf("[%s] updateDomain error: %s\n", domain.Site, err)
 					}
@@ -101,232 +99,175 @@ func getCampaignSites() {
 					}
 
 					// Increment total
-					updated++
+					updatedDomains++
 				}(domain)
 			}
 			// 🦗
 			wg.Wait()
 
 			// Increment offset
+			// Update the progress.
 			offset += limit
-			totalChecked += int32(len(domains))
+			totalCheckedDomains += int32(len(domains))
 
-			log.Printf(red+"Checked %d sites, took %v [Total: %d/%d]%s\n", len(domains), prettyDuration(time.Since(lt)), updated, totalChecked, reset)
+			log.Printf(red+"Checked %d sites, took %v [Total: %d/%d]%s", len(domains), prettyDuration(time.Since(loopStartTime)), updatedDomains, totalCheckedDomains, reset)
 		}
 
-		log.Printf(red+"Checked %d sites in %s%s\n", updated, prettyDuration(time.Since(t)), reset)
+		log.Printf(red+"Checked %d sites in %s%s\n", updatedDomains, prettyDuration(time.Since(t)), reset)
 
 		// Update healthcheck status
 		toolboxService.HealthCheckUpdate(cfg.HealthcheckCampaign)
 
 		// Notify partyvan
-		toolboxService.NotifyIrc(fmt.Sprintf("[WhyNoIPv6] Campaign Crawler checked %d/%d sites in %s", updated, totalChecked, prettyDuration(time.Since(t))))
+		toolboxService.NotifyIrc(fmt.Sprintf("[WhyNoIPv6] Campaign Crawler checked %d/%d sites in %s", updatedDomains, totalCheckedDomains, prettyDuration(time.Since(t))))
 
-		// Metrics
+		// Store crawler metrics.
 		crawlData := map[string]interface{}{
 			"duration":      time.Since(t).Seconds(),
-			"total_checked": totalChecked,
-			"updated":       updated,
+			"total_checked": totalCheckedDomains,
+			"updated":       updatedDomains,
 		}
 		if err := metricService.StoreMetric(ctx, "crawler_campaign", crawlData); err != nil {
 			log.Printf("Error storing metric: %s\n", err)
 		}
 
-		// Sleep for 2 hours
-		log.Println("Sleeping for 2 hours")
+		// Sleep for 2 hours before starting the next crawl.
+		log.Println("Time until next check: 2 hours")
 		time.Sleep(2 * time.Hour)
 	}
 }
 
-// newCheckDomain runs all the checks on a domain
+// checkCampaignDomain runs all the checks on a domain
 func checkCampaignDomain(domain core.CampaignDomainModel) (core.CampaignDomainModel, error) {
-	result := core.CampaignDomainModel{}
+	checkResult := core.CampaignDomainModel{}
 
-	// Check if domain is has any dns records, else just disable it before any checks
-	if err := toolboxService.ValidateDomain(domain.Site); err != nil {
+	// Check if domain has any DNS records, else just disable it before any checks
+	err := toolboxService.ValidateDomain(domain.Site)
+	if err != nil {
 		if err.Error() == "NXDOMAIN" {
 			// Disable domain
-			// if err2 := campaignService.DisableCampaignDomain(context.Background(), domain.Site); err2 != nil {
+			// if disableErr := campaignService.DisableCampaignDomain(context.Background(), domain.Site); disableErr != nil {
 			// 	log.Printf("[%s] Error disabling domain: %s\n", domain.Site, err)
 			// }
-			// return result, fmt.Errorf("Disabling domain: %v", err)
+			// return checkResult, fmt.Errorf("Disabling domain: %v", err)
 			if verbose {
 				log.Printf("[%s] Domain does not exist, should be disabled: %v\n", domain.Site, err)
 			}
 		}
-		return result, fmt.Errorf("Validate domain error: %v", err)
-
+		return checkResult, fmt.Errorf("Validate domain error: %v", err)
 	}
 
 	// Check if domain has AAAA records
-	checkAAAA, err := toolboxService.CheckTLD(domain.Site)
-	if err != nil {
-		if verbose {
-			log.Printf("[%s] CheckTLD AAAA error: %s\n", domain.Site, err)
-		}
+	tldCheck, err := toolboxService.CheckTLD(domain.Site)
+	if err != nil && verbose {
+		log.Printf("[%s] CheckTLD AAAA error: %s\n", domain.Site, err)
 	}
-	result.CheckAAAA = checkAAAA.IPv6
+	checkResult.CheckAAAA = tldCheck.IPv6
 
-	// Check if wwww.domain has AAAA record
-	checkWWW, err := toolboxService.CheckTLD(fmt.Sprintf("www.%s", domain.Site))
-	if err != nil {
-		if verbose {
-			log.Printf("[%s] CheckTLD WWW error: %s\n", domain.Site, err)
-		}
+	// Check if www.domain has AAAA record
+	wwwCheck, err := toolboxService.CheckTLD(fmt.Sprintf("www.%s", domain.Site))
+	if err != nil && verbose {
+		log.Printf("[%s] CheckTLD WWW error: %s\n", domain.Site, err)
 	}
-	result.CheckWWW = checkWWW.IPv6
+	checkResult.CheckWWW = wwwCheck.IPv6
 
 	// Check if domain has AAAA record for nameservers
-	checkNS, err := toolboxService.CheckNS(domain.Site)
-	if err != nil {
-		if verbose {
-			log.Printf("[%s] CheckNS error: %s", domain.Site, err)
-		}
+	nsCheck, err := toolboxService.CheckNS(domain.Site)
+	if err != nil && verbose {
+		log.Printf("[%s] CheckNS error: %s", domain.Site, err)
 	}
-	result.CheckNS = checkNS.IPv6
+	checkResult.CheckNS = nsCheck.IPv6
 
 	// --------------------------------------------------------------------------------------------------------------------------
 	// Check if it is possible to connect to domain using IPv6 only
 	//
-	// checkCurl, err := toolboxService.CheckCurl(domain.Site)
-	// if err != nil {
-	// 	if verbose {
-	// 		log.Printf("[%s] CheckCurl error: %s\n", domain.Site, err)
-	// 	}
+	// curlCheck, err := toolboxService.CheckCurl(domain.Site)
+	// if err != nil && verbose {
+	// 	log.Printf("[%s] CheckCurl error: %s\n", domain.Site, err)
 	// }
-	// result.CheckCurl = checkCurl
+	// checkResult.CheckCurl = curlCheck
 	// --------------------------------------------------------------------------------------------------------------------------
 
 	// Map AsnID to ASN Table
-	asnid, err := getASNInfo(domain.Site)
+	asnID, err := getASNInfo(domain.Site)
 	if err != nil {
 		log.Printf("[%s] getASNInfo error: %s\n", domain.Site, err)
 	}
-	result.AsnID = asnid
+	checkResult.AsnID = asnID
 
 	// Map CountryID to Country Table
-	countryid, err := getCountryInfo(domain.Site)
+	countryID, err := getCountryInfo(domain.Site)
 	if err != nil {
 		log.Printf("[%s] getCountryID error: %s\n", domain.Site, err)
 	}
-	result.CountryID = countryid
+	checkResult.CountryID = countryID
 
-	return result, nil
+	return checkResult, nil
 }
 
-func updateCampaignDomain(domain, new core.CampaignDomainModel) error {
+func updateCampaignDomain(currentDomain, newDomain core.CampaignDomainModel) error {
 	ctx := context.Background()
 
-	// Compare result for AAAA record
-	// Domain go from no AAAA to AAAA
-	if !domain.CheckAAAA && new.CheckAAAA {
-		domain.CheckAAAA = true
-		domain.TsAAAA = time.Now()
-		domain.TsUpdated = time.Now()
-
-		_, err := changelogService.CampaignCreate(context.Background(), core.ChangelogModel{
+	// Helper function to log and create changelog entry.
+	createChangelog := func(domain core.CampaignDomainModel, message string) {
+		_, err := changelogService.CampaignCreate(ctx, core.ChangelogModel{
 			DomainID:   int32(domain.ID),
 			CampaignID: domain.CampaignID,
-			Message:    fmt.Sprintf("Got AAAA record for %s", domain.Site),
-		})
-		if err != nil {
-			log.Printf("[%s] Error writing changelog: %s\n", domain.Site, err)
-		}
-	}
-	// Domain go from AAAA to no AAAA
-	if domain.CheckAAAA && !new.CheckAAAA {
-		domain.CheckAAAA = false
-		domain.TsUpdated = time.Now()
-
-		_, err := changelogService.CampaignCreate(context.Background(), core.ChangelogModel{
-			DomainID:   int32(domain.ID),
-			CampaignID: domain.CampaignID,
-			Message:    fmt.Sprintf("Lost AAAA record for %s", domain.Site),
-		})
-		if err != nil {
-			log.Printf("[%s] Error writing changelog: %s", domain.Site, err)
-		}
-	}
-
-	// WWW Record
-	// Domain go from no WWW to WWW
-	if !domain.CheckWWW && new.CheckWWW {
-		domain.CheckWWW = true
-		domain.TsWWW = time.Now()
-		domain.TsUpdated = time.Now()
-
-		_, err := changelogService.CampaignCreate(context.Background(), core.ChangelogModel{
-			DomainID:   int32(domain.ID),
-			CampaignID: domain.CampaignID,
-			Message:    fmt.Sprintf("Got AAAA record for www.%s", domain.Site),
-		})
-		if err != nil {
-			log.Printf("[%s] Error writing changelog: %s\n", domain.Site, err)
-		}
-	}
-	// Domain go from WWW to no WWW
-	if domain.CheckWWW && !new.CheckWWW {
-		domain.CheckWWW = false
-		domain.TsUpdated = time.Now()
-
-		_, err := changelogService.CampaignCreate(context.Background(), core.ChangelogModel{
-			DomainID:   int32(domain.ID),
-			CampaignID: domain.CampaignID,
-			Message:    fmt.Sprintf("Lost AAAA record for www.%s", domain.Site),
+			Message:    message,
 		})
 		if err != nil {
 			log.Printf("[%s] Error writing changelog: %s\n", domain.Site, err)
 		}
 	}
 
-	// NS record
-	// Domain go from no NS to NS
-	if !domain.CheckNS && new.CheckNS {
-		domain.CheckNS = true
-		domain.TsNS = time.Now()
-		domain.TsUpdated = time.Now()
-
-		_, err := changelogService.CampaignCreate(context.Background(), core.ChangelogModel{
-			DomainID:   int32(domain.ID),
-			CampaignID: domain.CampaignID,
-			Message:    fmt.Sprintf("Nameserver got AAAA record for %s", domain.Site),
-		})
-		if err != nil {
-			log.Printf("[%s] Error writing changelog: %s\n", domain.Site, err)
-		}
-	}
-	// Domain go from NS to no NS
-	if domain.CheckNS && !new.CheckNS {
-		domain.CheckNS = false
-		domain.TsUpdated = time.Now()
-
-		_, err := changelogService.CampaignCreate(context.Background(), core.ChangelogModel{
-			DomainID:   int32(domain.ID),
-			CampaignID: domain.CampaignID,
-			Message:    fmt.Sprintf("Nameserver lost AAAA record for %s", domain.Site),
-		})
-		if err != nil {
-			log.Printf("[%s] Error writing changelog: %s\n", domain.Site, err)
-		}
+	// Check and update AAAA record status.
+	if !currentDomain.CheckAAAA && newDomain.CheckAAAA {
+		currentDomain.CheckAAAA = true
+		currentDomain.TsAAAA = time.Now()
+		currentDomain.TsUpdated = time.Now()
+		createChangelog(currentDomain, fmt.Sprintf("Got AAAA record for %s", currentDomain.Site))
+	} else if currentDomain.CheckAAAA && !newDomain.CheckAAAA {
+		currentDomain.CheckAAAA = false
+		currentDomain.TsUpdated = time.Now()
+		createChangelog(currentDomain, fmt.Sprintf("Lost AAAA record for %s", currentDomain.Site))
 	}
 
-	// Curl
-	// Compare curl result
+	// Check and update WWW AAAA record status.
+	if !currentDomain.CheckWWW && newDomain.CheckWWW {
+		currentDomain.CheckWWW = true
+		currentDomain.TsWWW = time.Now()
+		currentDomain.TsUpdated = time.Now()
+		createChangelog(currentDomain, fmt.Sprintf("Got AAAA record for www.%s", currentDomain.Site))
+	} else if currentDomain.CheckWWW && !newDomain.CheckWWW {
+		currentDomain.CheckWWW = false
+		currentDomain.TsUpdated = time.Now()
+		createChangelog(currentDomain, fmt.Sprintf("Lost AAAA record for www.%s", currentDomain.Site))
+	}
 
-	// Set AsnID
-	domain.AsnID = new.AsnID
+	// Check and update nameserver AAAA record status.
+	if !currentDomain.CheckNS && newDomain.CheckNS {
+		currentDomain.CheckNS = true
+		currentDomain.TsNS = time.Now()
+		currentDomain.TsUpdated = time.Now()
+		createChangelog(currentDomain, fmt.Sprintf("Nameserver got AAAA record for %s", currentDomain.Site))
+	} else if currentDomain.CheckNS && !newDomain.CheckNS {
+		currentDomain.CheckNS = false
+		currentDomain.TsUpdated = time.Now()
+		createChangelog(currentDomain, fmt.Sprintf("Nameserver lost AAAA record for %s", currentDomain.Site))
+	}
 
-	// Set CountryID
-	domain.CountryID = new.CountryID
+	// Update ASN ID and Country ID.
+	currentDomain.AsnID = newDomain.AsnID
+	currentDomain.CountryID = newDomain.CountryID
 
-	// Set check time
-	domain.TsCheck = time.Now()
+	// Update the check timestamp.
+	currentDomain.TsCheck = time.Now()
 
-	// Write to database
-	err = campaignService.UpdateCampaignDomain(ctx, domain)
+	// Update the domain in the database.
+	err := campaignService.UpdateCampaignDomain(ctx, currentDomain)
 	if err != nil {
-		log.Printf("[%s] Error writing to database: %s\n", domain.Site, err)
-		log.Fatalf("FATAL: %+v\n", domain)
+		log.Printf("[%s] Error writing to database: %s\n", currentDomain.Site, err)
+		log.Fatalf("FATAL: %+v\n", currentDomain)
 	}
 
 	return nil

@@ -12,14 +12,14 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// importsCmd represents the imports command
+// campaignImportCmd represents the command for importing domains to a campaign
 var campaignImportCmd = &cobra.Command{
 	Use:   "import",
 	Short: "Import list of domains to a campaign",
-	Long:  `Import list of domains to a campaign`,
+	Long:  "Import list of domains to a campaign from a file",
 	Run: func(cmd *cobra.Command, args []string) {
 		campaignService = *core.NewCampaignService(db)
-		importCampaign()
+		importDomainsToCampaign()
 	},
 }
 
@@ -27,40 +27,47 @@ func init() {
 	campaignCmd.AddCommand(campaignImportCmd)
 }
 
-func importCampaign() {
+// importDomainsToCampaign imports domains from a file to the specified campaign
+func importDomainsToCampaign() {
 	ctx := context.Background()
 
-	fmt.Println("Importing domains to campaign, please provide the uuid of the campaign.")
+	fmt.Println("Importing domains to campaign, please provide the UUID of the campaign.")
 	reader := bufio.NewReader(os.Stdin)
 	fmt.Print("Campaign UUID: ")
-	campaignid, _ := reader.ReadString('\n')
-	campaignid = strings.TrimSpace(campaignid)
-	fmt.Println(campaignid)
+	campaignUUIDStr, _ := reader.ReadString('\n')
+	campaignUUIDStr = strings.TrimSpace(campaignUUIDStr)
 
 	// Convert string to UUID
-	u, err := uuid.Parse(campaignid)
+	campaignUUID, err := uuid.Parse(campaignUUIDStr)
 	if err != nil {
-		fmt.Println(err)
+		fmt.Println("Error parsing UUID:", err)
+		return
 	}
 
 	// Open file and loop through each line
-	file, err := os.Open(fmt.Sprintf("tmp/%s.txt", campaignid))
+	filePath := fmt.Sprintf("tmp/%s.txt", campaignUUIDStr)
+	file, err := os.Open(filePath)
 	if err != nil {
-		fmt.Println(err)
+		fmt.Println("Error opening file:", err)
+		return
 	}
 	defer file.Close()
 
-	var count = 0
+	var importedDomainsCount = 0
 
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		domain := scanner.Text()
-		if err := campaignService.InsertCampaignDomain(ctx, u, domain); err != nil {
-			fmt.Println(err)
+		if err := campaignService.InsertCampaignDomain(ctx, campaignUUID, domain); err != nil {
+			fmt.Println("Error inserting domain:", err)
+			continue
 		}
-		count++
+		importedDomainsCount++
 	}
 
-	fmt.Printf("Imported %d domains to campaign\n", count)
+	if err := scanner.Err(); err != nil {
+		fmt.Println("Error reading file:", err)
+	}
 
+	fmt.Printf("Imported %d domains to campaign\n", importedDomainsCount)
 }

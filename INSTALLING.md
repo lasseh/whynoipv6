@@ -1,40 +1,50 @@
-# Using the project
+# Using the Project
 
-### Database
-Create new database and user
+This guide provides instructions on how to set up and use the project.
+
+## Setting Up the Database
+
+1. Create a new database and user:
 ```
 CREATE DATABASE whynoipv6;
 CREATE USER whynoipv6 with encrypted password '<removed>';
 GRANT ALL PRIVILEGES ON DATABASE whynoipv6 TO whynoipv6;
 ```
 
-## DB Func
+## Adding Extensions and Migrations
+
+1. Add the required extension to the database:
 ```CREATE EXTENSION pgcrypto;```
 
-### DB Migrations
-Start the db migrations  
+2. Run the database migrations:  
 ```make migrateup```
 
-### Services
+## Installing and Running Services
 
-Install neeeded services
+1. Install the necessary services:
 ```
 go install -v github.com/eest/tranco-list-api/cmd/tldbwriter@latest
 ```
 
-Start services
+2. Start the services:
 ```
 tldbwriter -config=tldbwriter.toml
 ```
 
-### Import data
+## Importing Data and Crawling Domains
+
+1. Import data:
 ```v6manage import```
 
-## Crawl domains
+2. Crawl domains:
 ```v6manage crawl```
 
 
-### MaxMind Geo Database
+## Updating the MaxMind Geo Database
+
+1. Download the latest MaxMind Geo database from the following link:
 `https://github.com/P3TERX/GeoLite.mmdb/releases`
 
-How to update?
+2. Replace the existing database file with the downloaded file to update the database.
+
+

@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"log"
+	"sync"
 	"time"
 	"whynoipv6/internal/core"
 
@@ -63,4 +64,58 @@ func importData() {
 	// Print time it took to import
 	log.Println("Imported sites in", time.Since(t))
 
+}
+
+func importDataWG() {
+	ctx := context.Background()
+
+	// Spawn core service
+	siteService := core.NewSiteService(db)
+	domainService := core.NewDomainService(db)
+
+	// start time
+	t := time.Now()
+	log.Println("Importing data...")
+
+	var offset int32 = 0
+	var limit int32 = 10000
+	// Main loop
+	for {
+		sites, err := siteService.ListSite(ctx, offset, limit)
+		if err != nil {
+			log.Fatal(err.Error())
+		}
+
+		// Stop if no more data
+		if len(sites) == 0 {
+			log.Println("No sites left to import")
+			break
+		}
+
+		// Use wait group to synchronize goroutines
+		var wg sync.WaitGroup
+		wg.Add(len(sites))
+
+		// Loop through sites
+		for _, s := range sites {
+			// Process sites concurrently
+			go func(site core.SiteModel) {
+				defer wg.Done()
+
+				err := domainService.InsertDomain(ctx, site.Site)
+				if err != nil {
+					log.Println(err)
+				}
+			}(s)
+		}
+
+		// Wait for all goroutines to finish
+		wg.Wait()
+
+		// Increment offset
+		offset += limit
+	}
+
+	// Print time it took to import
+	log.Println("Imported sites in", time.Since(t))
 }
