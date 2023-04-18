@@ -7,18 +7,6 @@ import (
 	"time"
 )
 
-// HealthCheckUpdate notifys BetterUptime.com of a successfull run
-// func (s *Service) HealthCheckUpdate(uuid string) {
-// 	var client = &http.Client{
-// 		Timeout: 10 * time.Second,
-// 	}
-
-// 	_, err := client.Head(fmt.Sprintf("https://betteruptime.com/api/v1/heartbeat/%s", uuid))
-// 	if err != nil {
-// 		fmt.Printf("%s", err)
-// 	}
-// }
-
 // HealthCheckUpdate sends a successful health check notification to BetterUptime.com.
 // The function takes a unique identifier (uuid) as input and sends an HTTP HEAD request to BetterUptime.com's API.
 // If there's an error, it will log the error message.
