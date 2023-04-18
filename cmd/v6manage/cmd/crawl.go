@@ -44,6 +44,7 @@ func init() {
 	rootCmd.AddCommand(crawlCmd)
 }
 
+// getSites crawls the sites in the database.
 func getSites() {
 	ctx := context.Background()
 

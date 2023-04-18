@@ -37,6 +37,7 @@ func init() {
 	campaignCmd.AddCommand(campaignCrawlCmd)
 }
 
+// getCampaignSites crawls the campaign sites in the database.
 func getCampaignSites() {
 	ctx := context.Background()
 
