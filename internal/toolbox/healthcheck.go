@@ -2,6 +2,7 @@ package toolbox
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 	"time"
 )
@@ -35,7 +36,7 @@ func (s *Service) HealthCheckUpdate(uuid string) {
 
 	// If there's an error, log the error message.
 	if err != nil {
-		fmt.Printf("Error while sending health check update: %s\n", err)
+		log.Printf("Error while sending health check update: %s\n", err)
 		return
 	}
 
@@ -44,8 +45,8 @@ func (s *Service) HealthCheckUpdate(uuid string) {
 
 	// Check if the response status code indicates success (2xx).
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-		fmt.Println("Successfully sent health check update.")
+		log.Println("Successfully sent health check update.")
 	} else {
-		fmt.Printf("Failed to send health check update. Status code: %d\n", resp.StatusCode)
+		log.Printf("Failed to send health check update. Status code: %d\n", resp.StatusCode)
 	}
 }
