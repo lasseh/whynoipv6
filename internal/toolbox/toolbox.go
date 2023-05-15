@@ -167,6 +167,7 @@ func (s *Service) ValidateDomain(domain string) error {
 }
 
 // CheckCurl checks if a domain is accessible over IPv6 only.
+// TODO: Check if this works, it's not used yet.
 func (s *Service) CheckCurl(domain string) (bool, error) {
 	ipv6Client := http.Client{
 		Transport: &http.Transport{
