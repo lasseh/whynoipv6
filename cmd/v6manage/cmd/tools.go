@@ -66,7 +66,7 @@ func getASNInfo(domain string) (int64, error) {
 
 			newAsn, err := asnService.CreateAsn(ctx, asn.Number, asn.Name)
 			if err != nil {
-				log.Printf("[%s] CreateAsn Error: %s\n", domain, err)
+				log.Printf("[%s] CreateAsn Error (AS: %s): %s\n", domain, asn.Name, err)
 			}
 			if verbose {
 				log.Printf("[%s] Added %s(AS%d) to database\n", domain, newAsn.Name, newAsn.Number)
