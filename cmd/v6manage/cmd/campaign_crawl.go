@@ -13,9 +13,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// Global services
-var campaignService core.CampaignService
-
 // crawlCmd represents the crawl command
 var campaignCrawlCmd = &cobra.Command{
 	Use:   "crawl",
