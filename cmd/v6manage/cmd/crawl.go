@@ -14,14 +14,14 @@ import (
 )
 
 // Global services
-var changelogService core.ChangelogService
-var domainService core.DomainService
-var countryService core.CountryService
-var toolboxService toolbox.Service
-var asnService core.ASNService
-var statService core.StatService
-var resolver *toolbox.Resolver
-var metricService core.MetricService
+// var changelogService core.ChangelogService
+// var domainService core.DomainService
+// var countryService core.CountryService
+// var toolboxService toolbox.Service
+// var asnService core.ASNService
+// var statService core.StatService
+// var resolver *toolbox.Resolver
+// var metricService core.MetricService
 
 // crawlCmd represents the crawl command
 var crawlCmd = &cobra.Command{
