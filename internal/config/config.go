@@ -13,6 +13,7 @@ type Config struct {
 	APIPort             string `mapstructure:"API_PORT"`
 	IRCToken            string `mapstructure:"IRC_TOKEN"`
 	GeoIPPath           string `mapstructure:"GEOIP_PATH"`
+	CampaignPath        string `mapstructure:"CAMPAIGN_PATH"`
 	Nameserver          string `mapstructure:"NAMESERVER"`
 	HealthcheckCrawler  string `mapstructure:"HEALTHCHECK_CRAWLER"`
 	HealthcheckCampaign string `mapstructure:"HEALTHCHECK_CAMPAIGN"`

@@ -11,7 +11,6 @@ FROM campaign_domain
 LEFT JOIN asn ON campaign_domain.asn_id = asn.id
 LEFT JOIN country ON campaign_domain.country_id = country.id
 WHERE campaign_domain.campaign_id = $1
-AND ts_check IS NOT NULL
 ORDER BY campaign_domain.id
 LIMIT $2 
 OFFSET $3;
@@ -63,7 +62,27 @@ WHERE campaign.disabled = false
 GROUP BY campaign.id
 ORDER BY id;
 
+-- name: GetCampaignByUUID :one
+SELECT campaign.*, COUNT(campaign_domain.id)
+FROM campaign
+LEFT JOIN campaign_domain ON campaign.uuid = campaign_domain.campaign_id
+WHERE campaign.uuid = $1
+GROUP BY campaign.id
+LIMIT 1;
+
 -- name: CreateCampaign :one
 INSERT INTO campaign(name, description)
 VALUES ($1, $2)
 RETURNING *;
+
+-- name: UpdateCampaign :exec
+UPDATE campaign
+SET
+name = $2,
+description = $3
+WHERE uuid = $1;
+
+-- name: DeleteCampaignDomain :exec
+DELETE FROM campaign_domain
+WHERE
+campaign_id = $1 AND site = $2;

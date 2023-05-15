@@ -169,6 +169,22 @@ func (s *CampaignService) ListCampaign(ctx context.Context) ([]CampaignModel, er
 	return list, nil
 }
 
+// GetCampaign returns a campaign.
+func (s *CampaignService) GetCampaign(ctx context.Context, id uuid.UUID) (CampaignModel, error) {
+	c, err := s.q.GetCampaignByUUID(ctx, id)
+	if err != nil {
+		return CampaignModel{}, err
+	}
+	return CampaignModel{
+		ID:          c.ID,
+		CreatedAt:   c.CreatedAt,
+		UUID:        c.Uuid,
+		Name:        c.Name,
+		Description: c.Description,
+		Count:       c.Count,
+	}, nil
+}
+
 // CreateCampaign creates a new campaign and returns the new CampaignModel.
 func (s *CampaignService) CreateCampaign(ctx context.Context, name, description string) (CampaignModel, error) {
 	c, err := s.q.CreateCampaign(ctx, db.CreateCampaignParams{
@@ -217,4 +233,29 @@ func (s *CampaignService) ListCampaignDomain(ctx context.Context, campaignID uui
 		})
 	}
 	return list, nil
+}
+
+// UpdateCampaign updates a campaign.
+func (s *CampaignService) UpdateCampaign(ctx context.Context, campaign CampaignModel) error {
+	err := s.q.UpdateCampaign(ctx, db.UpdateCampaignParams{
+		Name:        campaign.Name,
+		Description: campaign.Description,
+		Uuid:        campaign.UUID,
+	})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// DeleteCampaignDomain deletes a domain from a campaign.
+func (s *CampaignService) DeleteCampaignDomain(ctx context.Context, campaignID uuid.UUID, domain string) error {
+	err := s.q.DeleteCampaignDomain(ctx, db.DeleteCampaignDomainParams{
+		CampaignID: campaignID,
+		Site:       domain,
+	})
+	if err != nil {
+		return err
+	}
+	return nil
 }

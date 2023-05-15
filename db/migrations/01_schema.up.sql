@@ -115,25 +115,15 @@ CREATE TABLE "campaign" (
 CREATE INDEX idx_campaign_domain_uuid ON campaign(uuid);
 CREATE INDEX idx_campaign_disabled ON campaign(disabled);
 
-CREATE TABLE "campaign_changelog" (
-  "id" BIGSERIAL PRIMARY KEY, -- 
-  "ts" TIMESTAMPTZ NOT NULL DEFAULT NOW(), -- Timestamp
-  "domain_id" int NOT NULL, -- Site,
-  "campaign_id" UUID NOT NULL REFERENCES campaign(uuid),
-  "message" text NOT NULL -- Message
-);
-CREATE INDEX idx_campaign_changelog_domain_id ON campaign_changelog(domain_id);
-CREATE INDEX idx_campaign_changelog_campaignid ON campaign_changelog(campaign_id);
-
 CREATE TABLE "campaign_domain" (
   "id" BIGSERIAL PRIMARY KEY,
-  "campaign_id" UUID NOT NULL REFERENCES campaign(uuid),
+  "campaign_id" UUID NOT NULL REFERENCES campaign(uuid) ON DELETE CASCADE,
   "site" TEXT NOT NULL,
   "check_aaaa" boolean NOT NULL DEFAULT FALSE, -- Check AAAA Record
   "check_www" boolean NOT NULL DEFAULT FALSE, -- Check AAAA Record for WWW
   "check_ns" boolean NOT NULL DEFAULT FALSE, -- Check NS Record
   "check_curl" boolean NOT NULL DEFAULT FALSE, -- Check Curl 
-  "asn_id" BIGINT, -- map to asn table
+  "asn_id" BIGINT REFERENCES asn(id) ON DELETE SET NULL,
   "country_id" BIGINT, -- map to country table
   "disabled" boolean NOT NULL DEFAULT FALSE, -- ignore domain: faulty, spam or disabled
   "ts_aaaa" TIMESTAMPTZ, -- timestamp of last AAAA check
@@ -144,8 +134,8 @@ CREATE TABLE "campaign_domain" (
   "ts_updated" TIMESTAMPTZ, --  timestamp of last update
   UNIQUE(campaign_id,site)
 );
-ALTER TABLE "campaign_domain" ADD FOREIGN KEY ("asn_id") REFERENCES "asn" ("id");
-ALTER TABLE "campaign_changelog" ADD FOREIGN KEY ("domain_id") REFERENCES "campaign_domain" ("id");
+-- ALTER TABLE "campaign_domain" ADD FOREIGN KEY ("asn_id") REFERENCES "asn" ("id");
+-- ALTER TABLE "campaign_changelog" ADD FOREIGN KEY ("domain_id") REFERENCES "campaign_domain" ("id");
 CREATE INDEX idx_campaign_domain_campaign_id ON campaign_domain(campaign_id, site);
 CREATE INDEX idx_campaign_domain_check_aaaa ON campaign_domain(check_aaaa);
 CREATE INDEX idx_campaign_domain_check_www ON campaign_domain(check_www);
@@ -156,6 +146,16 @@ CREATE INDEX idx_campaign_domain_asn_id ON campaign_domain(asn_id);
 CREATE INDEX idx_campaign_domain_country_id ON campaign_domain(country_id);
 CREATE INDEX idx_campaign_domain_ts_check ON campaign_domain(ts_check);
 CREATE INDEX idx_campaign_domain_disabled ON campaign_domain(disabled);
+
+CREATE TABLE "campaign_changelog" (
+  "id" BIGSERIAL PRIMARY KEY, -- Unique identifier for each change
+  "ts" TIMESTAMPTZ NOT NULL DEFAULT NOW(), -- Timestamp of the change
+  "domain_id" INT NOT NULL REFERENCES campaign_domain(id) ON DELETE CASCADE, -- Foreign key referencing campaign_domain table
+  "campaign_id" UUID NOT NULL REFERENCES campaign(uuid) ON DELETE CASCADE, -- Foreign key referencing campaign table
+  "message" TEXT NOT NULL -- Message describing the change
+);
+CREATE INDEX idx_campaign_changelog_domain_id ON campaign_changelog(domain_id);
+CREATE INDEX idx_campaign_changelog_campaign_id ON campaign_changelog(campaign_id);
 
 CREATE TABLE "metrics" (
     id BIGSERIAL PRIMARY KEY,
