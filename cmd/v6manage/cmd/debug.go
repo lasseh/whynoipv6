@@ -4,11 +4,14 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"time"
 	"whynoipv6/internal/core"
 	"whynoipv6/internal/toolbox"
 
 	"github.com/spf13/cobra"
 )
+
+var slow bool
 
 // debugCmd represents the debug command.
 var debugCmd = &cobra.Command{
@@ -25,6 +28,7 @@ var debugCmd = &cobra.Command{
 }
 
 func init() {
+	rootCmd.PersistentFlags().BoolVarP(&slow, "slow", "s", false, "adds a 5 second delay between each domain check")
 	rootCmd.AddCommand(debugCmd)
 }
 
@@ -66,12 +70,19 @@ func debugDomain() {
 			continue
 		}
 
+		if slow {
+			time.Sleep(500 * time.Millisecond)
+		}
+
 		// Check if domain has an AAAA record.
 		hasAAAA, err := toolboxService.CheckTLD(domain)
 		if err != nil && verbose {
 			log.Printf("[%s] CheckTLD AAAA error: %s\n", domain, err)
 		}
 		log.Println("CheckTLD AAAA:", hasAAAA)
+		if slow {
+			time.Sleep(500 * time.Millisecond)
+		}
 
 		// Check if www.domain has an AAAA record.
 		hasWWW, err := toolboxService.CheckTLD(fmt.Sprintf("www.%s", domain))
@@ -79,6 +90,9 @@ func debugDomain() {
 			log.Printf("[%s] CheckTLD WWW error: %s\n", domain, err)
 		}
 		log.Println("CheckTLD WWW:", hasWWW)
+		if slow {
+			time.Sleep(500 * time.Millisecond)
+		}
 
 		// Check if domain has AAAA records for nameservers.
 		hasNS, err := toolboxService.CheckNS(domain)
@@ -86,6 +100,9 @@ func debugDomain() {
 			log.Printf("[%s] CheckNS error: %s", domain, err)
 		}
 		log.Println("CheckNS:", hasNS)
+		if slow {
+			time.Sleep(500 * time.Millisecond)
+		}
 
 		// Retrieve ASN information for the domain.
 		asnID, err := getASNInfo(domain)
@@ -93,6 +110,9 @@ func debugDomain() {
 			log.Printf("[%s] getASNInfo error: %s\n", domain, err)
 		}
 		log.Println("ASNID:", asnID)
+		if slow {
+			time.Sleep(500 * time.Millisecond)
+		}
 
 		// Retrieve country information for the domain.
 		countryID, err := getCountryInfo(domain)
@@ -100,8 +120,14 @@ func debugDomain() {
 			log.Printf("[%s] getCountryID error: %s\n", domain, err)
 		}
 		log.Println("CountryID:", countryID)
+		if slow {
+			time.Sleep(500 * time.Millisecond)
+		}
 
 		// Done
 		log.Println("")
+		if slow {
+			time.Sleep(500 * time.Millisecond)
+		}
 	}
 }
