@@ -1,8 +1,10 @@
 -- name: InsertCampaignDomain :exec
+-- The ON CONFLICT DO NOTHING clause prevents errors in case a record with the same campaign_id and site already exists.
 INSERT INTO campaign_domain(campaign_id, site)
-VALUES ($1, $2) ON CONFLICT DO NOTHING;
+VALUES ($1, $2) ON CONFLICT (campaign_id, site) DO NOTHING;
 
 -- name: ListCampaignDomain :many
+-- Description: Retrieves a list of campaign domains with additional information from 'asn' and 'country' tables.
 SELECT 
  campaign_domain.*,
  asn.name as asname,
@@ -44,7 +46,7 @@ ts_www = $7,
 ts_ns = $8,
 ts_curl = $9,
 ts_check = $10,
-ts_updated = $11,
+ts_updated = NOW(),
 asn_id = $12,
 country_id = $13
 WHERE site = $1;
@@ -55,15 +57,16 @@ SET disabled = TRUE
 WHERE site = $1;
 
 -- name: ListCampaign :many
-SELECT campaign.*, COUNT(campaign_domain.id)
+-- Description: Retrieves a list of campaigns along with their associated domain count.
+SELECT campaign.*, COUNT(campaign_domain.id) AS domain_count
 FROM campaign
 LEFT JOIN campaign_domain ON campaign.uuid = campaign_domain.campaign_id
 WHERE campaign.disabled = false
 GROUP BY campaign.id
-ORDER BY id;
+ORDER BY campaign.id;
 
 -- name: GetCampaignByUUID :one
-SELECT campaign.*, COUNT(campaign_domain.id)
+SELECT campaign.*, COUNT(campaign_domain.id) AS domain_count
 FROM campaign
 LEFT JOIN campaign_domain ON campaign.uuid = campaign_domain.campaign_id
 WHERE campaign.uuid = $1

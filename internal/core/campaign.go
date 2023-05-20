@@ -163,7 +163,7 @@ func (s *CampaignService) ListCampaign(ctx context.Context) ([]CampaignModel, er
 			UUID:        c.Uuid,
 			Name:        c.Name,
 			Description: c.Description,
-			Count:       c.Count,
+			Count:       c.DomainCount,
 		})
 	}
 	return list, nil
@@ -181,7 +181,7 @@ func (s *CampaignService) GetCampaign(ctx context.Context, id uuid.UUID) (Campai
 		UUID:        c.Uuid,
 		Name:        c.Name,
 		Description: c.Description,
-		Count:       c.Count,
+		Count:       c.DomainCount,
 	}, nil
 }
 

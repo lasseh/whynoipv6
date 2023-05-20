@@ -1,4 +1,6 @@
--- CREATE EXTENSION pgcrypto;
+-- Add the pgcrypto extension for using the gen_random_uuid() function. 
+-- This needs to be done by a superuser.
+-- CREATE EXTENSION IF NOT EXISTS pgcrypto; 
 
 CREATE TABLE "lists" (
   "id" BIGSERIAL PRIMARY KEY,
