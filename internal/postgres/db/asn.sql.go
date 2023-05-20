@@ -11,7 +11,7 @@ import (
 
 const CreateASN = `-- name: CreateASN :one
 INSERT INTO asn(number,name)
-VALUES ($1, $2) ON CONFLICT (number) DO NOTHING
+VALUES ($1, $2) ON CONFLICT DO NOTHING
 RETURNING id, number, name
 `
 

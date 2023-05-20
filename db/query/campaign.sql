@@ -1,7 +1,7 @@
 -- name: InsertCampaignDomain :exec
 -- The ON CONFLICT DO NOTHING clause prevents errors in case a record with the same campaign_id and site already exists.
 INSERT INTO campaign_domain(campaign_id, site)
-VALUES ($1, $2) ON CONFLICT (campaign_id, site) DO NOTHING;
+VALUES ($1, $2) ON CONFLICT DO NOTHING;
 
 -- name: ListCampaignDomain :many
 -- Description: Retrieves a list of campaign domains with additional information from 'asn' and 'country' tables.
@@ -46,7 +46,7 @@ ts_www = $7,
 ts_ns = $8,
 ts_curl = $9,
 ts_check = $10,
-ts_updated = NOW(),
+ts_updated = $11,
 asn_id = $12,
 country_id = $13
 WHERE site = $1;
