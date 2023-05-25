@@ -31,7 +31,11 @@ CREATE INDEX idx_changelog_domain_id ON changelog(domain_id);
 CREATE TABLE "asn" (
   "id" BIGSERIAL PRIMARY KEY,
   "number" int NOT NULL, -- AS Number
-  "name" text NOT NULL -- AS Name
+  "name" text NOT NULL, -- AS Name
+  "count_v4" INT NULL, -- number of sites with v4-only in this ASN
+  "count_v6" INT NULL, -- number of sites with v6 support in this ASN
+  "percent_v4" FLOAT NULL, -- percent of sites with v4-only in this ASN
+  "percent_v6" FLOAT NULL -- percent of sites with v6 support in this ASN
 );
 CREATE INDEX idx_asn_id ON asn(id);
 
