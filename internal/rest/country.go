@@ -43,7 +43,6 @@ func (rs CountryHandler) Routes() chi.Router {
 func (rs CountryHandler) ListCountries(w http.ResponseWriter, r *http.Request) {
 	countries, err := rs.Repo.List(r.Context())
 	if err != nil {
-		//TODO: Log this to a logging service
 		log.Println("Error retrieving countries:", err)
 		render.Status(r, http.StatusInternalServerError)
 		render.JSON(w, r, render.M{"error": "internal server error"})
