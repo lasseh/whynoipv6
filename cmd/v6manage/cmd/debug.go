@@ -49,6 +49,7 @@ func debugDomain() {
 		"xn--gmq92kd2rm1kx34a.com",
 		"bodøposten.no",
 		"finn.no",
+		"uis.no",
 	}
 
 	// Initialize the DNS client.
@@ -122,6 +123,19 @@ func debugDomain() {
 		log.Println("CountryID:", countryID)
 		if slow {
 			time.Sleep(500 * time.Millisecond)
+		}
+
+		// Check if domain is available over pure IPv6.
+		// TODO: Check www.domain as well.
+		if hasAAAA.IPv6 {
+			ipv6, err := toolboxService.IsDomainAccessibleOverIPv6(domain)
+			if err != nil && verbose {
+				log.Printf("[%s] IsDomainAccessibleOverIPv6 error: %s\n", domain, err)
+			}
+			log.Println("IsDomainAccessibleOverIPv6:", ipv6)
+			if slow {
+				time.Sleep(500 * time.Millisecond)
+			}
 		}
 
 		// Done
