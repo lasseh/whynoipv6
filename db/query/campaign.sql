@@ -78,14 +78,23 @@ INSERT INTO campaign(name, description)
 VALUES ($1, $2)
 RETURNING *;
 
--- name: UpdateCampaign :exec
-UPDATE campaign
-SET
-name = $2,
-description = $3
-WHERE uuid = $1;
+-- name: CreateOrUpdateCampaign :one
+INSERT INTO campaign(uuid, name, description)
+VALUES ($1, $2, $3)
+ON CONFLICT (uuid)
+DO UPDATE SET 
+    name = EXCLUDED.name,
+    description = EXCLUDED.description
+RETURNING *;
 
 -- name: DeleteCampaignDomain :exec
 DELETE FROM campaign_domain
 WHERE
 campaign_id = $1 AND site = $2;
+
+-- name: UpdateCampaign :exec
+-- UPDATE campaign
+-- SET
+-- name = $2,
+-- description = $3
+-- WHERE uuid = $1;

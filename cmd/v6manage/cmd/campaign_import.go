@@ -70,12 +70,19 @@ func importDomainsToCampaignNew() {
 				return nil
 			}
 
-			// Update campaign title and description if needed
-			err = updateCampaignInfo(ctx, campaignFile, yamlData)
+			// Create or update campaign
+			err = createOrUpdateCampaign(ctx, campaignFile, yamlData)
 			if err != nil {
 				log.Println(err)
 				return nil
 			}
+
+			// Update campaign title and description if needed
+			// err = updateCampaignInfo(ctx, campaignFile, yamlData)
+			// if err != nil {
+			// 	log.Println(err)
+			// 	return nil
+			// }
 
 			// Sync domains with the database
 			err = syncDomainsWithDatabase(ctx, yamlData)
@@ -110,9 +117,8 @@ func unmarshalYAMLFile(campaignFile string) (*CampaignYAML, error) {
 	return &yamlData, nil
 }
 
-// updateCampaignInfo updates the campaign's title and description if they are different from the current values.
-// If the UUID is empty, it creates a new campaign and updates the YAML file with the new UUID.
-func updateCampaignInfo(ctx context.Context, campaignFile string, yamlData *CampaignYAML) error {
+// createOrUpdateCampaign creates a new campaign if the UUID is empty, otherwise it updates the campaign.
+func createOrUpdateCampaign(ctx context.Context, campaignFile string, yamlData *CampaignYAML) error {
 	// Validate Campaign title and description
 	if yamlData.Title == "" || yamlData.Description == "" {
 		return fmt.Errorf("error: Campaign title or description is empty in %s", campaignFile)
@@ -127,24 +133,58 @@ func updateCampaignInfo(ctx context.Context, campaignFile string, yamlData *Camp
 		yamlData.UUID = newUUID
 	}
 
-	// Update the campaign if the title or description is different
-	campaign, err := campaignService.GetCampaign(ctx, uuid.MustParse(yamlData.UUID))
-	if err != nil {
-		return fmt.Errorf("error getting campaign with UUID %s: %v", yamlData.UUID, err)
-	}
-	if campaign.Name != yamlData.Title || campaign.Description != yamlData.Description {
-		err = campaignService.UpdateCampaign(ctx, core.CampaignModel{
-			UUID:        campaign.UUID,
-			Name:        yamlData.Title,
-			Description: yamlData.Description,
-		})
-		if err != nil {
-			return fmt.Errorf("error updating campaign with UUID %s: %v", yamlData.UUID, err)
-		}
+	newCampaign := core.CampaignModel{
+		UUID:        uuid.MustParse(yamlData.UUID),
+		Name:        yamlData.Title,
+		Description: yamlData.Description,
 	}
 
+	// Update the campaign
+	_, err := campaignService.CreateOrUpdateCampaign(ctx, newCampaign)
+	if err != nil {
+		return fmt.Errorf("error creating or updating campaign: %v", err)
+	}
+
+	// log.Println("Campaign created or updated:", campaign.UUID)
 	return nil
+
 }
+
+// updateCampaignInfo updates the campaign's title and description if they are different from the current values.
+// If the UUID is empty, it creates a new campaign and updates the YAML file with the new UUID.
+// func updateCampaignInfo(ctx context.Context, campaignFile string, yamlData *CampaignYAML) error {
+// 	// Validate Campaign title and description
+// 	if yamlData.Title == "" || yamlData.Description == "" {
+// 		return fmt.Errorf("error: Campaign title or description is empty in %s", campaignFile)
+// 	}
+
+// 	// Check if the UUID is empty, if so, create a new campaign and update the YAML file
+// 	if yamlData.UUID == "" {
+// 		newUUID, err := updateCampaignUUID(campaignFile, yamlData)
+// 		if err != nil {
+// 			return fmt.Errorf("error updating campaign UUID: %v", err)
+// 		}
+// 		yamlData.UUID = newUUID
+// 	}
+
+// 	// Update the campaign if the title or description is different
+// 	campaign, err := campaignService.GetCampaign(ctx, uuid.MustParse(yamlData.UUID))
+// 	if err != nil {
+// 		return fmt.Errorf("error getting campaign with UUID %s: %v", yamlData.UUID, err)
+// 	}
+// 	if campaign.Name != yamlData.Title || campaign.Description != yamlData.Description {
+// 		err = campaignService.UpdateCampaign(ctx, core.CampaignModel{
+// 			UUID:        campaign.UUID,
+// 			Name:        yamlData.Title,
+// 			Description: yamlData.Description,
+// 		})
+// 		if err != nil {
+// 			return fmt.Errorf("error updating campaign with UUID %s: %v", yamlData.UUID, err)
+// 		}
+// 	}
+
+// 	return nil
+// }
 
 // updateCampaignUUID updates the campaign's UUID in the given YAML file and stores the updated content.
 // It creates a new campaign using campaignService, extracts the UUID and updates the YAML file with the new UUID.
@@ -189,12 +229,14 @@ func syncDomainsWithDatabase(ctx context.Context, yamlData *CampaignYAML) error 
 	for _, domain := range yamlData.DomainNames {
 		// Validate domain
 		if err := toolboxService.ValidateDomain(domain); err != nil {
-			return fmt.Errorf("error validating domain %s: %v", domain, err.Error())
+			log.Printf("error validating domain %s: %v", domain, err.Error())
+			continue
 		}
 
 		// Insert domain into campaign
 		if err := campaignService.InsertCampaignDomain(ctx, campaignUUID, domain); err != nil {
-			return fmt.Errorf("error inserting domain: %v", err)
+			log.Printf("error inserting domain: %v", err)
+			continue
 		}
 	}
 

@@ -87,6 +87,36 @@ func (q *Queries) CreateCampaign(ctx context.Context, arg CreateCampaignParams) 
 	return i, err
 }
 
+const CreateOrUpdateCampaign = `-- name: CreateOrUpdateCampaign :one
+INSERT INTO campaign(uuid, name, description)
+VALUES ($1, $2, $3)
+ON CONFLICT (uuid)
+DO UPDATE SET 
+    name = EXCLUDED.name,
+    description = EXCLUDED.description
+RETURNING id, created_at, uuid, name, description, disabled
+`
+
+type CreateOrUpdateCampaignParams struct {
+	Uuid        uuid.UUID
+	Name        string
+	Description string
+}
+
+func (q *Queries) CreateOrUpdateCampaign(ctx context.Context, arg CreateOrUpdateCampaignParams) (Campaign, error) {
+	row := q.db.QueryRow(ctx, CreateOrUpdateCampaign, arg.Uuid, arg.Name, arg.Description)
+	var i Campaign
+	err := row.Scan(
+		&i.ID,
+		&i.CreatedAt,
+		&i.Uuid,
+		&i.Name,
+		&i.Description,
+		&i.Disabled,
+	)
+	return i, err
+}
+
 const DeleteCampaignDomain = `-- name: DeleteCampaignDomain :exec
 DELETE FROM campaign_domain
 WHERE
@@ -150,7 +180,7 @@ func (q *Queries) GetCampaignByUUID(ctx context.Context, argUuid uuid.UUID) (Get
 
 const InsertCampaignDomain = `-- name: InsertCampaignDomain :exec
 INSERT INTO campaign_domain(campaign_id, site)
-VALUES ($1, $2) ON CONFLICT (campaign_id, site) DO NOTHING
+VALUES ($1, $2) ON CONFLICT DO NOTHING
 `
 
 type InsertCampaignDomainParams struct {
@@ -291,25 +321,6 @@ func (q *Queries) ListCampaignDomain(ctx context.Context, arg ListCampaignDomain
 		return nil, err
 	}
 	return items, nil
-}
-
-const UpdateCampaign = `-- name: UpdateCampaign :exec
-UPDATE campaign
-SET
-name = $2,
-description = $3
-WHERE uuid = $1
-`
-
-type UpdateCampaignParams struct {
-	Uuid        uuid.UUID
-	Name        string
-	Description string
-}
-
-func (q *Queries) UpdateCampaign(ctx context.Context, arg UpdateCampaignParams) error {
-	_, err := q.db.Exec(ctx, UpdateCampaign, arg.Uuid, arg.Name, arg.Description)
-	return err
 }
 
 const UpdateCampaignDomain = `-- name: UpdateCampaignDomain :exec
