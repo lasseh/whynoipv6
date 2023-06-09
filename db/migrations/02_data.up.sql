@@ -256,3 +256,18 @@ INSERT INTO "country" ("id", "country_name", "country_code", "country_tld", "con
 
 -- ASN
 INSERT INTO "asn" ("id", "number", "name") VALUES (1, '0', 'Unknown');
+
+-- Top Shame Domains
+INSERT INTO "top_shame" (id, site) VALUES 
+(1, 'twitter.com'),
+(2, 'twitch.tv'),
+(3, 'ebay.com'),
+(4, 'imgur.com'),
+(5, 'imdb.com'),
+(6, 'wordpress.com'),
+(7, 'github.com'),
+(8, 'paypal.com'),
+(9, 'stackoverflow.com'),
+(10, 'soundcloud.com'),
+(11, 'nytimes.com'),
+(12, 'w3schools.com');

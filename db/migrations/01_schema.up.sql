@@ -64,7 +64,6 @@ CREATE TABLE "country" (
 CREATE INDEX idx_country_id ON country(id);
 CREATE UNIQUE INDEX idx_country_country_code ON country(country_code);
 
-
 CREATE TABLE "domain" (
   "id" BIGSERIAL PRIMARY KEY,
   "site" TEXT NOT NULL,
@@ -97,6 +96,12 @@ CREATE INDEX idx_domain_asn_id ON domain(asn_id);
 CREATE INDEX idx_domain_country_id ON domain(country_id);
 CREATE INDEX idx_domain_ts_check ON domain(ts_check);
 CREATE INDEX idx_domain_disabled ON domain(disabled);
+
+CREATE TABLE "top_shame" (
+  "id" BIGSERIAL PRIMARY KEY,
+  "site" TEXT NOT NULL,
+  UNIQUE(site)
+);
 
 CREATE TABLE "stats_asn" (
   "id" BIGSERIAL PRIMARY KEY,
@@ -234,3 +239,32 @@ campaign_domain.site
 FROM campaign_changelog
 JOIN campaign_domain on campaign_changelog.domain_id = campaign_domain.id
 ORDER BY campaign_changelog.id DESC;
+
+CREATE OR REPLACE VIEW "shame_domains_view" AS 
+SELECT 
+    domain.id AS "domain_id", 
+    domain.site AS "domain_site", 
+    domain.check_aaaa,
+    domain.check_www, 
+    domain.check_ns, 
+    domain.check_curl, 
+    domain.asn_id,
+    domain.country_id, 
+    domain.disabled, 
+    domain.ts_aaaa, 
+    domain.ts_www,
+    domain.ts_ns, 
+    domain.ts_curl, 
+    domain.ts_check, 
+    domain.ts_updated,
+    top_shame.id AS "shame_id",
+    top_shame.site AS "shame_site"
+FROM 
+    domain
+JOIN 
+    top_shame
+ON 
+    domain."site" = top_shame."site"
+WHERE 
+    domain."check_aaaa" = FALSE;
+
