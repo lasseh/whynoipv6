@@ -62,9 +62,13 @@ func (ns NullContinents) Value() (driver.Value, error) {
 }
 
 type Asn struct {
-	ID     int64
-	Number int32
-	Name   string
+	ID        int64
+	Number    int32
+	Name      string
+	CountV4   sql.NullInt32
+	CountV6   sql.NullInt32
+	PercentV4 sql.NullFloat64
+	PercentV6 sql.NullFloat64
 }
 
 type Campaign struct {
@@ -250,6 +254,26 @@ type Metrics struct {
 	Data        pgtype.JSONB
 }
 
+type ShameDomainsView struct {
+	DomainID   int64
+	DomainSite string
+	CheckAaaa  bool
+	CheckWww   bool
+	CheckNs    bool
+	CheckCurl  bool
+	AsnID      sql.NullInt64
+	CountryID  sql.NullInt64
+	Disabled   bool
+	TsAaaa     sql.NullTime
+	TsWww      sql.NullTime
+	TsNs       sql.NullTime
+	TsCurl     sql.NullTime
+	TsCheck    sql.NullTime
+	TsUpdated  sql.NullTime
+	ShameID    int64
+	ShameSite  string
+}
+
 type Sites struct {
 	ID     int64
 	ListID int64
@@ -265,4 +289,9 @@ type StatsAsn struct {
 	V6Count   int32
 	V6Percent pgtype.Numeric
 	Ts        time.Time
+}
+
+type TopShame struct {
+	ID   int64
+	Site string
 }

@@ -12,7 +12,7 @@ import (
 const CreateASN = `-- name: CreateASN :one
 INSERT INTO asn(number,name)
 VALUES ($1, $2) ON CONFLICT DO NOTHING
-RETURNING id, number, name
+RETURNING id, number, name, count_v4, count_v6, percent_v4, percent_v6
 `
 
 type CreateASNParams struct {
@@ -24,12 +24,20 @@ type CreateASNParams struct {
 func (q *Queries) CreateASN(ctx context.Context, arg CreateASNParams) (Asn, error) {
 	row := q.db.QueryRow(ctx, CreateASN, arg.Number, arg.Name)
 	var i Asn
-	err := row.Scan(&i.ID, &i.Number, &i.Name)
+	err := row.Scan(
+		&i.ID,
+		&i.Number,
+		&i.Name,
+		&i.CountV4,
+		&i.CountV6,
+		&i.PercentV4,
+		&i.PercentV6,
+	)
 	return i, err
 }
 
 const GetASByNumber = `-- name: GetASByNumber :one
-SELECT id, number, name 
+SELECT id, number, name, count_v4, count_v6, percent_v4, percent_v6 
 FROM asn
 WHERE number = $1
 LIMIT 1
@@ -38,6 +46,14 @@ LIMIT 1
 func (q *Queries) GetASByNumber(ctx context.Context, number int32) (Asn, error) {
 	row := q.db.QueryRow(ctx, GetASByNumber, number)
 	var i Asn
-	err := row.Scan(&i.ID, &i.Number, &i.Name)
+	err := row.Scan(
+		&i.ID,
+		&i.Number,
+		&i.Name,
+		&i.CountV4,
+		&i.CountV6,
+		&i.PercentV4,
+		&i.PercentV6,
+	)
 	return i, err
 }
