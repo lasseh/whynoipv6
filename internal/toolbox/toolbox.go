@@ -129,9 +129,6 @@ func (s *Service) CheckNS(domain string) (QueryResult, error) {
 // ValidateDomain checks if the domain has enough DNS information to proceed with the checks.
 // Returns an error if no records are found for either domain.com or www.domain.com.
 func (s *Service) ValidateDomain(domain string) error {
-	// Check for lookup errors.
-	// var aError, wwwError bool
-
 	// Convert the domain to its IDNA form.
 	var err error
 	domain, err = IDNADomain(domain)
@@ -139,35 +136,13 @@ func (s *Service) ValidateDomain(domain string) error {
 		return err
 	}
 
-	// Check nameserver.
-	// resultNS, err := s.localQuery(domain, dns.TypeTXT)
-	// if err != nil {
-	// 	// No name server to answer the question.
-	// 	return err
-	// }
-
-	// if resultNS.Rcode != dns.RcodeSuccess {
-	// 	// If we get an error here, disable the domain.
-	// 	return fmt.Errorf("%s", dns.RcodeToString[resultNS.Rcode])
-	// }
 	// Check if domain has any DNS records, else disable it before performing any checks
 	resultNS, err := s.localQuery(domain, dns.TypeTXT)
 	if err != nil || resultNS.Rcode != dns.RcodeSuccess {
-		return fmt.Errorf("Failed to get nameserver for %s: %v", domain, err)
+		// return fmt.Errorf("%s", dns.RcodeToString[resultNS.Rcode])
+		// return fmt.Errorf("Failed to get nameserver for %s: %v", domain, err)
+		return fmt.Errorf("NXDOMAIN")
 	}
-
-	// Check for A record (note: this will fail on an IPv6-only domain).
-	// result, err := s.localQuery(domain, dns.TypeA)
-	// aError = err != nil || result.Rcode != dns.RcodeSuccess
-
-	// Check for www A record (note: this will fail on an IPv6-only domain).
-	// resultWWW, err := s.localQuery("www."+domain, dns.TypeA)
-	// wwwError = err != nil || resultWWW.Rcode != dns.RcodeSuccess
-
-	// Return an error if both A and www A records are not found.
-	// if aError && wwwError {
-	// 	return fmt.Errorf("No DNS record for %s", domain)
-	// }
 
 	// Check for A and AAAA record (IPv4 and IPv6).
 	isDomainError := s.queryDNSRecord(domain, dns.TypeA) && s.queryDNSRecord(domain, dns.TypeAAAA)
@@ -178,7 +153,7 @@ func (s *Service) ValidateDomain(domain string) error {
 	// Return an error if both A and www A records are not found.
 	if isDomainError && isWwwDomainError {
 		// return fmt.Errorf("No A or AAAA record found for %s or %s", domain, wwwPrefix + domain)
-		return fmt.Errorf("No DNS record for %s", domain)
+		return fmt.Errorf("No DNS record for %s: %v", domain, err)
 	}
 
 	return nil
@@ -189,42 +164,6 @@ func (s *Service) ValidateDomain(domain string) error {
 func (s *Service) queryDNSRecord(domain string, recordType uint16) bool {
 	result, err := s.localQuery(domain, recordType)
 	return err != nil || result.Rcode != dns.RcodeSuccess
-}
-
-// CheckCurl checks if a domain is accessible over IPv6 only.
-// TODO: Check if this works, it's not used yet.
-func (s *Service) CheckCurl(domain string) (bool, error) {
-	ipv6Client := http.Client{
-		Transport: &http.Transport{
-			DialContext: func(ctx context.Context, _, addr string) (net.Conn, error) {
-				dialer := net.Dialer{}
-				// Split the host and port and force an IPv6 connection by enclosing the host in square brackets.
-				host, port, err := net.SplitHostPort(addr)
-				if err != nil {
-					return nil, err
-				}
-				return dialer.DialContext(ctx, "tcp6", fmt.Sprintf("[%s]:%s", host, port))
-			},
-			MaxIdleConns:          100,
-			IdleConnTimeout:       90 * time.Second,
-			TLSHandshakeTimeout:   10 * time.Second,
-			ExpectContinueTimeout: 1 * time.Second,
-		},
-	}
-
-	// Perform an HTTP GET request using the IPv6-only client.
-	response, err := ipv6Client.Get("https://" + domain)
-	if err != nil {
-		return false, err
-	}
-	defer response.Body.Close()
-
-	// Check if the domain is accessible over IPv6.
-	if response.StatusCode == http.StatusOK {
-		return true, nil
-	}
-
-	return false, nil
 }
 
 // PercentOf calculates the percentage of 'current' relative to 'all'.
