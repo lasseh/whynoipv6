@@ -49,10 +49,10 @@ func (rs CampaignHandler) Routes() chi.Router {
 
 	// GET /campaign - List all campaigns
 	r.Get("/", rs.CampaignList)
-	// GET /campaign/domain/{domain} - View details of a single domain
-	r.Get("/domain/{domain}", rs.ViewCampaignDomain)
 	// GET /campaign/{uuid} - List all domains for a given campaign UUID
 	r.With(httpin.NewInput(PaginationInput{})).Get("/{uuid}", rs.CampaignDomains)
+	// GET /campaign/{campaign}/{domain} - View details of a single domain in a campaign
+	r.Get("/{uuid}/{domain}", rs.ViewCampaignDomain)
 
 	return r
 }
@@ -102,6 +102,14 @@ func (rs CampaignHandler) CampaignDomains(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	// Retrieve campaign details from the repository
+	campaignDetails, err := rs.Repo.GetCampaign(r.Context(), parsedUUID)
+	if err != nil {
+		render.Status(r, http.StatusNotFound)
+		render.JSON(w, r, render.M{"error": "Campaign not found"})
+		return
+	}
+
 	// Retrieve domains associated with the campaign
 	domains, err := rs.Repo.ListCampaignDomain(r.Context(), parsedUUID, int32(paginationInput.Offset), int32(paginationInput.Limit))
 	if err != nil {
@@ -133,7 +141,23 @@ func (rs CampaignHandler) CampaignDomains(w http.ResponseWriter, r *http.Request
 			TsUpdated: domain.TsUpdated,
 		})
 	}
-	render.JSON(w, r, domainList)
+
+	// Connect campaign details with domain list
+	campaignList := struct {
+		Campaign CampaignListResponse `json:"campaign"`
+		Domains  []CampaignResponse   `json:"domains"`
+	}{
+		Campaign: CampaignListResponse{
+			ID:          campaignDetails.ID,
+			UUID:        campaignDetails.UUID,
+			Name:        campaignDetails.Name,
+			Description: campaignDetails.Description,
+			Count:       campaignDetails.Count,
+		},
+		Domains: domainList,
+	}
+
+	render.JSON(w, r, campaignList)
 }
 
 // ViewCampaignDomain retrieves a single domain in a campaign.
