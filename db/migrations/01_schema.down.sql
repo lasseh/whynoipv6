@@ -9,3 +9,4 @@ DROP TABLE "changelog" CASCADE;
 DROP TABLE "campaign_changelog" CASCADE;
 DROP TABLE "campaign" CASCADE;
 DROP TABLE "campaign_domain" CASCADE;
+DROP TABLE "top_shame" CASCADE;
