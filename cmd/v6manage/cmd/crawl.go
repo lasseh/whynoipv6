@@ -52,11 +52,12 @@ func getSites() {
 	reset := "\033[0m"
 
 	// Initialize DNS client.
-	_, err := toolboxService.NewResolver()
+	resolver, err := toolboxService.NewResolver()
 	if err != nil {
 		log.Printf("Could not initialize DNS resolver: %s\n", err)
 		os.Exit(1)
 	}
+	fmt.Println(resolver)
 
 	// Run the crawler indefinitely.
 	for {
@@ -111,7 +112,7 @@ func getSites() {
 			wg.Wait()
 
 			// Update the progress.
-			offset += limit
+			// offset += limit // Since we use the domain_crawl_list view, we don't need to update the offset because it returns just the domains that have not been checked yet.
 			totalCheckedDomains += int32(len(domains))
 
 			log.Printf(red+"Checked %d sites, took %v [Total: %d/%d]%s", len(domains), prettyDuration(time.Since(loopStartTime)), updatedDomains, totalCheckedDomains, reset)
