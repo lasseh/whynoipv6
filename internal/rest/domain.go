@@ -5,6 +5,7 @@ import (
 	"time"
 	"whynoipv6/internal/core"
 
+	"github.com/ggicci/httpin"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/render"
 )
@@ -42,6 +43,8 @@ func (rs DomainHandler) Routes() chi.Router {
 	r.Get("/heroes", rs.DomainHeroes)
 	// GET /domain/{domain} - retrieve a domain by its name
 	r.Get("/{domain}", rs.RetrieveDomain)
+	// GET /domain/search/{domain} - search for a domain by its name
+	r.With(httpin.NewInput(PaginationInput{})).Get("/search/{domain}", rs.SearchDomain)
 
 	return r
 }
@@ -131,4 +134,52 @@ func (rs DomainHandler) RetrieveDomain(w http.ResponseWriter, r *http.Request) {
 		TsCheck:   domain.TsCheck,
 		TsUpdated: domain.TsUpdated,
 	})
+}
+
+// SearchDomain returns a domain based on the provided domain name.
+func (rs DomainHandler) SearchDomain(w http.ResponseWriter, r *http.Request) {
+	// Handle query params
+	paginationInput := r.Context().Value(httpin.Input).(*PaginationInput)
+	if paginationInput.Limit > 100 {
+		paginationInput.Limit = 100
+	}
+
+	domain := chi.URLParam(r, "domain")
+
+	result, err := rs.Repo.GetDomainsByName(r.Context(), domain, int32(paginationInput.Offset), int32(paginationInput.Limit))
+	if err != nil {
+		render.Status(r, http.StatusNotFound)
+		render.JSON(w, r, render.M{"error": "Internal server error"})
+		return
+	}
+
+	if len(result) == 0 {
+		render.Status(r, http.StatusNotFound)
+		render.JSON(w, r, render.M{"error": "no domains found"})
+		return
+	}
+
+	var domainlist []DomainResponse
+	for _, domain := range result {
+		domainlist = append(domainlist, DomainResponse{
+			Rank:      domain.Rank,
+			Domain:    domain.Site,
+			CheckAAAA: domain.CheckAAAA,
+			CheckWWW:  domain.CheckWWW,
+			CheckNS:   domain.CheckNS,
+			CheckCurl: domain.CheckCurl,
+			AsName:    domain.AsName,
+			Country:   domain.Country,
+			TsAAAA:    domain.TsAAAA,
+			TsWWW:     domain.TsWWW,
+			TsNS:      domain.TsNS,
+			TsCurl:    domain.TsCurl,
+			TsCheck:   domain.TsCheck,
+			TsUpdated: domain.TsUpdated,
+		})
+	}
+
+	render.JSON(w, r, domainlist)
+
+	// render.JSON(w, r, result)
 }

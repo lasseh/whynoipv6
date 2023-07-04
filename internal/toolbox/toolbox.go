@@ -108,11 +108,11 @@ func (s *Service) CheckNS(domain string) (QueryResult, error) {
 				queryResult.IPv6 = true
 			}
 		case *dns.NS:
-			nsResult, err := s.CheckTLD(ns.Ns)
-			if err != nil {
-				// Ignore errors caused by creative DNS server setups.
-				// We only care if at least one DNS server has IPv6 enabled!
-			}
+			nsResult, _ := s.CheckTLD(ns.Ns)
+			// if err != nil {
+			// Ignore errors caused by creative DNS server setups.
+			// We only care if at least one DNS server has IPv6 enabled!
+			// }
 			// Return true on the first IPv6-enabled nameserver.
 			if nsResult.IPv6 {
 				queryResult.IPv6 = true

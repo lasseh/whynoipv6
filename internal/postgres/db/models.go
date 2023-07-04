@@ -178,6 +178,26 @@ type DomainCrawlList struct {
 	TsUpdated sql.NullTime
 }
 
+type DomainShameView struct {
+	DomainID   int64
+	DomainSite string
+	CheckAaaa  bool
+	CheckWww   bool
+	CheckNs    bool
+	CheckCurl  bool
+	AsnID      sql.NullInt64
+	CountryID  sql.NullInt64
+	Disabled   bool
+	TsAaaa     sql.NullTime
+	TsWww      sql.NullTime
+	TsNs       sql.NullTime
+	TsCurl     sql.NullTime
+	TsCheck    sql.NullTime
+	TsUpdated  sql.NullTime
+	ShameID    int64
+	ShameSite  string
+}
+
 type DomainViewHeroes struct {
 	ID          sql.NullInt64
 	Site        sql.NullString
@@ -252,26 +272,6 @@ type Metrics struct {
 	Measurement string
 	Time        time.Time
 	Data        pgtype.JSONB
-}
-
-type ShameDomainsView struct {
-	DomainID   int64
-	DomainSite string
-	CheckAaaa  bool
-	CheckWww   bool
-	CheckNs    bool
-	CheckCurl  bool
-	AsnID      sql.NullInt64
-	CountryID  sql.NullInt64
-	Disabled   bool
-	TsAaaa     sql.NullTime
-	TsWww      sql.NullTime
-	TsNs       sql.NullTime
-	TsCurl     sql.NullTime
-	TsCheck    sql.NullTime
-	TsUpdated  sql.NullTime
-	ShameID    int64
-	ShameSite  string
 }
 
 type Sites struct {

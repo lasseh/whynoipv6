@@ -196,3 +196,37 @@ func (s *DomainService) DisableDomain(ctx context.Context, domain string) error 
 	}
 	return nil
 }
+
+// GetDomainsByName returns a list of domains by name.
+func (s *DomainService) GetDomainsByName(ctx context.Context, searchString string, offset, limit int32) ([]DomainModel, error) {
+	domains, err := s.q.GetDomainsByName(ctx, db.GetDomainsByNameParams{
+		Column1: NullString(searchString),
+		Offset:  offset,
+		Limit:   limit,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	var list []DomainModel
+	for _, d := range domains {
+		list = append(list, DomainModel{
+			ID:        IntNull(d.ID),
+			Site:      StringNull(d.Site),
+			CheckAAAA: BoolNull(d.CheckAaaa),
+			CheckWWW:  BoolNull(d.CheckWww),
+			CheckNS:   BoolNull(d.CheckNs),
+			CheckCurl: BoolNull(d.CheckCurl),
+			AsName:    StringNull(d.Asname),
+			Country:   StringNull(d.CountryName),
+			TsAAAA:    TimeNull(d.TsAaaa),
+			TsWWW:     TimeNull(d.TsWww),
+			TsNS:      TimeNull(d.TsNs),
+			TsCurl:    TimeNull(d.TsCurl),
+			TsCheck:   TimeNull(d.TsCheck),
+			TsUpdated: TimeNull(d.TsUpdated),
+			Rank:      d.Rank,
+		})
+	}
+	return list, nil
+}

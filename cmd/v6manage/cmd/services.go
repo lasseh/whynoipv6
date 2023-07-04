@@ -14,6 +14,6 @@ var (
 	toolboxService   toolbox.Service
 	asnService       core.ASNService
 	statService      core.StatService
-	resolver         *toolbox.Resolver
-	metricService    core.MetricService
+	// resolver         *toolbox.Resolver
+	metricService core.MetricService
 )

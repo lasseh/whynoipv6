@@ -69,6 +69,59 @@ func (q *Queries) DisableDomain(ctx context.Context, site string) error {
 	return err
 }
 
+const GetDomainsByName = `-- name: GetDomainsByName :many
+SELECT id, site, check_aaaa, check_www, check_ns, check_curl, asn_id, country_id, disabled, ts_aaaa, ts_www, ts_ns, ts_curl, ts_check, ts_updated, rank, asname, country_name 
+FROM domain_view_list
+WHERE site LIKE '%' || $1 || '%'
+LIMIT $2
+OFFSET $3
+`
+
+type GetDomainsByNameParams struct {
+	Column1 sql.NullString
+	Limit   int32
+	Offset  int32
+}
+
+func (q *Queries) GetDomainsByName(ctx context.Context, arg GetDomainsByNameParams) ([]DomainViewList, error) {
+	rows, err := q.db.Query(ctx, GetDomainsByName, arg.Column1, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []DomainViewList{}
+	for rows.Next() {
+		var i DomainViewList
+		if err := rows.Scan(
+			&i.ID,
+			&i.Site,
+			&i.CheckAaaa,
+			&i.CheckWww,
+			&i.CheckNs,
+			&i.CheckCurl,
+			&i.AsnID,
+			&i.CountryID,
+			&i.Disabled,
+			&i.TsAaaa,
+			&i.TsWww,
+			&i.TsNs,
+			&i.TsCurl,
+			&i.TsCheck,
+			&i.TsUpdated,
+			&i.Rank,
+			&i.Asname,
+			&i.CountryName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const InsertDomain = `-- name: InsertDomain :exec
 INSERT INTO domain(site)
 VALUES ($1) ON CONFLICT DO NOTHING

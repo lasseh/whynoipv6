@@ -240,7 +240,7 @@ FROM campaign_changelog
 JOIN campaign_domain on campaign_changelog.domain_id = campaign_domain.id
 ORDER BY campaign_changelog.id DESC;
 
-CREATE OR REPLACE VIEW "shame_domains_view" AS 
+CREATE OR REPLACE VIEW "domain_shame_view" AS 
 SELECT 
     domain.id AS "domain_id", 
     domain.site AS "domain_site", 

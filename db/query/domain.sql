@@ -43,3 +43,9 @@ UPDATE domain
 SET disabled = TRUE
 WHERE site = $1;
 
+-- name: GetDomainsByName :many
+SELECT * 
+FROM domain_view_list
+WHERE site LIKE '%' || $1 || '%'
+LIMIT $2
+OFFSET $3;
