@@ -219,10 +219,11 @@ func updateDomain(existingDomain, newDomain core.DomainModel) error {
 	ctx := context.Background()
 
 	// Helper function to create changelog entries
-	createChangelog := func(message string) {
+	createChangelog := func(message string, status bool) {
 		_, err := changelogService.Create(ctx, core.ChangelogModel{
-			DomainID: int32(existingDomain.ID),
-			Message:  message,
+			DomainID:   int32(existingDomain.ID),
+			Message:    message,
+			IPv6Status: status,
 		})
 		if err != nil {
 			log.Printf("[%s] Error writing changelog: %s\n", existingDomain.Site, err)
@@ -235,15 +236,13 @@ func updateDomain(existingDomain, newDomain core.DomainModel) error {
 		existingDomain.CheckAAAA = true
 		existingDomain.TsAAAA = time.Now()
 		existingDomain.TsUpdated = time.Now()
-
-		createChangelog(fmt.Sprintf("Got AAAA record for %s", existingDomain.Site))
+		createChangelog(fmt.Sprintf("Got AAAA record for %s", existingDomain.Site), true)
 	}
 	// Domain changes from AAAA to no AAAA
 	if existingDomain.CheckAAAA && !newDomain.CheckAAAA {
 		existingDomain.CheckAAAA = false
 		existingDomain.TsUpdated = time.Now()
-
-		createChangelog(fmt.Sprintf("Lost AAAA record for %s", existingDomain.Site))
+		createChangelog(fmt.Sprintf("Lost AAAA record for %s", existingDomain.Site), false)
 	}
 
 	// Compare WWW record result
@@ -252,15 +251,13 @@ func updateDomain(existingDomain, newDomain core.DomainModel) error {
 		existingDomain.CheckWWW = true
 		existingDomain.TsWWW = time.Now()
 		existingDomain.TsUpdated = time.Now()
-
-		createChangelog(fmt.Sprintf("Got AAAA record for www.%s", existingDomain.Site))
+		createChangelog(fmt.Sprintf("Got AAAA record for www.%s", existingDomain.Site), true)
 	}
 	// Domain changes from WWW to no WWW
 	if existingDomain.CheckWWW && !newDomain.CheckWWW {
 		existingDomain.CheckWWW = false
 		existingDomain.TsUpdated = time.Now()
-
-		createChangelog(fmt.Sprintf("Lost AAAA record for www.%s", existingDomain.Site))
+		createChangelog(fmt.Sprintf("Lost AAAA record for www.%s", existingDomain.Site), false)
 	}
 
 	// Compare NS record result
@@ -269,15 +266,13 @@ func updateDomain(existingDomain, newDomain core.DomainModel) error {
 		existingDomain.CheckNS = true
 		existingDomain.TsNS = time.Now()
 		existingDomain.TsUpdated = time.Now()
-
-		createChangelog(fmt.Sprintf("Nameserver got AAAA record for %s", existingDomain.Site))
+		createChangelog(fmt.Sprintf("Nameserver got AAAA record for %s", existingDomain.Site), true)
 	}
 	// Nameserver changes from NS to no NS
 	if existingDomain.CheckNS && !newDomain.CheckNS {
 		existingDomain.CheckNS = false
 		existingDomain.TsUpdated = time.Now()
-
-		createChangelog(fmt.Sprintf("Nameserver lost AAAA record for %s", existingDomain.Site))
+		createChangelog(fmt.Sprintf("Nameserver lost AAAA record for %s", existingDomain.Site), false)
 	}
 
 	// Set AsnID and CountryID

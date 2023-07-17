@@ -152,8 +152,8 @@ func (s *Service) ValidateDomain(domain string) error {
 
 	// Return an error if both A and www A records are not found.
 	if isDomainError && isWwwDomainError {
-		// return fmt.Errorf("No A or AAAA record found for %s or %s", domain, wwwPrefix + domain)
-		return fmt.Errorf("No DNS record for %s: %v", domain, err)
+		// Return NXDOMAIN error, so the checkDomain function can disable the domain.
+		return fmt.Errorf("NXDOMAIN")
 	}
 
 	return nil

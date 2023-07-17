@@ -96,19 +96,20 @@ func (s *CampaignService) CrawlCampaignDomain(ctx context.Context, offset, limit
 // UpdateCampaignDomain updates a domain.
 func (s *CampaignService) UpdateCampaignDomain(ctx context.Context, domain CampaignDomainModel) error {
 	err := s.q.UpdateCampaignDomain(ctx, db.UpdateCampaignDomainParams{
-		Site:      domain.Site,
-		CheckAaaa: domain.CheckAAAA,
-		CheckWww:  domain.CheckWWW,
-		CheckNs:   domain.CheckNS,
-		CheckCurl: domain.CheckCurl,
-		AsnID:     NullInt(domain.AsnID),
-		CountryID: NullInt(domain.CountryID),
-		TsAaaa:    NullTime(domain.TsAAAA),
-		TsWww:     NullTime(domain.TsWWW),
-		TsNs:      NullTime(domain.TsNS),
-		TsCurl:    NullTime(domain.TsCurl),
-		TsCheck:   NullTime(domain.TsCheck),
-		TsUpdated: NullTime(domain.TsUpdated),
+		Site:       domain.Site,
+		CampaignID: domain.CampaignID,
+		CheckAaaa:  domain.CheckAAAA,
+		CheckWww:   domain.CheckWWW,
+		CheckNs:    domain.CheckNS,
+		CheckCurl:  domain.CheckCurl,
+		AsnID:      NullInt(domain.AsnID),
+		CountryID:  NullInt(domain.CountryID),
+		TsAaaa:     NullTime(domain.TsAAAA),
+		TsWww:      NullTime(domain.TsWWW),
+		TsNs:       NullTime(domain.TsNS),
+		TsCurl:     NullTime(domain.TsCurl),
+		TsCheck:    NullTime(domain.TsCheck),
+		TsUpdated:  NullTime(domain.TsUpdated),
 	})
 	if err != nil {
 		return err
@@ -117,8 +118,11 @@ func (s *CampaignService) UpdateCampaignDomain(ctx context.Context, domain Campa
 }
 
 // ViewCampaignDomain list a domain.
-func (s *CampaignService) ViewCampaignDomain(ctx context.Context, domain string) (CampaignDomainModel, error) {
-	d, err := s.q.ViewCampaignDomain(ctx, domain)
+func (s *CampaignService) ViewCampaignDomain(ctx context.Context, uuid uuid.UUID, domain string) (CampaignDomainModel, error) {
+	d, err := s.q.ViewCampaignDomain(ctx, db.ViewCampaignDomainParams{
+		Site:       domain,
+		CampaignID: uuid,
+	})
 	if err != nil {
 		return CampaignDomainModel{}, err
 	}

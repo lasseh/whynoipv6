@@ -19,12 +19,12 @@ CREATE TABLE "sites" (
 CREATE INDEX idx_sites_rank ON sites(rank);
 CREATE INDEX idx_sites_site ON sites(site);
 
-
 CREATE TABLE "changelog" (
-  "id" BIGSERIAL PRIMARY KEY, -- 
-  "ts" TIMESTAMPTZ NOT NULL DEFAULT NOW(), -- Timestamp
+  "id" BIGSERIAL PRIMARY KEY, -- Unique identifier for each change
+  "ts" TIMESTAMPTZ NOT NULL DEFAULT NOW(), -- Timestamp 
   "domain_id" int NOT NULL, -- Site, ref: sites.site
-  "message" text NOT NULL -- Message
+  "message" text NOT NULL, -- Message
+  "ipv6_status" boolean NOT NULL DEFAULT NULL -- Status of IPv6
 );
 CREATE INDEX idx_changelog_domain_id ON changelog(domain_id);
 
@@ -38,7 +38,6 @@ CREATE TABLE "asn" (
   "percent_v6" FLOAT NULL -- percent of sites with v6 support in this ASN
 );
 CREATE INDEX idx_asn_id ON asn(id);
-
 
 DROP TYPE IF EXISTS "continents";
 CREATE TYPE "continents" AS ENUM (
@@ -145,8 +144,6 @@ CREATE TABLE "campaign_domain" (
   "ts_updated" TIMESTAMPTZ, --  timestamp of last update
   UNIQUE(campaign_id,site)
 );
--- ALTER TABLE "campaign_domain" ADD FOREIGN KEY ("asn_id") REFERENCES "asn" ("id");
--- ALTER TABLE "campaign_changelog" ADD FOREIGN KEY ("domain_id") REFERENCES "campaign_domain" ("id");
 CREATE INDEX idx_campaign_domain_campaign_id ON campaign_domain(campaign_id, site);
 CREATE INDEX idx_campaign_domain_check_aaaa ON campaign_domain(check_aaaa);
 CREATE INDEX idx_campaign_domain_check_www ON campaign_domain(check_www);
@@ -163,7 +160,8 @@ CREATE TABLE "campaign_changelog" (
   "ts" TIMESTAMPTZ NOT NULL DEFAULT NOW(), -- Timestamp of the change
   "domain_id" INT NOT NULL REFERENCES campaign_domain(id) ON DELETE CASCADE, -- Foreign key referencing campaign_domain table
   "campaign_id" UUID NOT NULL REFERENCES campaign(uuid) ON DELETE CASCADE, -- Foreign key referencing campaign table
-  "message" TEXT NOT NULL -- Message describing the change
+  "message" TEXT NOT NULL, -- Message describing the change
+  "ipv6_status" boolean NOT NULL DEFAULT NULL -- Status of IPv6
 );
 CREATE INDEX idx_campaign_changelog_domain_id ON campaign_changelog(domain_id);
 CREATE INDEX idx_campaign_changelog_campaign_id ON campaign_changelog(campaign_id);
@@ -177,94 +175,92 @@ CREATE TABLE "metrics" (
 
 -- VIEWS ------------------------------------------------------
 CREATE or REPLACE VIEW domain_view_list AS
-SELECT 
- domain.*, 
- sites.rank,
- asn.name as asname,
- country.country_name
+SELECT domain.*,
+       sites.rank,
+       asn.name as asname,
+       country.country_name
 FROM domain
-RIGHT JOIN sites ON domain.site = sites.site
-LEFT JOIN asn ON domain.asn_id = asn.id
-LEFT JOIN country ON domain.country_id = country.id
+         RIGHT JOIN sites ON domain.site = sites.site
+         LEFT JOIN asn ON domain.asn_id = asn.id
+         LEFT JOIN country ON domain.country_id = country.id
 WHERE domain.disabled = FALSE
 ORDER BY sites.rank;
 
 -- CREATE MATERIALIZED VIEW domain_view_index AS
 CREATE VIEW domain_view_index AS
-SELECT 
- domain.*, 
- sites.rank,
- asn.name as asname,
- country.country_name
+SELECT domain.*,
+       sites.rank,
+       asn.name as asname,
+       country.country_name
 FROM domain
-RIGHT JOIN sites ON domain.site = sites.site
-LEFT JOIN asn ON domain.asn_id = asn.id
-LEFT JOIN country ON domain.country_id = country.id
-WHERE domain.disabled = FALSE AND check_aaaa = FALSE OR check_www = FALSE
-ORDER BY sites.rank LIMIT 100;
+         RIGHT JOIN sites ON domain.site = sites.site
+         LEFT JOIN asn ON domain.asn_id = asn.id
+         LEFT JOIN country ON domain.country_id = country.id
+WHERE domain.disabled = FALSE AND check_aaaa = FALSE
+   OR check_www = FALSE
+ORDER BY sites.rank
+LIMIT 100;
 
 CREATE VIEW domain_view_heroes AS
-SELECT 
- domain.*, 
- sites.rank,
- asn.name as asname,
- country.country_name
+SELECT domain.*,
+       sites.rank,
+       asn.name as asname,
+       country.country_name
 FROM domain
-RIGHT JOIN sites ON domain.site = sites.site
-LEFT JOIN asn ON domain.asn_id = asn.id
-LEFT JOIN country ON domain.country_id = country.id
-WHERE domain.disabled = FALSE AND check_aaaa = TRUE AND check_www = TRUE AND check_ns = TRUE
-ORDER BY sites.rank LIMIT 100;
+         RIGHT JOIN sites ON domain.site = sites.site
+         LEFT JOIN asn ON domain.asn_id = asn.id
+         LEFT JOIN country ON domain.country_id = country.id
+WHERE domain.disabled = FALSE
+  AND check_aaaa = TRUE
+  AND check_www = TRUE
+  AND check_ns = TRUE
+ORDER BY sites.rank
+LIMIT 100;
 
 CREATE or REPLACE VIEW domain_crawl_list AS
-SELECT * 
+SELECT *
 FROM domain
-WHERE (ts_check < now() - '3 days' :: interval) 
-OR (ts_check IS NULL)
-AND disabled is FALSE 
+WHERE (disabled is FALSE)
+  AND ((ts_check < now() - '3 days' :: interval) OR (ts_check IS NULL))
 ORDER BY id;
 
 CREATE or REPLACE VIEW changelog_view AS
-SELECT
-changelog.*,
-domain.site
+SELECT changelog.*,
+       domain.site
 FROM changelog
-JOIN domain on changelog.domain_id = domain.id
+         JOIN domain on changelog.domain_id = domain.id
 ORDER BY changelog.id DESC;
 
 CREATE or REPLACE VIEW changelog_campaign_view AS
-SELECT
-campaign_changelog.*,
-campaign_domain.site
+SELECT campaign_changelog.*,
+       campaign_domain.site
 FROM campaign_changelog
-JOIN campaign_domain on campaign_changelog.domain_id = campaign_domain.id
+         JOIN campaign_domain on campaign_changelog.domain_id = campaign_domain.id
 ORDER BY campaign_changelog.id DESC;
 
-CREATE OR REPLACE VIEW "domain_shame_view" AS 
-SELECT 
-    domain.id AS "domain_id", 
-    domain.site AS "domain_site", 
-    domain.check_aaaa,
-    domain.check_www, 
-    domain.check_ns, 
-    domain.check_curl, 
-    domain.asn_id,
-    domain.country_id, 
-    domain.disabled, 
-    domain.ts_aaaa, 
-    domain.ts_www,
-    domain.ts_ns, 
-    domain.ts_curl, 
-    domain.ts_check, 
-    domain.ts_updated,
-    top_shame.id AS "shame_id",
-    top_shame.site AS "shame_site"
-FROM 
-    domain
-JOIN 
-    top_shame
-ON 
-    domain."site" = top_shame."site"
-WHERE 
-    domain."check_aaaa" = FALSE;
+CREATE OR REPLACE VIEW "domain_shame_view" AS
+SELECT domain.id      AS "id",
+       domain.site    AS "site",
+       domain.check_aaaa,
+       domain.check_www,
+       domain.check_ns,
+       domain.check_curl,
+       domain.asn_id,
+       domain.country_id,
+       domain.disabled,
+       domain.ts_aaaa,
+       domain.ts_www,
+       domain.ts_ns,
+       domain.ts_curl,
+       domain.ts_check,
+       domain.ts_updated,
+       top_shame.id   AS "shame_id",
+       top_shame.site AS "shame_site"
+FROM domain
+         JOIN
+     top_shame
+     ON
+         domain."site" = top_shame."site"
+WHERE domain."check_aaaa" = FALSE
+ORDER BY domain.id;
 

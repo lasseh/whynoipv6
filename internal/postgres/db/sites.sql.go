@@ -10,11 +10,10 @@ import (
 )
 
 const ListSites = `-- name: ListSites :many
-SELECT id, list_id, rank, site 
+SELECT id, list_id, rank, site
 FROM sites
 ORDER BY rank
-LIMIT $1
-OFFSET $2
+LIMIT $1 OFFSET $2
 `
 
 type ListSitesParams struct {

@@ -16,8 +16,8 @@ import (
 const CrawlCampaignDomain = `-- name: CrawlCampaignDomain :many
 SELECT id, campaign_id, site, check_aaaa, check_www, check_ns, check_curl, asn_id, country_id, disabled, ts_aaaa, ts_www, ts_ns, ts_curl, ts_check, ts_updated
 FROM campaign_domain
-LIMIT $1 
-OFFSET $2
+ORDER BY id
+LIMIT $1 OFFSET $2
 `
 
 type CrawlCampaignDomainParams struct {
@@ -90,10 +90,9 @@ func (q *Queries) CreateCampaign(ctx context.Context, arg CreateCampaignParams) 
 const CreateOrUpdateCampaign = `-- name: CreateOrUpdateCampaign :one
 INSERT INTO campaign(uuid, name, description)
 VALUES ($1, $2, $3)
-ON CONFLICT (uuid)
-DO UPDATE SET 
-    name = EXCLUDED.name,
-    description = EXCLUDED.description
+ON CONFLICT (uuid) DO UPDATE
+    SET name        = EXCLUDED.name,
+        description = EXCLUDED.description
 RETURNING id, created_at, uuid, name, description, disabled
 `
 
@@ -118,9 +117,10 @@ func (q *Queries) CreateOrUpdateCampaign(ctx context.Context, arg CreateOrUpdate
 }
 
 const DeleteCampaignDomain = `-- name: DeleteCampaignDomain :exec
-DELETE FROM campaign_domain
-WHERE
-campaign_id = $1 AND site = $2
+DELETE
+FROM campaign_domain
+WHERE campaign_id = $1
+  AND site = $2
 `
 
 type DeleteCampaignDomainParams struct {
@@ -134,7 +134,8 @@ func (q *Queries) DeleteCampaignDomain(ctx context.Context, arg DeleteCampaignDo
 }
 
 const DisableCampaignDomain = `-- name: DisableCampaignDomain :exec
-UPDATE campaign_domain
+UPDATE
+    campaign_domain
 SET disabled = TRUE
 WHERE site = $1
 `
@@ -145,9 +146,10 @@ func (q *Queries) DisableCampaignDomain(ctx context.Context, site string) error 
 }
 
 const GetCampaignByUUID = `-- name: GetCampaignByUUID :one
-SELECT campaign.id, campaign.created_at, campaign.uuid, campaign.name, campaign.description, campaign.disabled, COUNT(campaign_domain.id) AS domain_count
+SELECT campaign.id, campaign.created_at, campaign.uuid, campaign.name, campaign.description, campaign.disabled,
+       COUNT(campaign_domain.id) AS domain_count
 FROM campaign
-LEFT JOIN campaign_domain ON campaign.uuid = campaign_domain.campaign_id
+         LEFT JOIN campaign_domain ON campaign.uuid = campaign_domain.campaign_id
 WHERE campaign.uuid = $1
 GROUP BY campaign.id
 LIMIT 1
@@ -180,7 +182,8 @@ func (q *Queries) GetCampaignByUUID(ctx context.Context, argUuid uuid.UUID) (Get
 
 const InsertCampaignDomain = `-- name: InsertCampaignDomain :exec
 INSERT INTO campaign_domain(campaign_id, site)
-VALUES ($1, $2) ON CONFLICT DO NOTHING
+VALUES ($1, $2)
+ON CONFLICT DO NOTHING
 `
 
 type InsertCampaignDomainParams struct {
@@ -195,9 +198,10 @@ func (q *Queries) InsertCampaignDomain(ctx context.Context, arg InsertCampaignDo
 }
 
 const ListCampaign = `-- name: ListCampaign :many
-SELECT campaign.id, campaign.created_at, campaign.uuid, campaign.name, campaign.description, campaign.disabled, COUNT(campaign_domain.id) AS domain_count
+SELECT campaign.id, campaign.created_at, campaign.uuid, campaign.name, campaign.description, campaign.disabled,
+       COUNT(campaign_domain.id) AS domain_count
 FROM campaign
-LEFT JOIN campaign_domain ON campaign.uuid = campaign_domain.campaign_id
+         LEFT JOIN campaign_domain ON campaign.uuid = campaign_domain.campaign_id
 WHERE campaign.disabled = false
 GROUP BY campaign.id
 ORDER BY campaign.id
@@ -243,17 +247,15 @@ func (q *Queries) ListCampaign(ctx context.Context) ([]ListCampaignRow, error) {
 }
 
 const ListCampaignDomain = `-- name: ListCampaignDomain :many
-SELECT 
- campaign_domain.id, campaign_domain.campaign_id, campaign_domain.site, campaign_domain.check_aaaa, campaign_domain.check_www, campaign_domain.check_ns, campaign_domain.check_curl, campaign_domain.asn_id, campaign_domain.country_id, campaign_domain.disabled, campaign_domain.ts_aaaa, campaign_domain.ts_www, campaign_domain.ts_ns, campaign_domain.ts_curl, campaign_domain.ts_check, campaign_domain.ts_updated,
- asn.name as asname,
- country.country_name
+SELECT campaign_domain.id, campaign_domain.campaign_id, campaign_domain.site, campaign_domain.check_aaaa, campaign_domain.check_www, campaign_domain.check_ns, campaign_domain.check_curl, campaign_domain.asn_id, campaign_domain.country_id, campaign_domain.disabled, campaign_domain.ts_aaaa, campaign_domain.ts_www, campaign_domain.ts_ns, campaign_domain.ts_curl, campaign_domain.ts_check, campaign_domain.ts_updated,
+       asn.name as asname,
+       country.country_name
 FROM campaign_domain
-LEFT JOIN asn ON campaign_domain.asn_id = asn.id
-LEFT JOIN country ON campaign_domain.country_id = country.id
+         LEFT JOIN asn ON campaign_domain.asn_id = asn.id
+         LEFT JOIN country ON campaign_domain.country_id = country.id
 WHERE campaign_domain.campaign_id = $1
 ORDER BY campaign_domain.id
-LIMIT $2 
-OFFSET $3
+LIMIT $2 OFFSET $3
 `
 
 type ListCampaignDomainParams struct {
@@ -324,42 +326,45 @@ func (q *Queries) ListCampaignDomain(ctx context.Context, arg ListCampaignDomain
 }
 
 const UpdateCampaignDomain = `-- name: UpdateCampaignDomain :exec
-UPDATE campaign_domain
-SET
-check_aaaa = $2,
-check_www = $3,
-check_ns = $4,
-check_curl = $5,
-ts_aaaa = $6,
-ts_www = $7,
-ts_ns = $8,
-ts_curl = $9,
-ts_check = $10,
-ts_updated = $11,
-asn_id = $12,
-country_id = $13
+UPDATE
+    campaign_domain
+SET check_aaaa = $3,
+    check_www  = $4,
+    check_ns   = $5,
+    check_curl = $6,
+    ts_aaaa    = $7,
+    ts_www     = $8,
+    ts_ns      = $9,
+    ts_curl    = $10,
+    ts_check   = $11,
+    ts_updated = $12,
+    asn_id     = $13,
+    country_id = $14
 WHERE site = $1
+  AND campaign_id = $2
 `
 
 type UpdateCampaignDomainParams struct {
-	Site      string
-	CheckAaaa bool
-	CheckWww  bool
-	CheckNs   bool
-	CheckCurl bool
-	TsAaaa    sql.NullTime
-	TsWww     sql.NullTime
-	TsNs      sql.NullTime
-	TsCurl    sql.NullTime
-	TsCheck   sql.NullTime
-	TsUpdated sql.NullTime
-	AsnID     sql.NullInt64
-	CountryID sql.NullInt64
+	Site       string
+	CampaignID uuid.UUID
+	CheckAaaa  bool
+	CheckWww   bool
+	CheckNs    bool
+	CheckCurl  bool
+	TsAaaa     sql.NullTime
+	TsWww      sql.NullTime
+	TsNs       sql.NullTime
+	TsCurl     sql.NullTime
+	TsCheck    sql.NullTime
+	TsUpdated  sql.NullTime
+	AsnID      sql.NullInt64
+	CountryID  sql.NullInt64
 }
 
 func (q *Queries) UpdateCampaignDomain(ctx context.Context, arg UpdateCampaignDomainParams) error {
 	_, err := q.db.Exec(ctx, UpdateCampaignDomain,
 		arg.Site,
+		arg.CampaignID,
 		arg.CheckAaaa,
 		arg.CheckWww,
 		arg.CheckNs,
@@ -377,16 +382,21 @@ func (q *Queries) UpdateCampaignDomain(ctx context.Context, arg UpdateCampaignDo
 }
 
 const ViewCampaignDomain = `-- name: ViewCampaignDomain :one
-SELECT 
- campaign_domain.id, campaign_domain.campaign_id, campaign_domain.site, campaign_domain.check_aaaa, campaign_domain.check_www, campaign_domain.check_ns, campaign_domain.check_curl, campaign_domain.asn_id, campaign_domain.country_id, campaign_domain.disabled, campaign_domain.ts_aaaa, campaign_domain.ts_www, campaign_domain.ts_ns, campaign_domain.ts_curl, campaign_domain.ts_check, campaign_domain.ts_updated,
- asn.name as asname,
- country.country_name
+SELECT campaign_domain.id, campaign_domain.campaign_id, campaign_domain.site, campaign_domain.check_aaaa, campaign_domain.check_www, campaign_domain.check_ns, campaign_domain.check_curl, campaign_domain.asn_id, campaign_domain.country_id, campaign_domain.disabled, campaign_domain.ts_aaaa, campaign_domain.ts_www, campaign_domain.ts_ns, campaign_domain.ts_curl, campaign_domain.ts_check, campaign_domain.ts_updated,
+       asn.name as asname,
+       country.country_name
 FROM campaign_domain
-LEFT JOIN asn ON campaign_domain.asn_id = asn.id
-LEFT JOIN country ON campaign_domain.country_id = country.id
+         LEFT JOIN asn ON campaign_domain.asn_id = asn.id
+         LEFT JOIN country ON campaign_domain.country_id = country.id
 WHERE site = $1
+  AND campaign_id = $2
 LIMIT 1
 `
+
+type ViewCampaignDomainParams struct {
+	Site       string
+	CampaignID uuid.UUID
+}
 
 type ViewCampaignDomainRow struct {
 	ID          int64
@@ -409,8 +419,8 @@ type ViewCampaignDomainRow struct {
 	CountryName sql.NullString
 }
 
-func (q *Queries) ViewCampaignDomain(ctx context.Context, site string) (ViewCampaignDomainRow, error) {
-	row := q.db.QueryRow(ctx, ViewCampaignDomain, site)
+func (q *Queries) ViewCampaignDomain(ctx context.Context, arg ViewCampaignDomainParams) (ViewCampaignDomainRow, error) {
+	row := q.db.QueryRow(ctx, ViewCampaignDomain, arg.Site, arg.CampaignID)
 	var i ViewCampaignDomainRow
 	err := row.Scan(
 		&i.ID,

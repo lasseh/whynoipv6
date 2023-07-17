@@ -2,6 +2,7 @@ package rest
 
 import (
 	"net/http"
+	"regexp"
 	"time"
 	"whynoipv6/internal/core"
 
@@ -160,16 +161,40 @@ func (rs CampaignHandler) CampaignDomains(w http.ResponseWriter, r *http.Request
 	render.JSON(w, r, campaignList)
 }
 
-// ViewCampaignDomain retrieves a single domain in a campaign.
+// ViewCampaignDomain retrives a single domain in a campaign.
 func (rs CampaignHandler) ViewCampaignDomain(w http.ResponseWriter, r *http.Request) {
-	// Get domain from path
-	paramDomain := chi.URLParam(r, "domain")
+	// Get campaign UUID and domain from path
+	campaign := chi.URLParam(r, "uuid")
+	site := chi.URLParam(r, "domain")
+
+	// Validate and parse the UUID
+	uuid, err := uuid.Parse(campaign)
+	if err != nil {
+		render.Status(r, http.StatusBadRequest)
+		render.JSON(w, r, render.M{"error": "Invalid UUID"})
+		return
+	}
+
+	// Validate the domain
+	// TODO: Move this to core package
+	if !regexp.MustCompile(`^([a-z0-9]+(-[a-z0-9]+)*\.)+[a-z]{2,}$`).MatchString(site) {
+		render.Status(r, http.StatusBadRequest)
+		render.JSON(w, r, render.M{"error": "Invalid domain"})
+		return
+	}
 
 	// Retrieve domain details from the repository
-	domainDetails, err := rs.Repo.ViewCampaignDomain(r.Context(), paramDomain)
+	domainDetails, err := rs.Repo.ViewCampaignDomain(r.Context(), uuid, site)
 	if err != nil {
 		render.Status(r, http.StatusNotFound)
 		render.JSON(w, r, render.M{"error": "Domain not found"})
+		return
+	}
+
+	// If no changelogs are found, return 404
+	if len(domainDetails.Site) == 0 {
+		render.Status(r, http.StatusNotFound)
+		render.JSON(w, r, render.M{"error": "No changelog entries found for campaign " + campaign + " and domain " + site})
 		return
 	}
 

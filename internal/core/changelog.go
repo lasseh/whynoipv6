@@ -30,23 +30,26 @@ type ChangelogModel struct {
 	CampaignID uuid.UUID `json:"campaign_id,omitempty"`
 	Site       string    `json:"site"`
 	Message    string    `json:"message"`
+	IPv6Status bool      `json:"ipv6_status"`
 }
 
 // Create creates a new changelog entry.
 func (s *ChangelogService) Create(ctx context.Context, params ChangelogModel) (ChangelogModel, error) {
 	changelog, err := s.q.CreateChangelog(ctx, db.CreateChangelogParams{
-		DomainID: params.DomainID,
-		Message:  params.Message,
+		DomainID:   params.DomainID,
+		Message:    params.Message,
+		Ipv6Status: params.IPv6Status,
 	})
 	if err != nil {
 		return ChangelogModel{}, err
 	}
 
 	return ChangelogModel{
-		ID:       changelog.ID,
-		Ts:       changelog.Ts,
-		DomainID: changelog.DomainID,
-		Message:  changelog.Message,
+		ID:         changelog.ID,
+		Ts:         changelog.Ts,
+		DomainID:   changelog.DomainID,
+		Message:    changelog.Message,
+		IPv6Status: changelog.Ipv6Status,
 	}, nil
 }
 
@@ -56,6 +59,7 @@ func (s *ChangelogService) CampaignCreate(ctx context.Context, params ChangelogM
 		DomainID:   params.DomainID,
 		CampaignID: params.CampaignID,
 		Message:    params.Message,
+		Ipv6Status: params.IPv6Status,
 	})
 	if err != nil {
 		return ChangelogModel{}, err
@@ -67,6 +71,7 @@ func (s *ChangelogService) CampaignCreate(ctx context.Context, params ChangelogM
 		DomainID:   changelog.DomainID,
 		CampaignID: changelog.CampaignID,
 		Message:    changelog.Message,
+		IPv6Status: changelog.Ipv6Status,
 	}, nil
 }
 
@@ -82,10 +87,11 @@ func (s *ChangelogService) List(ctx context.Context, offset, limit int32) ([]Cha
 	var models []ChangelogModel
 	for _, changelog := range changelogs {
 		models = append(models, ChangelogModel{
-			ID:      changelog.ID,
-			Ts:      changelog.Ts,
-			Site:    changelog.Site,
-			Message: changelog.Message,
+			ID:         changelog.ID,
+			Ts:         changelog.Ts,
+			Site:       changelog.Site,
+			Message:    changelog.Message,
+			IPv6Status: changelog.Ipv6Status,
 		})
 	}
 	return models, nil
@@ -108,11 +114,12 @@ func (s *ChangelogService) GetChangelogByDomain(ctx context.Context, site string
 	var models []ChangelogModel
 	for _, changelog := range changelogs {
 		models = append(models, ChangelogModel{
-			ID:       changelog.ID,
-			Ts:       changelog.Ts,
-			DomainID: changelog.DomainID,
-			Site:     changelog.Site,
-			Message:  changelog.Message,
+			ID:         changelog.ID,
+			Ts:         changelog.Ts,
+			DomainID:   changelog.DomainID,
+			Site:       changelog.Site,
+			Message:    changelog.Message,
+			IPv6Status: changelog.Ipv6Status,
 		})
 	}
 	return models, nil
@@ -141,6 +148,7 @@ func (s *ChangelogService) GetChangelogByCampaign(ctx context.Context, campaignI
 			CampaignID: changelog.CampaignID,
 			Site:       changelog.Site,
 			Message:    changelog.Message,
+			IPv6Status: changelog.Ipv6Status,
 		})
 	}
 	return models, nil
@@ -170,6 +178,7 @@ func (s *ChangelogService) GetChangelogByCampaignDomain(ctx context.Context, cam
 			CampaignID: changelog.CampaignID,
 			Site:       changelog.Site,
 			Message:    changelog.Message,
+			IPv6Status: changelog.Ipv6Status,
 		})
 	}
 	return models, nil

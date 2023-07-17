@@ -19,10 +19,11 @@ type ChangelogHandler struct {
 
 // ChangelogResponse is the response for a changelog.
 type ChangelogResponse struct {
-	ID      int64     `json:"id"`
-	Ts      time.Time `json:"ts"`
-	Domain  string    `json:"domain"`
-	Message string    `json:"message"`
+	ID         int64     `json:"id"`
+	Ts         time.Time `json:"ts"`
+	Domain     string    `json:"domain"`
+	Message    string    `json:"message"`
+	IPv6Status bool      `json:"ipv6_status"`
 }
 
 // Routes returns a router with all changelog endpoints mounted.
@@ -64,10 +65,11 @@ func (rs ChangelogHandler) ChangelogList(w http.ResponseWriter, r *http.Request)
 	var changelogList []ChangelogResponse
 	for _, changelog := range changelogs {
 		changelogList = append(changelogList, ChangelogResponse{
-			ID:      changelog.ID,
-			Ts:      changelog.Ts,
-			Domain:  changelog.Site,
-			Message: changelog.Message,
+			ID:         changelog.ID,
+			Ts:         changelog.Ts,
+			Domain:     changelog.Site,
+			Message:    changelog.Message,
+			IPv6Status: changelog.IPv6Status,
 		})
 	}
 
@@ -115,10 +117,11 @@ func (rs ChangelogHandler) ChangelogByDomain(w http.ResponseWriter, r *http.Requ
 	var changelogList []ChangelogResponse
 	for _, changelog := range changelogs {
 		changelogList = append(changelogList, ChangelogResponse{
-			ID:      changelog.ID,
-			Ts:      changelog.Ts,
-			Domain:  changelog.Site,
-			Message: changelog.Message,
+			ID:         changelog.ID,
+			Ts:         changelog.Ts,
+			Domain:     changelog.Site,
+			Message:    changelog.Message,
+			IPv6Status: changelog.IPv6Status,
 		})
 	}
 
@@ -166,10 +169,11 @@ func (rs ChangelogHandler) ChangelogByCampaign(w http.ResponseWriter, r *http.Re
 	var changelogList []ChangelogResponse
 	for _, changelog := range changelogs {
 		changelogList = append(changelogList, ChangelogResponse{
-			ID:      changelog.ID,
-			Ts:      changelog.Ts,
-			Domain:  changelog.Site,
-			Message: changelog.Message,
+			ID:         changelog.ID,
+			Ts:         changelog.Ts,
+			Domain:     changelog.Site,
+			Message:    changelog.Message,
+			IPv6Status: changelog.IPv6Status,
 		})
 	}
 
@@ -226,10 +230,11 @@ func (rs ChangelogHandler) ChangelogByCampaignDomain(w http.ResponseWriter, r *h
 	var changelogList []ChangelogResponse
 	for _, changelog := range changelogs {
 		changelogList = append(changelogList, ChangelogResponse{
-			ID:      changelog.ID,
-			Ts:      changelog.Ts,
-			Domain:  changelog.Site,
-			Message: changelog.Message,
+			ID:         changelog.ID,
+			Ts:         changelog.Ts,
+			Domain:     changelog.Site,
+			Message:    changelog.Message,
+			IPv6Status: changelog.IPv6Status,
 		})
 	}
 

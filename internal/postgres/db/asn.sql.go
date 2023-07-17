@@ -10,8 +10,9 @@ import (
 )
 
 const CreateASN = `-- name: CreateASN :one
-INSERT INTO asn(number,name)
-VALUES ($1, $2) ON CONFLICT DO NOTHING
+INSERT INTO asn(number, name)
+VALUES ($1, $2)
+ON CONFLICT DO NOTHING
 RETURNING id, number, name, count_v4, count_v6, percent_v4, percent_v6
 `
 
@@ -37,7 +38,7 @@ func (q *Queries) CreateASN(ctx context.Context, arg CreateASNParams) (Asn, erro
 }
 
 const GetASByNumber = `-- name: GetASByNumber :one
-SELECT id, number, name, count_v4, count_v6, percent_v4, percent_v6 
+SELECT id, number, name, count_v4, count_v6, percent_v4, percent_v6
 FROM asn
 WHERE number = $1
 LIMIT 1

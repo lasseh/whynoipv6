@@ -230,3 +230,55 @@ func (s *DomainService) GetDomainsByName(ctx context.Context, searchString strin
 	}
 	return list, nil
 }
+
+// GetCampaignDomainsByName returns a list of domains from a campaign by name.
+func (s *DomainService) GetCampaignDomainsByName(ctx context.Context, searchString string, offset, limit int32) ([]CampaignDomainModel, error) {
+	domains, err := s.q.GetCampaignDomainsByName(ctx, db.GetCampaignDomainsByNameParams{
+		Column1: NullString(searchString),
+		Offset:  offset,
+		Limit:   limit,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	var list []CampaignDomainModel
+	for _, d := range domains {
+		list = append(list, CampaignDomainModel{
+			ID:         d.ID,
+			Site:       d.Site,
+			CheckAAAA:  d.CheckAaaa,
+			CheckWWW:   d.CheckWww,
+			CheckNS:    d.CheckNs,
+			CheckCurl:  d.CheckCurl,
+			CampaignID: d.CampaignID,
+		})
+	}
+	return list, nil
+}
+
+// ListDomainShamers lists 10-ish domains without IPv6 support.
+func (s *DomainService) ListDomainShamers(ctx context.Context) ([]DomainModel, error) {
+	domains, err := s.q.ListDomainShamers(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var list []DomainModel
+	for _, d := range domains {
+		list = append(list, DomainModel{
+			ID:        d.ID,
+			Site:      d.Site,
+			CheckAAAA: d.CheckAaaa,
+			CheckWWW:  d.CheckWww,
+			CheckNS:   d.CheckNs,
+			CheckCurl: d.CheckCurl,
+			TsAAAA:    TimeNull(d.TsAaaa),
+			TsWWW:     TimeNull(d.TsWww),
+			TsNS:      TimeNull(d.TsNs),
+			TsCurl:    TimeNull(d.TsCurl),
+			TsCheck:   TimeNull(d.TsCheck),
+			TsUpdated: TimeNull(d.TsUpdated),
+		})
+	}
+	return list, nil
+}

@@ -96,11 +96,10 @@ func (q *Queries) ListCountry(ctx context.Context) ([]Country, error) {
 const ListDomainHeroesByCountry = `-- name: ListDomainHeroesByCountry :many
 SELECT id, site, check_aaaa, check_www, check_ns, check_curl, asn_id, country_id, disabled, ts_aaaa, ts_www, ts_ns, ts_curl, ts_check, ts_updated, rank, asname, country_name
 FROM domain_view_list
-WHERE
- country_id = $1
- AND check_aaaa = TRUE
- AND check_www = TRUE
- AND check_ns = TRUE
+WHERE country_id = $1
+  AND check_aaaa = TRUE
+  AND check_www = TRUE
+  AND check_ns = TRUE
 ORDER BY id
 LIMIT 50
 `
@@ -148,8 +147,11 @@ const ListDomainsByCountry = `-- name: ListDomainsByCountry :many
 SELECT id, site, check_aaaa, check_www, check_ns, check_curl, asn_id, country_id, disabled, ts_aaaa, ts_www, ts_ns, ts_curl, ts_check, ts_updated, rank, asname, country_name
 FROM domain_view_list
 WHERE country_id = $1
- AND (check_aaaa = FALSE OR check_www = FALSE)
- AND ts_check IS NOT NULL
+  AND (
+            check_aaaa = FALSE
+        OR check_www = FALSE
+    )
+  AND ts_check IS NOT NULL
 ORDER BY id
 LIMIT 50
 `
@@ -194,12 +196,12 @@ func (q *Queries) ListDomainsByCountry(ctx context.Context, countryID sql.NullIn
 }
 
 const UpdateCountryStats = `-- name: UpdateCountryStats :one
-UPDATE country
-SET
- sites = $2,
- v6sites = $3,
- percent = $4
-WHERE id = $1 
+UPDATE
+    country
+SET sites   = $2,
+    v6sites = $3,
+    percent = $4
+WHERE id = $1
 RETURNING id, country_name, country_code, country_tld, continent, sites, v6sites, percent
 `
 

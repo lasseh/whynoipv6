@@ -13,7 +13,8 @@ import (
 )
 
 const GetMetric = `-- name: GetMetric :many
-SELECT time, data 
+SELECT time,
+       data
 FROM metrics
 WHERE measurement = $1
 ORDER BY time DESC
@@ -58,4 +59,40 @@ type StoreMetricParams struct {
 func (q *Queries) StoreMetric(ctx context.Context, arg StoreMetricParams) error {
 	_, err := q.db.Exec(ctx, StoreMetric, arg.Measurement, arg.Data)
 	return err
+}
+
+const TotalStats = `-- name: TotalStats :one
+SELECT
+  time,
+  ((data->>'total_sites')::NUMERIC) as TotalSites,
+  ((data->>'total_ns')::NUMERIC) as TotalNs,
+  ((data->>'total_aaaa')::NUMERIC) as TotalAaaa,
+  ((data->>'total_www')::NUMERIC) as TotalWww,
+  ((data->>'total_both')::NUMERIC) as TotalBoth
+FROM
+  metrics
+WHERE measurement = 'domains' LIMIT 1
+`
+
+type TotalStatsRow struct {
+	Time       time.Time
+	Totalsites pgtype.Numeric
+	Totalns    pgtype.Numeric
+	Totalaaaa  pgtype.Numeric
+	Totalwww   pgtype.Numeric
+	Totalboth  pgtype.Numeric
+}
+
+func (q *Queries) TotalStats(ctx context.Context) (TotalStatsRow, error) {
+	row := q.db.QueryRow(ctx, TotalStats)
+	var i TotalStatsRow
+	err := row.Scan(
+		&i.Time,
+		&i.Totalsites,
+		&i.Totalns,
+		&i.Totalaaaa,
+		&i.Totalwww,
+		&i.Totalboth,
+	)
+	return i, err
 }

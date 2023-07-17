@@ -12,19 +12,25 @@ import (
 )
 
 const CreateCampaignChangelog = `-- name: CreateCampaignChangelog :one
-INSERT INTO campaign_changelog (domain_id, campaign_id, message)
-VALUES ($1, $2, $3)
-RETURNING id, ts, domain_id, campaign_id, message
+INSERT INTO campaign_changelog (domain_id, campaign_id, message, ipv6_status)
+VALUES ($1, $2, $3, $4)
+RETURNING id, ts, domain_id, campaign_id, message, ipv6_status
 `
 
 type CreateCampaignChangelogParams struct {
 	DomainID   int32
 	CampaignID uuid.UUID
 	Message    string
+	Ipv6Status bool
 }
 
 func (q *Queries) CreateCampaignChangelog(ctx context.Context, arg CreateCampaignChangelogParams) (CampaignChangelog, error) {
-	row := q.db.QueryRow(ctx, CreateCampaignChangelog, arg.DomainID, arg.CampaignID, arg.Message)
+	row := q.db.QueryRow(ctx, CreateCampaignChangelog,
+		arg.DomainID,
+		arg.CampaignID,
+		arg.Message,
+		arg.Ipv6Status,
+	)
 	var i CampaignChangelog
 	err := row.Scan(
 		&i.ID,
@@ -32,39 +38,41 @@ func (q *Queries) CreateCampaignChangelog(ctx context.Context, arg CreateCampaig
 		&i.DomainID,
 		&i.CampaignID,
 		&i.Message,
+		&i.Ipv6Status,
 	)
 	return i, err
 }
 
 const CreateChangelog = `-- name: CreateChangelog :one
-INSERT INTO changelog (domain_id, message)
-VALUES ($1, $2)
-RETURNING id, ts, domain_id, message
+INSERT INTO changelog (domain_id, message, ipv6_status)
+VALUES ($1, $2, $3)
+RETURNING id, ts, domain_id, message, ipv6_status
 `
 
 type CreateChangelogParams struct {
-	DomainID int32
-	Message  string
+	DomainID   int32
+	Message    string
+	Ipv6Status bool
 }
 
 func (q *Queries) CreateChangelog(ctx context.Context, arg CreateChangelogParams) (Changelog, error) {
-	row := q.db.QueryRow(ctx, CreateChangelog, arg.DomainID, arg.Message)
+	row := q.db.QueryRow(ctx, CreateChangelog, arg.DomainID, arg.Message, arg.Ipv6Status)
 	var i Changelog
 	err := row.Scan(
 		&i.ID,
 		&i.Ts,
 		&i.DomainID,
 		&i.Message,
+		&i.Ipv6Status,
 	)
 	return i, err
 }
 
 const GetChangelogByCampaign = `-- name: GetChangelogByCampaign :many
-SELECT id, ts, domain_id, campaign_id, message, site
+SELECT id, ts, domain_id, campaign_id, message, ipv6_status, site
 FROM changelog_campaign_view
 WHERE campaign_id = $1
-LIMIT $2
-OFFSET $3
+LIMIT $2 OFFSET $3
 `
 
 type GetChangelogByCampaignParams struct {
@@ -88,6 +96,7 @@ func (q *Queries) GetChangelogByCampaign(ctx context.Context, arg GetChangelogBy
 			&i.DomainID,
 			&i.CampaignID,
 			&i.Message,
+			&i.Ipv6Status,
 			&i.Site,
 		); err != nil {
 			return nil, err
@@ -101,12 +110,11 @@ func (q *Queries) GetChangelogByCampaign(ctx context.Context, arg GetChangelogBy
 }
 
 const GetChangelogByCampaignDomain = `-- name: GetChangelogByCampaignDomain :many
-SELECT id, ts, domain_id, campaign_id, message, site
+SELECT id, ts, domain_id, campaign_id, message, ipv6_status, site
 FROM changelog_campaign_view
 WHERE campaign_id = $1
-AND site = $2
-LIMIT $3
-OFFSET $4
+  AND site = $2
+LIMIT $3 OFFSET $4
 `
 
 type GetChangelogByCampaignDomainParams struct {
@@ -136,6 +144,7 @@ func (q *Queries) GetChangelogByCampaignDomain(ctx context.Context, arg GetChang
 			&i.DomainID,
 			&i.CampaignID,
 			&i.Message,
+			&i.Ipv6Status,
 			&i.Site,
 		); err != nil {
 			return nil, err
@@ -149,11 +158,10 @@ func (q *Queries) GetChangelogByCampaignDomain(ctx context.Context, arg GetChang
 }
 
 const GetChangelogByDomain = `-- name: GetChangelogByDomain :many
-SELECT id, ts, domain_id, message, site
+SELECT id, ts, domain_id, message, ipv6_status, site
 FROM changelog_view
 WHERE site = $1
-LIMIT $2
-OFFSET $3
+LIMIT $2 OFFSET $3
 `
 
 type GetChangelogByDomainParams struct {
@@ -176,6 +184,7 @@ func (q *Queries) GetChangelogByDomain(ctx context.Context, arg GetChangelogByDo
 			&i.Ts,
 			&i.DomainID,
 			&i.Message,
+			&i.Ipv6Status,
 			&i.Site,
 		); err != nil {
 			return nil, err
@@ -189,10 +198,9 @@ func (q *Queries) GetChangelogByDomain(ctx context.Context, arg GetChangelogByDo
 }
 
 const ListChangelog = `-- name: ListChangelog :many
-SELECT id, ts, domain_id, message, site 
+SELECT id, ts, domain_id, message, ipv6_status, site
 FROM changelog_view
-LIMIT $1
-OFFSET $2
+LIMIT $1 OFFSET $2
 `
 
 type ListChangelogParams struct {
@@ -214,6 +222,7 @@ func (q *Queries) ListChangelog(ctx context.Context, arg ListChangelogParams) ([
 			&i.Ts,
 			&i.DomainID,
 			&i.Message,
+			&i.Ipv6Status,
 			&i.Site,
 		); err != nil {
 			return nil, err

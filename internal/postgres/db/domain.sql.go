@@ -11,10 +11,9 @@ import (
 )
 
 const CrawlDomain = `-- name: CrawlDomain :many
-SELECT id, site, check_aaaa, check_www, check_ns, check_curl, asn_id, country_id, disabled, ts_aaaa, ts_www, ts_ns, ts_curl, ts_check, ts_updated 
-FROM domain_crawl_list 
-LIMIT $1
-OFFSET $2
+SELECT id, site, check_aaaa, check_www, check_ns, check_curl, asn_id, country_id, disabled, ts_aaaa, ts_www, ts_ns, ts_curl, ts_check, ts_updated
+FROM domain_crawl_list
+LIMIT $1 OFFSET $2
 `
 
 type CrawlDomainParams struct {
@@ -59,7 +58,8 @@ func (q *Queries) CrawlDomain(ctx context.Context, arg CrawlDomainParams) ([]Dom
 }
 
 const DisableDomain = `-- name: DisableDomain :exec
-UPDATE domain 
+UPDATE
+    domain
 SET disabled = TRUE
 WHERE site = $1
 `
@@ -69,12 +69,61 @@ func (q *Queries) DisableDomain(ctx context.Context, site string) error {
 	return err
 }
 
+const GetCampaignDomainsByName = `-- name: GetCampaignDomainsByName :many
+SELECT id, campaign_id, site, check_aaaa, check_www, check_ns, check_curl, asn_id, country_id, disabled, ts_aaaa, ts_www, ts_ns, ts_curl, ts_check, ts_updated
+FROM campaign_domain
+WHERE site LIKE '%' || $1 || '%'
+LIMIT $2 OFFSET $3
+`
+
+type GetCampaignDomainsByNameParams struct {
+	Column1 sql.NullString
+	Limit   int32
+	Offset  int32
+}
+
+func (q *Queries) GetCampaignDomainsByName(ctx context.Context, arg GetCampaignDomainsByNameParams) ([]CampaignDomain, error) {
+	rows, err := q.db.Query(ctx, GetCampaignDomainsByName, arg.Column1, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CampaignDomain{}
+	for rows.Next() {
+		var i CampaignDomain
+		if err := rows.Scan(
+			&i.ID,
+			&i.CampaignID,
+			&i.Site,
+			&i.CheckAaaa,
+			&i.CheckWww,
+			&i.CheckNs,
+			&i.CheckCurl,
+			&i.AsnID,
+			&i.CountryID,
+			&i.Disabled,
+			&i.TsAaaa,
+			&i.TsWww,
+			&i.TsNs,
+			&i.TsCurl,
+			&i.TsCheck,
+			&i.TsUpdated,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const GetDomainsByName = `-- name: GetDomainsByName :many
-SELECT id, site, check_aaaa, check_www, check_ns, check_curl, asn_id, country_id, disabled, ts_aaaa, ts_www, ts_ns, ts_curl, ts_check, ts_updated, rank, asname, country_name 
+SELECT id, site, check_aaaa, check_www, check_ns, check_curl, asn_id, country_id, disabled, ts_aaaa, ts_www, ts_ns, ts_curl, ts_check, ts_updated, rank, asname, country_name
 FROM domain_view_list
 WHERE site LIKE '%' || $1 || '%'
-LIMIT $2
-OFFSET $3
+LIMIT $2 OFFSET $3
 `
 
 type GetDomainsByNameParams struct {
@@ -124,7 +173,8 @@ func (q *Queries) GetDomainsByName(ctx context.Context, arg GetDomainsByNamePara
 
 const InsertDomain = `-- name: InsertDomain :exec
 INSERT INTO domain(site)
-VALUES ($1) ON CONFLICT DO NOTHING
+VALUES ($1)
+ON CONFLICT DO NOTHING
 `
 
 func (q *Queries) InsertDomain(ctx context.Context, site string) error {
@@ -133,7 +183,7 @@ func (q *Queries) InsertDomain(ctx context.Context, site string) error {
 }
 
 const ListDomain = `-- name: ListDomain :many
-SELECT id, site, check_aaaa, check_www, check_ns, check_curl, asn_id, country_id, disabled, ts_aaaa, ts_www, ts_ns, ts_curl, ts_check, ts_updated, rank, asname, country_name 
+SELECT id, site, check_aaaa, check_www, check_ns, check_curl, asn_id, country_id, disabled, ts_aaaa, ts_www, ts_ns, ts_curl, ts_check, ts_updated, rank, asname, country_name
 FROM domain_view_index
 `
 
@@ -177,7 +227,7 @@ func (q *Queries) ListDomain(ctx context.Context) ([]DomainViewIndex, error) {
 }
 
 const ListDomainHeroes = `-- name: ListDomainHeroes :many
-SELECT id, site, check_aaaa, check_www, check_ns, check_curl, asn_id, country_id, disabled, ts_aaaa, ts_www, ts_ns, ts_curl, ts_check, ts_updated, rank, asname, country_name 
+SELECT id, site, check_aaaa, check_www, check_ns, check_curl, asn_id, country_id, disabled, ts_aaaa, ts_www, ts_ns, ts_curl, ts_check, ts_updated, rank, asname, country_name
 FROM domain_view_heroes
 `
 
@@ -220,20 +270,64 @@ func (q *Queries) ListDomainHeroes(ctx context.Context) ([]DomainViewHeroes, err
 	return items, nil
 }
 
+const ListDomainShamers = `-- name: ListDomainShamers :many
+SELECT id, site, check_aaaa, check_www, check_ns, check_curl, asn_id, country_id, disabled, ts_aaaa, ts_www, ts_ns, ts_curl, ts_check, ts_updated, shame_id, shame_site
+FROM domain_shame_view
+`
+
+func (q *Queries) ListDomainShamers(ctx context.Context) ([]DomainShameView, error) {
+	rows, err := q.db.Query(ctx, ListDomainShamers)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []DomainShameView{}
+	for rows.Next() {
+		var i DomainShameView
+		if err := rows.Scan(
+			&i.ID,
+			&i.Site,
+			&i.CheckAaaa,
+			&i.CheckWww,
+			&i.CheckNs,
+			&i.CheckCurl,
+			&i.AsnID,
+			&i.CountryID,
+			&i.Disabled,
+			&i.TsAaaa,
+			&i.TsWww,
+			&i.TsNs,
+			&i.TsCurl,
+			&i.TsCheck,
+			&i.TsUpdated,
+			&i.ShameID,
+			&i.ShameSite,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const UpdateDomain = `-- name: UpdateDomain :exec
-UPDATE domain SET 
-check_aaaa = $2,
-check_www = $3,
-check_ns = $4,
-check_curl = $5,
-ts_aaaa = $6,
-ts_www = $7,
-ts_ns = $8,
-ts_curl = $9,
-ts_check = $10,
-ts_updated = $11,
-asn_id = $12,
-country_id = $13
+UPDATE
+    domain
+SET check_aaaa = $2,
+    check_www  = $3,
+    check_ns   = $4,
+    check_curl = $5,
+    ts_aaaa    = $6,
+    ts_www     = $7,
+    ts_ns      = $8,
+    ts_curl    = $9,
+    ts_check   = $10,
+    ts_updated = $11,
+    asn_id     = $12,
+    country_id = $13
 WHERE site = $1
 `
 
@@ -273,7 +367,7 @@ func (q *Queries) UpdateDomain(ctx context.Context, arg UpdateDomainParams) erro
 }
 
 const ViewDomain = `-- name: ViewDomain :one
-SELECT id, site, check_aaaa, check_www, check_ns, check_curl, asn_id, country_id, disabled, ts_aaaa, ts_www, ts_ns, ts_curl, ts_check, ts_updated, rank, asname, country_name 
+SELECT id, site, check_aaaa, check_www, check_ns, check_curl, asn_id, country_id, disabled, ts_aaaa, ts_www, ts_ns, ts_curl, ts_check, ts_updated, rank, asname, country_name
 FROM domain_view_list
 WHERE site = $1
 LIMIT 1

@@ -86,6 +86,7 @@ type CampaignChangelog struct {
 	DomainID   int32
 	CampaignID uuid.UUID
 	Message    string
+	Ipv6Status bool
 }
 
 type CampaignDomain struct {
@@ -108,10 +109,11 @@ type CampaignDomain struct {
 }
 
 type Changelog struct {
-	ID       int64
-	Ts       time.Time
-	DomainID int32
-	Message  string
+	ID         int64
+	Ts         time.Time
+	DomainID   int32
+	Message    string
+	Ipv6Status bool
 }
 
 type ChangelogCampaignView struct {
@@ -120,15 +122,17 @@ type ChangelogCampaignView struct {
 	DomainID   int32
 	CampaignID uuid.UUID
 	Message    string
+	Ipv6Status bool
 	Site       string
 }
 
 type ChangelogView struct {
-	ID       int64
-	Ts       time.Time
-	DomainID int32
-	Message  string
-	Site     string
+	ID         int64
+	Ts         time.Time
+	DomainID   int32
+	Message    string
+	Ipv6Status bool
+	Site       string
 }
 
 type Country struct {
@@ -179,23 +183,23 @@ type DomainCrawlList struct {
 }
 
 type DomainShameView struct {
-	DomainID   int64
-	DomainSite string
-	CheckAaaa  bool
-	CheckWww   bool
-	CheckNs    bool
-	CheckCurl  bool
-	AsnID      sql.NullInt64
-	CountryID  sql.NullInt64
-	Disabled   bool
-	TsAaaa     sql.NullTime
-	TsWww      sql.NullTime
-	TsNs       sql.NullTime
-	TsCurl     sql.NullTime
-	TsCheck    sql.NullTime
-	TsUpdated  sql.NullTime
-	ShameID    int64
-	ShameSite  string
+	ID        int64
+	Site      string
+	CheckAaaa bool
+	CheckWww  bool
+	CheckNs   bool
+	CheckCurl bool
+	AsnID     sql.NullInt64
+	CountryID sql.NullInt64
+	Disabled  bool
+	TsAaaa    sql.NullTime
+	TsWww     sql.NullTime
+	TsNs      sql.NullTime
+	TsCurl    sql.NullTime
+	TsCheck   sql.NullTime
+	TsUpdated sql.NullTime
+	ShameID   int64
+	ShameSite string
 }
 
 type DomainViewHeroes struct {

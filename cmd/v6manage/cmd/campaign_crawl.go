@@ -59,6 +59,7 @@ func getCampaignSites() {
 		var updatedDomains int32 = 0
 		var totalCheckedDomains int32 = 0
 		var wg sync.WaitGroup
+		var mu sync.Mutex
 
 		// Main loop to crawl and update domains.
 		for {
@@ -93,14 +94,17 @@ func getCampaignSites() {
 						log.Printf("[%s] updateDomain error: %s\n", domain.Site, err)
 					}
 					if verbose {
-						log.Printf("[%s] Updated\n", domain.Site)
+						log.Printf("[%s] Updated %s in campaign: %s\n", domain.Site, domain.Site, domain.CampaignID)
 					}
+					mu.Lock()
 
 					// Increment total
 					updatedDomains++
+					mu.Unlock()
 				}(domain)
 			}
-			// 🦗
+
+			// Wait for all goroutines to finish.
 			wg.Wait()
 
 			// Increment offset
@@ -148,9 +152,7 @@ func checkCampaignDomain(domain core.CampaignDomainModel) (core.CampaignDomainMo
 			// 	log.Printf("[%s] Error disabling domain: %s\n", domain.Site, err)
 			// }
 			// return checkResult, fmt.Errorf("Disabling domain: %v", err)
-			if verbose {
-				log.Printf("[%s] Domain does not exist, should be disabled: %v\n", domain.Site, err)
-			}
+			log.Printf("[%s] Domain does not exist, should be disabled: %v\n", domain.Site, err)
 		}
 		return checkResult, fmt.Errorf("Validate domain error: %v", err)
 	}
@@ -207,11 +209,12 @@ func updateCampaignDomain(currentDomain, newDomain core.CampaignDomainModel) err
 	ctx := context.Background()
 
 	// Helper function to log and create changelog entry.
-	createChangelog := func(domain core.CampaignDomainModel, message string) {
+	createChangelog := func(domain core.CampaignDomainModel, message string, status bool) {
 		_, err := changelogService.CampaignCreate(ctx, core.ChangelogModel{
 			DomainID:   int32(domain.ID),
 			CampaignID: domain.CampaignID,
 			Message:    message,
+			IPv6Status: status,
 		})
 		if err != nil {
 			log.Printf("[%s] Error writing changelog: %s\n", domain.Site, err)
@@ -223,11 +226,11 @@ func updateCampaignDomain(currentDomain, newDomain core.CampaignDomainModel) err
 		currentDomain.CheckAAAA = true
 		currentDomain.TsAAAA = time.Now()
 		currentDomain.TsUpdated = time.Now()
-		createChangelog(currentDomain, fmt.Sprintf("Got AAAA record for %s", currentDomain.Site))
+		createChangelog(currentDomain, fmt.Sprintf("Got AAAA record for %s", currentDomain.Site), true)
 	} else if currentDomain.CheckAAAA && !newDomain.CheckAAAA {
 		currentDomain.CheckAAAA = false
 		currentDomain.TsUpdated = time.Now()
-		createChangelog(currentDomain, fmt.Sprintf("Lost AAAA record for %s", currentDomain.Site))
+		createChangelog(currentDomain, fmt.Sprintf("Lost AAAA record for %s", currentDomain.Site), false)
 	}
 
 	// Check and update WWW AAAA record status.
@@ -235,11 +238,11 @@ func updateCampaignDomain(currentDomain, newDomain core.CampaignDomainModel) err
 		currentDomain.CheckWWW = true
 		currentDomain.TsWWW = time.Now()
 		currentDomain.TsUpdated = time.Now()
-		createChangelog(currentDomain, fmt.Sprintf("Got AAAA record for www.%s", currentDomain.Site))
+		createChangelog(currentDomain, fmt.Sprintf("Got AAAA record for www.%s", currentDomain.Site), true)
 	} else if currentDomain.CheckWWW && !newDomain.CheckWWW {
 		currentDomain.CheckWWW = false
 		currentDomain.TsUpdated = time.Now()
-		createChangelog(currentDomain, fmt.Sprintf("Lost AAAA record for www.%s", currentDomain.Site))
+		createChangelog(currentDomain, fmt.Sprintf("Lost AAAA record for www.%s", currentDomain.Site), false)
 	}
 
 	// Check and update nameserver AAAA record status.
@@ -247,11 +250,11 @@ func updateCampaignDomain(currentDomain, newDomain core.CampaignDomainModel) err
 		currentDomain.CheckNS = true
 		currentDomain.TsNS = time.Now()
 		currentDomain.TsUpdated = time.Now()
-		createChangelog(currentDomain, fmt.Sprintf("Nameserver got AAAA record for %s", currentDomain.Site))
+		createChangelog(currentDomain, fmt.Sprintf("Nameserver got AAAA record for %s", currentDomain.Site), true)
 	} else if currentDomain.CheckNS && !newDomain.CheckNS {
 		currentDomain.CheckNS = false
 		currentDomain.TsUpdated = time.Now()
-		createChangelog(currentDomain, fmt.Sprintf("Nameserver lost AAAA record for %s", currentDomain.Site))
+		createChangelog(currentDomain, fmt.Sprintf("Nameserver lost AAAA record for %s", currentDomain.Site), false)
 	}
 
 	// Update ASN ID and Country ID.
