@@ -14,19 +14,21 @@ LIMIT 1;
 SELECT *
 FROM domain_view_list
 WHERE country_id = $1
- AND (check_aaaa = FALSE OR check_www = FALSE)
- AND ts_check IS NOT NULL
+  AND (
+            check_aaaa = FALSE
+        OR check_www = FALSE
+    )
+  AND ts_check IS NOT NULL
 ORDER BY id
 LIMIT 50;
 
 -- name: ListDomainHeroesByCountry :many
 SELECT *
 FROM domain_view_list
-WHERE
- country_id = $1
- AND check_aaaa = TRUE
- AND check_www = TRUE
- AND check_ns = TRUE
+WHERE country_id = $1
+  AND check_aaaa = TRUE
+  AND check_www = TRUE
+  AND check_ns = TRUE
 ORDER BY id
 LIMIT 50;
 
@@ -36,10 +38,10 @@ FROM country
 ORDER BY id;
 
 -- name: UpdateCountryStats :one
-UPDATE country
-SET
- sites = $2,
- v6sites = $3,
- percent = $4
-WHERE id = $1 
+UPDATE
+    country
+SET sites   = $2,
+    v6sites = $3,
+    percent = $4
+WHERE id = $1
 RETURNING *;

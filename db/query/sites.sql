@@ -1,6 +1,5 @@
 -- name: ListSites :many
-SELECT * 
+SELECT *
 FROM sites
 ORDER BY rank
-LIMIT $1
-OFFSET $2;
+LIMIT $1 OFFSET $2;
