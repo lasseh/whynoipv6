@@ -24,6 +24,7 @@ upgrade: ## Upgrades dependencies
 .PHONY: lint
 lint: ## Runs the linter
 	golangci-lint run
+	govulncheck ./...
 
 .PHONY: migrateup
 migrateup: ## Migrates up the database
