@@ -9,6 +9,24 @@ import (
 	"context"
 )
 
+const CalculateASNStats = `-- name: CalculateASNStats :exec
+SELECT update_asn_metrics()
+`
+
+func (q *Queries) CalculateASNStats(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, CalculateASNStats)
+	return err
+}
+
+const CalculateCountryStats = `-- name: CalculateCountryStats :exec
+SELECT update_country_metrics()
+`
+
+func (q *Queries) CalculateCountryStats(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, CalculateCountryStats)
+	return err
+}
+
 const DomainStats = `-- name: DomainStats :one
 SELECT
  count(1) filter (WHERE "ts_check" IS NOT NULL) AS "total_sites",
@@ -31,6 +49,7 @@ type DomainStatsRow struct {
 	TopNs      int64
 }
 
+// Used by the crawler to store total stats in the metric table
 func (q *Queries) DomainStats(ctx context.Context) (DomainStatsRow, error) {
 	row := q.db.QueryRow(ctx, DomainStats)
 	var i DomainStatsRow

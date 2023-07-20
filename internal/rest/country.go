@@ -32,9 +32,10 @@ func (rs CountryHandler) Routes() chi.Router {
 	// GET /country - Retrieve a list of all countries
 	r.Get("/", rs.ListCountries)
 	// GET /country/{code} - Retrieve all domains without IPv6 for a specific country by country code
-	r.Get("/{code}", rs.DomainsWithoutIPv6ByCountryCode)
+	// r.Get("/{code}", rs.DomainsWithoutIPv6ByCountryCode)
+	r.Get("/{code}", rs.CountryInfo)
 	// GET /country/{code}/heroes - Retrieve all domains with IPv6 for a specific country by country code
-	r.Get("/{code}/heroes", rs.DomainsWithIPv6ByCountryCode)
+	// r.Get("/{code}/heroes", rs.DomainsWithIPv6ByCountryCode)
 
 	return r
 }
@@ -148,4 +149,90 @@ func (rs CountryHandler) DomainsWithIPv6ByCountryCode(w http.ResponseWriter, r *
 		})
 	}
 	render.JSON(w, r, heroList)
+}
+
+// CountryInfo retrieves and returns information about a specific country and all the domains it has.
+func (rs CountryHandler) CountryInfo(w http.ResponseWriter, r *http.Request) {
+	code := chi.URLParam(r, "code")
+
+	// Get the country information
+	countryInfo, err := rs.Repo.GetCountryCode(r.Context(), strings.ToUpper(code))
+	if err != nil {
+		render.Status(r, http.StatusNotFound)
+		render.JSON(w, r, render.M{"error": "Country not found"})
+		return
+	}
+
+	// Get IPv6 sinners in the country
+	domains, err := rs.Repo.ListDomainsByCountry(r.Context(), countryInfo.ID)
+	if err != nil {
+		render.Status(r, http.StatusInternalServerError)
+		render.JSON(w, r, render.M{"error": "internal server error"})
+		return
+	}
+	var domainList []DomainResponse
+	for _, domain := range domains {
+		domainList = append(domainList, DomainResponse{
+			Rank:      domain.Rank,
+			Domain:    domain.Site,
+			CheckAAAA: domain.CheckAAAA,
+			CheckWWW:  domain.CheckWWW,
+			CheckNS:   domain.CheckNS,
+			CheckCurl: domain.CheckCurl,
+			AsName:    domain.AsName,
+			Country:   domain.Country,
+			TsAAAA:    domain.TsAAAA,
+			TsWWW:     domain.TsWWW,
+			TsNS:      domain.TsNS,
+			TsCurl:    domain.TsCurl,
+			TsCheck:   domain.TsCheck,
+			TsUpdated: domain.TsUpdated,
+		})
+	}
+
+	// Retrieve the list of IPv6-supported domains (heroes) for the country.ID
+	heroes, err := rs.Repo.ListDomainHeroesByCountry(r.Context(), countryInfo.ID)
+	if err != nil {
+		render.Status(r, http.StatusInternalServerError)
+		render.JSON(w, r, render.M{"error": "internal server error"})
+		return
+	}
+	var heroList []DomainResponse
+	for _, domain := range heroes {
+		heroList = append(heroList, DomainResponse{
+			Rank:      domain.Rank,
+			Domain:    domain.Site,
+			CheckAAAA: domain.CheckAAAA,
+			CheckWWW:  domain.CheckWWW,
+			CheckNS:   domain.CheckNS,
+			CheckCurl: domain.CheckCurl,
+			AsName:    domain.AsName,
+			Country:   domain.Country,
+			TsAAAA:    domain.TsAAAA,
+			TsWWW:     domain.TsWWW,
+			TsNS:      domain.TsNS,
+			TsCurl:    domain.TsCurl,
+			TsCheck:   domain.TsCheck,
+			TsUpdated: domain.TsUpdated,
+		})
+	}
+
+	// Merge data
+	countryInfoResponse := struct {
+		CountryInfo CountryResponse  `json:"country_info"`
+		Domains     []DomainResponse `json:"domains"`
+		Heroes      []DomainResponse `json:"heroes"`
+	}{
+		CountryInfo: CountryResponse{
+			Country:     countryInfo.Country,
+			CountryCode: countryInfo.CountryCode,
+			Sites:       countryInfo.Sites,
+			V6sites:     countryInfo.V6sites,
+		},
+		Domains: domainList,
+		Heroes:  heroList,
+	}
+
+	render.JSON(w, r, countryInfoResponse)
+
 }

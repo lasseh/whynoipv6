@@ -264,3 +264,91 @@ FROM domain
 WHERE domain."check_aaaa" = FALSE
 ORDER BY domain.id;
 
+-- Stored Procedures ------------------------------------------------------
+CREATE OR REPLACE FUNCTION update_country_metrics() RETURNS VOID AS $$
+BEGIN
+  WITH v6_country_count AS (
+    SELECT
+      country_id AS country,
+      COUNT(country_id) AS v6sites
+    FROM
+      domain
+    WHERE
+      country_id IS NOT NULL
+      AND check_aaaa = TRUE
+    GROUP BY
+      country_id
+  )
+  UPDATE
+    country
+  SET
+    v6sites = COALESCE(v6_country_count.v6sites, 0)
+  FROM
+    v6_country_count
+  WHERE
+    country.id = v6_country_count.country;
+  
+  WITH country_count AS (
+    SELECT
+      country_id AS country,
+      COUNT(country_id) AS sites
+    FROM
+      domain
+    WHERE
+      country_id IS NOT NULL
+    GROUP BY
+      country_id
+  )
+  UPDATE
+    country
+  SET
+    sites = country_count.sites,
+    percent = ROUND((COALESCE(country.v6sites, 0)::numeric / NULLIF(country_count.sites, 0)::numeric) * 100, 1)
+  FROM
+    country_count
+  WHERE
+    country.id = country_count.country;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION update_asn_metrics() RETURNS VOID AS $$
+BEGIN
+  WITH v4_count AS (
+    SELECT
+      asn_id,
+      COUNT(asn_id) AS count_v4
+    FROM
+      domain
+    WHERE
+      asn_id IS NOT NULL
+    GROUP BY
+      asn_id
+  ),
+  v6_count AS (
+    SELECT
+      asn_id,
+      COUNT(asn_id) AS count_v6
+    FROM
+      domain
+    WHERE
+      asn_id IS NOT NULL AND check_aaaa = TRUE AND check_www = TRUE AND check_ns = TRUE
+    GROUP BY
+      asn_id
+  )
+  UPDATE
+    asn
+  SET
+    count_v4 = COALESCE(v4_count.count_v4, 0),
+    count_v6 = COALESCE(v6_count.count_v6, 0),
+    percent_v4 = ROUND((COALESCE(v4_count.count_v4, 0)::numeric / NULLIF(COALESCE(v4_count.count_v4, 0) + COALESCE(v6_count.count_v6, 0), 0)::numeric) * 100, 1),
+    percent_v6 = ROUND((COALESCE(v6_count.count_v6, 0)::numeric / NULLIF(COALESCE(v4_count.count_v4, 0) + COALESCE(v6_count.count_v6, 0), 0)::numeric) * 100, 1)
+  FROM
+    v4_count
+  FULL OUTER JOIN
+    v6_count
+  ON
+    v4_count.asn_id = v6_count.asn_id
+  WHERE
+    asn.id = COALESCE(v4_count.asn_id, v6_count.asn_id);
+END;
+$$ LANGUAGE plpgsql;

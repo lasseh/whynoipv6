@@ -33,7 +33,7 @@ var crawlCmd = &cobra.Command{
 		domainService = *core.NewDomainService(db)
 		countryService = *core.NewCountryService(db)
 		asnService = *core.NewASNService(db)
-		statService = *core.NewStatService(db)
+		// statService = *core.NewStatService(db)
 		metricService = *core.NewMetricService(db)
 		toolboxService = *toolbox.NewToolboxService(cfg.GeoIPPath, cfg.Nameserver)
 		getSites()
@@ -119,7 +119,7 @@ func getSites() {
 		}
 
 		// Collect and store domain statistics.
-		stats, err := statService.DomainStats(ctx)
+		stats, err := domainService.DomainStats(ctx)
 		if err != nil {
 			log.Printf("Error getting stats: %s\n", err)
 		}
@@ -143,6 +143,17 @@ func getSites() {
 		}
 		if err := metricService.StoreMetric(ctx, "domains", stats); err != nil {
 			log.Printf("Error storing metric: %s\n", err)
+		}
+
+		// Calculate country stats.
+		err = countryService.CalculateCountryStats(ctx)
+		if err != nil {
+			log.Printf("Error calculating country stats: %s\n", err)
+		}
+		// Calculate ASN stats.
+		err = asnService.CalculateASNStats(ctx)
+		if err != nil {
+			log.Printf("Error calculating ASN stats: %s\n", err)
 		}
 
 		// Sleep for 2 hours before starting the next crawl.

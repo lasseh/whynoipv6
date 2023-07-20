@@ -28,15 +28,19 @@ func (rs MetricHandler) Routes() chi.Router {
 	// GET /metrics/total
 	r.Get("/total", rs.Totals)
 
+	// GET /metrics/asn
+	r.Get("/asn", rs.AsnMetrics)
+
 	return r
 }
 
 // Totals returns the aggregated metrics for all crawled domains.
+// TODO: Add pagination and limits
 func (rs MetricHandler) Totals(w http.ResponseWriter, r *http.Request) {
 	metrics, err := rs.Repo.GetMetrics(r.Context(), "domains")
 	if err != nil {
 		render.Status(r, http.StatusNotFound)
-		render.JSON(w, r, render.M{"error": "domain not found"})
+		render.JSON(w, r, render.M{"error": "metric not found"})
 		return
 	}
 
@@ -49,4 +53,40 @@ func (rs MetricHandler) Totals(w http.ResponseWriter, r *http.Request) {
 	}
 
 	render.JSON(w, r, metricList)
+}
+
+// ASNResponse represents a BGP Autonomous System Number (ASN) and its associated information.
+type ASNResponse struct {
+	ID        int64   `json:"id"`
+	Number    int32   `json:"asn"`
+	Name      string  `json:"name"`
+	CountV4   int32   `json:"count_v4,omitempty"`
+	CountV6   int32   `json:"count_v6,omitempty"`
+	PercentV4 float64 `json:"percent_v4,omitempty"`
+	PercentV6 float64 `json:"percent_v6,omitempty"`
+}
+
+// AsnMetrics returns the aggregated metrics for all crawled domains per ASN.
+func (rs MetricHandler) AsnMetrics(w http.ResponseWriter, r *http.Request) {
+	asn, err := rs.Repo.ListASN(r.Context(), 0, 50)
+	if err != nil {
+		render.Status(r, http.StatusNotFound)
+		render.JSON(w, r, render.M{"error": "metric not found"})
+		return
+	}
+
+	var asnList []ASNResponse
+	for _, a := range asn {
+		asnList = append(asnList, ASNResponse{
+			ID:        a.ID,
+			Number:    a.Number,
+			Name:      a.Name,
+			CountV4:   a.CountV4,
+			CountV6:   a.CountV6,
+			PercentV4: a.PercentV4,
+			PercentV6: a.PercentV6,
+		})
+	}
+
+	render.JSON(w, r, asnList)
 }

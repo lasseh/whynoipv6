@@ -86,32 +86,32 @@ func (s *CountryService) List(ctx context.Context) ([]CountryModel, error) {
 }
 
 // UpdateStats updates a country stats.
-// Only used by CLI crawler
-func (s *CountryService) UpdateStats(ctx context.Context, id int64, params CountryModel) (CountryModel, error) {
-	// Check if sites is not null
-	if params.Sites == 0 {
-		return CountryModel{}, nil
-	}
+// TODO: NOT IN USE!
+// func (s *CountryService) UpdateStats(ctx context.Context, id int64, params CountryModel) (CountryModel, error) {
+// 	// Check if sites is not null
+// 	if params.Sites == 0 {
+// 		return CountryModel{}, nil
+// 	}
 
-	country, err := s.q.UpdateCountryStats(ctx, db.UpdateCountryStatsParams{
-		ID:      id,
-		Sites:   params.Sites,
-		V6sites: params.V6sites,
-		Percent: params.Percent,
-	})
-	if err != nil {
-		return CountryModel{}, err
-	}
-	return CountryModel{
-		ID:          country.ID,
-		Country:     country.CountryName,
-		CountryCode: country.CountryCode,
-		CountryTld:  country.CountryTld,
-		Sites:       country.Sites,
-		V6sites:     country.V6sites,
-		Percent:     country.Percent,
-	}, nil
-}
+// 	country, err := s.q.UpdateCountryStats(ctx, db.UpdateCountryStatsParams{
+// 		ID:      id,
+// 		Sites:   params.Sites,
+// 		V6sites: params.V6sites,
+// 		Percent: params.Percent,
+// 	})
+// 	if err != nil {
+// 		return CountryModel{}, err
+// 	}
+// 	return CountryModel{
+// 		ID:          country.ID,
+// 		Country:     country.CountryName,
+// 		CountryCode: country.CountryCode,
+// 		CountryTld:  country.CountryTld,
+// 		Sites:       country.Sites,
+// 		V6sites:     country.V6sites,
+// 		Percent:     country.Percent,
+// 	}, nil
+// }
 
 // ListDomainsByCountry gets a list of all country TLDs.
 func (s *CountryService) ListDomainsByCountry(ctx context.Context, countryID int64) ([]DomainModel, error) {
@@ -169,4 +169,9 @@ func (s *CountryService) ListDomainHeroesByCountry(ctx context.Context, countryI
 		})
 	}
 	return list, nil
+}
+
+// CalculateCountryStats calculates the statistics for a country.
+func (s *CountryService) CalculateCountryStats(ctx context.Context) error {
+	return s.q.CalculateCountryStats(ctx)
 }

@@ -15,8 +15,8 @@ SELECT *
 FROM domain_view_list
 WHERE country_id = $1
   AND (
-            check_aaaa = FALSE
-        OR check_www = FALSE
+      check_aaaa = FALSE
+      OR check_www = FALSE
     )
   AND ts_check IS NOT NULL
 ORDER BY id
@@ -35,13 +35,4 @@ LIMIT 50;
 -- name: ListCountry :many
 SELECT *
 FROM country
-ORDER BY id;
-
--- name: UpdateCountryStats :one
-UPDATE
-    country
-SET sites   = $2,
-    v6sites = $3,
-    percent = $4
-WHERE id = $1
-RETURNING *;
+ORDER BY sites DESC;

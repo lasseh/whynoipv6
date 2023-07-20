@@ -11,13 +11,13 @@ import (
 
 // MetricService is a service for handling metrics.
 type MetricService struct {
-	queries *db.Queries
+	q *db.Queries
 }
 
 // NewMetricService creates a new MetricService instance.
 func NewMetricService(d db.DBTX) *MetricService {
 	return &MetricService{
-		queries: db.New(d),
+		q: db.New(d),
 	}
 }
 
@@ -43,7 +43,7 @@ func (s *MetricService) StoreMetric(ctx context.Context, measurement string, dat
 		return err
 	}
 
-	return s.queries.StoreMetric(ctx, db.StoreMetricParams{
+	return s.q.StoreMetric(ctx, db.StoreMetricParams{
 		Measurement: measurement,
 		Data:        *jsonb,
 	})
@@ -51,7 +51,7 @@ func (s *MetricService) StoreMetric(ctx context.Context, measurement string, dat
 
 // GetMetrics retrieves all the metrics for a specified measurement.
 func (s *MetricService) GetMetrics(ctx context.Context, measurement string) ([]Metric, error) {
-	metrics, err := s.queries.GetMetric(ctx, measurement)
+	metrics, err := s.q.GetMetric(ctx, measurement)
 	if err != nil {
 		return nil, err
 	}
@@ -64,4 +64,26 @@ func (s *MetricService) GetMetrics(ctx context.Context, measurement string) ([]M
 		})
 	}
 	return metricList, nil
+}
+
+// ListASN retrieves all BGP ASN records.
+func (s *MetricService) ListASN(ctx context.Context, offset, limit int32) ([]ASNModel, error) {
+	asnRecords, err := s.q.ListASN(ctx, db.ListASNParams{
+		Offset: offset,
+		Limit:  limit,
+	})
+	if err != nil {
+		return nil, err
+	}
+	var asns []ASNModel
+	for _, asn := range asnRecords {
+		asns = append(asns, ASNModel{
+			ID:      asn.ID,
+			Number:  asn.Number,
+			Name:    asn.Name,
+			CountV4: asn.CountV4.Int32,
+			CountV6: asn.CountV6.Int32,
+		})
+	}
+	return asns, nil
 }

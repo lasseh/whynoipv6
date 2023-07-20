@@ -13,7 +13,7 @@ var (
 	countryService   core.CountryService
 	toolboxService   toolbox.Service
 	asnService       core.ASNService
-	statService      core.StatService
+	// statService      core.StatService
 	// resolver         *toolbox.Resolver
 	metricService core.MetricService
 )

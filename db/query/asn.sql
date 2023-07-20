@@ -10,3 +10,10 @@ SELECT *
 FROM asn
 WHERE number = $1
 LIMIT 1;
+
+-- name: ListASN :many
+SELECT *
+FROM asn
+WHERE count_v4 IS NOT NULL
+ORDER BY count_v4 DESC
+LIMIT $1 OFFSET $2;

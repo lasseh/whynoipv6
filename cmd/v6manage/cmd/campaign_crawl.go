@@ -23,7 +23,7 @@ var campaignCrawlCmd = &cobra.Command{
 		campaignService = *core.NewCampaignService(db)
 		countryService = *core.NewCountryService(db)
 		asnService = *core.NewASNService(db)
-		statService = *core.NewStatService(db)
+		// statService = *core.NewStatService(db)
 		metricService = *core.NewMetricService(db)
 		toolboxService = *toolbox.NewToolboxService(cfg.GeoIPPath, cfg.Nameserver)
 		getCampaignSites()

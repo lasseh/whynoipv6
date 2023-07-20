@@ -53,6 +53,15 @@ func IntNull(i sql.NullInt64) int64 {
 	return 0
 }
 
+// NullInt32 converts an int32 value to a sql.NullInt64 value.
+// It always returns a valid sql.NullInt64 value.
+func NullInt32(i int32) sql.NullInt32 {
+	return sql.NullInt32{
+		Int32: int32(i),
+		Valid: true,
+	}
+}
+
 // NullInt converts an int64 value to a sql.NullInt64 value.
 // It always returns a valid sql.NullInt64 value.
 func NullInt(i int64) sql.NullInt64 {

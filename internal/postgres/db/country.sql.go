@@ -8,8 +8,6 @@ package db
 import (
 	"context"
 	"database/sql"
-
-	"github.com/jackc/pgtype"
 )
 
 const GetCountry = `-- name: GetCountry :one
@@ -61,7 +59,7 @@ func (q *Queries) GetCountryTld(ctx context.Context, countryTld string) (Country
 const ListCountry = `-- name: ListCountry :many
 SELECT id, country_name, country_code, country_tld, continent, sites, v6sites, percent
 FROM country
-ORDER BY id
+ORDER BY sites DESC
 `
 
 func (q *Queries) ListCountry(ctx context.Context) ([]Country, error) {
@@ -148,8 +146,8 @@ SELECT id, site, check_aaaa, check_www, check_ns, check_curl, asn_id, country_id
 FROM domain_view_list
 WHERE country_id = $1
   AND (
-            check_aaaa = FALSE
-        OR check_www = FALSE
+      check_aaaa = FALSE
+      OR check_www = FALSE
     )
   AND ts_check IS NOT NULL
 ORDER BY id
@@ -193,42 +191,4 @@ func (q *Queries) ListDomainsByCountry(ctx context.Context, countryID sql.NullIn
 		return nil, err
 	}
 	return items, nil
-}
-
-const UpdateCountryStats = `-- name: UpdateCountryStats :one
-UPDATE
-    country
-SET sites   = $2,
-    v6sites = $3,
-    percent = $4
-WHERE id = $1
-RETURNING id, country_name, country_code, country_tld, continent, sites, v6sites, percent
-`
-
-type UpdateCountryStatsParams struct {
-	ID      int64
-	Sites   int32
-	V6sites int32
-	Percent pgtype.Numeric
-}
-
-func (q *Queries) UpdateCountryStats(ctx context.Context, arg UpdateCountryStatsParams) (Country, error) {
-	row := q.db.QueryRow(ctx, UpdateCountryStats,
-		arg.ID,
-		arg.Sites,
-		arg.V6sites,
-		arg.Percent,
-	)
-	var i Country
-	err := row.Scan(
-		&i.ID,
-		&i.CountryName,
-		&i.CountryCode,
-		&i.CountryTld,
-		&i.Continent,
-		&i.Sites,
-		&i.V6sites,
-		&i.Percent,
-	)
-	return i, err
 }
