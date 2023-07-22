@@ -1,6 +1,7 @@
 package rest
 
 import (
+	"log"
 	"net/http"
 	"time"
 	"whynoipv6/internal/core"
@@ -224,6 +225,7 @@ func (rs DomainHandler) DomainShamers(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		render.Status(r, http.StatusInternalServerError)
 		render.JSON(w, r, render.M{"error": "internal server error"})
+		log.Println("Error listing domain shamers:", err)
 		return
 	}
 	var domainlist []DomainResponse
