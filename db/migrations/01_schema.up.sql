@@ -186,7 +186,7 @@ FROM domain
 WHERE domain.disabled = FALSE
 ORDER BY sites.rank;
 
--- CREATE MATERIALIZED VIEW domain_view_index AS
+-- TODO: NOT IN USE
 CREATE VIEW domain_view_index AS
 SELECT domain.*,
        sites.rank,
@@ -196,11 +196,12 @@ FROM domain
          RIGHT JOIN sites ON domain.site = sites.site
          LEFT JOIN asn ON domain.asn_id = asn.id
          LEFT JOIN country ON domain.country_id = country.id
-WHERE domain.disabled = FALSE AND check_aaaa = FALSE
-   OR check_www = FALSE
-ORDER BY sites.rank
-LIMIT 100;
+WHERE domain.disabled = FALSE 
+  AND check_aaaa = FALSE
+  OR check_www = FALSE
+ORDER BY sites.rank;
 
+-- TODO: NOT IN USE
 CREATE VIEW domain_view_heroes AS
 SELECT domain.*,
        sites.rank,
@@ -214,9 +215,9 @@ WHERE domain.disabled = FALSE
   AND check_aaaa = TRUE
   AND check_www = TRUE
   AND check_ns = TRUE
-ORDER BY sites.rank
-LIMIT 100;
+ORDER BY sites.rank;
 
+-- This view is used by the crawler to get a list of domains to crawl.
 CREATE or REPLACE VIEW domain_crawl_list AS
 SELECT *
 FROM domain

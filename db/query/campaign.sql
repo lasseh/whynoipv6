@@ -60,16 +60,33 @@ WHERE site = $1;
 -- name: ListCampaign :many
 -- Description: Retrieves a list of campaigns along with their associated domain count.
 SELECT campaign.*,
-       COUNT(campaign_domain.id) AS domain_count
+       COUNT(campaign_domain.id) AS domain_count,
+       COUNT(
+           CASE
+           WHEN campaign_domain.check_aaaa = true AND
+                campaign_domain.check_www = true AND
+                campaign_domain.check_ns = true
+           THEN TRUE
+           ELSE NULL
+           END
+       ) AS v6_ready_count
 FROM campaign
-         LEFT JOIN campaign_domain ON campaign.uuid = campaign_domain.campaign_id
-WHERE campaign.disabled = false
+LEFT JOIN campaign_domain ON campaign.uuid = campaign_domain.campaign_id AND campaign.disabled = false
 GROUP BY campaign.id
 ORDER BY campaign.id;
 
 -- name: GetCampaignByUUID :one
 SELECT campaign.*,
-       COUNT(campaign_domain.id) AS domain_count
+       COUNT(campaign_domain.id) AS domain_count,
+       COUNT(
+           CASE
+           WHEN campaign_domain.check_aaaa = true AND
+                campaign_domain.check_www = true AND
+                campaign_domain.check_ns = true
+           THEN TRUE
+           ELSE NULL
+           END
+       ) AS v6_ready_count
 FROM campaign
          LEFT JOIN campaign_domain ON campaign.uuid = campaign_domain.campaign_id
 WHERE campaign.uuid = $1
@@ -89,9 +106,15 @@ ON CONFLICT (uuid) DO UPDATE
         description = EXCLUDED.description
 RETURNING *;
 
-
 -- name: DeleteCampaignDomain :exec
 DELETE
 FROM campaign_domain
 WHERE campaign_id = $1
   AND site = $2;
+
+-- name: GetCampaignDomainsByName :many
+-- Used for searching campaign domains by site name.
+SELECT *
+FROM campaign_domain
+WHERE site LIKE '%' || $1 || '%'
+LIMIT $2 OFFSET $3;

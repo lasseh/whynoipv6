@@ -85,37 +85,13 @@ func (s *CountryService) List(ctx context.Context) ([]CountryModel, error) {
 	return models, nil
 }
 
-// UpdateStats updates a country stats.
-// TODO: NOT IN USE!
-// func (s *CountryService) UpdateStats(ctx context.Context, id int64, params CountryModel) (CountryModel, error) {
-// 	// Check if sites is not null
-// 	if params.Sites == 0 {
-// 		return CountryModel{}, nil
-// 	}
-
-// 	country, err := s.q.UpdateCountryStats(ctx, db.UpdateCountryStatsParams{
-// 		ID:      id,
-// 		Sites:   params.Sites,
-// 		V6sites: params.V6sites,
-// 		Percent: params.Percent,
-// 	})
-// 	if err != nil {
-// 		return CountryModel{}, err
-// 	}
-// 	return CountryModel{
-// 		ID:          country.ID,
-// 		Country:     country.CountryName,
-// 		CountryCode: country.CountryCode,
-// 		CountryTld:  country.CountryTld,
-// 		Sites:       country.Sites,
-// 		V6sites:     country.V6sites,
-// 		Percent:     country.Percent,
-// 	}, nil
-// }
-
 // ListDomainsByCountry gets a list of all country TLDs.
-func (s *CountryService) ListDomainsByCountry(ctx context.Context, countryID int64) ([]DomainModel, error) {
-	domains, err := s.q.ListDomainsByCountry(ctx, NullInt(countryID))
+func (s *CountryService) ListDomainsByCountry(ctx context.Context, countryID int64, offset, limit int32) ([]DomainModel, error) {
+	domains, err := s.q.ListDomainsByCountry(ctx, db.ListDomainsByCountryParams{
+		CountryID: NullInt(countryID),
+		Offset:    offset,
+		Limit:     limit,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -143,8 +119,12 @@ func (s *CountryService) ListDomainsByCountry(ctx context.Context, countryID int
 }
 
 // ListDomainHeroesByCountry gets a list of all country TLDs.
-func (s *CountryService) ListDomainHeroesByCountry(ctx context.Context, countryID int64) ([]DomainModel, error) {
-	domains, err := s.q.ListDomainHeroesByCountry(ctx, NullInt(countryID))
+func (s *CountryService) ListDomainHeroesByCountry(ctx context.Context, countryID int64, offset, limit int32) ([]DomainModel, error) {
+	domains, err := s.q.ListDomainHeroesByCountry(ctx, db.ListDomainHeroesByCountryParams{
+		CountryID: NullInt(countryID),
+		Offset:    offset,
+		Limit:     limit,
+	})
 	if err != nil {
 		return nil, err
 	}

@@ -18,9 +18,8 @@ WHERE country_id = $1
       check_aaaa = FALSE
       OR check_www = FALSE
     )
-  AND ts_check IS NOT NULL
 ORDER BY id
-LIMIT 50;
+LIMIT $2 OFFSET $3;
 
 -- name: ListDomainHeroesByCountry :many
 SELECT *
@@ -30,7 +29,7 @@ WHERE country_id = $1
   AND check_www = TRUE
   AND check_ns = TRUE
 ORDER BY id
-LIMIT 50;
+LIMIT $2 OFFSET $3;
 
 -- name: ListCountry :many
 SELECT *

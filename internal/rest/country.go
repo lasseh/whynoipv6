@@ -7,6 +7,7 @@ import (
 	"strings"
 	"whynoipv6/internal/core"
 
+	"github.com/ggicci/httpin"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/render"
 )
@@ -18,30 +19,33 @@ type CountryHandler struct {
 
 // CountryResponse is a structured response containing country data.
 type CountryResponse struct {
-	Country     string `json:"country"`
-	CountryCode string `json:"country_code"`
-	// CountryTld  string  `json:"country_tld"`
-	Sites   int32   `json:"sites"`
-	V6sites int32   `json:"v6sites"`
-	Percent float64 `json:"percent"`
+	Country     string  `json:"country"`
+	CountryCode string  `json:"country_code"`
+	Sites       int32   `json:"sites"`
+	V6sites     int32   `json:"v6sites"`
+	Percent     float64 `json:"percent"`
 }
 
 // Routes returns a router with all country-related endpoints mounted.
 func (rs CountryHandler) Routes() chi.Router {
 	r := chi.NewRouter()
 	// GET /country - Retrieve a list of all countries
-	r.Get("/", rs.ListCountries)
-	// GET /country/{code} - Retrieve all domains without IPv6 for a specific country by country code
-	// r.Get("/{code}", rs.DomainsWithoutIPv6ByCountryCode)
+	r.Get("/", rs.CountryList)
+
+	// GET /country/{code} - Retrieve information about a specific country
 	r.Get("/{code}", rs.CountryInfo)
+
+	// GET /country/{code}/sinners - Retrieve all domains without IPv6 for a specific country by country code
+	r.With(httpin.NewInput(PaginationInput{})).Get("/{code}/sinners", rs.CountrySinners)
+
 	// GET /country/{code}/heroes - Retrieve all domains with IPv6 for a specific country by country code
-	// r.Get("/{code}/heroes", rs.DomainsWithIPv6ByCountryCode)
+	r.With(httpin.NewInput(PaginationInput{})).Get("/{code}/heroes", rs.CountryHeroes)
 
 	return r
 }
 
-// ListCountries retrieves and returns a list of all countries.
-func (rs CountryHandler) ListCountries(w http.ResponseWriter, r *http.Request) {
+// CountryList retrieves and returns a list of all countries.
+func (rs CountryHandler) CountryList(w http.ResponseWriter, r *http.Request) {
 	countries, err := rs.Repo.List(r.Context())
 	if err != nil {
 		log.Println("Error retrieving countries:", err)
@@ -71,8 +75,44 @@ func (rs CountryHandler) ListCountries(w http.ResponseWriter, r *http.Request) {
 	render.JSON(w, r, countryList)
 }
 
-// DomainsWithoutIPv6ByCountryCode retrieves and returns a list of domains without IPv6 support for a given country code (e.g. US).
-func (rs CountryHandler) DomainsWithoutIPv6ByCountryCode(w http.ResponseWriter, r *http.Request) {
+// CountryInfo retrieves and returns information about a specific country and all the domains it has.
+func (rs CountryHandler) CountryInfo(w http.ResponseWriter, r *http.Request) {
+	code := chi.URLParam(r, "code")
+
+	// Get the country information
+	countryInfo, err := rs.Repo.GetCountryCode(r.Context(), strings.ToUpper(code))
+	if err != nil {
+		render.Status(r, http.StatusNotFound)
+		render.JSON(w, r, render.M{"error": "Country not found"})
+		return
+	}
+	// Convert pgtype.Numeric to float64
+	percent, err := strconv.ParseFloat(countryInfo.Percent.Int.String(), 64)
+	if err != nil {
+		log.Println("Error converting percentage to float64:", err)
+	}
+	percent /= 10
+
+	// Build the response
+	countryRespose := CountryResponse{
+		Country:     countryInfo.Country,
+		CountryCode: countryInfo.CountryCode,
+		Sites:       countryInfo.Sites,
+		V6sites:     countryInfo.V6sites,
+		Percent:     percent,
+	}
+
+	// TODO: Fix percent calculation
+	render.JSON(w, r, countryRespose)
+}
+
+// CountrySinners retrieves and returns a list of domains without IPv6 support for a given country code (e.g. US).
+func (rs CountryHandler) CountrySinners(w http.ResponseWriter, r *http.Request) {
+	// Handle query params
+	paginationInput := r.Context().Value(httpin.Input).(*PaginationInput)
+	if paginationInput.Limit > 100 {
+		paginationInput.Limit = 100
+	}
 	code := chi.URLParam(r, "code")
 
 	country, err := rs.Repo.GetCountryCode(r.Context(), strings.ToUpper(code))
@@ -83,7 +123,7 @@ func (rs CountryHandler) DomainsWithoutIPv6ByCountryCode(w http.ResponseWriter, 
 	}
 
 	// Retrieve the list of domains for the country.ID
-	domains, err := rs.Repo.ListDomainsByCountry(r.Context(), country.ID)
+	domains, err := rs.Repo.ListDomainsByCountry(r.Context(), country.ID, int32(paginationInput.Offset), int32(paginationInput.Limit))
 	if err != nil {
 		render.Status(r, http.StatusInternalServerError)
 		render.JSON(w, r, render.M{"error": "internal server error"})
@@ -111,8 +151,13 @@ func (rs CountryHandler) DomainsWithoutIPv6ByCountryCode(w http.ResponseWriter, 
 	render.JSON(w, r, domainList)
 }
 
-// DomainsWithIPv6ByCountryCode retrieves and returns a list of domains with IPv6 support for a given country code (e.g. US).
-func (rs CountryHandler) DomainsWithIPv6ByCountryCode(w http.ResponseWriter, r *http.Request) {
+// CountryHeroes retrieves and returns a list of domains with IPv6 support for a given country code (e.g. US).
+func (rs CountryHandler) CountryHeroes(w http.ResponseWriter, r *http.Request) {
+	// Handle query params
+	paginationInput := r.Context().Value(httpin.Input).(*PaginationInput)
+	if paginationInput.Limit > 100 {
+		paginationInput.Limit = 100
+	}
 	code := chi.URLParam(r, "code")
 
 	country, err := rs.Repo.GetCountryCode(r.Context(), strings.ToUpper(code))
@@ -123,7 +168,7 @@ func (rs CountryHandler) DomainsWithIPv6ByCountryCode(w http.ResponseWriter, r *
 	}
 
 	// Retrieve the list of IPv6-supported domains (heroes) for the country.ID
-	heroes, err := rs.Repo.ListDomainHeroesByCountry(r.Context(), country.ID)
+	heroes, err := rs.Repo.ListDomainHeroesByCountry(r.Context(), country.ID, int32(paginationInput.Offset), int32(paginationInput.Limit))
 	if err != nil {
 		render.Status(r, http.StatusInternalServerError)
 		render.JSON(w, r, render.M{"error": "internal server error"})
@@ -149,90 +194,4 @@ func (rs CountryHandler) DomainsWithIPv6ByCountryCode(w http.ResponseWriter, r *
 		})
 	}
 	render.JSON(w, r, heroList)
-}
-
-// CountryInfo retrieves and returns information about a specific country and all the domains it has.
-func (rs CountryHandler) CountryInfo(w http.ResponseWriter, r *http.Request) {
-	code := chi.URLParam(r, "code")
-
-	// Get the country information
-	countryInfo, err := rs.Repo.GetCountryCode(r.Context(), strings.ToUpper(code))
-	if err != nil {
-		render.Status(r, http.StatusNotFound)
-		render.JSON(w, r, render.M{"error": "Country not found"})
-		return
-	}
-
-	// Get IPv6 sinners in the country
-	domains, err := rs.Repo.ListDomainsByCountry(r.Context(), countryInfo.ID)
-	if err != nil {
-		render.Status(r, http.StatusInternalServerError)
-		render.JSON(w, r, render.M{"error": "internal server error"})
-		return
-	}
-	var domainList []DomainResponse
-	for _, domain := range domains {
-		domainList = append(domainList, DomainResponse{
-			Rank:      domain.Rank,
-			Domain:    domain.Site,
-			CheckAAAA: domain.CheckAAAA,
-			CheckWWW:  domain.CheckWWW,
-			CheckNS:   domain.CheckNS,
-			CheckCurl: domain.CheckCurl,
-			AsName:    domain.AsName,
-			Country:   domain.Country,
-			TsAAAA:    domain.TsAAAA,
-			TsWWW:     domain.TsWWW,
-			TsNS:      domain.TsNS,
-			TsCurl:    domain.TsCurl,
-			TsCheck:   domain.TsCheck,
-			TsUpdated: domain.TsUpdated,
-		})
-	}
-
-	// Retrieve the list of IPv6-supported domains (heroes) for the country.ID
-	heroes, err := rs.Repo.ListDomainHeroesByCountry(r.Context(), countryInfo.ID)
-	if err != nil {
-		render.Status(r, http.StatusInternalServerError)
-		render.JSON(w, r, render.M{"error": "internal server error"})
-		return
-	}
-	var heroList []DomainResponse
-	for _, domain := range heroes {
-		heroList = append(heroList, DomainResponse{
-			Rank:      domain.Rank,
-			Domain:    domain.Site,
-			CheckAAAA: domain.CheckAAAA,
-			CheckWWW:  domain.CheckWWW,
-			CheckNS:   domain.CheckNS,
-			CheckCurl: domain.CheckCurl,
-			AsName:    domain.AsName,
-			Country:   domain.Country,
-			TsAAAA:    domain.TsAAAA,
-			TsWWW:     domain.TsWWW,
-			TsNS:      domain.TsNS,
-			TsCurl:    domain.TsCurl,
-			TsCheck:   domain.TsCheck,
-			TsUpdated: domain.TsUpdated,
-		})
-	}
-
-	// Merge data
-	countryInfoResponse := struct {
-		CountryInfo CountryResponse  `json:"country_info"`
-		Domains     []DomainResponse `json:"domains"`
-		Heroes      []DomainResponse `json:"heroes"`
-	}{
-		CountryInfo: CountryResponse{
-			Country:     countryInfo.Country,
-			CountryCode: countryInfo.CountryCode,
-			Sites:       countryInfo.Sites,
-			V6sites:     countryInfo.V6sites,
-		},
-		Domains: domainList,
-		Heroes:  heroList,
-	}
-
-	render.JSON(w, r, countryInfoResponse)
-
 }

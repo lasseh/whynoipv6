@@ -147,7 +147,16 @@ func (q *Queries) DisableCampaignDomain(ctx context.Context, site string) error 
 
 const GetCampaignByUUID = `-- name: GetCampaignByUUID :one
 SELECT campaign.id, campaign.created_at, campaign.uuid, campaign.name, campaign.description, campaign.disabled,
-       COUNT(campaign_domain.id) AS domain_count
+       COUNT(campaign_domain.id) AS domain_count,
+       COUNT(
+           CASE
+           WHEN campaign_domain.check_aaaa = true AND
+                campaign_domain.check_www = true AND
+                campaign_domain.check_ns = true
+           THEN TRUE
+           ELSE NULL
+           END
+       ) AS v6_ready_count
 FROM campaign
          LEFT JOIN campaign_domain ON campaign.uuid = campaign_domain.campaign_id
 WHERE campaign.uuid = $1
@@ -156,13 +165,14 @@ LIMIT 1
 `
 
 type GetCampaignByUUIDRow struct {
-	ID          int64
-	CreatedAt   time.Time
-	Uuid        uuid.UUID
-	Name        string
-	Description string
-	Disabled    bool
-	DomainCount int64
+	ID           int64
+	CreatedAt    time.Time
+	Uuid         uuid.UUID
+	Name         string
+	Description  string
+	Disabled     bool
+	DomainCount  int64
+	V6ReadyCount int64
 }
 
 func (q *Queries) GetCampaignByUUID(ctx context.Context, argUuid uuid.UUID) (GetCampaignByUUIDRow, error) {
@@ -176,8 +186,60 @@ func (q *Queries) GetCampaignByUUID(ctx context.Context, argUuid uuid.UUID) (Get
 		&i.Description,
 		&i.Disabled,
 		&i.DomainCount,
+		&i.V6ReadyCount,
 	)
 	return i, err
+}
+
+const GetCampaignDomainsByName = `-- name: GetCampaignDomainsByName :many
+SELECT id, campaign_id, site, check_aaaa, check_www, check_ns, check_curl, asn_id, country_id, disabled, ts_aaaa, ts_www, ts_ns, ts_curl, ts_check, ts_updated
+FROM campaign_domain
+WHERE site LIKE '%' || $1 || '%'
+LIMIT $2 OFFSET $3
+`
+
+type GetCampaignDomainsByNameParams struct {
+	Column1 sql.NullString
+	Limit   int32
+	Offset  int32
+}
+
+// Used for searching campaign domains by site name.
+func (q *Queries) GetCampaignDomainsByName(ctx context.Context, arg GetCampaignDomainsByNameParams) ([]CampaignDomain, error) {
+	rows, err := q.db.Query(ctx, GetCampaignDomainsByName, arg.Column1, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CampaignDomain{}
+	for rows.Next() {
+		var i CampaignDomain
+		if err := rows.Scan(
+			&i.ID,
+			&i.CampaignID,
+			&i.Site,
+			&i.CheckAaaa,
+			&i.CheckWww,
+			&i.CheckNs,
+			&i.CheckCurl,
+			&i.AsnID,
+			&i.CountryID,
+			&i.Disabled,
+			&i.TsAaaa,
+			&i.TsWww,
+			&i.TsNs,
+			&i.TsCurl,
+			&i.TsCheck,
+			&i.TsUpdated,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const InsertCampaignDomain = `-- name: InsertCampaignDomain :exec
@@ -199,22 +261,31 @@ func (q *Queries) InsertCampaignDomain(ctx context.Context, arg InsertCampaignDo
 
 const ListCampaign = `-- name: ListCampaign :many
 SELECT campaign.id, campaign.created_at, campaign.uuid, campaign.name, campaign.description, campaign.disabled,
-       COUNT(campaign_domain.id) AS domain_count
+       COUNT(campaign_domain.id) AS domain_count,
+       COUNT(
+           CASE
+           WHEN campaign_domain.check_aaaa = true AND
+                campaign_domain.check_www = true AND
+                campaign_domain.check_ns = true
+           THEN TRUE
+           ELSE NULL
+           END
+       ) AS v6_ready_count
 FROM campaign
-         LEFT JOIN campaign_domain ON campaign.uuid = campaign_domain.campaign_id
-WHERE campaign.disabled = false
+LEFT JOIN campaign_domain ON campaign.uuid = campaign_domain.campaign_id AND campaign.disabled = false
 GROUP BY campaign.id
 ORDER BY campaign.id
 `
 
 type ListCampaignRow struct {
-	ID          int64
-	CreatedAt   time.Time
-	Uuid        uuid.UUID
-	Name        string
-	Description string
-	Disabled    bool
-	DomainCount int64
+	ID           int64
+	CreatedAt    time.Time
+	Uuid         uuid.UUID
+	Name         string
+	Description  string
+	Disabled     bool
+	DomainCount  int64
+	V6ReadyCount int64
 }
 
 // Description: Retrieves a list of campaigns along with their associated domain count.
@@ -235,6 +306,7 @@ func (q *Queries) ListCampaign(ctx context.Context) ([]ListCampaignRow, error) {
 			&i.Description,
 			&i.Disabled,
 			&i.DomainCount,
+			&i.V6ReadyCount,
 		); err != nil {
 			return nil, err
 		}

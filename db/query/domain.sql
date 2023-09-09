@@ -5,11 +5,18 @@ ON CONFLICT DO NOTHING;
 
 -- name: ListDomain :many
 SELECT *
-FROM domain_view_index;
+FROM domain_view_list
+WHERE check_aaaa = FALSE
+   OR check_www = FALSE
+LIMIT $1 OFFSET $2;
 
 -- name: ListDomainHeroes :many
 SELECT *
-FROM domain_view_heroes;
+FROM domain_view_list
+WHERE check_aaaa = TRUE
+  AND check_www = TRUE
+  AND check_ns = TRUE
+LIMIT $1 OFFSET $2;
 
 -- name: CrawlDomain :many
 SELECT *
@@ -48,12 +55,6 @@ WHERE site = $1;
 -- name: GetDomainsByName :many
 SELECT *
 FROM domain_view_list
-WHERE site LIKE '%' || $1 || '%'
-LIMIT $2 OFFSET $3;
-
--- name: GetCampaignDomainsByName :many
-SELECT *
-FROM campaign_domain
 WHERE site LIKE '%' || $1 || '%'
 LIMIT $2 OFFSET $3;
 

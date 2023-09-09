@@ -28,6 +28,7 @@ type CampaignModel struct {
 	Name        string    `json:"name"`
 	Description string    `json:"description"`
 	Count       int64     `json:"count"`
+	V6Ready     int64     `json:"v6_ready"`
 }
 
 // CampaignDomainModel represents a scan.
@@ -168,6 +169,7 @@ func (s *CampaignService) ListCampaign(ctx context.Context) ([]CampaignModel, er
 			Name:        c.Name,
 			Description: c.Description,
 			Count:       c.DomainCount,
+			V6Ready:     c.V6ReadyCount,
 		})
 	}
 	return list, nil
@@ -186,6 +188,7 @@ func (s *CampaignService) GetCampaign(ctx context.Context, id uuid.UUID) (Campai
 		Name:        c.Name,
 		Description: c.Description,
 		Count:       c.DomainCount,
+		V6Ready:     c.V6ReadyCount,
 	}, nil
 }
 
@@ -280,4 +283,30 @@ func (s *CampaignService) DeleteCampaignDomain(ctx context.Context, campaignID u
 		return err
 	}
 	return nil
+}
+
+// GetCampaignDomainsByName returns a list of domains from a campaign by name.
+func (s *CampaignService) GetCampaignDomainsByName(ctx context.Context, searchString string, offset, limit int32) ([]CampaignDomainModel, error) {
+	domains, err := s.q.GetCampaignDomainsByName(ctx, db.GetCampaignDomainsByNameParams{
+		Column1: NullString(searchString),
+		Offset:  offset,
+		Limit:   limit,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	var list []CampaignDomainModel
+	for _, d := range domains {
+		list = append(list, CampaignDomainModel{
+			ID:         d.ID,
+			Site:       d.Site,
+			CheckAAAA:  d.CheckAaaa,
+			CheckWWW:   d.CheckWww,
+			CheckNS:    d.CheckNs,
+			CheckCurl:  d.CheckCurl,
+			CampaignID: d.CampaignID,
+		})
+	}
+	return list, nil
 }

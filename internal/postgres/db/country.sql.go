@@ -99,11 +99,17 @@ WHERE country_id = $1
   AND check_www = TRUE
   AND check_ns = TRUE
 ORDER BY id
-LIMIT 50
+LIMIT $2 OFFSET $3
 `
 
-func (q *Queries) ListDomainHeroesByCountry(ctx context.Context, countryID sql.NullInt64) ([]DomainViewList, error) {
-	rows, err := q.db.Query(ctx, ListDomainHeroesByCountry, countryID)
+type ListDomainHeroesByCountryParams struct {
+	CountryID sql.NullInt64
+	Limit     int32
+	Offset    int32
+}
+
+func (q *Queries) ListDomainHeroesByCountry(ctx context.Context, arg ListDomainHeroesByCountryParams) ([]DomainViewList, error) {
+	rows, err := q.db.Query(ctx, ListDomainHeroesByCountry, arg.CountryID, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}
@@ -149,13 +155,18 @@ WHERE country_id = $1
       check_aaaa = FALSE
       OR check_www = FALSE
     )
-  AND ts_check IS NOT NULL
 ORDER BY id
-LIMIT 50
+LIMIT $2 OFFSET $3
 `
 
-func (q *Queries) ListDomainsByCountry(ctx context.Context, countryID sql.NullInt64) ([]DomainViewList, error) {
-	rows, err := q.db.Query(ctx, ListDomainsByCountry, countryID)
+type ListDomainsByCountryParams struct {
+	CountryID sql.NullInt64
+	Limit     int32
+	Offset    int32
+}
+
+func (q *Queries) ListDomainsByCountry(ctx context.Context, arg ListDomainsByCountryParams) ([]DomainViewList, error) {
+	rows, err := q.db.Query(ctx, ListDomainsByCountry, arg.CountryID, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}

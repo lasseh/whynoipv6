@@ -54,8 +54,11 @@ func (s *DomainService) InsertDomain(ctx context.Context, site string) error {
 }
 
 // ListDomain lists all domains.
-func (s *DomainService) ListDomain(ctx context.Context) ([]DomainModel, error) {
-	domains, err := s.q.ListDomain(ctx)
+func (s *DomainService) ListDomain(ctx context.Context, offset, limit int32) ([]DomainModel, error) {
+	domains, err := s.q.ListDomain(ctx, db.ListDomainParams{
+		Offset: offset,
+		Limit:  limit,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -83,8 +86,11 @@ func (s *DomainService) ListDomain(ctx context.Context) ([]DomainModel, error) {
 }
 
 // ListDomainHeroes lists all domains.
-func (s *DomainService) ListDomainHeroes(ctx context.Context) ([]DomainModel, error) {
-	domains, err := s.q.ListDomainHeroes(ctx)
+func (s *DomainService) ListDomainHeroes(ctx context.Context, offset, limit int32) ([]DomainModel, error) {
+	domains, err := s.q.ListDomainHeroes(ctx, db.ListDomainHeroesParams{
+		Offset: offset,
+		Limit:  limit,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -232,30 +238,30 @@ func (s *DomainService) GetDomainsByName(ctx context.Context, searchString strin
 }
 
 // GetCampaignDomainsByName returns a list of domains from a campaign by name.
-func (s *DomainService) GetCampaignDomainsByName(ctx context.Context, searchString string, offset, limit int32) ([]CampaignDomainModel, error) {
-	domains, err := s.q.GetCampaignDomainsByName(ctx, db.GetCampaignDomainsByNameParams{
-		Column1: NullString(searchString),
-		Offset:  offset,
-		Limit:   limit,
-	})
-	if err != nil {
-		return nil, err
-	}
+// func (s *DomainService) GetCampaignDomainsByName(ctx context.Context, searchString string, offset, limit int32) ([]CampaignDomainModel, error) {
+// 	domains, err := s.q.GetCampaignDomainsByName(ctx, db.GetCampaignDomainsByNameParams{
+// 		Column1: NullString(searchString),
+// 		Offset:  offset,
+// 		Limit:   limit,
+// 	})
+// 	if err != nil {
+// 		return nil, err
+// 	}
 
-	var list []CampaignDomainModel
-	for _, d := range domains {
-		list = append(list, CampaignDomainModel{
-			ID:         d.ID,
-			Site:       d.Site,
-			CheckAAAA:  d.CheckAaaa,
-			CheckWWW:   d.CheckWww,
-			CheckNS:    d.CheckNs,
-			CheckCurl:  d.CheckCurl,
-			CampaignID: d.CampaignID,
-		})
-	}
-	return list, nil
-}
+// 	var list []CampaignDomainModel
+// 	for _, d := range domains {
+// 		list = append(list, CampaignDomainModel{
+// 			ID:         d.ID,
+// 			Site:       d.Site,
+// 			CheckAAAA:  d.CheckAaaa,
+// 			CheckWWW:   d.CheckWww,
+// 			CheckNS:    d.CheckNs,
+// 			CheckCurl:  d.CheckCurl,
+// 			CampaignID: d.CampaignID,
+// 		})
+// 	}
+// 	return list, nil
+// }
 
 // ListDomainShamers lists 10-ish domains without IPv6 support.
 func (s *DomainService) ListDomainShamers(ctx context.Context) ([]DomainModel, error) {

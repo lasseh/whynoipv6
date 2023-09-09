@@ -39,12 +39,15 @@ type DomainResponse struct {
 func (rs DomainHandler) Routes() chi.Router {
 	r := chi.NewRouter()
 
-	// GET /domain - list top 100 domains without IPv6
-	r.Get("/", rs.DomainList)
-	// GET /domain/heroes - list top 100 domains with IPv6
-	r.Get("/heroes", rs.DomainHeroes)
-	// GET /domain/shamers - list the top 10-ish domains without IPv6
-	r.Get("/shamers", rs.DomainShamers)
+	// GET /domain - list all domains
+	r.With(httpin.NewInput(PaginationInput{})).Get("/", rs.DomainList)
+	// GET /domain/heroes - list the domains with IPv6
+	r.With(httpin.NewInput(PaginationInput{})).Get("/heroes", rs.DomainHeroes)
+	// GET /domain/sinners - list the domains without IPv6
+	// TODO: Is this in use? DomainList does tha same thing.
+	// r.With(httpin.NewInput(PaginationInput{})).Get("/sinners", rs.DomainSinners)
+	// GET /domain/topsinner - list the top 10-ish domains without IPv6
+	r.Get("/topsinner", rs.TopSinner)
 	// GET /domain/{domain} - retrieve a domain by its name
 	r.Get("/{domain}", rs.RetrieveDomain)
 	// GET /domain/search/{domain} - search for a domain by its name
@@ -53,9 +56,15 @@ func (rs DomainHandler) Routes() chi.Router {
 	return r
 }
 
-// DomainList returns the top 100 domains without IPv6 support.
+// DomainList returns all domains.
 func (rs DomainHandler) DomainList(w http.ResponseWriter, r *http.Request) {
-	domains, err := rs.Repo.ListDomain(r.Context())
+	// Handle query params
+	paginationInput := r.Context().Value(httpin.Input).(*PaginationInput)
+	if paginationInput.Limit > 100 {
+		paginationInput.Limit = 100
+	}
+
+	domains, err := rs.Repo.ListDomain(r.Context(), int32(paginationInput.Offset), int32(paginationInput.Limit))
 	if err != nil {
 		render.Status(r, http.StatusInternalServerError)
 		render.JSON(w, r, render.M{"error": "internal server error"})
@@ -83,9 +92,15 @@ func (rs DomainHandler) DomainList(w http.ResponseWriter, r *http.Request) {
 	render.JSON(w, r, domainlist)
 }
 
-// DomainHeroes returns the top 100 domains with IPv6 support.
+// DomainHeroes returns the domains with IPv6 support.
 func (rs DomainHandler) DomainHeroes(w http.ResponseWriter, r *http.Request) {
-	domains, err := rs.Repo.ListDomainHeroes(r.Context())
+	// Handle query params
+	paginationInput := r.Context().Value(httpin.Input).(*PaginationInput)
+	if paginationInput.Limit > 100 {
+		paginationInput.Limit = 100
+	}
+
+	domains, err := rs.Repo.ListDomainHeroes(r.Context(), int32(paginationInput.Offset), int32(paginationInput.Limit))
 	if err != nil {
 		render.Status(r, http.StatusInternalServerError)
 		render.JSON(w, r, render.M{"error": "internal server error"})
@@ -112,6 +127,42 @@ func (rs DomainHandler) DomainHeroes(w http.ResponseWriter, r *http.Request) {
 	}
 	render.JSON(w, r, domainlist)
 }
+
+// DomainSinners returns the domains without IPv6 support.
+// func (rs DomainHandler) DomainSinners(w http.ResponseWriter, r *http.Request) {
+// 	// Handle query params
+// 	paginationInput := r.Context().Value(httpin.Input).(*PaginationInput)
+// 	if paginationInput.Limit > 100 {
+// 		paginationInput.Limit = 100
+// 	}
+
+// 	domains, err := rs.Repo.ListDomainHeroes(r.Context(), int32(paginationInput.Offset), int32(paginationInput.Limit))
+// 	if err != nil {
+// 		render.Status(r, http.StatusInternalServerError)
+// 		render.JSON(w, r, render.M{"error": "internal server error"})
+// 		return
+// 	}
+// 	var domainlist []DomainResponse
+// 	for _, domain := range domains {
+// 		domainlist = append(domainlist, DomainResponse{
+// 			Rank:      domain.Rank,
+// 			Domain:    domain.Site,
+// 			CheckAAAA: domain.CheckAAAA,
+// 			CheckWWW:  domain.CheckWWW,
+// 			CheckNS:   domain.CheckNS,
+// 			CheckCurl: domain.CheckCurl,
+// 			AsName:    domain.AsName,
+// 			Country:   domain.Country,
+// 			TsAAAA:    domain.TsAAAA,
+// 			TsWWW:     domain.TsWWW,
+// 			TsNS:      domain.TsNS,
+// 			TsCurl:    domain.TsCurl,
+// 			TsCheck:   domain.TsCheck,
+// 			TsUpdated: domain.TsUpdated,
+// 		})
+// 	}
+// 	render.JSON(w, r, domainlist)
+// }
 
 // RetrieveDomain returns a domain based on the provided domain name.
 func (rs DomainHandler) RetrieveDomain(w http.ResponseWriter, r *http.Request) {
@@ -157,17 +208,7 @@ func (rs DomainHandler) SearchDomain(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Search for campaign domains
-	campaignDomains, err := rs.Repo.GetCampaignDomainsByName(r.Context(), domain, int32(paginationInput.Offset), int32(paginationInput.Limit))
-	if err != nil {
-		render.Status(r, http.StatusNotFound)
-		render.JSON(w, r, render.M{"error": "Internal server error"})
-		return
-	}
-	// Append campaign domains to result
-	// result = append(result, campaignDomains...)
-
-	if len(domains) == 0 && len(campaignDomains) == 0 {
+	if len(domains) == 0 {
 		render.Status(r, http.StatusNotFound)
 		render.JSON(w, r, render.M{"error": "no domains found"})
 		return
@@ -193,34 +234,13 @@ func (rs DomainHandler) SearchDomain(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	var campaignDomainList []DomainResponse
-	for _, domain := range campaignDomains {
-		campaignDomainList = append(campaignDomainList, DomainResponse{
-			Domain:       domain.Site,
-			CheckAAAA:    domain.CheckAAAA,
-			CheckWWW:     domain.CheckWWW,
-			CheckNS:      domain.CheckNS,
-			CheckCurl:    domain.CheckCurl,
-			AsName:       domain.AsName,
-			Country:      domain.Country,
-			TsAAAA:       domain.TsAAAA,
-			TsWWW:        domain.TsWWW,
-			TsNS:         domain.TsNS,
-			TsCurl:       domain.TsCurl,
-			TsCheck:      domain.TsCheck,
-			TsUpdated:    domain.TsUpdated,
-			CampaignUUID: domain.CampaignID.String(),
-		})
-	}
-
 	render.JSON(w, r, render.M{
-		"domains":         domainList,
-		"campaignDomains": campaignDomainList,
+		"data": domainList,
 	})
 }
 
-// DomainShamers returns the top 10-ish domains without IPv6 support.
-func (rs DomainHandler) DomainShamers(w http.ResponseWriter, r *http.Request) {
+// TopSinner returns the top 10-ish domains without IPv6 support.
+func (rs DomainHandler) TopSinner(w http.ResponseWriter, r *http.Request) {
 	domains, err := rs.Repo.ListDomainShamers(r.Context())
 	if err != nil {
 		render.Status(r, http.StatusInternalServerError)

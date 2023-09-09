@@ -69,56 +69,6 @@ func (q *Queries) DisableDomain(ctx context.Context, site string) error {
 	return err
 }
 
-const GetCampaignDomainsByName = `-- name: GetCampaignDomainsByName :many
-SELECT id, campaign_id, site, check_aaaa, check_www, check_ns, check_curl, asn_id, country_id, disabled, ts_aaaa, ts_www, ts_ns, ts_curl, ts_check, ts_updated
-FROM campaign_domain
-WHERE site LIKE '%' || $1 || '%'
-LIMIT $2 OFFSET $3
-`
-
-type GetCampaignDomainsByNameParams struct {
-	Column1 sql.NullString
-	Limit   int32
-	Offset  int32
-}
-
-func (q *Queries) GetCampaignDomainsByName(ctx context.Context, arg GetCampaignDomainsByNameParams) ([]CampaignDomain, error) {
-	rows, err := q.db.Query(ctx, GetCampaignDomainsByName, arg.Column1, arg.Limit, arg.Offset)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []CampaignDomain{}
-	for rows.Next() {
-		var i CampaignDomain
-		if err := rows.Scan(
-			&i.ID,
-			&i.CampaignID,
-			&i.Site,
-			&i.CheckAaaa,
-			&i.CheckWww,
-			&i.CheckNs,
-			&i.CheckCurl,
-			&i.AsnID,
-			&i.CountryID,
-			&i.Disabled,
-			&i.TsAaaa,
-			&i.TsWww,
-			&i.TsNs,
-			&i.TsCurl,
-			&i.TsCheck,
-			&i.TsUpdated,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const GetDomainsByName = `-- name: GetDomainsByName :many
 SELECT id, site, check_aaaa, check_www, check_ns, check_curl, asn_id, country_id, disabled, ts_aaaa, ts_www, ts_ns, ts_curl, ts_check, ts_updated, rank, asname, country_name
 FROM domain_view_list
@@ -184,18 +134,26 @@ func (q *Queries) InsertDomain(ctx context.Context, site string) error {
 
 const ListDomain = `-- name: ListDomain :many
 SELECT id, site, check_aaaa, check_www, check_ns, check_curl, asn_id, country_id, disabled, ts_aaaa, ts_www, ts_ns, ts_curl, ts_check, ts_updated, rank, asname, country_name
-FROM domain_view_index
+FROM domain_view_list
+WHERE check_aaaa = FALSE
+   OR check_www = FALSE
+LIMIT $1 OFFSET $2
 `
 
-func (q *Queries) ListDomain(ctx context.Context) ([]DomainViewIndex, error) {
-	rows, err := q.db.Query(ctx, ListDomain)
+type ListDomainParams struct {
+	Limit  int32
+	Offset int32
+}
+
+func (q *Queries) ListDomain(ctx context.Context, arg ListDomainParams) ([]DomainViewList, error) {
+	rows, err := q.db.Query(ctx, ListDomain, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []DomainViewIndex{}
+	items := []DomainViewList{}
 	for rows.Next() {
-		var i DomainViewIndex
+		var i DomainViewList
 		if err := rows.Scan(
 			&i.ID,
 			&i.Site,
@@ -228,18 +186,27 @@ func (q *Queries) ListDomain(ctx context.Context) ([]DomainViewIndex, error) {
 
 const ListDomainHeroes = `-- name: ListDomainHeroes :many
 SELECT id, site, check_aaaa, check_www, check_ns, check_curl, asn_id, country_id, disabled, ts_aaaa, ts_www, ts_ns, ts_curl, ts_check, ts_updated, rank, asname, country_name
-FROM domain_view_heroes
+FROM domain_view_list
+WHERE check_aaaa = TRUE
+  AND check_www = TRUE
+  AND check_ns = TRUE
+LIMIT $1 OFFSET $2
 `
 
-func (q *Queries) ListDomainHeroes(ctx context.Context) ([]DomainViewHeroes, error) {
-	rows, err := q.db.Query(ctx, ListDomainHeroes)
+type ListDomainHeroesParams struct {
+	Limit  int32
+	Offset int32
+}
+
+func (q *Queries) ListDomainHeroes(ctx context.Context, arg ListDomainHeroesParams) ([]DomainViewList, error) {
+	rows, err := q.db.Query(ctx, ListDomainHeroes, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []DomainViewHeroes{}
+	items := []DomainViewList{}
 	for rows.Next() {
-		var i DomainViewHeroes
+		var i DomainViewList
 		if err := rows.Scan(
 			&i.ID,
 			&i.Site,

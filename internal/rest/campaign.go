@@ -42,6 +42,7 @@ type CampaignListResponse struct {
 	Name        string    `json:"name"`
 	Description string    `json:"description"`
 	Count       int64     `json:"count"`
+	V6Ready     int64     `json:"v6_ready"`
 }
 
 // Routes returns a router with all campaign endpoints mounted.
@@ -54,6 +55,8 @@ func (rs CampaignHandler) Routes() chi.Router {
 	r.With(httpin.NewInput(PaginationInput{})).Get("/{uuid}", rs.CampaignDomains)
 	// GET /campaign/{campaign}/{domain} - View details of a single domain in a campaign
 	r.Get("/{uuid}/{domain}", rs.ViewCampaignDomain)
+	// GET /campaign/search/{domain} - search for a domain by its name
+	r.With(httpin.NewInput(PaginationInput{})).Get("/search/{domain}", rs.SearchDomain)
 
 	return r
 }
@@ -77,6 +80,7 @@ func (rs CampaignHandler) CampaignList(w http.ResponseWriter, r *http.Request) {
 			Name:        campaign.Name,
 			Description: campaign.Description,
 			Count:       campaign.Count,
+			V6Ready:     campaign.V6Ready,
 		})
 	}
 
@@ -154,6 +158,7 @@ func (rs CampaignHandler) CampaignDomains(w http.ResponseWriter, r *http.Request
 			Name:        campaignDetails.Name,
 			Description: campaignDetails.Description,
 			Count:       campaignDetails.Count,
+			V6Ready:     campaignDetails.V6Ready,
 		},
 		Domains: domainList,
 	}
@@ -213,5 +218,54 @@ func (rs CampaignHandler) ViewCampaignDomain(w http.ResponseWriter, r *http.Requ
 		TsCurl:    domainDetails.TsCurl,
 		TsCheck:   domainDetails.TsCheck,
 		TsUpdated: domainDetails.TsUpdated,
+	})
+}
+
+// SearchDomain returns a domain based on the provided domain name.
+func (rs CampaignHandler) SearchDomain(w http.ResponseWriter, r *http.Request) {
+	// Handle query params
+	paginationInput := r.Context().Value(httpin.Input).(*PaginationInput)
+	if paginationInput.Limit > 100 {
+		paginationInput.Limit = 100
+	}
+
+	domain := chi.URLParam(r, "domain")
+
+	// Search for campaign domains
+	campaignDomains, err := rs.Repo.GetCampaignDomainsByName(r.Context(), domain, int32(paginationInput.Offset), int32(paginationInput.Limit))
+	if err != nil {
+		render.Status(r, http.StatusNotFound)
+		render.JSON(w, r, render.M{"error": "Internal server error"})
+		return
+	}
+
+	if len(campaignDomains) == 0 {
+		render.Status(r, http.StatusNotFound)
+		render.JSON(w, r, render.M{"error": "no domains found"})
+		return
+	}
+
+	var campaignDomainList []DomainResponse
+	for _, domain := range campaignDomains {
+		campaignDomainList = append(campaignDomainList, DomainResponse{
+			Domain:       domain.Site,
+			CheckAAAA:    domain.CheckAAAA,
+			CheckWWW:     domain.CheckWWW,
+			CheckNS:      domain.CheckNS,
+			CheckCurl:    domain.CheckCurl,
+			AsName:       domain.AsName,
+			Country:      domain.Country,
+			TsAAAA:       domain.TsAAAA,
+			TsWWW:        domain.TsWWW,
+			TsNS:         domain.TsNS,
+			TsCurl:       domain.TsCurl,
+			TsCheck:      domain.TsCheck,
+			TsUpdated:    domain.TsUpdated,
+			CampaignUUID: domain.CampaignID.String(),
+		})
+	}
+
+	render.JSON(w, r, render.M{
+		"data": campaignDomainList,
 	})
 }
