@@ -61,3 +61,17 @@ LIMIT $2 OFFSET $3;
 -- name: ListDomainShamers :many
 SELECT *
 FROM domain_shame_view;
+
+-- name: InitSpaceTimestamps :exec
+WITH SpacedTimestampUpdates AS (
+    SELECT 
+        id,
+        calculatedStartTime + calculatedIntervalStep * ROW_NUMBER() OVER (ORDER BY id) AS newSpacedTimestamp
+    FROM domain, 
+    (SELECT count(*)::DECIMAL as total_records FROM domain) t,
+    (SELECT (NOW() - '3 days'::INTERVAL) as calculatedStartTime, ('3 days'::INTERVAL) / count(*)::DECIMAL as calculatedIntervalStep FROM domain) i
+)
+UPDATE domain 
+SET ts_check = newSpacedTimestamp
+FROM SpacedTimestampUpdates
+WHERE domain.id = SpacedTimestampUpdates.id;

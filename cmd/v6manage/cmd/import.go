@@ -63,6 +63,9 @@ func importData() {
 	// Print time it took to import
 	log.Println("Imported sites in", time.Since(t))
 
+	// Space out domain timestamps
+	log.Println("Spacing out domain timestamps...")
+	domainService.InitSpaceTimestamps(ctx)
 }
 
 // func importDataWG() {

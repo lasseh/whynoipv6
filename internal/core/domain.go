@@ -289,6 +289,16 @@ func (s *DomainService) ListDomainShamers(ctx context.Context) ([]DomainModel, e
 	return list, nil
 }
 
+// InitSpaceTimestamps spaces out the timestamps for all domains.
+// Is used to prevent all domains from being crawled at the same time.
+func (s *DomainService) InitSpaceTimestamps(ctx context.Context) error {
+	err := s.q.InitSpaceTimestamps(ctx)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 // CrawlerStat represents a domain statistic.
 type CrawlerStat struct {
 	TotalSites int64 `json:"total_sites"`
