@@ -91,6 +91,7 @@ CREATE INDEX idx_domain_check_ns ON domain(check_ns);
 CREATE INDEX idx_domain_check_aaaa_www ON domain(check_aaaa, check_www);
 CREATE INDEX idx_domain_check_aaaa_www_ns ON domain(check_aaaa, check_www, check_ns);
 CREATE INDEX idx_domain_country_check_aaaa_www_ns ON domain(country_id, check_aaaa, check_www, check_ns);
+CREATE INDEX idx_domain_country_check_aaaa_www ON domain(country_id, check_aaaa, check_www);
 CREATE INDEX idx_domain_asn_id ON domain(asn_id);
 CREATE INDEX idx_domain_country_id ON domain(country_id);
 CREATE INDEX idx_domain_ts_check ON domain(ts_check);
@@ -172,6 +173,8 @@ CREATE TABLE "metrics" (
     time TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     data jsonb NOT NULL
 );
+CREATE INDEX idx_metrics_measurement_time ON metrics (measurement, time DESC);
+
 
 -- VIEWS ------------------------------------------------------
 CREATE or REPLACE VIEW domain_view_list AS
