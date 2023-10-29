@@ -289,8 +289,8 @@ func (s *DomainService) ListDomainShamers(ctx context.Context) ([]DomainModel, e
 	return list, nil
 }
 
-// DomainStat represents a domain statistic.
-type DomainStat struct {
+// CrawlerStat represents a domain statistic.
+type CrawlerStat struct {
 	TotalSites int64 `json:"total_sites"`
 	TotalAaaa  int64 `json:"total_aaaa"`
 	TotalWww   int64 `json:"total_www"`
@@ -300,13 +300,13 @@ type DomainStat struct {
 	TopNs      int64 `json:"top_ns"`
 }
 
-// DomainStats retrieves the statistics for all crawled domains.
-func (s *DomainService) DomainStats(ctx context.Context) (DomainStat, error) {
-	stats, err := s.q.DomainStats(ctx)
+// CrawlerStats retrieves the statistics for all crawled domains.
+func (s *DomainService) CrawlerStats(ctx context.Context) (CrawlerStat, error) {
+	stats, err := s.q.CrawlerStats(ctx)
 	if err != nil {
-		return DomainStat{}, err
+		return CrawlerStat{}, err
 	}
-	return DomainStat{
+	return CrawlerStat{
 		TotalSites: stats.TotalSites,
 		TotalAaaa:  stats.TotalAaaa,
 		TotalWww:   stats.TotalWww,
