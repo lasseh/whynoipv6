@@ -13,12 +13,12 @@ LIMIT 1;
 -- name: ListDomainsByCountry :many
 SELECT *
 FROM domain_view_list
-WHERE country_id = $1
+WHERE domain_view_list.country_id = $1
   AND (
-      check_aaaa = FALSE
-      OR check_www = FALSE
+      domain_view_list.check_aaaa = FALSE
+      OR domain_view_list.check_www = FALSE
     )
-ORDER BY id
+ORDER BY domain_view_list.id
 LIMIT $2 OFFSET $3;
 
 -- name: ListDomainHeroesByCountry :many
