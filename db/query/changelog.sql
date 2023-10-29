@@ -3,6 +3,11 @@ SELECT *
 FROM changelog_view
 LIMIT $1 OFFSET $2;
 
+-- name: ListCampaignChangelog :many
+SELECT *
+FROM changelog_campaign_view
+LIMIT $1 OFFSET $2;
+
 -- name: GetChangelogByDomain :many
 SELECT *
 FROM changelog_view

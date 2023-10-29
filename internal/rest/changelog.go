@@ -32,6 +32,8 @@ func (rs ChangelogHandler) Routes() chi.Router {
 
 	// GET /changelog - List all changelog entries
 	r.With(httpin.NewInput(PaginationInput{})).Get("/", rs.ChangelogList)
+	// GET /changelog/campaign - List all campaign changelog entries
+	r.With(httpin.NewInput(PaginationInput{})).Get("/campaign", rs.CampaignChangelogList)
 	// GET /changelog/{domain} - List all changelog entries for a specific domain
 	r.With(httpin.NewInput(PaginationInput{})).Get("/{domain}", rs.ChangelogByDomain)
 	// GET /changelog/campaign/{uuid} - List all changelog entries for a specific campaign UUID
@@ -54,6 +56,41 @@ func (rs ChangelogHandler) ChangelogList(w http.ResponseWriter, r *http.Request)
 
 	// Fetch changelogs from the repository
 	changelogs, err := rs.Repo.List(r.Context(), int32(paginationInput.Offset), int32(paginationInput.Limit))
+	if err != nil {
+		// Handle any errors while fetching changelogs
+		render.Status(r, http.StatusInternalServerError)
+		render.JSON(w, r, render.M{"error": "internal server error"})
+		return
+	}
+
+	// Convert changelogs to ChangelogResponse objects
+	var changelogList []ChangelogResponse
+	for _, changelog := range changelogs {
+		changelogList = append(changelogList, ChangelogResponse{
+			ID:         changelog.ID,
+			Ts:         changelog.Ts,
+			Domain:     changelog.Site,
+			Message:    changelog.Message,
+			IPv6Status: changelog.IPv6Status,
+		})
+	}
+
+	// Send the changelog list as JSON
+	render.JSON(w, r, changelogList)
+}
+
+// CampaignChangelogList lists all changelog entries with pagination.
+func (rs ChangelogHandler) CampaignChangelogList(w http.ResponseWriter, r *http.Request) {
+	// Retrieve pagination input from context
+	paginationInput := r.Context().Value(httpin.Input).(*PaginationInput)
+
+	// Limit the maximum number of entries per page to 100
+	if paginationInput.Limit > 100 {
+		paginationInput.Limit = 100
+	}
+
+	// Fetch changelogs from the repository
+	changelogs, err := rs.Repo.CampaignList(r.Context(), int32(paginationInput.Offset), int32(paginationInput.Limit))
 	if err != nil {
 		// Handle any errors while fetching changelogs
 		render.Status(r, http.StatusInternalServerError)
