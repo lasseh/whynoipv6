@@ -61,18 +61,19 @@ func getSites() {
 
 	// Run the crawler indefinitely.
 	for {
-		currentTime := time.Now()
-		log.Println("Starting crawl at", currentTime.Format("2006-01-02 15:04:05"))
+		// currentTime := time.Now()
+		// log.Println("Starting crawl at", currentTime.Format("2006-01-02 15:04:05"))
 
 		var offset int32 = 0
 		const limit int32 = 50
-		var updatedDomains int32 = 0
 		var totalCheckedDomains int32 = 0
 		var wg sync.WaitGroup
 
 		// Main loop to crawl and update domains.
 		for {
+			currentTime := time.Now()
 			loopStartTime := time.Now()
+			var updatedDomains int32 = 0
 
 			domains, err := domainService.CrawlDomain(ctx, offset, limit)
 			if err != nil {
@@ -116,34 +117,41 @@ func getSites() {
 			totalCheckedDomains += int32(len(domains))
 
 			log.Printf(red+"Checked %d sites, took %v [Total: %d/%d]%s", len(domains), prettyDuration(time.Since(loopStartTime)), updatedDomains, totalCheckedDomains, reset)
+
+			// clear domains variable
+			domains = nil
+
+			// Test test test
+			// }
+
+			// Collect and store domain statistics.
+			stats, err := domainService.CrawlerStats(ctx)
+			if err != nil {
+				log.Printf("Error getting stats: %s\n", err)
+			}
+
+			// Update healthcheck status
+			toolboxService.HealthCheckUpdate(cfg.HealthcheckCrawler)
+
+			// Store crawler metrics.
+			crawlData := map[string]interface{}{
+				"duration":      time.Since(currentTime).Seconds(),
+				"total_checked": totalCheckedDomains,
+				"updated":       updatedDomains,
+			}
+			if err := metricService.StoreMetric(ctx, "crawler", crawlData); err != nil {
+				log.Printf("Error storing metric: %s\n", err)
+			}
+			if err := metricService.StoreMetric(ctx, "domains", stats); err != nil {
+				log.Printf("Error storing metric: %s\n", err)
+			}
+
 		}
 
-		// Collect and store domain statistics.
-		stats, err := domainService.DomainStats(ctx)
-		if err != nil {
-			log.Printf("Error getting stats: %s\n", err)
-		}
-
-		log.Printf(red+"Checked/Updated %d/%d sites in %s%s\n", updatedDomains, totalCheckedDomains, prettyDuration(time.Since(currentTime)), reset)
-
-		// Update healthcheck status
-		toolboxService.HealthCheckUpdate(cfg.HealthcheckCrawler)
+		// log.Printf(red+"Checked/Updated %d/%d sites in %s%s\n", updatedDomains, totalCheckedDomains, prettyDuration(time.Since(currentTime)), reset)
 
 		// Notify partyvan
-		toolboxService.NotifyIrc(fmt.Sprintf("[WhyNoIPv6] Crawler checked %d/%d sites in %s", updatedDomains, totalCheckedDomains, prettyDuration(time.Since(currentTime))))
-
-		// Store crawler metrics.
-		crawlData := map[string]interface{}{
-			"duration":      time.Since(currentTime).Seconds(),
-			"total_checked": totalCheckedDomains,
-			"updated":       updatedDomains,
-		}
-		if err := metricService.StoreMetric(ctx, "crawler", crawlData); err != nil {
-			log.Printf("Error storing metric: %s\n", err)
-		}
-		if err := metricService.StoreMetric(ctx, "domains", stats); err != nil {
-			log.Printf("Error storing metric: %s\n", err)
-		}
+		// toolboxService.NotifyIrc(fmt.Sprintf("[WhyNoIPv6] Crawler checked %d/%d sites in %s", updatedDomains, totalCheckedDomains, prettyDuration(time.Since(currentTime))))
 
 		// Calculate country stats.
 		err = countryService.CalculateCountryStats(ctx)
@@ -158,7 +166,8 @@ func getSites() {
 
 		// Sleep for 2 hours before starting the next crawl.
 		log.Println("Time until next check: 2 hours")
-		time.Sleep(2 * time.Hour)
+		// time.Sleep(2 * time.Hour)
+		time.Sleep(30 * time.Minute)
 	}
 }
 
