@@ -97,6 +97,28 @@ func (s *ChangelogService) List(ctx context.Context, offset, limit int32) ([]Cha
 	return models, nil
 }
 
+// CampaignList lists all changelog entries for campaign table.
+func (s *ChangelogService) CampaignList(ctx context.Context, offset, limit int32) ([]ChangelogModel, error) {
+	changelogs, err := s.q.ListCampaignChangelog(ctx, db.ListCampaignChangelogParams{
+		Offset: offset,
+		Limit:  limit,
+	})
+	if err != nil {
+		return nil, err
+	}
+	var models []ChangelogModel
+	for _, changelog := range changelogs {
+		models = append(models, ChangelogModel{
+			ID:         changelog.ID,
+			Ts:         changelog.Ts,
+			Site:       changelog.Site,
+			Message:    changelog.Message,
+			IPv6Status: changelog.Ipv6Status,
+		})
+	}
+	return models, nil
+}
+
 // GetChangelogByDomain gets all changelog entries for a domain name.
 func (s *ChangelogService) GetChangelogByDomain(ctx context.Context, site string, offset, limit int32) ([]ChangelogModel, error) {
 	// Get all changelog entries for site id
