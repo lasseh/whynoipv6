@@ -26,7 +26,7 @@ func (rs MetricHandler) Routes() chi.Router {
 	r := chi.NewRouter()
 
 	// GET /metrics/total
-	r.Get("/total", rs.Totals)
+	r.Get("/total", rs.DomainStats)
 
 	// GET /metrics/asn
 	r.Get("/asn", rs.AsnMetrics)
@@ -38,6 +38,27 @@ func (rs MetricHandler) Routes() chi.Router {
 // TODO: Add pagination and limits
 func (rs MetricHandler) Totals(w http.ResponseWriter, r *http.Request) {
 	metrics, err := rs.Repo.GetMetrics(r.Context(), "domains")
+	if err != nil {
+		render.Status(r, http.StatusNotFound)
+		render.JSON(w, r, render.M{"error": "metric not found"})
+		return
+	}
+
+	var metricList []MetricResponse
+	for _, metric := range metrics {
+		metricList = append(metricList, MetricResponse{
+			Time: metric.Time,
+			Data: metric.Data,
+		})
+	}
+
+	render.JSON(w, r, metricList)
+}
+
+// DomainStats returns the aggregated metrics for all crawled domains.
+func (rs MetricHandler) DomainStats(w http.ResponseWriter, r *http.Request) {
+	// metrics, err := rs.Repo.DomainStats(r.Context())
+	metrics, err := rs.Repo.DomainStats(r.Context())
 	if err != nil {
 		render.Status(r, http.StatusNotFound)
 		render.JSON(w, r, render.M{"error": "metric not found"})

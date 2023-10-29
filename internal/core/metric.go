@@ -87,3 +87,42 @@ func (s *MetricService) ListASN(ctx context.Context, offset, limit int32) ([]ASN
 	}
 	return asns, nil
 }
+
+// type DomainStatsModel struct {
+// 	TotalSites int64 `json:"total_sites"`
+// 	TotalAaaa  int64 `json:"total_aaaa"`
+// 	TotalWww   int64 `json:"total_www"`
+// 	TotalBoth  int64 `json:"total_both"`
+// 	TotalNs    int64 `json:"total_ns"`
+// 	Top1k      int64 `json:"top_1k"`
+// 	TopNs      int64 `json:"top_ns"`
+// }
+
+// DomainStatsModel represents a domain statistic.
+type DomainStatsModel struct {
+	Time       time.Time
+	Totalsites pgtype.Numeric
+	Totalns    pgtype.Numeric
+	Totalaaaa  pgtype.Numeric
+	Totalwww   pgtype.Numeric
+	Totalboth  pgtype.Numeric
+	Top1k      pgtype.Numeric
+	Topns      pgtype.Numeric
+}
+
+// DomainStats retrieves the aggregated metrics for all crawled domains.
+func (s *MetricService) DomainStats(ctx context.Context) ([]Metric, error) {
+	metrics, err := s.q.DomainStats(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var metricList []Metric
+	for _, metric := range metrics {
+		metricList = append(metricList, Metric{
+			Time: metric.Time,
+			Data: metric.Data,
+		})
+	}
+	return metricList, nil
+}

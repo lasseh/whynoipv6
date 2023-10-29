@@ -1,4 +1,4 @@
--- name: DomainStats :one
+-- name: CrawlerStats :one
 -- Used by the crawler to store total stats in the metric table
 SELECT
  count(1) filter (WHERE "ts_check" IS NOT NULL) AS "total_sites",
