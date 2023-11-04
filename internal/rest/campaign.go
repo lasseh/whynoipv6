@@ -3,6 +3,7 @@ package rest
 import (
 	"net/http"
 	"regexp"
+	"strings"
 	"time"
 	"whynoipv6/internal/core"
 
@@ -102,7 +103,7 @@ func (rs CampaignHandler) CampaignDomains(w http.ResponseWriter, r *http.Request
 	// Convert campaignUUID to uuid.UUID
 	parsedUUID, err := uuid.Parse(campaignUUID)
 	if err != nil {
-		render.Status(r, http.StatusBadRequest)
+		render.Status(r, http.StatusNotFound)
 		render.JSON(w, r, render.M{"error": "Invalid UUID"})
 		return
 	}
@@ -232,7 +233,7 @@ func (rs CampaignHandler) SearchDomain(w http.ResponseWriter, r *http.Request) {
 	domain := chi.URLParam(r, "domain")
 
 	// Search for campaign domains
-	campaignDomains, err := rs.Repo.GetCampaignDomainsByName(r.Context(), domain, int32(paginationInput.Offset), int32(paginationInput.Limit))
+	campaignDomains, err := rs.Repo.GetCampaignDomainsByName(r.Context(), strings.ToLower(domain), int32(paginationInput.Offset), int32(paginationInput.Limit))
 	if err != nil {
 		render.Status(r, http.StatusNotFound)
 		render.JSON(w, r, render.M{"error": "Internal server error"})

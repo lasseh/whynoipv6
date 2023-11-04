@@ -3,6 +3,7 @@ package rest
 import (
 	"log"
 	"net/http"
+	"strings"
 	"time"
 	"whynoipv6/internal/core"
 
@@ -43,9 +44,6 @@ func (rs DomainHandler) Routes() chi.Router {
 	r.With(httpin.NewInput(PaginationInput{})).Get("/", rs.DomainList)
 	// GET /domain/heroes - list the domains with IPv6
 	r.With(httpin.NewInput(PaginationInput{})).Get("/heroes", rs.DomainHeroes)
-	// GET /domain/sinners - list the domains without IPv6
-	// TODO: Is this in use? DomainList does tha same thing.
-	// r.With(httpin.NewInput(PaginationInput{})).Get("/sinners", rs.DomainSinners)
 	// GET /domain/topsinner - list the top 10-ish domains without IPv6
 	r.Get("/topsinner", rs.TopSinner)
 	// GET /domain/{domain} - retrieve a domain by its name
@@ -128,42 +126,6 @@ func (rs DomainHandler) DomainHeroes(w http.ResponseWriter, r *http.Request) {
 	render.JSON(w, r, domainlist)
 }
 
-// DomainSinners returns the domains without IPv6 support.
-// func (rs DomainHandler) DomainSinners(w http.ResponseWriter, r *http.Request) {
-// 	// Handle query params
-// 	paginationInput := r.Context().Value(httpin.Input).(*PaginationInput)
-// 	if paginationInput.Limit > 100 {
-// 		paginationInput.Limit = 100
-// 	}
-
-// 	domains, err := rs.Repo.ListDomainHeroes(r.Context(), int32(paginationInput.Offset), int32(paginationInput.Limit))
-// 	if err != nil {
-// 		render.Status(r, http.StatusInternalServerError)
-// 		render.JSON(w, r, render.M{"error": "internal server error"})
-// 		return
-// 	}
-// 	var domainlist []DomainResponse
-// 	for _, domain := range domains {
-// 		domainlist = append(domainlist, DomainResponse{
-// 			Rank:      domain.Rank,
-// 			Domain:    domain.Site,
-// 			CheckAAAA: domain.CheckAAAA,
-// 			CheckWWW:  domain.CheckWWW,
-// 			CheckNS:   domain.CheckNS,
-// 			CheckCurl: domain.CheckCurl,
-// 			AsName:    domain.AsName,
-// 			Country:   domain.Country,
-// 			TsAAAA:    domain.TsAAAA,
-// 			TsWWW:     domain.TsWWW,
-// 			TsNS:      domain.TsNS,
-// 			TsCurl:    domain.TsCurl,
-// 			TsCheck:   domain.TsCheck,
-// 			TsUpdated: domain.TsUpdated,
-// 		})
-// 	}
-// 	render.JSON(w, r, domainlist)
-// }
-
 // RetrieveDomain returns a domain based on the provided domain name.
 func (rs DomainHandler) RetrieveDomain(w http.ResponseWriter, r *http.Request) {
 	d := chi.URLParam(r, "domain")
@@ -201,7 +163,7 @@ func (rs DomainHandler) SearchDomain(w http.ResponseWriter, r *http.Request) {
 
 	domain := chi.URLParam(r, "domain")
 
-	domains, err := rs.Repo.GetDomainsByName(r.Context(), domain, int32(paginationInput.Offset), int32(paginationInput.Limit))
+	domains, err := rs.Repo.GetDomainsByName(r.Context(), strings.ToLower(domain), int32(paginationInput.Offset), int32(paginationInput.Limit))
 	if err != nil {
 		render.Status(r, http.StatusNotFound)
 		render.JSON(w, r, render.M{"error": "Internal server error"})
