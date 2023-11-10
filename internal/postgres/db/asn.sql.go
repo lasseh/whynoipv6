@@ -7,7 +7,90 @@ package db
 
 import (
 	"context"
+	"database/sql"
 )
+
+const AsnByIPv4 = `-- name: AsnByIPv4 :many
+SELECT id, number, name, count_v4, count_v6, percent_v4, percent_v6 
+FROM asn
+WHERE count_v4 IS NOT NULL AND id != 1
+ORDER BY count_v4 DESC
+LIMIT $1 OFFSET $2
+`
+
+type AsnByIPv4Params struct {
+	Limit  int32
+	Offset int32
+}
+
+func (q *Queries) AsnByIPv4(ctx context.Context, arg AsnByIPv4Params) ([]Asn, error) {
+	rows, err := q.db.Query(ctx, AsnByIPv4, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Asn{}
+	for rows.Next() {
+		var i Asn
+		if err := rows.Scan(
+			&i.ID,
+			&i.Number,
+			&i.Name,
+			&i.CountV4,
+			&i.CountV6,
+			&i.PercentV4,
+			&i.PercentV6,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const AsnByIPv6 = `-- name: AsnByIPv6 :many
+SELECT id, number, name, count_v4, count_v6, percent_v4, percent_v6 
+FROM asn
+WHERE count_v4 IS NOT NULL AND id != 1
+ORDER BY count_v6 DESC
+LIMIT $1 OFFSET $2
+`
+
+type AsnByIPv6Params struct {
+	Limit  int32
+	Offset int32
+}
+
+func (q *Queries) AsnByIPv6(ctx context.Context, arg AsnByIPv6Params) ([]Asn, error) {
+	rows, err := q.db.Query(ctx, AsnByIPv6, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Asn{}
+	for rows.Next() {
+		var i Asn
+		if err := rows.Scan(
+			&i.ID,
+			&i.Number,
+			&i.Name,
+			&i.CountV4,
+			&i.CountV6,
+			&i.PercentV4,
+			&i.PercentV6,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
 
 const CreateASN = `-- name: CreateASN :one
 INSERT INTO asn(number, name)
@@ -59,21 +142,52 @@ func (q *Queries) GetASByNumber(ctx context.Context, number int32) (Asn, error) 
 	return i, err
 }
 
-const ListASN = `-- name: ListASN :many
+const SearchAsName = `-- name: SearchAsName :many
 SELECT id, number, name, count_v4, count_v6, percent_v4, percent_v6
 FROM asn
-WHERE count_v4 IS NOT NULL
+WHERE name ILIKE '%' || $1 || '%'
 ORDER BY count_v4 DESC
-LIMIT $1 OFFSET $2
+LIMIT 50
 `
 
-type ListASNParams struct {
-	Limit  int32
-	Offset int32
+func (q *Queries) SearchAsName(ctx context.Context, dollar_1 sql.NullString) ([]Asn, error) {
+	rows, err := q.db.Query(ctx, SearchAsName, dollar_1)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Asn{}
+	for rows.Next() {
+		var i Asn
+		if err := rows.Scan(
+			&i.ID,
+			&i.Number,
+			&i.Name,
+			&i.CountV4,
+			&i.CountV6,
+			&i.PercentV4,
+			&i.PercentV6,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
-func (q *Queries) ListASN(ctx context.Context, arg ListASNParams) ([]Asn, error) {
-	rows, err := q.db.Query(ctx, ListASN, arg.Limit, arg.Offset)
+const SearchAsNumber = `-- name: SearchAsNumber :many
+SELECT id, number, name, count_v4, count_v6, percent_v4, percent_v6
+FROM asn
+WHERE number = $1
+ORDER BY count_v4 DESC
+LIMIT 50
+`
+
+func (q *Queries) SearchAsNumber(ctx context.Context, number int32) ([]Asn, error) {
+	rows, err := q.db.Query(ctx, SearchAsNumber, number)
 	if err != nil {
 		return nil, err
 	}

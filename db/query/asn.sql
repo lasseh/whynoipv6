@@ -11,9 +11,30 @@ FROM asn
 WHERE number = $1
 LIMIT 1;
 
--- name: ListASN :many
-SELECT *
+-- name: AsnByIPv4 :many
+SELECT * 
 FROM asn
-WHERE count_v4 IS NOT NULL
+WHERE count_v4 IS NOT NULL AND id != 1
 ORDER BY count_v4 DESC
 LIMIT $1 OFFSET $2;
+
+-- name: AsnByIPv6 :many
+SELECT * 
+FROM asn
+WHERE count_v4 IS NOT NULL AND id != 1
+ORDER BY count_v6 DESC
+LIMIT $1 OFFSET $2;
+
+-- name: SearchAsNumber :many
+SELECT *
+FROM asn
+WHERE number = $1
+ORDER BY count_v4 DESC
+LIMIT 100;
+
+-- name: SearchAsName :many
+SELECT *
+FROM asn
+WHERE name ILIKE '%' || $1 || '%'
+ORDER BY count_v4 DESC
+LIMIT 100;
