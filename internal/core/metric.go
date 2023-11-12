@@ -91,7 +91,42 @@ func (s *MetricService) AsnList(ctx context.Context, offset, limit int32, order 
 			ID:      asn.ID,
 			Number:  asn.Number,
 			Name:    asn.Name,
-			CountV4: asn.CountV4.Int32,
+			CountV4: asn.CountV4.Int32 - asn.CountV6.Int32, // Since all domains has IPv4, we subtract IPv6 from IPv4 to get the IPv4 only domains
+			CountV6: asn.CountV6.Int32,
+		})
+	}
+
+	return asns, nil
+}
+
+// SearchAsn retrieves all BGP ASN records for the given ASN number.
+func (s *MetricService) SearchAsn(ctx context.Context, searchQuery string) ([]ASNModel, error) {
+	// Normalize search query by trimming "AS" prefix if present
+	searchQuery = strings.TrimPrefix(strings.ToUpper(searchQuery), "AS")
+
+	var asnRecords []db.Asn
+	asnNumber, err := strconv.Atoi(searchQuery)
+	if err == nil {
+		// Search query is a valid ASN number
+		asnRecords, err = s.q.SearchAsNumber(ctx, int32(asnNumber))
+		if err != nil {
+			return nil, fmt.Errorf("error fetching ASN record by number: %w", err)
+		}
+	} else {
+		// Search query is an ASN name
+		asnRecords, err = s.q.SearchAsName(ctx, NullString(searchQuery))
+		if err != nil {
+			return nil, fmt.Errorf("error fetching ASN record by name: %w", err)
+		}
+	}
+
+	asns := make([]ASNModel, 0, len(asnRecords))
+	for _, asn := range asnRecords {
+		asns = append(asns, ASNModel{
+			ID:      asn.ID,
+			Number:  asn.Number,
+			Name:    asn.Name,
+			CountV4: asn.CountV4.Int32 - asn.CountV6.Int32, // Since all domains has IPv4, we subtract IPv6 from IPv4 to get the IPv4 only domains
 			CountV6: asn.CountV6.Int32,
 		})
 	}
@@ -136,39 +171,4 @@ func (s *MetricService) DomainStats(ctx context.Context) ([]Metric, error) {
 		})
 	}
 	return metricList, nil
-}
-
-// SearchAsn retrieves all BGP ASN records for the given ASN number.
-func (s *MetricService) SearchAsn(ctx context.Context, searchQuery string) ([]ASNModel, error) {
-	// Normalize search query by trimming "AS" prefix if present
-	searchQuery = strings.TrimPrefix(strings.ToUpper(searchQuery), "AS")
-
-	var asnRecords []db.Asn
-	asnNumber, err := strconv.Atoi(searchQuery)
-	if err == nil {
-		// Search query is a valid ASN number
-		asnRecords, err = s.q.SearchAsNumber(ctx, int32(asnNumber))
-		if err != nil {
-			return nil, fmt.Errorf("error fetching ASN record by number: %w", err)
-		}
-	} else {
-		// Search query is an ASN name
-		asnRecords, err = s.q.SearchAsName(ctx, NullString(searchQuery))
-		if err != nil {
-			return nil, fmt.Errorf("error fetching ASN record by name: %w", err)
-		}
-	}
-
-	asns := make([]ASNModel, 0, len(asnRecords))
-	for _, asn := range asnRecords {
-		asns = append(asns, ASNModel{
-			ID:      asn.ID,
-			Number:  asn.Number,
-			Name:    asn.Name,
-			CountV4: asn.CountV4.Int32,
-			CountV6: asn.CountV6.Int32,
-		})
-	}
-
-	return asns, nil
 }
