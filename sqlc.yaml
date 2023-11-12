@@ -4,7 +4,7 @@ sql:
     queries: "db/query"
     engine: "postgresql"
     database:
-      uri: ${DB_SOURCE}
+      uri: postgresql://whynoipv6:wer1212opK@localhost:5432/whynoipv6?sslmode=disable
     gen:
       go:
         package: "db"

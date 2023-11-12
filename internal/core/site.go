@@ -26,7 +26,7 @@ type SiteModel struct {
 // ListSite retrieves a list of sites with pagination support.
 // It accepts a context, offset, and limit as parameters.
 // Returns a slice of SiteModel and an error if any.
-func (s *SiteService) ListSite(ctx context.Context, offset, limit int32) ([]SiteModel, error) {
+func (s *SiteService) ListSite(ctx context.Context, offset, limit int64) ([]SiteModel, error) {
 	sites, err := s.q.ListSites(ctx, db.ListSitesParams{
 		Offset: offset,
 		Limit:  limit,

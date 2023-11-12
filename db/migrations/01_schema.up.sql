@@ -103,17 +103,6 @@ CREATE TABLE "top_shame" (
   UNIQUE(site)
 );
 
-CREATE TABLE "stats_asn" (
-  "id" BIGSERIAL PRIMARY KEY,
-  "asn_id" BIGINT NOT NULL, -- AS Number
-  "v4_count" integer NOT NULL DEFAULT 0, -- number of sites with v4-only in this ASN
-  "v4_percent" numeric(4,1) NOT NULL DEFAULT 0, -- percent of sites with v4-only in this ASN
-  "v6_count" integer NOT NULL DEFAULT 0, -- number of sites with v6-only in this ASN
-  "v6_percent" numeric(4,1) NOT NULL DEFAULT 0, -- percent of sites with v6-only in this ASN
-  "ts" TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-ALTER TABLE "stats_asn" ADD FOREIGN KEY ("asn_id") REFERENCES "asn" ("id");
-
 -- Campaign 
 CREATE TABLE "campaign" (
   "id" BIGSERIAL PRIMARY KEY,

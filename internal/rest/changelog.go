@@ -55,7 +55,7 @@ func (rs ChangelogHandler) ChangelogList(w http.ResponseWriter, r *http.Request)
 	}
 
 	// Fetch changelogs from the repository
-	changelogs, err := rs.Repo.List(r.Context(), int32(paginationInput.Offset), int32(paginationInput.Limit))
+	changelogs, err := rs.Repo.List(r.Context(), paginationInput.Offset, paginationInput.Limit)
 	if err != nil {
 		// Handle any errors while fetching changelogs
 		render.Status(r, http.StatusInternalServerError)
@@ -90,7 +90,7 @@ func (rs ChangelogHandler) CampaignChangelogList(w http.ResponseWriter, r *http.
 	}
 
 	// Fetch changelogs from the repository
-	changelogs, err := rs.Repo.CampaignList(r.Context(), int32(paginationInput.Offset), int32(paginationInput.Limit))
+	changelogs, err := rs.Repo.CampaignList(r.Context(), paginationInput.Offset, paginationInput.Limit)
 	if err != nil {
 		// Handle any errors while fetching changelogs
 		render.Status(r, http.StatusInternalServerError)
@@ -136,7 +136,7 @@ func (rs ChangelogHandler) ChangelogByDomain(w http.ResponseWriter, r *http.Requ
 	}
 
 	// Fetch changelogs for the domain from the repository
-	changelogs, err := rs.Repo.GetChangelogByDomain(r.Context(), site, int32(paginationInput.Offset), int32(paginationInput.Limit))
+	changelogs, err := rs.Repo.GetChangelogByDomain(r.Context(), site, paginationInput.Offset, paginationInput.Limit)
 	if err != nil {
 		render.Status(r, http.StatusNotFound)
 		render.JSON(w, r, render.M{"error": "Unable to find changelog entries for " + site})
@@ -188,7 +188,7 @@ func (rs ChangelogHandler) ChangelogByCampaign(w http.ResponseWriter, r *http.Re
 	}
 
 	// Fetch changelogs for the campaign from the repository
-	changelogs, err := rs.Repo.GetChangelogByCampaign(r.Context(), uuid, int32(paginationInput.Offset), int32(paginationInput.Limit))
+	changelogs, err := rs.Repo.GetChangelogByCampaign(r.Context(), uuid, paginationInput.Offset, paginationInput.Limit)
 	if err != nil {
 		render.Status(r, http.StatusNotFound)
 		render.JSON(w, r, render.M{"error": "Unable to find changelog entries for campaign " + campaign})
@@ -249,7 +249,7 @@ func (rs ChangelogHandler) ChangelogByCampaignDomain(w http.ResponseWriter, r *h
 	}
 
 	// Fetch changelogs for the campaign and domain from the repository
-	changelogs, err := rs.Repo.GetChangelogByCampaignDomain(r.Context(), uuid, site, int32(paginationInput.Offset), int32(paginationInput.Limit))
+	changelogs, err := rs.Repo.GetChangelogByCampaignDomain(r.Context(), uuid, site, paginationInput.Offset, paginationInput.Limit)
 	if err != nil {
 		render.Status(r, http.StatusNotFound)
 		render.JSON(w, r, render.M{"error": "Unable to find changelog entries for campaign " + campaign + " and domain " + site})

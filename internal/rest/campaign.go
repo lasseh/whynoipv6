@@ -117,7 +117,7 @@ func (rs CampaignHandler) CampaignDomains(w http.ResponseWriter, r *http.Request
 	}
 
 	// Retrieve domains associated with the campaign
-	domains, err := rs.Repo.ListCampaignDomain(r.Context(), parsedUUID, int32(paginationInput.Offset), int32(paginationInput.Limit))
+	domains, err := rs.Repo.ListCampaignDomain(r.Context(), parsedUUID, paginationInput.Offset, paginationInput.Limit)
 	if err != nil {
 		render.Status(r, http.StatusInternalServerError)
 		render.JSON(w, r, render.M{"error": "Internal server error"})
@@ -233,7 +233,7 @@ func (rs CampaignHandler) SearchDomain(w http.ResponseWriter, r *http.Request) {
 	domain := chi.URLParam(r, "domain")
 
 	// Search for campaign domains
-	campaignDomains, err := rs.Repo.GetCampaignDomainsByName(r.Context(), strings.ToLower(domain), int32(paginationInput.Offset), int32(paginationInput.Limit))
+	campaignDomains, err := rs.Repo.GetCampaignDomainsByName(r.Context(), strings.ToLower(domain), paginationInput.Offset, paginationInput.Limit)
 	if err != nil {
 		render.Status(r, http.StatusNotFound)
 		render.JSON(w, r, render.M{"error": "Internal server error"})

@@ -34,8 +34,8 @@ func importData() {
 	t := time.Now()
 	log.Println("Importing data...")
 
-	var offset int32 = 0
-	var limit int32 = 10000
+	var offset int64 = 0
+	var limit int64 = 10000
 	// Main loop
 	for {
 		sites, err := siteService.ListSite(ctx, offset, limit)

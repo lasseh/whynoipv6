@@ -54,8 +54,8 @@ func getCampaignSites() {
 		t := time.Now()
 		log.Println("Starting crawl at", t.Format("2006-01-02 15:04:05"))
 
-		var offset int32 = 0
-		const limit int32 = 5
+		var offset int64 = 0
+		const limit int64 = 5
 		var updatedDomains int32 = 0
 		var totalCheckedDomains int32 = 0
 		var wg sync.WaitGroup

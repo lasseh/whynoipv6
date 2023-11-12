@@ -63,15 +63,22 @@ SELECT *
 FROM domain_shame_view;
 
 -- name: InitSpaceTimestamps :exec
-WITH SpacedTimestampUpdates AS (
+WITH DomainCount AS (
+    SELECT count(*)::DECIMAL AS total_records FROM domain
+),
+IntervalCalculation AS (
     SELECT 
-        id,
-        calculatedStartTime + calculatedIntervalStep * ROW_NUMBER() OVER (ORDER BY id) AS newSpacedTimestamp
-    FROM domain, 
-    (SELECT count(*)::DECIMAL as total_records FROM domain) t,
-    (SELECT (NOW() - '3 days'::INTERVAL) as calculatedStartTime, ('3 days'::INTERVAL) / count(*)::DECIMAL as calculatedIntervalStep FROM domain) i
+        (NOW() - '3 days'::INTERVAL) AS calculatedStartTime, 
+        ('3 days'::INTERVAL) / total_records AS calculatedIntervalStep
+    FROM DomainCount
+),
+SpacedTimestampUpdates AS (
+    SELECT 
+        d.id,
+        ic.calculatedStartTime + ic.calculatedIntervalStep * ROW_NUMBER() OVER (ORDER BY d.id) AS newSpacedTimestamp
+    FROM domain d, IntervalCalculation ic
 )
 UPDATE domain 
-SET ts_check = newSpacedTimestamp
-FROM SpacedTimestampUpdates
-WHERE domain.id = SpacedTimestampUpdates.id;
+SET ts_check = stu.newSpacedTimestamp
+FROM SpacedTimestampUpdates stu
+WHERE domain.id = stu.id;

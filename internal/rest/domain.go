@@ -62,7 +62,7 @@ func (rs DomainHandler) DomainList(w http.ResponseWriter, r *http.Request) {
 		paginationInput.Limit = 100
 	}
 
-	domains, err := rs.Repo.ListDomain(r.Context(), int32(paginationInput.Offset), int32(paginationInput.Limit))
+	domains, err := rs.Repo.ListDomain(r.Context(), paginationInput.Offset, paginationInput.Limit)
 	if err != nil {
 		render.Status(r, http.StatusInternalServerError)
 		render.JSON(w, r, render.M{"error": "internal server error"})
@@ -98,7 +98,7 @@ func (rs DomainHandler) DomainHeroes(w http.ResponseWriter, r *http.Request) {
 		paginationInput.Limit = 100
 	}
 
-	domains, err := rs.Repo.ListDomainHeroes(r.Context(), int32(paginationInput.Offset), int32(paginationInput.Limit))
+	domains, err := rs.Repo.ListDomainHeroes(r.Context(), paginationInput.Offset, paginationInput.Limit)
 	if err != nil {
 		render.Status(r, http.StatusInternalServerError)
 		render.JSON(w, r, render.M{"error": "internal server error"})
@@ -163,7 +163,7 @@ func (rs DomainHandler) SearchDomain(w http.ResponseWriter, r *http.Request) {
 
 	domain := chi.URLParam(r, "domain")
 
-	domains, err := rs.Repo.GetDomainsByName(r.Context(), strings.ToLower(domain), int32(paginationInput.Offset), int32(paginationInput.Limit))
+	domains, err := rs.Repo.GetDomainsByName(r.Context(), strings.ToLower(domain), paginationInput.Offset, paginationInput.Limit)
 	if err != nil {
 		render.Status(r, http.StatusNotFound)
 		render.JSON(w, r, render.M{"error": "Internal server error"})

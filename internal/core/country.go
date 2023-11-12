@@ -86,7 +86,7 @@ func (s *CountryService) List(ctx context.Context) ([]CountryModel, error) {
 }
 
 // ListDomainsByCountry gets a list of all country TLDs.
-func (s *CountryService) ListDomainsByCountry(ctx context.Context, countryID int64, offset, limit int32) ([]DomainModel, error) {
+func (s *CountryService) ListDomainsByCountry(ctx context.Context, countryID int64, offset, limit int64) ([]DomainModel, error) {
 	domains, err := s.q.ListDomainsByCountry(ctx, db.ListDomainsByCountryParams{
 		CountryID: NullInt(countryID),
 		Offset:    offset,
@@ -119,7 +119,7 @@ func (s *CountryService) ListDomainsByCountry(ctx context.Context, countryID int
 }
 
 // ListDomainHeroesByCountry gets a list of all country TLDs.
-func (s *CountryService) ListDomainHeroesByCountry(ctx context.Context, countryID int64, offset, limit int32) ([]DomainModel, error) {
+func (s *CountryService) ListDomainHeroesByCountry(ctx context.Context, countryID int64, offset, limit int64) ([]DomainModel, error) {
 	domains, err := s.q.ListDomainHeroesByCountry(ctx, db.ListDomainHeroesByCountryParams{
 		CountryID: NullInt(countryID),
 		Offset:    offset,

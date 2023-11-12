@@ -123,7 +123,7 @@ func (rs CountryHandler) CountrySinners(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Retrieve the list of domains for the country.ID
-	domains, err := rs.Repo.ListDomainsByCountry(r.Context(), country.ID, int32(paginationInput.Offset), int32(paginationInput.Limit))
+	domains, err := rs.Repo.ListDomainsByCountry(r.Context(), country.ID, paginationInput.Offset, paginationInput.Limit)
 	if err != nil {
 		render.Status(r, http.StatusInternalServerError)
 		render.JSON(w, r, render.M{"error": "internal server error"})
@@ -168,7 +168,7 @@ func (rs CountryHandler) CountryHeroes(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Retrieve the list of IPv6-supported domains (heroes) for the country.ID
-	heroes, err := rs.Repo.ListDomainHeroesByCountry(r.Context(), country.ID, int32(paginationInput.Offset), int32(paginationInput.Limit))
+	heroes, err := rs.Repo.ListDomainHeroesByCountry(r.Context(), country.ID, paginationInput.Offset, paginationInput.Limit)
 	if err != nil {
 		render.Status(r, http.StatusInternalServerError)
 		render.JSON(w, r, render.M{"error": "internal server error"})

@@ -64,8 +64,8 @@ func getSites() {
 		// currentTime := time.Now()
 		// log.Println("Starting crawl at", currentTime.Format("2006-01-02 15:04:05"))
 
-		var offset int32 = 0
-		const limit int32 = 50
+		var offset int64 = 0
+		const limit int64 = 50
 		var totalCheckedDomains int32 = 0
 		var wg sync.WaitGroup
 

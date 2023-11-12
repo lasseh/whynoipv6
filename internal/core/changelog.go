@@ -76,7 +76,7 @@ func (s *ChangelogService) CampaignCreate(ctx context.Context, params ChangelogM
 }
 
 // List lists all changelog entries.
-func (s *ChangelogService) List(ctx context.Context, offset, limit int32) ([]ChangelogModel, error) {
+func (s *ChangelogService) List(ctx context.Context, offset, limit int64) ([]ChangelogModel, error) {
 	changelogs, err := s.q.ListChangelog(ctx, db.ListChangelogParams{
 		Offset: offset,
 		Limit:  limit,
@@ -98,7 +98,7 @@ func (s *ChangelogService) List(ctx context.Context, offset, limit int32) ([]Cha
 }
 
 // CampaignList lists all changelog entries for campaign table.
-func (s *ChangelogService) CampaignList(ctx context.Context, offset, limit int32) ([]ChangelogModel, error) {
+func (s *ChangelogService) CampaignList(ctx context.Context, offset, limit int64) ([]ChangelogModel, error) {
 	changelogs, err := s.q.ListCampaignChangelog(ctx, db.ListCampaignChangelogParams{
 		Offset: offset,
 		Limit:  limit,
@@ -120,7 +120,7 @@ func (s *ChangelogService) CampaignList(ctx context.Context, offset, limit int32
 }
 
 // GetChangelogByDomain gets all changelog entries for a domain name.
-func (s *ChangelogService) GetChangelogByDomain(ctx context.Context, site string, offset, limit int32) ([]ChangelogModel, error) {
+func (s *ChangelogService) GetChangelogByDomain(ctx context.Context, site string, offset, limit int64) ([]ChangelogModel, error) {
 	// Get all changelog entries for site id
 	changelogs, err := s.q.GetChangelogByDomain(ctx, db.GetChangelogByDomainParams{
 		Site:   site,
@@ -148,7 +148,7 @@ func (s *ChangelogService) GetChangelogByDomain(ctx context.Context, site string
 }
 
 // GetChangelogByCampaign gets all changelog entries for a campaign.
-func (s *ChangelogService) GetChangelogByCampaign(ctx context.Context, campaignID uuid.UUID, offset, limit int32) ([]ChangelogModel, error) {
+func (s *ChangelogService) GetChangelogByCampaign(ctx context.Context, campaignID uuid.UUID, offset, limit int64) ([]ChangelogModel, error) {
 	// Get all changelog entries for site id
 	changelogs, err := s.q.GetChangelogByCampaign(ctx, db.GetChangelogByCampaignParams{
 		CampaignID: campaignID,
@@ -177,7 +177,7 @@ func (s *ChangelogService) GetChangelogByCampaign(ctx context.Context, campaignI
 }
 
 // GetChangelogByCampaignDomain gets all changelog entries for a campaign and domain.
-func (s *ChangelogService) GetChangelogByCampaignDomain(ctx context.Context, campaignID uuid.UUID, site string, offset, limit int32) ([]ChangelogModel, error) {
+func (s *ChangelogService) GetChangelogByCampaignDomain(ctx context.Context, campaignID uuid.UUID, site string, offset, limit int64) ([]ChangelogModel, error) {
 	// Get all changelog entries for site id
 	changelogs, err := s.q.GetChangelogByCampaignDomain(ctx, db.GetChangelogByCampaignDomainParams{
 		CampaignID: campaignID,

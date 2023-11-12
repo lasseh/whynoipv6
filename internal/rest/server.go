@@ -55,6 +55,6 @@ func PrintRoutes(r *chi.Mux) {
 
 // PaginationInput is the path variables from the request.
 type PaginationInput struct {
-	Offset int `in:"query=offset;default=0"`
-	Limit  int `in:"query=limit;default=50"`
+	Offset int64 `in:"query=offset;default=0"`
+	Limit  int64 `in:"query=limit;default=50"`
 }

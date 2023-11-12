@@ -65,7 +65,7 @@ func (s *CampaignService) InsertCampaignDomain(ctx context.Context, campaignID u
 }
 
 // CrawlCampaignDomain lists all domains available for crawling
-func (s *CampaignService) CrawlCampaignDomain(ctx context.Context, offset, limit int32) ([]CampaignDomainModel, error) {
+func (s *CampaignService) CrawlCampaignDomain(ctx context.Context, offset, limit int64) ([]CampaignDomainModel, error) {
 	domains, err := s.q.CrawlCampaignDomain(ctx, db.CrawlCampaignDomainParams{
 		Offset: offset,
 		Limit:  limit,
@@ -228,7 +228,7 @@ func (s *CampaignService) CreateOrUpdateCampaign(ctx context.Context, campaign C
 }
 
 // ListCampaignDomain lists all domains for a campaign.
-func (s *CampaignService) ListCampaignDomain(ctx context.Context, campaignID uuid.UUID, offset, limit int32) ([]CampaignDomainModel, error) {
+func (s *CampaignService) ListCampaignDomain(ctx context.Context, campaignID uuid.UUID, offset, limit int64) ([]CampaignDomainModel, error) {
 	domains, err := s.q.ListCampaignDomain(ctx, db.ListCampaignDomainParams{
 		CampaignID: campaignID,
 		Offset:     offset,
@@ -286,7 +286,7 @@ func (s *CampaignService) DeleteCampaignDomain(ctx context.Context, campaignID u
 }
 
 // GetCampaignDomainsByName returns a list of domains from a campaign by name.
-func (s *CampaignService) GetCampaignDomainsByName(ctx context.Context, searchString string, offset, limit int32) ([]CampaignDomainModel, error) {
+func (s *CampaignService) GetCampaignDomainsByName(ctx context.Context, searchString string, offset, limit int64) ([]CampaignDomainModel, error) {
 	domains, err := s.q.GetCampaignDomainsByName(ctx, db.GetCampaignDomainsByNameParams{
 		Column1: NullString(searchString),
 		Offset:  offset,

@@ -70,7 +70,7 @@ func (s *MetricService) GetMetrics(ctx context.Context, measurement string) ([]M
 }
 
 // AsnList retrieves all BGP ASN records.
-func (s *MetricService) AsnList(ctx context.Context, offset, limit int32, order string) ([]ASNModel, error) {
+func (s *MetricService) AsnList(ctx context.Context, offset, limit int64, order string) ([]ASNModel, error) {
 	var asnRecords []db.Asn
 	var err error
 
