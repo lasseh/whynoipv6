@@ -17,7 +17,7 @@ func NewRouter() (*chi.Mux, error) {
 	corsMiddleware := cors.New(cors.Options{
 		// AllowedOrigins: []string{"https://whynoipv6.com","https://ipv6.fail"}, // Use this to allow specific origin hosts
 		AllowedOrigins:   []string{"https://*", "http://*"},
-		AllowedMethods:   []string{"GET", "HEAD", "OPTION"},
+		AllowedMethods:   []string{"GET", "HEAD", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
 		ExposedHeaders:   []string{"Link"},
 		AllowCredentials: false,
