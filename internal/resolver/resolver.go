@@ -30,6 +30,7 @@ type DomainResult struct {
 	WWWDomain  string
 	Nameserver string
 	MXRecord   string
+	v6Only     string
 }
 
 // DomainStatus checks the domain's IPv6, NS, and MX records.
