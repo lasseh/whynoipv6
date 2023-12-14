@@ -26,11 +26,11 @@ func NewChangelogService(d db.DBTX) *ChangelogService {
 type ChangelogModel struct {
 	ID         int64     `json:"id"`
 	Ts         time.Time `json:"timestamp"`
-	DomainID   int32     `json:"domain_id,omitempty"`
+	DomainID   int64     `json:"domain_id,omitempty"`
 	CampaignID uuid.UUID `json:"campaign_id,omitempty"`
 	Site       string    `json:"site"`
 	Message    string    `json:"message"`
-	IPv6Status bool      `json:"ipv6_status"`
+	IPv6Status string    `json:"ipv6_status"`
 }
 
 // Create creates a new changelog entry.
