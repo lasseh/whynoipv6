@@ -27,7 +27,7 @@ var nameservers = []string{"1.1.1.1:53", "8.8.8.8:53", "9.9.9.9:53"}
 // DomainResult represents a scan result.
 type DomainResult struct {
 	BaseDomain string
-	WWWDomain  string
+	WwwDomain  string
 	Nameserver string
 	MXRecord   string
 	v6Only     string
@@ -49,7 +49,7 @@ func DomainStatus(domain string) (DomainResult, error) {
 		return DomainResult{}, err
 	}
 
-	wwwDomainStatus, err := checkDomainStatus("www."+domain, c)
+	WwwDomainStatus, err := checkDomainStatus("www."+domain, c)
 	if err != nil {
 		return DomainResult{}, err
 	}
@@ -61,7 +61,7 @@ func DomainStatus(domain string) (DomainResult, error) {
 
 	return DomainResult{
 		BaseDomain: baseDomainStatus,
-		WWWDomain:  wwwDomainStatus,
+		WwwDomain:  WwwDomainStatus,
 		Nameserver: nsStatus,
 		MXRecord:   mxStatus,
 	}, nil
