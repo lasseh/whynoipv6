@@ -2,3 +2,4 @@ app.env
 tldbwriter.toml
 /tmp/
 .vscode
+cmd/api/api
