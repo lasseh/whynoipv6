@@ -23,7 +23,7 @@ type ChangelogResponse struct {
 	Ts         time.Time `json:"ts"`
 	Domain     string    `json:"domain"`
 	Message    string    `json:"message"`
-	IPv6Status bool      `json:"ipv6_status"`
+	IPv6Status string    `json:"ipv6_status"`
 }
 
 // Routes returns a router with all changelog endpoints mounted.

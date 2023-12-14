@@ -132,20 +132,22 @@ func (rs CountryHandler) CountrySinners(w http.ResponseWriter, r *http.Request) 
 	var domainList []DomainResponse
 	for _, domain := range domains {
 		domainList = append(domainList, DomainResponse{
-			Rank:      domain.Rank,
-			Domain:    domain.Site,
-			CheckAAAA: domain.CheckAAAA,
-			CheckWWW:  domain.CheckWWW,
-			CheckNS:   domain.CheckNS,
-			CheckCurl: domain.CheckCurl,
-			AsName:    domain.AsName,
-			Country:   domain.Country,
-			TsAAAA:    domain.TsAAAA,
-			TsWWW:     domain.TsWWW,
-			TsNS:      domain.TsNS,
-			TsCurl:    domain.TsCurl,
-			TsCheck:   domain.TsCheck,
-			TsUpdated: domain.TsUpdated,
+			Rank:         domain.Rank,
+			Domain:       domain.Site,
+			BaseDomain:   domain.BaseDomain,
+			WwwDomain:    domain.WwwDomain,
+			Nameserver:   domain.Nameserver,
+			MXRecord:     domain.MXRecord,
+			V6Only:       domain.V6Only,
+			AsName:       domain.AsName,
+			Country:      domain.Country,
+			TsBaseDomain: domain.TsBaseDomain,
+			TsWwwDomain:  domain.TsWwwDomain,
+			TsNameserver: domain.TsNameserver,
+			TsMXRecord:   domain.TsMXRecord,
+			TsV6Only:     domain.TsV6Only,
+			TsCheck:      domain.TsCheck,
+			TsUpdated:    domain.TsUpdated,
 		})
 	}
 	render.JSON(w, r, domainList)
@@ -177,20 +179,22 @@ func (rs CountryHandler) CountryHeroes(w http.ResponseWriter, r *http.Request) {
 	var heroList []DomainResponse
 	for _, domain := range heroes {
 		heroList = append(heroList, DomainResponse{
-			Rank:      domain.Rank,
-			Domain:    domain.Site,
-			CheckAAAA: domain.CheckAAAA,
-			CheckWWW:  domain.CheckWWW,
-			CheckNS:   domain.CheckNS,
-			CheckCurl: domain.CheckCurl,
-			AsName:    domain.AsName,
-			Country:   domain.Country,
-			TsAAAA:    domain.TsAAAA,
-			TsWWW:     domain.TsWWW,
-			TsNS:      domain.TsNS,
-			TsCurl:    domain.TsCurl,
-			TsCheck:   domain.TsCheck,
-			TsUpdated: domain.TsUpdated,
+			Rank:         domain.Rank,
+			Domain:       domain.Site,
+			BaseDomain:   domain.BaseDomain,
+			WwwDomain:    domain.WwwDomain,
+			Nameserver:   domain.Nameserver,
+			MXRecord:     domain.MXRecord,
+			V6Only:       domain.V6Only,
+			AsName:       domain.AsName,
+			Country:      domain.Country,
+			TsBaseDomain: domain.TsBaseDomain,
+			TsWwwDomain:  domain.TsWwwDomain,
+			TsNameserver: domain.TsNameserver,
+			TsMXRecord:   domain.TsMXRecord,
+			TsV6Only:     domain.TsV6Only,
+			TsCheck:      domain.TsCheck,
+			TsUpdated:    domain.TsUpdated,
 		})
 	}
 	render.JSON(w, r, heroList)
