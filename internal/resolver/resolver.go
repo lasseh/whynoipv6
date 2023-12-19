@@ -122,7 +122,7 @@ func checkDNSRecords(domain string, c *dns.Client) (string, string, error) {
 // checkNameserver performs a DNS query for NS records
 func checkNameserver(domain string, c *dns.Client) (string, error) {
 	log := log.With().Str("service", "checkNameserver").Logger()
-	log.Debug().Msgf("Checking nameservers for [%s]", domain)
+	// log.Debug().Msgf("Checking nameservers for [%s]", domain)
 
 	// Get all nameservers for the domain
 	nsList, err := getNameservers(c, domain)
@@ -134,20 +134,20 @@ func checkNameserver(domain string, c *dns.Client) (string, error) {
 	// Check each nameserver for IPv6
 	for _, ns := range nsList {
 		if checkInetType(c, ns, dns.TypeAAAA) {
-			log.Debug().Msgf("Nameserver [%s] has IPv6", ns)
+			log.Debug().Msgf("[%s] Nameserver [%s] has IPv6", domain, ns)
 			return IPv6Available, nil
 		}
 	}
 	// If no nameservers have IPv6, check for IPv4
 	for _, ns := range nsList {
 		if checkInetType(c, ns, dns.TypeA) {
-			log.Debug().Msgf("Nameserver [%s] has IPv4", ns)
+			log.Debug().Msgf("[%s] Nameserver [%s] has IPv4", domain, ns)
 			return IPv4Only, nil
 		}
 	}
 
 	// If no records found at all, return "no_records_found"
-	log.Debug().Msgf("No nameservers found for domain [%s]", domain)
+	log.Debug().Msgf("[%s] No nameservers found for domain", domain)
 	return NoRecordsFound, nil
 }
 
@@ -175,7 +175,7 @@ func getNameservers(c *dns.Client, domain string) ([]string, error) {
 // checkMX performs a DNS query for MX records
 func checkMX(domain string, c *dns.Client) (string, error) {
 	log := log.With().Str("service", "checkMX").Logger()
-	log.Debug().Msgf("Checking MX records for IPv6 for domain [%s]", domain)
+	// log.Debug().Msgf("Checking MX records for IPv6 for domain [%s]", domain)
 
 	// Get all MX records for the domain
 	mxRecords, err := getMXRecords(c, domain)
@@ -187,7 +187,7 @@ func checkMX(domain string, c *dns.Client) (string, error) {
 	// Check each MX record for IPv6
 	for _, mx := range mxRecords {
 		if checkInetType(c, mx, dns.TypeAAAA) {
-			log.Debug().Msgf("MX record [%s] has IPv6", mx)
+			log.Debug().Msgf("[%s] MX record [%s] has IPv6", domain, mx)
 			return IPv6Available, nil
 		}
 	}
@@ -195,13 +195,13 @@ func checkMX(domain string, c *dns.Client) (string, error) {
 	// If no MX records have IPv6, check for IPv4
 	for _, mx := range mxRecords {
 		if checkInetType(c, mx, dns.TypeA) {
-			log.Debug().Msgf("MX record [%s] has IPv4", mx)
+			log.Debug().Msgf("[%s] MX record [%s] has IPv4", domain, mx)
 			return IPv4Only, nil
 		}
 	}
 
 	// If no records found at all, return "no_records_found"
-	log.Debug().Msgf("No MX records found for domain [%s]", domain)
+	log.Debug().Msgf("[%s] No MX records found for domain", domain)
 	return NoRecordsFound, nil
 }
 
@@ -294,12 +294,12 @@ func queryDomainRecord(client *dns.Client, domain string, qtype uint16) (string,
 			switch rr := rr.(type) {
 			case *dns.AAAA:
 				if qtype == dns.TypeAAAA {
-					log.Debug().Msgf("IPv6 Answer for [%s]: %s", domain, rr.AAAA.String())
+					log.Debug().Msgf("[%s] IPv6 Answer: %s", domain, rr.AAAA.String())
 					return IPv6Available, nil
 				}
 			case *dns.A:
 				if qtype == dns.TypeA {
-					log.Debug().Msgf("IPv4 Answer for [%s]: %s", domain, rr.A.String())
+					log.Debug().Msgf("[%s] IPv4 Answer: %s", domain, rr.A.String())
 					return IPv4Only, nil
 				}
 			case *dns.CNAME:
@@ -308,7 +308,7 @@ func queryDomainRecord(client *dns.Client, domain string, qtype uint16) (string,
 					log.Warn().Msgf("Exceeded CNAME hop limit for [%s]", domain)
 					return "", fmt.Errorf("exceeded CNAME hop limit for domain [%s]", domain)
 				}
-				log.Debug().Msgf("Following CNAME for [%s]: %s", domain, rr.Target)
+				log.Debug().Msgf("[%s] Following CNAME: %s", domain, rr.Target)
 				domain = rr.Target // Set the domain to the target of the CNAME and check again
 				continue
 			}
