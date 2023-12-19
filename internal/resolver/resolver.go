@@ -22,7 +22,9 @@ const (
 )
 
 var log = logger.GetLogger()
-var nameservers = []string{"1.1.1.1:53", "8.8.8.8:53", "9.9.9.9:53"}
+
+// var nameservers = []string{"1.1.1.1:53", "8.8.8.8:53", "9.9.9.9:53"}
+var nameservers = []string{"[2606:4700:4700::1111]:53", "[2606:4700:4700::1001]:53", "1.1.1.1:53", "1.0.0.1:53"}
 
 // DomainResult represents a scan result.
 type DomainResult struct {
@@ -370,4 +372,16 @@ func ValidateDomain(domain string) error {
 	}
 
 	return nil
+}
+
+func getTopLevelDomain(domain string) string {
+	// Split the domain into parts
+	parts := strings.Split(domain, ".")
+	// Check if domain has at least two parts to consider it a valid domain
+	if len(parts) >= 2 {
+		// Return the last two parts as the top-level domain
+		return parts[len(parts)-2] + "." + parts[len(parts)-1]
+	}
+	// If it's not a valid domain or a TLD itself, return the original domain
+	return domain
 }
