@@ -96,14 +96,14 @@ func debugDomain() {
 		}
 
 		// Check if domain has AAAA records for nameservers.
-		hasNS, err := toolboxService.CheckNS(domain)
-		if err != nil && verbose {
-			log.Printf("[%s] CheckNS error: %s", domain, err)
-		}
-		log.Println("CheckNS:", hasNS)
-		if slow {
-			time.Sleep(500 * time.Millisecond)
-		}
+		// hasNS, err := toolboxService.Nameserver(domain)
+		// if err != nil && verbose {
+		// 	log.Printf("[%s] Nameserver error: %s", domain, err)
+		// }
+		// log.Println("Nameserver:", hasNS)
+		// if slow {
+		// 	time.Sleep(500 * time.Millisecond)
+		// }
 
 		// Retrieve ASN information for the domain.
 		asnID, err := getASNInfo(domain)
