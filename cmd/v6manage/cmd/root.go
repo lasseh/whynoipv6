@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"fmt"
 	"log"
 	"os"
 	"whynoipv6/internal/config"
@@ -62,7 +61,7 @@ func init() {
 	// Connect to the database
 	db, err = postgres.NewPostgreSQL(cfg.DatabaseSource)
 	if err != nil {
-		fmt.Println("Error connecting to database", err)
+		log.Fatalln("Error connecting to database", err)
 	}
 
 }
