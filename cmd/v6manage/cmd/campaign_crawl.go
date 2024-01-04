@@ -3,11 +3,11 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 	"whynoipv6/internal/core"
 	"whynoipv6/internal/logger"
 	"whynoipv6/internal/resolver"
-	"whynoipv6/internal/toolbox"
 
 	"github.com/spf13/cobra"
 )
@@ -22,9 +22,9 @@ var campaignCrawlCmd = &cobra.Command{
 		campaignService = *core.NewCampaignService(db)
 		countryService = *core.NewCountryService(db)
 		asnService = *core.NewASNService(db)
-		// statService = *core.NewStatService(db)
 		metricService = *core.NewMetricService(db)
-		toolboxService = *toolbox.NewToolboxService(cfg.GeoIPPath, cfg.Nameserver)
+		// statService = *core.NewStatService(db)
+		// toolboxService = *toolbox.NewToolboxService(cfg.GeoIPPath, cfg.Nameserver)
 		getCampaignSites()
 	},
 }
@@ -37,12 +37,15 @@ func init() {
 // getCampaignSites crawls the campaign sites in the database.
 func getCampaignSites() {
 	ctx := context.Background()
+	logg := logg.With().Str("service", "campaignCrawl").Logger()
+
 	startTime := time.Now()
 	defer func() {
-		duration := time.Since(startTime).Round(time.Second)
-		logg.Info().Msg("Crawl completed in " + duration.String())
+		logg.Info().Msg("Crawl completed in " + time.Since(startTime).Round(time.Second).String())
 	}()
-	logg := logg.With().Str("service", "campaignCrawl").Logger()
+
+	// Workers
+	workerCount := 5
 
 	// Run the crawler indefinitely.
 	for {
@@ -50,63 +53,78 @@ func getCampaignSites() {
 		t := time.Now()
 		logg.Info().Msg("Starting crawl at " + t.Format("2006-01-02 15:04:05"))
 
+		domainChan := make(chan core.CampaignDomainModel, workerCount)
+		var wg sync.WaitGroup
+
+		// Start worker goroutines for this crawl
+		for i := 0; i < workerCount; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				for domain := range domainChan {
+					processDomain(ctx, domain)
+				}
+			}()
+		}
+
 		var offset int64 = 0
 		const limit int64 = 50
-		var totalCheckedDomains = 0
-		// var wg sync.WaitGroup
-		// var mu sync.Mutex
+		var totalCheckedDomains int
 
-		// Main loop to crawl and update domains.
 		for {
-			loopStartTime := time.Now()
-			var updatedDomains = 0
+			var updatedDomains int
+			loopTime := time.Now()
 
-			// Get a list of domains to be checked.
 			domains, err := campaignService.CrawlCampaignDomain(ctx, offset, limit)
 			if err != nil {
 				logg.Error().Err(err).Msg("Could not get domains to check")
 				break
 			}
 
-			// Stop if no more data
 			if len(domains) == 0 {
 				logg.Info().Msg("All domains checked!")
 				break
 			}
 
-			// Loop through domains and check IPv6 support concurrently.
 			for _, domain := range domains {
-				logg.Debug().Str("domain", domain.Site).Msg("Checking domain")
-
-				// Check if the domain has IPv6 support.
-				checkResult, err := checkCampaignDomain(domain)
-				if err != nil {
-					logg.Error().Err(err).Msg("Could not check domain")
-					continue
-				}
-
-				// Update the domain with the result.
-				err = updateCampaignDomain(ctx, domain, checkResult)
-
+				domainChan <- domain
 				updatedDomains++
 				totalCheckedDomains++
-
-				// Print the current progress.
 			}
-			logg.Info().Msgf("Checked %v domains in %v", updatedDomains, time.Since(loopStartTime).Round(time.Second).String())
 
-			// Increment offset
 			offset += limit
 
-			// logg.Info().Msg("Time for loop: " + time.Since(loopStartTime).Round(time.Second).String())
-
+			// Print the current progress.
+			logg.Info().Msgf("Checked %v domains in %s", updatedDomains, time.Since(loopTime).Round(time.Second).String())
 		}
+
+		close(domainChan) // Close the channel to signal the workers to stop
+		wg.Wait()         // Wait for all workers to finish
 
 		logg.Info().Msgf("Total domains checked: %v", totalCheckedDomains)
 		logg.Info().Msg("Time for crawl: " + time.Since(t).Round(time.Second).String())
+
 		// Sleep for 2 hours before starting the next crawl.
 		logg.Info().Msg("Time until next check: 2 hours")
-		time.Sleep(10 * time.Second)
+		time.Sleep(20 * time.Second)
+	}
+}
+
+func processDomain(ctx context.Context, domain core.CampaignDomainModel) {
+	logg := logg.With().Str("service", "processDomain").Logger()
+
+	// Check if the domain has IPv6 support.
+	checkResult, err := checkCampaignDomain(domain)
+	if err != nil {
+		logg.Error().Err(err).Msg("Could not check domain")
+		return
+	}
+
+	// Update the domain with the result.
+	err = updateCampaignDomain(ctx, domain, checkResult)
+	if err != nil {
+		logg.Error().Err(err).Msg("Could not update domain")
+		return
 	}
 }
 
@@ -115,7 +133,6 @@ func checkCampaignDomain(domain core.CampaignDomainModel) (core.CampaignDomainMo
 	logg := logg.With().Str("service", "checkCampaignDomain").Logger()
 
 	// Validate domain
-	// TODO: Check if this is the correct way to validate domains.
 	err := resolver.ValidateDomain(domain.Site)
 	if err != nil {
 		logg.Error().Err(err).Msg("Invalid domain")
@@ -155,7 +172,6 @@ func checkCampaignDomain(domain core.CampaignDomainModel) (core.CampaignDomainMo
 }
 
 func updateCampaignDomain(ctx context.Context, currentDomain, newDomain core.CampaignDomainModel) error {
-
 	// Helper function to log and create a changelog entry.
 	createChangelog := func(domain core.CampaignDomainModel, message string, status string) {
 		_, err := changelogService.CampaignCreate(ctx, core.ChangelogModel{
@@ -174,24 +190,28 @@ func updateCampaignDomain(ctx context.Context, currentDomain, newDomain core.Cam
 		createChangelog(currentDomain, generateChangelog(currentDomain, newDomain), newDomain.BaseDomain)
 		currentDomain.BaseDomain = newDomain.BaseDomain
 		currentDomain.TsBaseDomain = time.Now()
+		currentDomain.TsUpdated = time.Now()
 	}
 
 	if currentDomain.WwwDomain != newDomain.WwwDomain {
 		createChangelog(currentDomain, generateChangelog(currentDomain, newDomain), newDomain.WwwDomain)
 		currentDomain.WwwDomain = newDomain.WwwDomain
 		currentDomain.TsWwwDomain = time.Now()
+		currentDomain.TsUpdated = time.Now()
 	}
 
 	if currentDomain.Nameserver != newDomain.Nameserver {
 		createChangelog(currentDomain, generateChangelog(currentDomain, newDomain), newDomain.Nameserver)
 		currentDomain.Nameserver = newDomain.Nameserver
 		currentDomain.TsNameserver = time.Now()
+		currentDomain.TsUpdated = time.Now()
 	}
 
 	if currentDomain.MXRecord != newDomain.MXRecord {
 		createChangelog(currentDomain, generateChangelog(currentDomain, newDomain), newDomain.MXRecord)
 		currentDomain.MXRecord = newDomain.MXRecord
 		currentDomain.TsMXRecord = time.Now()
+		currentDomain.TsUpdated = time.Now()
 	}
 
 	// Update ASN ID and Country ID.
