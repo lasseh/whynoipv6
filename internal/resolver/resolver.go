@@ -328,6 +328,7 @@ func performQuery(c *dns.Client, m *dns.Msg) (*dns.Msg, error) {
 		if err != nil {
 			errMsg := fmt.Sprintf("Error querying DNS server [%s]: %v", nameserver, err)
 			log.Warn().Msg(errMsg)
+			log.Debug().Msgf("Query: %v", m)
 			errs = append(errs, errMsg)
 			continue // Try next nameserver on error
 		}
@@ -368,12 +369,12 @@ func ValidateDomain(domain string) error {
 	}
 	if result.Rcode != dns.RcodeSuccess {
 		return fmt.Errorf("[%s] RCODE: %s", domain, dns.RcodeToString[result.Rcode])
-		// return nil
 	}
 
 	return nil
 }
 
+// is this in use?
 func getTopLevelDomain(domain string) string {
 	// Split the domain into parts
 	parts := strings.Split(domain, ".")
