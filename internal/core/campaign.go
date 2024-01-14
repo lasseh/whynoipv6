@@ -33,23 +33,25 @@ type CampaignModel struct {
 
 // CampaignDomainModel represents a scan.
 type CampaignDomainModel struct {
-	ID         int64     `json:"id"`
-	Site       string    `json:"site"`
-	CampaignID uuid.UUID `json:"campaign_id"`
-	CheckAAAA  bool      `json:"check_aaaa"`
-	CheckWWW   bool      `json:"check_www"`
-	CheckNS    bool      `json:"check_ns"`
-	CheckCurl  bool      `json:"check_curl"`
-	AsnID      int64     `json:"asn_id"`
-	AsName     string    `json:"asn"`
-	CountryID  int64     `json:"country_id"`
-	Country    string    `json:"country"`
-	TsAAAA     time.Time `json:"ts_aaaa"`
-	TsWWW      time.Time `json:"ts_www"`
-	TsNS       time.Time `json:"ts_ns"`
-	TsCurl     time.Time `json:"ts_curl"`
-	TsCheck    time.Time `json:"ts_check"`
-	TsUpdated  time.Time `json:"ts_updated"`
+	ID           int64     `json:"id"`
+	Site         string    `json:"site"`
+	CampaignID   uuid.UUID `json:"campaign_id"`
+	BaseDomain   string    `json:"check_aaaa"`
+	WwwDomain    string    `json:"check_www"`
+	Nameserver   string    `json:"check_ns"`
+	MXRecord     string    `json:"check_mx"`
+	V6Only       string    `json:"check_curl"`
+	AsnID        int64     `json:"asn_id"`
+	AsName       string    `json:"asn"`
+	CountryID    int64     `json:"country_id"`
+	Country      string    `json:"country"`
+	TsBaseDomain time.Time `json:"ts_aaaa"`
+	TsWwwDomain  time.Time `json:"ts_www"`
+	TsNameserver time.Time `json:"ts_ns"`
+	TsMXRecord   time.Time `json:"ts_mx"`
+	TsV6Only     time.Time `json:"ts_curl"`
+	TsCheck      time.Time `json:"ts_check"`
+	TsUpdated    time.Time `json:"ts_updated"`
 }
 
 // InsertCampaignDomain inserts a domain into a campaign.
@@ -76,19 +78,21 @@ func (s *CampaignService) CrawlCampaignDomain(ctx context.Context, offset, limit
 	var list []CampaignDomainModel
 	for _, d := range domains {
 		list = append(list, CampaignDomainModel{
-			ID:         d.ID,
-			Site:       d.Site,
-			CampaignID: d.CampaignID,
-			CheckAAAA:  d.CheckAaaa,
-			CheckWWW:   d.CheckWww,
-			CheckNS:    d.CheckNs,
-			CheckCurl:  d.CheckCurl,
-			TsAAAA:     TimeNull(d.TsAaaa),
-			TsWWW:      TimeNull(d.TsWww),
-			TsNS:       TimeNull(d.TsNs),
-			TsCurl:     TimeNull(d.TsCurl),
-			TsCheck:    TimeNull(d.TsCheck),
-			TsUpdated:  TimeNull(d.TsUpdated),
+			ID:           d.ID,
+			Site:         d.Site,
+			CampaignID:   d.CampaignID,
+			BaseDomain:   d.BaseDomain,
+			WwwDomain:    d.WwwDomain,
+			Nameserver:   d.Nameserver,
+			MXRecord:     d.MxRecord,
+			V6Only:       d.V6Only,
+			TsBaseDomain: TimeNull(d.TsBaseDomain),
+			TsWwwDomain:  TimeNull(d.TsWwwDomain),
+			TsNameserver: TimeNull(d.TsNameserver),
+			TsMXRecord:   TimeNull(d.TsMxRecord),
+			TsV6Only:     TimeNull(d.TsV6Only),
+			TsCheck:      TimeNull(d.TsCheck),
+			TsUpdated:    TimeNull(d.TsUpdated),
 		})
 	}
 	return list, nil
@@ -97,20 +101,22 @@ func (s *CampaignService) CrawlCampaignDomain(ctx context.Context, offset, limit
 // UpdateCampaignDomain updates a domain.
 func (s *CampaignService) UpdateCampaignDomain(ctx context.Context, domain CampaignDomainModel) error {
 	err := s.q.UpdateCampaignDomain(ctx, db.UpdateCampaignDomainParams{
-		Site:       domain.Site,
-		CampaignID: domain.CampaignID,
-		CheckAaaa:  domain.CheckAAAA,
-		CheckWww:   domain.CheckWWW,
-		CheckNs:    domain.CheckNS,
-		CheckCurl:  domain.CheckCurl,
-		AsnID:      NullInt(domain.AsnID),
-		CountryID:  NullInt(domain.CountryID),
-		TsAaaa:     NullTime(domain.TsAAAA),
-		TsWww:      NullTime(domain.TsWWW),
-		TsNs:       NullTime(domain.TsNS),
-		TsCurl:     NullTime(domain.TsCurl),
-		TsCheck:    NullTime(domain.TsCheck),
-		TsUpdated:  NullTime(domain.TsUpdated),
+		Site:         domain.Site,
+		CampaignID:   domain.CampaignID,
+		BaseDomain:   domain.BaseDomain,
+		WwwDomain:    domain.WwwDomain,
+		Nameserver:   domain.Nameserver,
+		MxRecord:     domain.MXRecord,
+		V6Only:       domain.V6Only,
+		AsnID:        NullInt(domain.AsnID),
+		CountryID:    NullInt(domain.CountryID),
+		TsBaseDomain: NullTime(domain.TsBaseDomain),
+		TsWwwDomain:  NullTime(domain.TsWwwDomain),
+		TsNameserver: NullTime(domain.TsNameserver),
+		TsMxRecord:   NullTime(domain.TsMXRecord),
+		TsV6Only:     NullTime(domain.TsV6Only),
+		TsCheck:      NullTime(domain.TsCheck),
+		TsUpdated:    NullTime(domain.TsUpdated),
 	})
 	if err != nil {
 		return err
@@ -128,20 +134,22 @@ func (s *CampaignService) ViewCampaignDomain(ctx context.Context, uuid uuid.UUID
 		return CampaignDomainModel{}, err
 	}
 	return CampaignDomainModel{
-		ID:        d.ID,
-		Site:      d.Site,
-		CheckAAAA: d.CheckAaaa,
-		CheckWWW:  d.CheckWww,
-		CheckNS:   d.CheckNs,
-		CheckCurl: d.CheckCurl,
-		AsName:    StringNull(d.Asname),
-		Country:   StringNull(d.CountryName),
-		TsAAAA:    TimeNull(d.TsAaaa),
-		TsWWW:     TimeNull(d.TsWww),
-		TsNS:      TimeNull(d.TsNs),
-		TsCurl:    TimeNull(d.TsCurl),
-		TsCheck:   TimeNull(d.TsCheck),
-		TsUpdated: TimeNull(d.TsUpdated),
+		ID:           d.ID,
+		Site:         d.Site,
+		BaseDomain:   d.BaseDomain,
+		WwwDomain:    d.WwwDomain,
+		Nameserver:   d.Nameserver,
+		MXRecord:     d.MxRecord,
+		V6Only:       d.V6Only,
+		AsName:       StringNull(d.Asname),
+		Country:      StringNull(d.CountryName),
+		TsBaseDomain: TimeNull(d.TsBaseDomain),
+		TsWwwDomain:  TimeNull(d.TsWwwDomain),
+		TsNameserver: TimeNull(d.TsNameserver),
+		TsMXRecord:   TimeNull(d.TsMxRecord),
+		TsV6Only:     TimeNull(d.TsV6Only),
+		TsCheck:      TimeNull(d.TsCheck),
+		TsUpdated:    TimeNull(d.TsUpdated),
 	}, nil
 }
 
@@ -240,21 +248,23 @@ func (s *CampaignService) ListCampaignDomain(ctx context.Context, campaignID uui
 	var list []CampaignDomainModel
 	for _, d := range domains {
 		list = append(list, CampaignDomainModel{
-			ID:         d.ID,
-			Site:       d.Site,
-			CampaignID: d.CampaignID,
-			CheckAAAA:  d.CheckAaaa,
-			CheckWWW:   d.CheckWww,
-			CheckNS:    d.CheckNs,
-			CheckCurl:  d.CheckCurl,
-			TsAAAA:     TimeNull(d.TsAaaa),
-			TsWWW:      TimeNull(d.TsWww),
-			TsNS:       TimeNull(d.TsNs),
-			TsCurl:     TimeNull(d.TsCurl),
-			TsCheck:    TimeNull(d.TsCheck),
-			TsUpdated:  TimeNull(d.TsUpdated),
-			AsName:     StringNull(d.Asname),
-			Country:    StringNull(d.CountryName),
+			ID:           d.ID,
+			Site:         d.Site,
+			CampaignID:   d.CampaignID,
+			BaseDomain:   d.BaseDomain,
+			WwwDomain:    d.WwwDomain,
+			Nameserver:   d.Nameserver,
+			MXRecord:     d.MxRecord,
+			V6Only:       d.V6Only,
+			TsBaseDomain: TimeNull(d.TsBaseDomain),
+			TsWwwDomain:  TimeNull(d.TsWwwDomain),
+			TsNameserver: TimeNull(d.TsNameserver),
+			TsMXRecord:   TimeNull(d.TsMxRecord),
+			TsV6Only:     TimeNull(d.TsV6Only),
+			TsCheck:      TimeNull(d.TsCheck),
+			TsUpdated:    TimeNull(d.TsUpdated),
+			AsName:       StringNull(d.Asname),
+			Country:      StringNull(d.CountryName),
 		})
 	}
 	return list, nil
@@ -301,10 +311,11 @@ func (s *CampaignService) GetCampaignDomainsByName(ctx context.Context, searchSt
 		list = append(list, CampaignDomainModel{
 			ID:         d.ID,
 			Site:       d.Site,
-			CheckAAAA:  d.CheckAaaa,
-			CheckWWW:   d.CheckWww,
-			CheckNS:    d.CheckNs,
-			CheckCurl:  d.CheckCurl,
+			BaseDomain: d.BaseDomain,
+			WwwDomain:  d.WwwDomain,
+			Nameserver: d.Nameserver,
+			MXRecord:   d.MxRecord,
+			V6Only:     d.V6Only,
 			CampaignID: d.CampaignID,
 		})
 	}

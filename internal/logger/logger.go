@@ -42,7 +42,7 @@ func GetLogger() zerolog.Logger {
 		}
 		// Configure an auto rotating file for storing JSON-formatted records
 		fileLogger := &lumberjack.Logger{
-			Filename:   "crawler.log",
+			Filename:   "logs/crawler.log",
 			MaxSize:    10, // Max size in megabytes before the file is rotated
 			MaxBackups: 2,  // Max number of old log files to keep
 			MaxAge:     14, // Max number of days to retain the log files

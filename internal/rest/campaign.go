@@ -20,19 +20,21 @@ type CampaignHandler struct {
 
 // CampaignResponse is the response for a domain.
 type CampaignResponse struct {
-	Domain    string    `json:"domain"`
-	CheckAAAA bool      `json:"v6_aaaa"`
-	CheckWWW  bool      `json:"v6_www"`
-	CheckNS   bool      `json:"v6_ns"`
-	CheckCurl bool      `json:"v6_curl"`
-	AsName    string    `json:"asn"`
-	Country   string    `json:"country"`
-	TsAAAA    time.Time `json:"ts_aaaa"`
-	TsWWW     time.Time `json:"ts_www"`
-	TsNS      time.Time `json:"ts_ns"`
-	TsCurl    time.Time `json:"ts_curl"`
-	TsCheck   time.Time `json:"ts_check"`
-	TsUpdated time.Time `json:"ts_updated"`
+	Domain       string    `json:"domain"`
+	BaseDomain   string    `json:"base_domain"`
+	WwwDomain    string    `json:"www_domain"`
+	Nameserver   string    `json:"nameserver"`
+	MXRecord     string    `json:"mx_record"`
+	V6Only       string    `json:"v6_only"`
+	AsName       string    `json:"asn"`
+	Country      string    `json:"country"`
+	TsBaseDomain time.Time `json:"ts_aaaa"`
+	TsWwwDomain  time.Time `json:"ts_www"`
+	TsNameserver time.Time `json:"ts_ns"`
+	TsMXRecord   time.Time `json:"ts_mx"`
+	TsV6Only     time.Time `json:"ts_curl"`
+	TsCheck      time.Time `json:"ts_check"`
+	TsUpdated    time.Time `json:"ts_updated"`
 }
 
 // CampaignListResponse represents a campaign.
@@ -132,19 +134,21 @@ func (rs CampaignHandler) CampaignDomains(w http.ResponseWriter, r *http.Request
 	var domainList []CampaignResponse
 	for _, domain := range domains {
 		domainList = append(domainList, CampaignResponse{
-			Domain:    domain.Site,
-			CheckAAAA: domain.CheckAAAA,
-			CheckWWW:  domain.CheckWWW,
-			CheckNS:   domain.CheckNS,
-			CheckCurl: domain.CheckCurl,
-			AsName:    domain.AsName,
-			Country:   domain.Country,
-			TsAAAA:    domain.TsAAAA,
-			TsWWW:     domain.TsWWW,
-			TsNS:      domain.TsNS,
-			TsCurl:    domain.TsCurl,
-			TsCheck:   domain.TsCheck,
-			TsUpdated: domain.TsUpdated,
+			Domain:       domain.Site,
+			BaseDomain:   domain.BaseDomain,
+			WwwDomain:    domain.WwwDomain,
+			Nameserver:   domain.Nameserver,
+			MXRecord:     domain.MXRecord,
+			V6Only:       domain.V6Only,
+			AsName:       domain.AsName,
+			Country:      domain.Country,
+			TsBaseDomain: domain.TsBaseDomain,
+			TsWwwDomain:  domain.TsWwwDomain,
+			TsNameserver: domain.TsNameserver,
+			TsMXRecord:   domain.TsMXRecord,
+			TsV6Only:     domain.TsV6Only,
+			TsCheck:      domain.TsCheck,
+			TsUpdated:    domain.TsUpdated,
 		})
 	}
 
@@ -206,19 +210,21 @@ func (rs CampaignHandler) ViewCampaignDomain(w http.ResponseWriter, r *http.Requ
 
 	// Send domain details as JSON response
 	render.JSON(w, r, CampaignResponse{
-		Domain:    domainDetails.Site,
-		CheckAAAA: domainDetails.CheckAAAA,
-		CheckWWW:  domainDetails.CheckWWW,
-		CheckNS:   domainDetails.CheckNS,
-		CheckCurl: domainDetails.CheckCurl,
-		AsName:    domainDetails.AsName,
-		Country:   domainDetails.Country,
-		TsAAAA:    domainDetails.TsAAAA,
-		TsWWW:     domainDetails.TsWWW,
-		TsNS:      domainDetails.TsNS,
-		TsCurl:    domainDetails.TsCurl,
-		TsCheck:   domainDetails.TsCheck,
-		TsUpdated: domainDetails.TsUpdated,
+		Domain:       domainDetails.Site,
+		BaseDomain:   domainDetails.BaseDomain,
+		WwwDomain:    domainDetails.WwwDomain,
+		Nameserver:   domainDetails.Nameserver,
+		MXRecord:     domainDetails.MXRecord,
+		V6Only:       domainDetails.V6Only,
+		AsName:       domainDetails.AsName,
+		Country:      domainDetails.Country,
+		TsBaseDomain: domainDetails.TsBaseDomain,
+		TsWwwDomain:  domainDetails.TsWwwDomain,
+		TsNameserver: domainDetails.TsNameserver,
+		TsMXRecord:   domainDetails.TsMXRecord,
+		TsV6Only:     domainDetails.TsV6Only,
+		TsCheck:      domainDetails.TsCheck,
+		TsUpdated:    domainDetails.TsUpdated,
 	})
 }
 
@@ -250,16 +256,18 @@ func (rs CampaignHandler) SearchDomain(w http.ResponseWriter, r *http.Request) {
 	for _, domain := range campaignDomains {
 		campaignDomainList = append(campaignDomainList, DomainResponse{
 			Domain:       domain.Site,
-			CheckAAAA:    domain.CheckAAAA,
-			CheckWWW:     domain.CheckWWW,
-			CheckNS:      domain.CheckNS,
-			CheckCurl:    domain.CheckCurl,
+			BaseDomain:   domain.BaseDomain,
+			WwwDomain:    domain.WwwDomain,
+			Nameserver:   domain.Nameserver,
+			MXRecord:     domain.MXRecord,
+			V6Only:       domain.V6Only,
 			AsName:       domain.AsName,
 			Country:      domain.Country,
-			TsAAAA:       domain.TsAAAA,
-			TsWWW:        domain.TsWWW,
-			TsNS:         domain.TsNS,
-			TsCurl:       domain.TsCurl,
+			TsBaseDomain: domain.TsBaseDomain,
+			TsWwwDomain:  domain.TsWwwDomain,
+			TsNameserver: domain.TsNameserver,
+			TsMXRecord:   domain.TsMXRecord,
+			TsV6Only:     domain.TsV6Only,
 			TsCheck:      domain.TsCheck,
 			TsUpdated:    domain.TsUpdated,
 			CampaignUUID: domain.CampaignID.String(),

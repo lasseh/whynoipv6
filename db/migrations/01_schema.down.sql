@@ -1,6 +1,5 @@
 DROP TABLE "lists" CASCADE;
 DROP TABLE "sites" CASCADE;
-DROP TABLE "stats_asn" CASCADE;
 DROP TABLE "metrics" CASCADE;
 DROP TABLE "asn" CASCADE;
 DROP TABLE "domain" CASCADE;
@@ -10,3 +9,5 @@ DROP TABLE "campaign_changelog" CASCADE;
 DROP TABLE "campaign" CASCADE;
 DROP TABLE "campaign_domain" CASCADE;
 DROP TABLE "top_shame" CASCADE;
+DROP FUNCTION update_asn_metrics();
+DROP FUNCTION update_country_metrics();

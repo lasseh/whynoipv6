@@ -52,7 +52,7 @@ func createHTTPClient() *http.Client {
 
 // NotifyIrc sends message to irc
 // This is a private setup, please don't use this
-func (s *Service) NotifyIrc(m string) {
+func NotifyIrc(m string) {
 	// New message
 	message := apiMessage{
 		Channel: "legz",

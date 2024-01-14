@@ -65,7 +65,10 @@ func importData() {
 
 	// Space out domain timestamps
 	log.Println("Spacing out domain timestamps...")
-	domainService.InitSpaceTimestamps(ctx)
+	err := domainService.InitSpaceTimestamps(ctx)
+	if err != nil {
+		log.Println("Failed to space out domain timestamps: ", err)
+	}
 }
 
 // func importDataWG() {

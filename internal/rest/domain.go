@@ -21,16 +21,18 @@ type DomainHandler struct {
 type DomainResponse struct {
 	Rank         int64     `json:"rank"`
 	Domain       string    `json:"domain"`
-	CheckAAAA    bool      `json:"v6_aaaa"`
-	CheckWWW     bool      `json:"v6_www"`
-	CheckNS      bool      `json:"v6_ns"`
-	CheckCurl    bool      `json:"v6_curl"`
+	BaseDomain   string    `json:"base_domain"`
+	WwwDomain    string    `json:"www_domain"`
+	Nameserver   string    `json:"nameserver"`
+	MXRecord     string    `json:"mx_record"`
+	V6Only       string    `json:"v6_only"`
 	AsName       string    `json:"asn"`
 	Country      string    `json:"country"`
-	TsAAAA       time.Time `json:"ts_aaaa"`
-	TsWWW        time.Time `json:"ts_www"`
-	TsNS         time.Time `json:"ts_ns"`
-	TsCurl       time.Time `json:"ts_curl"`
+	TsBaseDomain time.Time `json:"ts_aaaa"`
+	TsWwwDomain  time.Time `json:"ts_www"`
+	TsNameserver time.Time `json:"ts_ns"`
+	TsMXRecord   time.Time `json:"ts_mx"`
+	TsV6Only     time.Time `json:"ts_curl"`
 	TsCheck      time.Time `json:"ts_check"`
 	TsUpdated    time.Time `json:"ts_updated"`
 	CampaignUUID string    `json:"campaign_uuid,omitempty"`
@@ -71,20 +73,22 @@ func (rs DomainHandler) DomainList(w http.ResponseWriter, r *http.Request) {
 	var domainlist []DomainResponse
 	for _, domain := range domains {
 		domainlist = append(domainlist, DomainResponse{
-			Rank:      domain.Rank,
-			Domain:    domain.Site,
-			CheckAAAA: domain.CheckAAAA,
-			CheckWWW:  domain.CheckWWW,
-			CheckNS:   domain.CheckNS,
-			CheckCurl: domain.CheckCurl,
-			AsName:    domain.AsName,
-			Country:   domain.Country,
-			TsAAAA:    domain.TsAAAA,
-			TsWWW:     domain.TsWWW,
-			TsNS:      domain.TsNS,
-			TsCurl:    domain.TsCurl,
-			TsCheck:   domain.TsCheck,
-			TsUpdated: domain.TsUpdated,
+			Rank:         domain.Rank,
+			Domain:       domain.Site,
+			BaseDomain:   domain.BaseDomain,
+			WwwDomain:    domain.WwwDomain,
+			Nameserver:   domain.Nameserver,
+			MXRecord:     domain.MXRecord,
+			V6Only:       domain.V6Only,
+			AsName:       domain.AsName,
+			Country:      domain.Country,
+			TsBaseDomain: domain.TsBaseDomain,
+			TsWwwDomain:  domain.TsWwwDomain,
+			TsNameserver: domain.TsNameserver,
+			TsMXRecord:   domain.TsMXRecord,
+			TsV6Only:     domain.TsV6Only,
+			TsCheck:      domain.TsCheck,
+			TsUpdated:    domain.TsUpdated,
 		})
 	}
 	render.JSON(w, r, domainlist)
@@ -107,20 +111,22 @@ func (rs DomainHandler) DomainHeroes(w http.ResponseWriter, r *http.Request) {
 	var domainlist []DomainResponse
 	for _, domain := range domains {
 		domainlist = append(domainlist, DomainResponse{
-			Rank:      domain.Rank,
-			Domain:    domain.Site,
-			CheckAAAA: domain.CheckAAAA,
-			CheckWWW:  domain.CheckWWW,
-			CheckNS:   domain.CheckNS,
-			CheckCurl: domain.CheckCurl,
-			AsName:    domain.AsName,
-			Country:   domain.Country,
-			TsAAAA:    domain.TsAAAA,
-			TsWWW:     domain.TsWWW,
-			TsNS:      domain.TsNS,
-			TsCurl:    domain.TsCurl,
-			TsCheck:   domain.TsCheck,
-			TsUpdated: domain.TsUpdated,
+			Rank:         domain.Rank,
+			Domain:       domain.Site,
+			BaseDomain:   domain.BaseDomain,
+			WwwDomain:    domain.WwwDomain,
+			Nameserver:   domain.Nameserver,
+			MXRecord:     domain.MXRecord,
+			V6Only:       domain.V6Only,
+			AsName:       domain.AsName,
+			Country:      domain.Country,
+			TsBaseDomain: domain.TsBaseDomain,
+			TsWwwDomain:  domain.TsWwwDomain,
+			TsNameserver: domain.TsNameserver,
+			TsMXRecord:   domain.TsMXRecord,
+			TsV6Only:     domain.TsV6Only,
+			TsCheck:      domain.TsCheck,
+			TsUpdated:    domain.TsUpdated,
 		})
 	}
 	render.JSON(w, r, domainlist)
@@ -136,20 +142,22 @@ func (rs DomainHandler) RetrieveDomain(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	render.JSON(w, r, DomainResponse{
-		Rank:      domain.Rank,
-		Domain:    domain.Site,
-		CheckAAAA: domain.CheckAAAA,
-		CheckWWW:  domain.CheckWWW,
-		CheckNS:   domain.CheckNS,
-		CheckCurl: domain.CheckCurl,
-		AsName:    domain.AsName,
-		Country:   domain.Country,
-		TsAAAA:    domain.TsAAAA,
-		TsWWW:     domain.TsWWW,
-		TsNS:      domain.TsNS,
-		TsCurl:    domain.TsCurl,
-		TsCheck:   domain.TsCheck,
-		TsUpdated: domain.TsUpdated,
+		Rank:         domain.Rank,
+		Domain:       domain.Site,
+		BaseDomain:   domain.BaseDomain,
+		WwwDomain:    domain.WwwDomain,
+		Nameserver:   domain.Nameserver,
+		MXRecord:     domain.MXRecord,
+		V6Only:       domain.V6Only,
+		AsName:       domain.AsName,
+		Country:      domain.Country,
+		TsBaseDomain: domain.TsBaseDomain,
+		TsWwwDomain:  domain.TsWwwDomain,
+		TsNameserver: domain.TsNameserver,
+		TsMXRecord:   domain.TsMXRecord,
+		TsV6Only:     domain.TsV6Only,
+		TsCheck:      domain.TsCheck,
+		TsUpdated:    domain.TsUpdated,
 	})
 }
 
@@ -179,20 +187,22 @@ func (rs DomainHandler) SearchDomain(w http.ResponseWriter, r *http.Request) {
 	var domainList []DomainResponse
 	for _, domain := range domains {
 		domainList = append(domainList, DomainResponse{
-			Rank:      domain.Rank,
-			Domain:    domain.Site,
-			CheckAAAA: domain.CheckAAAA,
-			CheckWWW:  domain.CheckWWW,
-			CheckNS:   domain.CheckNS,
-			CheckCurl: domain.CheckCurl,
-			AsName:    domain.AsName,
-			Country:   domain.Country,
-			TsAAAA:    domain.TsAAAA,
-			TsWWW:     domain.TsWWW,
-			TsNS:      domain.TsNS,
-			TsCurl:    domain.TsCurl,
-			TsCheck:   domain.TsCheck,
-			TsUpdated: domain.TsUpdated,
+			Rank:         domain.Rank,
+			Domain:       domain.Site,
+			BaseDomain:   domain.BaseDomain,
+			WwwDomain:    domain.WwwDomain,
+			Nameserver:   domain.Nameserver,
+			MXRecord:     domain.MXRecord,
+			V6Only:       domain.V6Only,
+			AsName:       domain.AsName,
+			Country:      domain.Country,
+			TsBaseDomain: domain.TsBaseDomain,
+			TsWwwDomain:  domain.TsWwwDomain,
+			TsNameserver: domain.TsNameserver,
+			TsMXRecord:   domain.TsMXRecord,
+			TsV6Only:     domain.TsV6Only,
+			TsCheck:      domain.TsCheck,
+			TsUpdated:    domain.TsUpdated,
 		})
 	}
 
@@ -213,18 +223,20 @@ func (rs DomainHandler) TopSinner(w http.ResponseWriter, r *http.Request) {
 	var domainlist []DomainResponse
 	for _, domain := range domains {
 		domainlist = append(domainlist, DomainResponse{
-			Rank:      domain.ID,
-			Domain:    domain.Site,
-			CheckAAAA: domain.CheckAAAA,
-			CheckWWW:  domain.CheckWWW,
-			CheckNS:   domain.CheckNS,
-			CheckCurl: domain.CheckCurl,
-			TsAAAA:    domain.TsAAAA,
-			TsWWW:     domain.TsWWW,
-			TsNS:      domain.TsNS,
-			TsCurl:    domain.TsCurl,
-			TsCheck:   domain.TsCheck,
-			TsUpdated: domain.TsUpdated,
+			Rank:         domain.ID,
+			Domain:       domain.Site,
+			BaseDomain:   domain.BaseDomain,
+			WwwDomain:    domain.WwwDomain,
+			Nameserver:   domain.Nameserver,
+			MXRecord:     domain.MXRecord,
+			V6Only:       domain.V6Only,
+			TsBaseDomain: domain.TsBaseDomain,
+			TsWwwDomain:  domain.TsWwwDomain,
+			TsNameserver: domain.TsNameserver,
+			TsMXRecord:   domain.TsMXRecord,
+			TsV6Only:     domain.TsV6Only,
+			TsCheck:      domain.TsCheck,
+			TsUpdated:    domain.TsUpdated,
 		})
 	}
 	render.JSON(w, r, domainlist)

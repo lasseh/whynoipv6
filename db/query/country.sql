@@ -15,8 +15,8 @@ SELECT *
 FROM domain_view_list
 WHERE domain_view_list.country_id = $1
   AND (
-      domain_view_list.check_aaaa = FALSE
-      OR domain_view_list.check_www = FALSE
+      domain_view_list.base_domain = 'unsupported'
+      OR domain_view_list.www_domain = 'unsupported'
     )
 ORDER BY domain_view_list.id
 LIMIT $2 OFFSET $3;
@@ -25,10 +25,10 @@ LIMIT $2 OFFSET $3;
 SELECT *
 FROM domain_view_list
 WHERE country_id = $1
-  AND check_aaaa = TRUE
-  AND check_www = TRUE
-  AND check_ns = TRUE
-ORDER BY id
+  AND base_domain = 'supported'
+  AND www_domain = 'supported'
+  AND nameserver = 'supported'
+ORDER BY rank
 LIMIT $2 OFFSET $3;
 
 -- name: ListCountry :many

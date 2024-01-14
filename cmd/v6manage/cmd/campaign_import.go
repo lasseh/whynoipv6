@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"whynoipv6/internal/core"
-	"whynoipv6/internal/toolbox"
+	"whynoipv6/internal/resolver"
 
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
@@ -22,8 +22,7 @@ var campaignImportCmd = &cobra.Command{
 	Long:  "Import list of domains to a campaign from a file",
 	Run: func(cmd *cobra.Command, args []string) {
 		campaignService = *core.NewCampaignService(db)
-		toolboxService = *toolbox.NewToolboxService(cfg.GeoIPPath, cfg.Nameserver)
-		importDomainsToCampaignNew()
+		importDomainsToCampaign()
 	},
 }
 
@@ -43,16 +42,8 @@ type CampaignYAML struct {
 // It reads and processes the YAML files in the campaign folder and imports the domains into the campaign.
 // The function also handles updating the campaign's title and description if needed,
 // as well as adding and removing domains from the campaign.
-func importDomainsToCampaignNew() {
+func importDomainsToCampaign() {
 	ctx := context.Background()
-
-	// Initialize DNS client.
-	_, err := toolboxService.NewResolver()
-	if err != nil {
-		log.Printf("Could not initialize DNS resolver: %s\n", err)
-		os.Exit(1)
-	}
-
 	log.Println("Starting Campaign Import from", cfg.CampaignPath)
 
 	// Read all the files in the campaign folder
@@ -76,13 +67,6 @@ func importDomainsToCampaignNew() {
 				log.Println(err)
 				return nil
 			}
-
-			// Update campaign title and description if needed
-			// err = updateCampaignInfo(ctx, campaignFile, yamlData)
-			// if err != nil {
-			// 	log.Println(err)
-			// 	return nil
-			// }
 
 			// Sync domains with the database
 			err = syncDomainsWithDatabase(ctx, yamlData)
@@ -150,42 +134,6 @@ func createOrUpdateCampaign(ctx context.Context, campaignFile string, yamlData *
 
 }
 
-// updateCampaignInfo updates the campaign's title and description if they are different from the current values.
-// If the UUID is empty, it creates a new campaign and updates the YAML file with the new UUID.
-// func updateCampaignInfo(ctx context.Context, campaignFile string, yamlData *CampaignYAML) error {
-// 	// Validate Campaign title and description
-// 	if yamlData.Title == "" || yamlData.Description == "" {
-// 		return fmt.Errorf("error: Campaign title or description is empty in %s", campaignFile)
-// 	}
-
-// 	// Check if the UUID is empty, if so, create a new campaign and update the YAML file
-// 	if yamlData.UUID == "" {
-// 		newUUID, err := updateCampaignUUID(campaignFile, yamlData)
-// 		if err != nil {
-// 			return fmt.Errorf("error updating campaign UUID: %v", err)
-// 		}
-// 		yamlData.UUID = newUUID
-// 	}
-
-// 	// Update the campaign if the title or description is different
-// 	campaign, err := campaignService.GetCampaign(ctx, uuid.MustParse(yamlData.UUID))
-// 	if err != nil {
-// 		return fmt.Errorf("error getting campaign with UUID %s: %v", yamlData.UUID, err)
-// 	}
-// 	if campaign.Name != yamlData.Title || campaign.Description != yamlData.Description {
-// 		err = campaignService.UpdateCampaign(ctx, core.CampaignModel{
-// 			UUID:        campaign.UUID,
-// 			Name:        yamlData.Title,
-// 			Description: yamlData.Description,
-// 		})
-// 		if err != nil {
-// 			return fmt.Errorf("error updating campaign with UUID %s: %v", yamlData.UUID, err)
-// 		}
-// 	}
-
-// 	return nil
-// }
-
 // updateCampaignUUID updates the campaign's UUID in the given YAML file and stores the updated content.
 // It creates a new campaign using campaignService, extracts the UUID and updates the YAML file with the new UUID.
 // And returns the new UUID.
@@ -228,7 +176,7 @@ func syncDomainsWithDatabase(ctx context.Context, yamlData *CampaignYAML) error 
 	// Loop over domains
 	for _, domain := range yamlData.DomainNames {
 		// Validate domain
-		if err := toolboxService.ValidateDomain(domain); err != nil {
+		if err := resolver.ValidateDomain(domain); err != nil {
 			log.Printf("error validating domain %s: %v", domain, err.Error())
 			continue
 		}

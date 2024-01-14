@@ -36,18 +36,20 @@ LIMIT $1 OFFSET $2;
 -- name: UpdateCampaignDomain :exec
 UPDATE
     campaign_domain
-SET check_aaaa = $3,
-    check_www  = $4,
-    check_ns   = $5,
-    check_curl = $6,
-    ts_aaaa    = $7,
-    ts_www     = $8,
-    ts_ns      = $9,
-    ts_curl    = $10,
-    ts_check   = $11,
-    ts_updated = $12,
-    asn_id     = $13,
-    country_id = $14
+SET base_domain    = $3,
+    www_domain     = $4,
+    nameserver     = $5,
+    mx_record      = $6,
+    v6_only        = $7,
+    ts_base_domain = $8,
+    ts_www_domain  = $9,
+    ts_nameserver  = $10,
+    ts_mx_record   = $11,
+    ts_v6_only     = $12,
+    ts_check       = $13,
+    ts_updated     = $14,
+    asn_id         = $15,
+    country_id     = $16
 WHERE site = $1
   AND campaign_id = $2;
 
@@ -62,16 +64,16 @@ WHERE site = $1;
 SELECT campaign.*,
        COUNT(campaign_domain.id) AS domain_count,
        COUNT(
-           CASE
-           WHEN campaign_domain.check_aaaa = true AND
-                campaign_domain.check_www = true AND
-                campaign_domain.check_ns = true
-           THEN TRUE
-           ELSE NULL
-           END
-       ) AS v6_ready_count
+               CASE
+                   WHEN campaign_domain.base_domain = 'supported' AND
+                        campaign_domain.www_domain = 'supported' AND
+                        campaign_domain.nameserver = 'supported'
+                       THEN 1
+                   ELSE NULL
+                   END
+           )                     AS v6_ready_count
 FROM campaign
-LEFT JOIN campaign_domain ON campaign.uuid = campaign_domain.campaign_id AND campaign.disabled = false
+         LEFT JOIN campaign_domain ON campaign.uuid = campaign_domain.campaign_id AND campaign.disabled = FALSE
 GROUP BY campaign.id
 ORDER BY campaign.id;
 
@@ -79,14 +81,14 @@ ORDER BY campaign.id;
 SELECT campaign.*,
        COUNT(campaign_domain.id) AS domain_count,
        COUNT(
-           CASE
-           WHEN campaign_domain.check_aaaa = true AND
-                campaign_domain.check_www = true AND
-                campaign_domain.check_ns = true
-           THEN TRUE
-           ELSE NULL
-           END
-       ) AS v6_ready_count
+               CASE
+                   WHEN campaign_domain.base_domain = 'supported' AND
+                        campaign_domain.www_domain = 'supported' AND
+                        campaign_domain.nameserver = 'supported'
+                       THEN 1
+                   ELSE NULL
+                   END
+           )                     AS v6_ready_count
 FROM campaign
          LEFT JOIN campaign_domain ON campaign.uuid = campaign_domain.campaign_id
 WHERE campaign.uuid = $1

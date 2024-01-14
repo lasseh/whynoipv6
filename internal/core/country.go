@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"strings"
 	"whynoipv6/internal/postgres/db"
 
 	"github.com/jackc/pgtype"
@@ -49,7 +50,7 @@ func (s *CountryService) GetCountryCode(ctx context.Context, code string) (Count
 
 // GetCountryTld gets a country by CountryTLD.
 func (s *CountryService) GetCountryTld(ctx context.Context, tld string) (CountryModel, error) {
-	country, err := s.q.GetCountryTld(ctx, tld)
+	country, err := s.q.GetCountryTld(ctx, strings.ToUpper(tld))
 	if err != nil {
 		return CountryModel{}, err
 	}
@@ -98,21 +99,23 @@ func (s *CountryService) ListDomainsByCountry(ctx context.Context, countryID int
 	var list []DomainModel
 	for _, d := range domains {
 		list = append(list, DomainModel{
-			ID:        IntNull(d.ID),
-			Site:      StringNull(d.Site),
-			CheckAAAA: BoolNull(d.CheckAaaa),
-			CheckWWW:  BoolNull(d.CheckWww),
-			CheckNS:   BoolNull(d.CheckNs),
-			CheckCurl: BoolNull(d.CheckCurl),
-			AsName:    StringNull(d.Asname),
-			Country:   StringNull(d.CountryName),
-			TsAAAA:    TimeNull(d.TsAaaa),
-			TsWWW:     TimeNull(d.TsWww),
-			TsNS:      TimeNull(d.TsNs),
-			TsCurl:    TimeNull(d.TsCurl),
-			TsCheck:   TimeNull(d.TsCheck),
-			TsUpdated: TimeNull(d.TsUpdated),
-			Rank:      d.Rank,
+			ID:           IntNull(d.ID),
+			Site:         StringNull(d.Site),
+			BaseDomain:   StringNull(d.BaseDomain),
+			WwwDomain:    StringNull(d.WwwDomain),
+			Nameserver:   StringNull(d.Nameserver),
+			MXRecord:     StringNull(d.MxRecord),
+			V6Only:       StringNull(d.V6Only),
+			AsName:       StringNull(d.Asname),
+			Country:      StringNull(d.CountryName),
+			TsBaseDomain: TimeNull(d.TsBaseDomain),
+			TsWwwDomain:  TimeNull(d.TsWwwDomain),
+			TsNameserver: TimeNull(d.TsNameserver),
+			TsMXRecord:   TimeNull(d.TsMxRecord),
+			TsV6Only:     TimeNull(d.TsV6Only),
+			TsCheck:      TimeNull(d.TsCheck),
+			TsUpdated:    TimeNull(d.TsUpdated),
+			Rank:         d.Rank,
 		})
 	}
 	return list, nil
@@ -131,21 +134,23 @@ func (s *CountryService) ListDomainHeroesByCountry(ctx context.Context, countryI
 	var list []DomainModel
 	for _, d := range domains {
 		list = append(list, DomainModel{
-			ID:        IntNull(d.ID),
-			Site:      StringNull(d.Site),
-			CheckAAAA: BoolNull(d.CheckAaaa),
-			CheckWWW:  BoolNull(d.CheckWww),
-			CheckNS:   BoolNull(d.CheckNs),
-			CheckCurl: BoolNull(d.CheckCurl),
-			AsName:    StringNull(d.Asname),
-			Country:   StringNull(d.CountryName),
-			TsAAAA:    TimeNull(d.TsAaaa),
-			TsWWW:     TimeNull(d.TsWww),
-			TsNS:      TimeNull(d.TsNs),
-			TsCurl:    TimeNull(d.TsCurl),
-			TsCheck:   TimeNull(d.TsCheck),
-			TsUpdated: TimeNull(d.TsUpdated),
-			Rank:      d.Rank,
+			ID:           IntNull(d.ID),
+			Site:         StringNull(d.Site),
+			BaseDomain:   StringNull(d.BaseDomain),
+			WwwDomain:    StringNull(d.WwwDomain),
+			Nameserver:   StringNull(d.Nameserver),
+			MXRecord:     StringNull(d.MxRecord),
+			V6Only:       StringNull(d.V6Only),
+			AsName:       StringNull(d.Asname),
+			Country:      StringNull(d.CountryName),
+			TsBaseDomain: TimeNull(d.TsBaseDomain),
+			TsWwwDomain:  TimeNull(d.TsWwwDomain),
+			TsNameserver: TimeNull(d.TsNameserver),
+			TsMXRecord:   TimeNull(d.TsMxRecord),
+			TsV6Only:     TimeNull(d.TsV6Only),
+			TsCheck:      TimeNull(d.TsCheck),
+			TsUpdated:    TimeNull(d.TsUpdated),
+			Rank:         d.Rank,
 		})
 	}
 	return list, nil
