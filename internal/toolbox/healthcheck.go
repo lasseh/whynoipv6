@@ -11,7 +11,7 @@ import (
 // HealthCheckUpdate sends a successful health check notification to BetterUptime.com.
 // The function takes a unique identifier (uuid) as input and sends an HTTP HEAD request to BetterUptime.com's API.
 // If there's an error, it will log the error message.
-func (s *Service) HealthCheckUpdate(uuid string) {
+func HealthCheckUpdate(uuid string) {
 	var log = logger.GetLogger()
 	log = log.With().Str("service", "HealthCheckUpdate").Logger()
 	// Create an HTTP client with a 10-second timeout.
