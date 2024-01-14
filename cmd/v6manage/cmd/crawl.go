@@ -10,6 +10,7 @@ import (
 	"whynoipv6/internal/resolver"
 	"whynoipv6/internal/toolbox"
 
+	"github.com/miekg/dns"
 	"github.com/spf13/cobra"
 )
 
@@ -220,7 +221,15 @@ func checkDomain(ctx context.Context, domain core.DomainModel) (core.DomainModel
 	logg := logg.With().Str("service", "checkDomain").Logger()
 
 	// Validate domain
-	err := resolver.ValidateDomain(domain.Site)
+	err, rcode := resolver.ValidateDomain(domain.Site)
+	if rcode == dns.RcodeNameError || rcode == dns.RcodeServerFailure {
+		logg.Error().Err(err).Msgf("[%s] Disabling domain", domain.Site)
+		// Disable domain
+		if disableErr := domainService.DisableDomain(ctx, domain.Site); disableErr != nil {
+			logg.Error().Err(disableErr).Msg("Could not disable domain")
+		}
+		return domain, err
+	}
 	if err != nil {
 		// logg.Error().Err(err).Msg("Invalid domain")
 		return domain, err
