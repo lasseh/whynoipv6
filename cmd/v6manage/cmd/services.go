@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"whynoipv6/internal/core"
+	"whynoipv6/internal/logger"
 	"whynoipv6/internal/toolbox"
 )
 
@@ -16,4 +17,5 @@ var (
 	// statService      core.StatService
 	// resolver         *toolbox.Resolver
 	metricService core.MetricService
+	logg          = logger.GetLogger() // Global logger
 )
