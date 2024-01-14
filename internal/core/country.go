@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"strings"
 	"whynoipv6/internal/postgres/db"
 
 	"github.com/jackc/pgtype"
@@ -49,7 +50,7 @@ func (s *CountryService) GetCountryCode(ctx context.Context, code string) (Count
 
 // GetCountryTld gets a country by CountryTLD.
 func (s *CountryService) GetCountryTld(ctx context.Context, tld string) (CountryModel, error) {
-	country, err := s.q.GetCountryTld(ctx, tld)
+	country, err := s.q.GetCountryTld(ctx, strings.ToUpper(tld))
 	if err != nil {
 		return CountryModel{}, err
 	}
