@@ -424,13 +424,13 @@ func convertToASCII(domain string) (string, error) {
 }
 
 // ValidateDomain checks if the domain has enough DNS information to proceed with the checks.
-func ValidateDomain(domain string) error {
+func ValidateDomain(domain string) (error, int) {
 	c := &dns.Client{Timeout: DefaultTimeout}
 
 	// Convert domain to ASCII for DNS lookup
 	domain, err := convertToASCII(domain)
 	if err != nil {
-		return fmt.Errorf("IDNA conversion error: %v", err)
+		return fmt.Errorf("IDNA conversion error: %v", err), 0
 	}
 
 	m := new(dns.Msg)
@@ -440,13 +440,13 @@ func ValidateDomain(domain string) error {
 	// Check if domain has any DNS records, else disable it before performing any checks
 	result, err := performQuery(c, m)
 	if err != nil {
-		return err
+		return err, 0
 	}
 	if result.Rcode != dns.RcodeSuccess {
-		return fmt.Errorf("[%s] RCODE: %s", domain, dns.RcodeToString[result.Rcode])
+		return fmt.Errorf("[%s] RCODE: %s", domain, dns.RcodeToString[result.Rcode]), result.Rcode
 	}
 
-	return nil
+	return nil, 0
 }
 
 // getTopLevelDomain extracts the top-level domain from a domain.

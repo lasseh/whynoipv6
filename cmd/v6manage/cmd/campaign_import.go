@@ -176,7 +176,9 @@ func syncDomainsWithDatabase(ctx context.Context, yamlData *CampaignYAML) error 
 	// Loop over domains
 	for _, domain := range yamlData.DomainNames {
 		// Validate domain
-		if err := resolver.ValidateDomain(domain); err != nil {
+		// Ignore rcode here. Manually disable/remove domains from campaigns if they are not valid.
+		err, _ := resolver.ValidateDomain(domain)
+		if err != nil {
 			log.Printf("error validating domain %s: %v", domain, err.Error())
 			continue
 		}

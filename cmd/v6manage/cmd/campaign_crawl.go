@@ -143,8 +143,8 @@ func campaignCrawl() {
 
 		// Sleep for 2 hours
 		logg.Info().Msg("Time until next check: 2 hours")
-		// time.Sleep(2 * time.Hour)
-		time.Sleep(20 * time.Second)
+		time.Sleep(2 * time.Hour)
+		// time.Sleep(20 * time.Second)
 	}
 }
 
@@ -197,7 +197,8 @@ func checkCampaignDomain(ctx context.Context, domain core.CampaignDomainModel) (
 	logg := logg.With().Str("service", "checkCampaignDomain").Logger()
 
 	// Validate domain
-	err := resolver.ValidateDomain(domain.Site)
+	// Ignore the rcode here, since we want to manually disable domains.
+	err, _ := resolver.ValidateDomain(domain.Site)
 	if err != nil {
 		// logg.Error().Err(err).Msg("Invalid domain")
 		return domain, err
