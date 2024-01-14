@@ -32,13 +32,13 @@ type DomainResult struct {
 	WwwDomain  string
 	Nameserver string
 	MXRecord   string
-	v6Only     string
+	// v6Only     string // TODO: Add v6Only check
 }
 
 // DomainStatus checks the domain's IPv6, NS, and MX records.
 func DomainStatus(domain string) (DomainResult, error) {
 	c := &dns.Client{Timeout: DefaultTimeout}
-	// log := log.With().Str("service", "CheckDomainStatus").Logger()
+	log := log.With().Str("service", "DomainStatus").Logger()
 
 	// Convert domain to ASCII for DNS lookup
 	domain, err := convertToASCII(domain)
@@ -48,16 +48,19 @@ func DomainStatus(domain string) (DomainResult, error) {
 
 	baseDomainStatus, err := checkDomainStatus(domain, c)
 	if err != nil {
+		log.Error().Msgf("Error checking base domain [%s]: %v", domain, err)
 		return DomainResult{}, err
 	}
 
 	WwwDomainStatus, err := checkDomainStatus("www."+domain, c)
 	if err != nil {
+		log.Error().Msgf("Error checking www domain [%s]: %v", domain, err)
 		return DomainResult{}, err
 	}
 
 	nsStatus, mxStatus, err := checkDNSRecords(domain, c)
 	if err != nil {
+		log.Err(err).Msgf("Error checking NS/MX records for domain [%s]: %v", domain, err)
 		return DomainResult{}, err
 	}
 
@@ -70,8 +73,9 @@ func DomainStatus(domain string) (DomainResult, error) {
 }
 
 // checkDomainStatus checks the domain's IPv6 availability.
+// It returns the string value of the result, or an error if the query fails.
 func checkDomainStatus(domain string, c *dns.Client) (string, error) {
-	result, err := queryDomainRecord(c, domain, dns.TypeAAAA)
+	result, err := queryDomainStatus(c, domain, dns.TypeAAAA)
 	if err != nil {
 		return "", err
 	}
@@ -80,7 +84,7 @@ func checkDomainStatus(domain string, c *dns.Client) (string, error) {
 	}
 
 	// Check for IPv4 as fallback
-	result, err = queryDomainRecord(c, domain, dns.TypeA)
+	result, err = queryDomainStatus(c, domain, dns.TypeA)
 	if err != nil {
 		return "", err
 	}
@@ -124,8 +128,12 @@ func checkNameserver(domain string, c *dns.Client) (string, error) {
 	log := log.With().Str("service", "checkNameserver").Logger()
 	// log.Debug().Msgf("Checking nameservers for [%s]", domain)
 
+	// Check on the top level domain.
+	// TODO: Check if this is working as intended.
+	tld := getTopLevelDomain(domain)
+
 	// Get all nameservers for the domain
-	nsList, err := getNameservers(c, domain)
+	nsList, err := getNameservers(c, tld)
 	if err != nil {
 		log.Warn().Msgf("Error getting nameservers for domain [%s]: %v", domain, err)
 		return "", err
@@ -267,8 +275,10 @@ func checkInetType(c *dns.Client, domain string, recordType uint16) bool {
 	}
 }
 
-// queryDomainRecord performs a DNS query for a given query name and type.
-func queryDomainRecord(client *dns.Client, domain string, qtype uint16) (string, error) {
+// queryDomainStatus performs a DNS query for a given query name and type.
+// It returns the string value of the result, or an error if the query fails.
+func queryDomainStatus(client *dns.Client, domain string, qtype uint16) (string, error) {
+	log := log.With().Str("service", "queryDomainStatus").Logger()
 	cnameHops := 0
 
 	for {
@@ -318,18 +328,83 @@ func queryDomainRecord(client *dns.Client, domain string, qtype uint16) (string,
 	}
 }
 
+// IPLookup performs a DNS lookup for a given domain and returns the first IPv6 or IPv4 address found.
+func IPLookup(domain string) (string, error) {
+	c := &dns.Client{Timeout: DefaultTimeout}
+
+	// Convert domain to ASCII for DNS lookup
+	domain, err := convertToASCII(domain)
+	if err != nil {
+		return "", fmt.Errorf("IDNA conversion error: %v", err)
+	}
+
+	// Get the IPv6 for the domain
+	ipv6, err := queryDNSRecord(c, domain, dns.TypeAAAA)
+	if err != nil {
+		return "", err
+	}
+	if ipv6 != nil && len(ipv6.Answer) > 0 {
+		return ipv6.Answer[0].(*dns.AAAA).AAAA.String(), nil
+	}
+
+	// Get the IPv4 for the domain
+	ip, err := queryDNSRecord(c, domain, dns.TypeA)
+	if err != nil {
+		return "", err
+	}
+	if ip != nil && len(ip.Answer) > 0 {
+		return ip.Answer[0].(*dns.A).A.String(), nil
+	}
+
+	return "", nil
+
+}
+
+// queryDNSRecord performs a DNS query for a given query name and type.
+// It returns the answer in a *dns.Msg (or nil in case of an error, in which case err will be set accordingly.)
+func queryDNSRecord(client *dns.Client, domain string, qtype uint16) (*dns.Msg, error) {
+	m := new(dns.Msg)
+	m.SetQuestion(dns.Fqdn(domain), qtype)
+	m.RecursionDesired = true
+
+	r, err := performQuery(client, m)
+	if err != nil {
+		log.Err(err).Msgf("Error querying DNS [%s]", domain)
+		return nil, err
+	}
+
+	if r.Rcode != dns.RcodeSuccess {
+		log.Warn().Msgf("DNS query unsuccessful for [%s]: %s", domain, dns.RcodeToString[r.Rcode])
+		return nil, err
+	}
+
+	// Check if the result is a CNAME
+	for _, rr := range r.Answer {
+		switch rr := rr.(type) {
+		case *dns.CNAME:
+			log.Debug().Msgf("[%s] Following CNAME: %s", domain, rr.Target)
+			domain = rr.Target // Set the domain to the target of the CNAME and check again
+			return queryDNSRecord(client, domain, qtype)
+		}
+	}
+
+	return r, nil
+}
+
 // performQuery performs a DNS query using multiple nameservers.
+// returns the first successful response, or an error if all nameservers fail.
 func performQuery(c *dns.Client, m *dns.Msg) (*dns.Msg, error) {
 	var errs []string
-
 	for _, nameserver := range nameservers {
 		r, _, err := c.Exchange(m, nameserver)
 		log := log.With().Str("nameserver", nameserver).Logger()
 		if err != nil {
-			errMsg := fmt.Sprintf("Error querying DNS server [%s]: %v", nameserver, err)
-			log.Warn().Msg(errMsg)
-			log.Debug().Msgf("Query: %v", m)
-			errs = append(errs, errMsg)
+			// errMsg := fmt.Sprintf("Error querying DNS server [%s]: %v", nameserver, err)
+			// log.Warn().Msg(errMsg)
+			// log.Err(err).Msgf("[%v] Query error on %v", m.Question[0].Name, dns.TypeToString[m.Question[0].Qtype])
+			log.Err(err).Msgf("Error checking %v on %v", dns.TypeToString[m.Question[0].Qtype], m.Question[0].Name)
+			// log.Warn().Msgf("Query: %v", m)
+			// errs = append(errs, errMsg)
 			continue // Try next nameserver on error
 		}
 		return r, nil // Successful response
@@ -374,7 +449,7 @@ func ValidateDomain(domain string) error {
 	return nil
 }
 
-// is this in use?
+// getTopLevelDomain extracts the top-level domain from a domain.
 func getTopLevelDomain(domain string) string {
 	// Split the domain into parts
 	parts := strings.Split(domain, ".")
