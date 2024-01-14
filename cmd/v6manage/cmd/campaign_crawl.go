@@ -8,6 +8,7 @@ import (
 	"whynoipv6/internal/core"
 	"whynoipv6/internal/geoip"
 	"whynoipv6/internal/resolver"
+	"whynoipv6/internal/toolbox"
 
 	"github.com/spf13/cobra"
 )
@@ -125,9 +126,9 @@ func campaignCrawl() {
 		logg.Info().Msgf("Total Domains: %v domains, Successful Jobs: %v, Failed Jobs: %v Duration: %s", totalDomains, totalSuccessfulJobs, totalFailedJobs, prettyDuration(time.Since(t)))
 
 		// Healthcheck reporting
-		toolboxService.HealthCheckUpdate(cfg.HealthcheckCampaign)
+		toolbox.HealthCheckUpdate(cfg.HealthcheckCampaign)
 		// Notify partyvan
-		toolboxService.NotifyIrc(fmt.Sprintf("[WhyNoIPv6 Campaign] Total Domains: %v, Successful: %v, Failed: %v Duration: %s", totalDomains, totalSuccessfulJobs, totalFailedJobs, prettyDuration(time.Since(t))))
+		toolbox.NotifyIrc(fmt.Sprintf("[WhyNoIPv6 Campaign] Total Domains: %v, Successful: %v, Failed: %v Duration: %s", totalDomains, totalSuccessfulJobs, totalFailedJobs, prettyDuration(time.Since(t))))
 
 		// Store crawler metrics in the database.
 		crawlData := map[string]interface{}{
@@ -147,10 +148,11 @@ func campaignCrawl() {
 	}
 }
 
+// processCampaignDomain processes a domain and updates it in the database.
+// Returns true if the job was successful, false if it failed
 func processCampaignDomain(ctx context.Context, jobs <-chan core.CampaignDomainModel, done chan<- bool) {
 	logg := logg.With().Str("service", "processCampaignDomain").Logger()
 	for job := range jobs {
-		success := true // Flag to indicate if the job was successful
 		// Process the job
 		checkResult, err := checkCampaignDomain(ctx, job)
 		if err != nil {
@@ -161,8 +163,6 @@ func processCampaignDomain(ctx context.Context, jobs <-chan core.CampaignDomainM
 
 		// Check if any of the results is empty
 		if checkResult.BaseDomain == "" || checkResult.WwwDomain == "" || checkResult.Nameserver == "" || checkResult.MXRecord == "" {
-			success = false // Mark job as unsuccessful
-
 			// Find the one that is empty
 			var emptyResult string
 			if checkResult.BaseDomain == "" {
@@ -187,7 +187,7 @@ func processCampaignDomain(ctx context.Context, jobs <-chan core.CampaignDomainM
 			return        // Stop processing this job
 		}
 
-		done <- success // Signal completion, indicating if it was successful
+		done <- true // Signal completion, indicating if it was successful
 	}
 }
 
