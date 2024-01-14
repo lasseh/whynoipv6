@@ -8,6 +8,7 @@ import (
 	"whynoipv6/internal/core"
 	"whynoipv6/internal/geoip"
 	"whynoipv6/internal/resolver"
+	"whynoipv6/internal/toolbox"
 
 	"github.com/spf13/cobra"
 )
@@ -32,6 +33,7 @@ func init() {
 }
 
 // domainCrawl crawls the domains in the database
+// TODO: Disable domain functionality
 func domainCrawl() {
 	ctx := context.Background()
 	logg := logg.With().Str("service", "domainCrawl").Logger()
@@ -54,7 +56,7 @@ func domainCrawl() {
 		logg.Info().Msg("Starting crawl at " + t.Format("2006-01-02 15:04:05"))
 
 		var offset int64 = 0        // Offset for the database query
-		const limit int64 = 200     // Limit for the database query
+		const limit int64 = 50      // Limit for the database query
 		var totalDomains int        // Total number of domains checked in this crawl
 		var totalSuccessfulJobs int // Total number of successful jobs
 		var totalFailedJobs int     // Total number of failed jobs
@@ -157,9 +159,9 @@ func domainCrawl() {
 		}
 
 		// Healthcheck reporting
-		toolboxService.HealthCheckUpdate(cfg.HealthcheckCrawler)
+		toolbox.HealthCheckUpdate(cfg.HealthcheckCrawler)
 		// Notify partyvan
-		toolboxService.NotifyIrc(fmt.Sprintf("[WhyNoIPv6] Total Domains: %v, Successful: %v, Failed: %v Duration: %s", totalDomains, totalSuccessfulJobs, totalFailedJobs, prettyDuration(time.Since(t))))
+		toolbox.NotifyIrc(fmt.Sprintf("[WhyNoIPv6] Total Domains: %v, Successful: %v, Failed: %v Duration: %s", totalDomains, totalSuccessfulJobs, totalFailedJobs, prettyDuration(time.Since(t))))
 
 		// Sleep for 2 hours
 		logg.Info().Msg("Time until next check: 2 hours")
@@ -169,11 +171,11 @@ func domainCrawl() {
 
 }
 
-// processDomain processes a domain
+// processDomain processes a domain and updates the database
+// Returns true if the job was successful, false if it failed
 func processDomain(ctx context.Context, jobs <-chan core.DomainModel, done chan<- bool) {
 	logg := logg.With().Str("service", "processDomain").Logger()
 	for job := range jobs {
-		success := true // Flag to indicate if the job was successful
 		// Process the job
 		checkResult, err := checkDomain(ctx, job)
 		if err != nil {
@@ -184,8 +186,6 @@ func processDomain(ctx context.Context, jobs <-chan core.DomainModel, done chan<
 
 		// Check if any of the results is empty
 		if checkResult.BaseDomain == "" || checkResult.WwwDomain == "" || checkResult.Nameserver == "" || checkResult.MXRecord == "" {
-			success = false // Mark job as unsuccessful
-
 			// Find the one that is empty
 			var emptyResult string
 			if checkResult.BaseDomain == "" {
@@ -210,7 +210,7 @@ func processDomain(ctx context.Context, jobs <-chan core.DomainModel, done chan<
 			return        // Stop processing this job
 		}
 
-		done <- success // Signal completion, indicating if it was successful
+		done <- true // Signal completion, indicating if it was successful
 	}
 }
 
@@ -439,13 +439,13 @@ func generateChangelog(currentDomain, newDomain core.DomainModel) (string, error
 }
 
 // runHealthcheckReportingJob runs a job that periodically reports the healthcheck status
-func runHealthcheckReportingJob() {
-	ticker := time.NewTicker(2 * time.Minute)
-	defer ticker.Stop()
+// func runHealthcheckReportingJob() {
+// 	ticker := time.NewTicker(2 * time.Minute)
+// 	defer ticker.Stop()
 
-	for range ticker.C {
-		// Notify healthcheck status
-		logg.Info().Msg("Performing healthcheck reporting...")
-		toolboxService.HealthCheckUpdate(cfg.HealthcheckCampaign)
-	}
-}
+// 	for range ticker.C {
+// 		// Notify healthcheck status
+// 		logg.Info().Msg("Performing healthcheck reporting...")
+// 		toolboxService.HealthCheckUpdate(cfg.HealthcheckCampaign)
+// 	}
+// }
