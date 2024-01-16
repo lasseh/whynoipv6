@@ -34,7 +34,6 @@ func init() {
 }
 
 // domainCrawl crawls the domains in the database
-// TODO: Disable domain functionality
 func domainCrawl() {
 	ctx := context.Background()
 	logg := logg.With().Str("service", "domainCrawl").Logger()
@@ -140,6 +139,7 @@ func domainCrawl() {
 		}
 
 		// Collect and store domain statistics.
+		// TODO: Fix the sql logic for this.
 		stats, err := domainService.CrawlerStats(ctx)
 		if err != nil {
 			logg.Err(err).Msg("Error getting stats")
