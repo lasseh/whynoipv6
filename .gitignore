@@ -4,3 +4,4 @@ tldbwriter.toml
 .vscode
 cmd/api/api
 logs/
+extra/vector/
