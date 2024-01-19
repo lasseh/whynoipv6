@@ -322,13 +322,14 @@ func (s *DomainService) InitSpaceTimestamps(ctx context.Context) error {
 
 // CrawlerStat represents a domain statistic.
 type CrawlerStat struct {
-	TotalSites int64 `json:"total_sites"`
-	TotalAaaa  int64 `json:"total_aaaa"`
-	TotalWww   int64 `json:"total_www"`
-	TotalBoth  int64 `json:"total_both"`
-	TotalNs    int64 `json:"total_ns"`
-	Top1k      int64 `json:"top_1k"`
-	TopNs      int64 `json:"top_ns"`
+	Domains       int64 `json:"domains"`
+	BaseDomain    int64 `json:"base_domain"`
+	WwwDomain     int64 `json:"www_domain"`
+	Nameserver    int64 `json:"nameserver"`
+	MxRecord      int64 `json:"mx_record"`
+	Heroes        int64 `json:"heroes"`
+	TopHeroes     int64 `json:"top_heroes"`
+	TopNameserver int64 `json:"top_nameserver"`
 }
 
 // CrawlerStats retrieves the statistics for all crawled domains.
@@ -338,12 +339,13 @@ func (s *DomainService) CrawlerStats(ctx context.Context) (CrawlerStat, error) {
 		return CrawlerStat{}, err
 	}
 	return CrawlerStat{
-		TotalSites: stats.TotalSites,
-		TotalAaaa:  stats.TotalAaaa,
-		TotalWww:   stats.TotalWww,
-		TotalBoth:  stats.TotalBoth,
-		TotalNs:    stats.TotalNs,
-		Top1k:      stats.Top1k,
-		TopNs:      stats.TopNs,
+		Domains:       stats.Domains,
+		BaseDomain:    stats.BaseDomain,
+		WwwDomain:     stats.WwwDomain,
+		Nameserver:    stats.Nameserver,
+		MxRecord:      stats.MxRecord,
+		Heroes:        stats.Heroes,
+		TopHeroes:     stats.TopHeroes,
+		TopNameserver: stats.TopNameserver,
 	}, nil
 }
