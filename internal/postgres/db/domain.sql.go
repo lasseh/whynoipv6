@@ -221,6 +221,7 @@ FROM domain_view_list
 WHERE base_domain = 'supported'
   AND www_domain = 'supported'
   AND nameserver = 'supported'
+  AND mx_record != 'unsupported'
 ORDER BY rank
 LIMIT $1 OFFSET $2
 `

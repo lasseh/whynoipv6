@@ -29,24 +29,26 @@ func (q *Queries) CalculateCountryStats(ctx context.Context) error {
 
 const CrawlerStats = `-- name: CrawlerStats :one
 SELECT
- count(1) filter (WHERE "ts_check" IS NOT NULL) AS "total_sites",
- count(1) filter (WHERE "ts_check" IS NOT NULL AND base_domain = 'supported') AS "total_aaaa",
- count(1) filter (WHERE "ts_check" IS NOT NULL AND www_domain = 'supported') AS "total_www",
- count(1) filter (WHERE "ts_check" IS NOT NULL AND base_domain = 'supported' AND www_domain = 'supported') AS "total_both",
- count(1) filter (WHERE "ts_check" IS NOT NULL AND nameserver = 'supported') AS "total_ns",
- count(1) filter (WHERE "ts_check" IS NOT NULL AND base_domain = 'supported' AND www_domain = 'supported' AND rank < 1000) AS "top_1k",
- count(1) filter (WHERE "ts_check" IS NOT NULL AND nameserver = 'supported' AND rank < 1000) AS "top_ns"
+ count(1) AS "domains",
+ count(1) filter (WHERE base_domain = 'supported') AS "base_domain",
+ count(1) filter (WHERE www_domain = 'supported') AS "www_domain",
+ count(1) filter (WHERE nameserver = 'supported') AS "nameserver",
+ count(1) filter (WHERE mx_record = 'supported') AS "mx_record",
+ count(1) filter (WHERE base_domain = 'supported' AND www_domain = 'supported') AS "heroes",
+ count(1) filter (WHERE base_domain = 'supported' AND www_domain = 'supported' AND rank < 1000) AS "top_heroes",
+ count(1) filter (WHERE nameserver = 'supported' AND rank < 1000) AS "top_nameserver"
 FROM domain_view_list
 `
 
 type CrawlerStatsRow struct {
-	TotalSites int64
-	TotalAaaa  int64
-	TotalWww   int64
-	TotalBoth  int64
-	TotalNs    int64
-	Top1k      int64
-	TopNs      int64
+	Domains       int64
+	BaseDomain    int64
+	WwwDomain     int64
+	Nameserver    int64
+	MxRecord      int64
+	Heroes        int64
+	TopHeroes     int64
+	TopNameserver int64
 }
 
 // Used by the crawler to store total stats in the metric table
@@ -54,13 +56,14 @@ func (q *Queries) CrawlerStats(ctx context.Context) (CrawlerStatsRow, error) {
 	row := q.db.QueryRow(ctx, CrawlerStats)
 	var i CrawlerStatsRow
 	err := row.Scan(
-		&i.TotalSites,
-		&i.TotalAaaa,
-		&i.TotalWww,
-		&i.TotalBoth,
-		&i.TotalNs,
-		&i.Top1k,
-		&i.TopNs,
+		&i.Domains,
+		&i.BaseDomain,
+		&i.WwwDomain,
+		&i.Nameserver,
+		&i.MxRecord,
+		&i.Heroes,
+		&i.TopHeroes,
+		&i.TopNameserver,
 	)
 	return i, err
 }
