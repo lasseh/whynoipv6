@@ -46,7 +46,7 @@ func domainCrawl() {
 	}
 
 	const (
-		numWorkers = 5               // Number of workers
+		numWorkers = 10              // Number of workers
 		jobTimeout = 2 * time.Minute // Timeout for each batch of jobs
 	)
 
@@ -56,7 +56,7 @@ func domainCrawl() {
 		logg.Info().Msg("Starting crawl at " + t.Format("2006-01-02 15:04:05"))
 
 		var offset int64 = 0        // Offset for the database query
-		const limit int64 = 50      // Limit for the database query
+		const limit int64 = 200     // Limit for the database query
 		var totalDomains int        // Total number of domains checked in this crawl
 		var totalSuccessfulJobs int // Total number of successful jobs
 		var totalFailedJobs int     // Total number of failed jobs
@@ -121,7 +121,7 @@ func domainCrawl() {
 			offset += limit                       // Update the offset for the next batch
 			totalSuccessfulJobs += successfulJobs // Update the total count of successful jobs
 			totalFailedJobs += failedJobs         // Update the total count of failed jobs
-			logg.Info().Msgf("Checked %v domains, Successful: %v, Failed: %v Duraation: %s", domainJobs, successfulJobs, failedJobs, prettyDuration(time.Since(loopTime)))
+			logg.Info().Msgf("Checked %v domains, Successful: %v, Failed: %v Total: %v Duration: %s", domainJobs, successfulJobs, failedJobs, totalDomains, prettyDuration(time.Since(loopTime)))
 		}
 
 		// Outer loop finished
@@ -139,7 +139,6 @@ func domainCrawl() {
 		}
 
 		// Collect and store domain statistics.
-		// TODO: Fix the sql logic for this.
 		stats, err := domainService.CrawlerStats(ctx)
 		if err != nil {
 			logg.Err(err).Msg("Error getting stats")
@@ -180,7 +179,7 @@ func processDomain(ctx context.Context, jobs <-chan core.DomainModel, done chan<
 		// Process the job
 		checkResult, err := checkDomain(ctx, job)
 		if err != nil {
-			logg.Error().Err(err).Msg("Could not check domain")
+			logg.Error().Err(err).Msgf("[%s] Could not check domain", job.Site)
 			done <- false // Signal completion indicating failure
 			return        // Stop processing this job
 		}
@@ -191,16 +190,21 @@ func processDomain(ctx context.Context, jobs <-chan core.DomainModel, done chan<
 			var emptyResult string
 			if checkResult.BaseDomain == "" {
 				emptyResult = "BaseDomain"
+				checkResult.BaseDomain = "no_record"
 			} else if checkResult.WwwDomain == "" {
 				emptyResult = "WwwDomain"
+				checkResult.WwwDomain = "no_record"
 			} else if checkResult.Nameserver == "" {
 				emptyResult = "Nameserver"
+				checkResult.Nameserver = "no_record"
 			} else if checkResult.MXRecord == "" {
 				emptyResult = "MXRecord"
+				checkResult.MXRecord = "no_record"
 			}
-			logg.Error().Err(errors.New("Failed check: "+emptyResult)).Msgf("Empty check result for [%s]", job.Site)
-			done <- false // Signal completion indicating failure
-			return        // Stop processing this job
+			logg.Error().Err(errors.New("Failed check: "+emptyResult)).Msgf("[%s] Empty check result", job.Site)
+			// NOTE: Disable the signal completion, we still want to save the result if one of the checks failed
+			// done <- false // Signal completion indicating failure
+			// return        // Stop processing this job
 		}
 
 		// Update domain
@@ -221,7 +225,7 @@ func checkDomain(ctx context.Context, domain core.DomainModel) (core.DomainModel
 	logg := logg.With().Str("service", "checkDomain").Logger()
 
 	// Validate domain
-	err, rcode := resolver.ValidateDomain(domain.Site)
+	rcode, err := resolver.ValidateDomain(domain.Site)
 	if rcode == dns.RcodeNameError || rcode == dns.RcodeServerFailure {
 		logg.Error().Err(err).Msgf("[%s] Disabling domain", domain.Site)
 		// Disable domain
@@ -238,7 +242,7 @@ func checkDomain(ctx context.Context, domain core.DomainModel) (core.DomainModel
 	// Run all the checks on the domain.
 	domainResult, err := resolver.DomainStatus(domain.Site)
 	if err != nil {
-		logg.Error().Err(err).Msg("Could not check domain")
+		logg.Error().Err(err).Msgf("[%s] Could not check domain", domain.Site)
 		return domain, err
 	}
 
