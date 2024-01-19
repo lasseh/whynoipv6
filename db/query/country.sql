@@ -28,6 +28,7 @@ WHERE country_id = $1
   AND base_domain = 'supported'
   AND www_domain = 'supported'
   AND nameserver = 'supported'
+  AND mx_record != 'unsupported'
 ORDER BY rank
 LIMIT $2 OFFSET $3;
 
