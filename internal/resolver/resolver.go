@@ -296,7 +296,7 @@ func queryDomainStatus(client *dns.Client, domain string, qtype uint16) (string,
 			if r.Rcode == dns.RcodeNameError { // NXDOMAIN
 				return NoRecordsFound, nil
 			}
-			log.Printf("DNS query unsuccessful for [%s]: %s", domain, dns.RcodeToString[r.Rcode])
+			log.Printf("[%s] DNS query unsuccessful: %s", domain, dns.RcodeToString[r.Rcode])
 			return "", err
 		}
 
@@ -363,6 +363,7 @@ func IPLookup(domain string) (string, error) {
 // queryDNSRecord performs a DNS query for a given query name and type.
 // It returns the answer in a *dns.Msg (or nil in case of an error, in which case err will be set accordingly.)
 func queryDNSRecord(client *dns.Client, domain string, qtype uint16) (*dns.Msg, error) {
+	log := log.With().Str("service", "queryDNSRecord").Logger()
 	m := new(dns.Msg)
 	m.SetQuestion(dns.Fqdn(domain), qtype)
 	m.RecursionDesired = true
@@ -374,7 +375,7 @@ func queryDNSRecord(client *dns.Client, domain string, qtype uint16) (*dns.Msg, 
 	}
 
 	if r.Rcode != dns.RcodeSuccess {
-		log.Warn().Msgf("DNS query unsuccessful for [%s]: %s", domain, dns.RcodeToString[r.Rcode])
+		log.Warn().Msgf("[%s] DNS query unsuccessful: %s", domain, dns.RcodeToString[r.Rcode])
 		return nil, err
 	}
 
@@ -424,13 +425,13 @@ func convertToASCII(domain string) (string, error) {
 }
 
 // ValidateDomain checks if the domain has enough DNS information to proceed with the checks.
-func ValidateDomain(domain string) (error, int) {
+func ValidateDomain(domain string) (int, error) {
 	c := &dns.Client{Timeout: DefaultTimeout}
 
 	// Convert domain to ASCII for DNS lookup
 	domain, err := convertToASCII(domain)
 	if err != nil {
-		return fmt.Errorf("IDNA conversion error: %v", err), 0
+		return 0, fmt.Errorf("IDNA conversion error: %v", err)
 	}
 
 	m := new(dns.Msg)
@@ -440,13 +441,13 @@ func ValidateDomain(domain string) (error, int) {
 	// Check if domain has any DNS records, else disable it before performing any checks
 	result, err := performQuery(c, m)
 	if err != nil {
-		return err, 0
+		return 0, err
 	}
 	if result.Rcode != dns.RcodeSuccess {
-		return fmt.Errorf("[%s] RCODE: %s", domain, dns.RcodeToString[result.Rcode]), result.Rcode
+		return result.Rcode, fmt.Errorf("[%s] RCODE: %s", domain, dns.RcodeToString[result.Rcode])
 	}
 
-	return nil, 0
+	return 0, nil
 }
 
 // getTopLevelDomain extracts the top-level domain from a domain.
