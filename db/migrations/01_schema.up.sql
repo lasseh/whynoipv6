@@ -90,6 +90,8 @@ CREATE INDEX idx_domain_site ON domain(site);
 CREATE INDEX idx_domain_base_domain ON domain(base_domain);
 CREATE INDEX idx_domain_www_domain ON domain(www_domain);
 CREATE INDEX idx_domain_nameserver ON domain(nameserver);
+CREATE INDEX idx_domain_mx_record ON domain(mx_record);
+CREATE INDEX idx_domain_v6_only ON domain(v6_only);
 CREATE INDEX idx_domain_base_domain_www ON domain(base_domain, www_domain);
 CREATE INDEX idx_domain_base_domain_www_ns ON domain(base_domain, www_domain, nameserver);
 CREATE INDEX idx_domain_country_base_domain_www_ns ON domain(country_id, base_domain, www_domain, nameserver);
@@ -142,6 +144,8 @@ CREATE INDEX idx_campaign_domain_campaign_id ON campaign_domain(campaign_id, sit
 CREATE INDEX idx_campaign_domain_base_domain ON campaign_domain(base_domain);
 CREATE INDEX idx_campaign_domain_www_domain ON campaign_domain(www_domain);
 CREATE INDEX idx_campaign_domain_nameserver ON campaign_domain(nameserver);
+CREATE INDEX idx_campaign_domain_mx_record ON campaign_domain(mx_record);
+CREATE INDEX idx_campaign_domain_v6_only ON campaign_domain(v6_only);
 CREATE INDEX idx_campaign_domain_base_domain_www ON campaign_domain(base_domain, www_domain);
 CREATE INDEX idx_campaign_domain_base_domain_www_ns ON campaign_domain(base_domain, www_domain, nameserver);
 CREATE INDEX idx_campaign_domain_asn_id ON campaign_domain(asn_id);
