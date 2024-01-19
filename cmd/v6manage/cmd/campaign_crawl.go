@@ -156,7 +156,7 @@ func processCampaignDomain(ctx context.Context, jobs <-chan core.CampaignDomainM
 		// Process the job
 		checkResult, err := checkCampaignDomain(ctx, job)
 		if err != nil {
-			logg.Error().Err(err).Msg("Could not check domain")
+			logg.Error().Err(err).Msgf("[%s] Could not check domain", job.Site)
 			done <- false // Signal completion indicating failure
 			return        // Stop processing this job
 		}
@@ -166,15 +166,18 @@ func processCampaignDomain(ctx context.Context, jobs <-chan core.CampaignDomainM
 			// Find the one that is empty
 			var emptyResult string
 			if checkResult.BaseDomain == "" {
-				emptyResult = "BaseDomain"
-			} else if checkResult.WwwDomain == "" {
-				emptyResult = "WwwDomain"
-			} else if checkResult.Nameserver == "" {
-				emptyResult = "Nameserver"
-			} else if checkResult.MXRecord == "" {
-				emptyResult = "MXRecord"
+				emptyResult += "BaseDomain "
 			}
-			logg.Error().Err(errors.New("Failed check: "+emptyResult)).Msgf("Empty check result for [%s]", job.Site)
+			if checkResult.WwwDomain == "" {
+				emptyResult += "WwwDomain "
+			}
+			if checkResult.Nameserver == "" {
+				emptyResult += "Nameserver "
+			}
+			if checkResult.MXRecord == "" {
+				emptyResult += "MXRecord "
+			}
+			logg.Error().Err(errors.New("Failed check: "+emptyResult)).Msgf("[%s] Empty check result", job.Site)
 			done <- false // Signal completion indicating failure
 			return        // Stop processing this job
 		}
@@ -198,7 +201,7 @@ func checkCampaignDomain(ctx context.Context, domain core.CampaignDomainModel) (
 
 	// Validate domain
 	// Ignore the rcode here, since we want to manually disable domains.
-	err, _ := resolver.ValidateDomain(domain.Site)
+	_, err := resolver.ValidateDomain(domain.Site)
 	if err != nil {
 		// logg.Error().Err(err).Msg("Invalid domain")
 		return domain, err
@@ -207,7 +210,7 @@ func checkCampaignDomain(ctx context.Context, domain core.CampaignDomainModel) (
 	// Run all the checks on the domain.
 	domainResult, err := resolver.DomainStatus(domain.Site)
 	if err != nil {
-		logg.Error().Err(err).Msg("Could not check domain")
+		logg.Error().Err(err).Msgf("[%s] Could not check domain", domain.Site)
 		return domain, err
 	}
 
