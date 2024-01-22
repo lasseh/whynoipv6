@@ -161,27 +161,6 @@ func processCampaignDomain(ctx context.Context, jobs <-chan core.CampaignDomainM
 			return        // Stop processing this job
 		}
 
-		// Check if any of the results is empty
-		if checkResult.BaseDomain == "" || checkResult.WwwDomain == "" || checkResult.Nameserver == "" || checkResult.MXRecord == "" {
-			// Find the one that is empty
-			var emptyResult string
-			if checkResult.BaseDomain == "" {
-				emptyResult += "BaseDomain "
-			}
-			if checkResult.WwwDomain == "" {
-				emptyResult += "WwwDomain "
-			}
-			if checkResult.Nameserver == "" {
-				emptyResult += "Nameserver "
-			}
-			if checkResult.MXRecord == "" {
-				emptyResult += "MXRecord "
-			}
-			logg.Error().Err(errors.New("Failed check: "+emptyResult)).Msgf("[%s] Empty check result", job.Site)
-			done <- false // Signal completion indicating failure
-			return        // Stop processing this job
-		}
-
 		// Update domain
 		err = updateCampaignDomain(ctx, job, checkResult)
 		if err != nil {
@@ -222,6 +201,24 @@ func checkCampaignDomain(ctx context.Context, domain core.CampaignDomainModel) (
 	checkResult.WwwDomain = domainResult.WwwDomain
 	checkResult.Nameserver = domainResult.Nameserver
 	checkResult.MXRecord = domainResult.MXRecord
+
+	// Check if the results are empty and set them to "no_record" if they are.
+	if checkResult.BaseDomain == "" {
+		logg.Error().Msgf("[%s] Empty BaseDomain", domain.Site)
+		checkResult.BaseDomain = "no_record"
+	}
+	if checkResult.WwwDomain == "" {
+		logg.Error().Msgf("[%s] Empty WwwDomain", domain.Site)
+		checkResult.WwwDomain = "no_record"
+	}
+	if checkResult.Nameserver == "" {
+		logg.Error().Msgf("[%s] Empty Nameserver", domain.Site)
+		checkResult.Nameserver = "no_record"
+	}
+	if checkResult.MXRecord == "" {
+		logg.Error().Msgf("[%s] Empty MXRecord", domain.Site)
+		checkResult.MXRecord = "no_record"
+	}
 
 	// Retrieve ASN information for the domain if it has basic dns records.
 	// If the domain has no records, set the ASN ID to 1 (Unknown).
@@ -280,7 +277,7 @@ func updateCampaignDomain(ctx context.Context, currentDomain, newDomain core.Cam
 	if currentDomain.BaseDomain != newDomain.BaseDomain {
 		changelog, err := generateCampaignChangelog(currentDomain, newDomain)
 		if err != nil {
-			logg.Error().Err(err).Msg("Could not generate changelog")
+			logg.Error().Err(err).Msgf("[%s] Could not generate changelog", currentDomain.Site)
 			return err
 		}
 		createChangelog(currentDomain, changelog, newDomain.BaseDomain)
@@ -292,7 +289,7 @@ func updateCampaignDomain(ctx context.Context, currentDomain, newDomain core.Cam
 	if currentDomain.WwwDomain != newDomain.WwwDomain {
 		changelog, err := generateCampaignChangelog(currentDomain, newDomain)
 		if err != nil {
-			logg.Error().Err(err).Msg("Could not generate changelog")
+			logg.Error().Err(err).Msgf("[%s] Could not generate changelog", currentDomain.Site)
 			return err
 		}
 		createChangelog(currentDomain, changelog, newDomain.WwwDomain)
@@ -304,7 +301,7 @@ func updateCampaignDomain(ctx context.Context, currentDomain, newDomain core.Cam
 	if currentDomain.Nameserver != newDomain.Nameserver {
 		changelog, err := generateCampaignChangelog(currentDomain, newDomain)
 		if err != nil {
-			logg.Error().Err(err).Msg("Could not generate changelog")
+			logg.Error().Err(err).Msgf("[%s] Could not generate changelog", currentDomain.Site)
 			return err
 		}
 		createChangelog(currentDomain, changelog, newDomain.Nameserver)
@@ -316,7 +313,7 @@ func updateCampaignDomain(ctx context.Context, currentDomain, newDomain core.Cam
 	if currentDomain.MXRecord != newDomain.MXRecord {
 		changelog, err := generateCampaignChangelog(currentDomain, newDomain)
 		if err != nil {
-			logg.Error().Err(err).Msg("Could not generate changelog")
+			logg.Error().Err(err).Msgf("[%s] Could not generate changelog", currentDomain.Site)
 			return err
 		}
 		createChangelog(currentDomain, changelog, newDomain.MXRecord)
@@ -335,7 +332,7 @@ func updateCampaignDomain(ctx context.Context, currentDomain, newDomain core.Cam
 	// Update the domain in the database.
 	err := campaignService.UpdateCampaignDomain(ctx, currentDomain)
 	if err != nil {
-		logg.Error().Err(err).Msg("Could not update domain")
+		logg.Error().Err(err).Msgf("[%s] Could not update domain", currentDomain.Site)
 		return err
 	}
 
