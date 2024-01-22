@@ -164,9 +164,9 @@ func domainCrawl() {
 		toolbox.NotifyIrc(fmt.Sprintf("[WhyNoIPv6] Total Domains: %v, Successful: %v, Failed: %v Duration: %s", totalDomains, totalSuccessfulJobs, totalFailedJobs, prettyDuration(time.Since(t))))
 
 		// Sleep for 2 hours
-		logg.Info().Msg("Time until next check: 2 hours")
+		logg.Info().Msg("Time until next check: 10 minutes")
 		// time.Sleep(2 * time.Hour)
-		time.Sleep(20 * time.Second)
+		time.Sleep(10 * time.Minute)
 	}
 
 }
@@ -182,29 +182,6 @@ func processDomain(ctx context.Context, jobs <-chan core.DomainModel, done chan<
 			logg.Error().Err(err).Msgf("[%s] Could not check domain", job.Site)
 			done <- false // Signal completion indicating failure
 			return        // Stop processing this job
-		}
-
-		// Check if any of the results is empty
-		if checkResult.BaseDomain == "" || checkResult.WwwDomain == "" || checkResult.Nameserver == "" || checkResult.MXRecord == "" {
-			// Find the one that is empty
-			var emptyResult string
-			if checkResult.BaseDomain == "" {
-				emptyResult = "BaseDomain"
-				checkResult.BaseDomain = "no_record"
-			} else if checkResult.WwwDomain == "" {
-				emptyResult = "WwwDomain"
-				checkResult.WwwDomain = "no_record"
-			} else if checkResult.Nameserver == "" {
-				emptyResult = "Nameserver"
-				checkResult.Nameserver = "no_record"
-			} else if checkResult.MXRecord == "" {
-				emptyResult = "MXRecord"
-				checkResult.MXRecord = "no_record"
-			}
-			logg.Error().Err(errors.New("Failed check: "+emptyResult)).Msgf("[%s] Empty check result", job.Site)
-			// NOTE: Disable the signal completion, we still want to save the result if one of the checks failed
-			// done <- false // Signal completion indicating failure
-			// return        // Stop processing this job
 		}
 
 		// Update domain
@@ -226,7 +203,8 @@ func checkDomain(ctx context.Context, domain core.DomainModel) (core.DomainModel
 
 	// Validate domain
 	rcode, err := resolver.ValidateDomain(domain.Site)
-	if rcode == dns.RcodeNameError || rcode == dns.RcodeServerFailure {
+	// The return code 1 is a custom code for IDNA error
+	if rcode == dns.RcodeNameError || rcode == dns.RcodeServerFailure || rcode == 1 {
 		logg.Error().Err(err).Msgf("[%s] Disabling domain", domain.Site)
 		// Disable domain
 		if disableErr := domainService.DisableDomain(ctx, domain.Site); disableErr != nil {
@@ -253,6 +231,24 @@ func checkDomain(ctx context.Context, domain core.DomainModel) (core.DomainModel
 	checkResult.WwwDomain = domainResult.WwwDomain
 	checkResult.Nameserver = domainResult.Nameserver
 	checkResult.MXRecord = domainResult.MXRecord
+
+	// Check if the results are empty and set them to "no_record" if they are.
+	if checkResult.BaseDomain == "" {
+		logg.Error().Msgf("[%s] Empty BaseDomain", domain.Site)
+		checkResult.BaseDomain = "no_record"
+	}
+	if checkResult.WwwDomain == "" {
+		logg.Error().Msgf("[%s] Empty WwwDomain", domain.Site)
+		checkResult.WwwDomain = "no_record"
+	}
+	if checkResult.Nameserver == "" {
+		logg.Error().Msgf("[%s] Empty Nameserver", domain.Site)
+		checkResult.Nameserver = "no_record"
+	}
+	if checkResult.MXRecord == "" {
+		logg.Error().Msgf("[%s] Empty MXRecord", domain.Site)
+		checkResult.MXRecord = "no_record"
+	}
 
 	// Retrieve ASN information for the domain if it has basic dns records.
 	// If the domain has no records, set the ASN ID to 1 (Unknown).
@@ -309,7 +305,7 @@ func updateDomain(ctx context.Context, currentDomain, newDomain core.DomainModel
 	if currentDomain.BaseDomain != newDomain.BaseDomain {
 		changelog, err := generateChangelog(currentDomain, newDomain)
 		if err != nil {
-			logg.Error().Err(err).Msg("Could not generate changelog")
+			logg.Error().Err(err).Msgf("[%s] Could not generate changelog", currentDomain.Site)
 			return err
 		}
 		createChangelog(currentDomain, changelog, newDomain.BaseDomain)
@@ -321,7 +317,7 @@ func updateDomain(ctx context.Context, currentDomain, newDomain core.DomainModel
 	if currentDomain.WwwDomain != newDomain.WwwDomain {
 		changelog, err := generateChangelog(currentDomain, newDomain)
 		if err != nil {
-			logg.Error().Err(err).Msg("Could not generate changelog")
+			logg.Error().Err(err).Msgf("[%s] Could not generate changelog", currentDomain.Site)
 			return err
 		}
 		createChangelog(currentDomain, changelog, newDomain.WwwDomain)
@@ -333,7 +329,7 @@ func updateDomain(ctx context.Context, currentDomain, newDomain core.DomainModel
 	if currentDomain.Nameserver != newDomain.Nameserver {
 		changelog, err := generateChangelog(currentDomain, newDomain)
 		if err != nil {
-			logg.Error().Err(err).Msg("Could not generate changelog")
+			logg.Error().Err(err).Msgf("[%s] Could not generate changelog", currentDomain.Site)
 			return err
 		}
 		createChangelog(currentDomain, changelog, newDomain.Nameserver)
@@ -345,7 +341,7 @@ func updateDomain(ctx context.Context, currentDomain, newDomain core.DomainModel
 	if currentDomain.MXRecord != newDomain.MXRecord {
 		changelog, err := generateChangelog(currentDomain, newDomain)
 		if err != nil {
-			logg.Error().Err(err).Msg("Could not generate changelog")
+			logg.Error().Err(err).Msgf("[%s] Could not generate changelog", currentDomain.Site)
 			return err
 		}
 		createChangelog(currentDomain, changelog, newDomain.MXRecord)
@@ -364,7 +360,7 @@ func updateDomain(ctx context.Context, currentDomain, newDomain core.DomainModel
 	// Update the domain in the database.
 	err := domainService.UpdateDomain(ctx, currentDomain)
 	if err != nil {
-		logg.Error().Err(err).Msg("Could not update domain")
+		logg.Error().Err(err).Msgf("[%s] Could not update domain", currentDomain.Site)
 		return err
 	}
 
