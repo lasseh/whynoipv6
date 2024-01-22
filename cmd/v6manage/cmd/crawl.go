@@ -446,15 +446,3 @@ func generateChangelog(currentDomain, newDomain core.DomainModel) (string, error
 
 	return "", errors.New("Unknown change for " + currentDomain.Site + ": BaseDomain: [" + currentDomain.BaseDomain + " - " + newDomain.BaseDomain + "] WwwDomain: [" + currentDomain.WwwDomain + " - " + newDomain.WwwDomain + "] Nameserver: [" + currentDomain.Nameserver + " - " + newDomain.Nameserver + "] MXRecord: [" + currentDomain.MXRecord + " - " + newDomain.MXRecord + "]")
 }
-
-// runHealthcheckReportingJob runs a job that periodically reports the healthcheck status
-// func runHealthcheckReportingJob() {
-// 	ticker := time.NewTicker(2 * time.Minute)
-// 	defer ticker.Stop()
-
-// 	for range ticker.C {
-// 		// Notify healthcheck status
-// 		logg.Info().Msg("Performing healthcheck reporting...")
-// 		toolboxService.HealthCheckUpdate(cfg.HealthcheckCampaign)
-// 	}
-// }
