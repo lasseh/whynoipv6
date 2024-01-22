@@ -43,25 +43,27 @@ func DomainStatus(domain string) (DomainResult, error) {
 	// Convert domain to ASCII for DNS lookup
 	domain, err := convertToASCII(domain)
 	if err != nil {
+		// TODO: Disable the domain if it fails to convert to ASCII
 		return DomainResult{}, fmt.Errorf("IDNA conversion error: %v", err)
 	}
 
 	baseDomainStatus, err := checkDomainStatus(domain, c)
 	if err != nil {
 		log.Error().Msgf("Error checking base domain [%s]: %v", domain, err)
-		return DomainResult{}, err
+		log.Debug().Err(err).Msgf("Error checking base domain [%s]", domain)
+		// return DomainResult{}, err
 	}
 
 	WwwDomainStatus, err := checkDomainStatus("www."+domain, c)
 	if err != nil {
 		log.Error().Msgf("Error checking www domain [%s]: %v", domain, err)
-		return DomainResult{}, err
+		// return DomainResult{}, err
 	}
 
 	nsStatus, mxStatus, err := checkDNSRecords(domain, c)
 	if err != nil {
 		log.Err(err).Msgf("Error checking NS/MX records for domain [%s]: %v", domain, err)
-		return DomainResult{}, err
+		// return DomainResult{}, err
 	}
 
 	return DomainResult{
@@ -431,7 +433,8 @@ func ValidateDomain(domain string) (int, error) {
 	// Convert domain to ASCII for DNS lookup
 	domain, err := convertToASCII(domain)
 	if err != nil {
-		return 0, fmt.Errorf("IDNA conversion error: %v", err)
+		// Return a non-zero exit code to disable the domain
+		return 1, fmt.Errorf("IDNA conversion error: %v", err)
 	}
 
 	m := new(dns.Msg)
