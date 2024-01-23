@@ -24,8 +24,9 @@ LIMIT $1 OFFSET $2;
 -- name: CrawlDomain :many
 SELECT *
 FROM domain_crawl_list
+WHERE id > $1
 ORDER BY id
-LIMIT $1 OFFSET $2;
+LIMIT $2;
 
 -- name: ViewDomain :one
 SELECT *

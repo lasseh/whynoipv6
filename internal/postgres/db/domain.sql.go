@@ -13,17 +13,18 @@ import (
 const CrawlDomain = `-- name: CrawlDomain :many
 SELECT id, site, base_domain, www_domain, nameserver, mx_record, v6_only, asn_id, country_id, disabled, ts_base_domain, ts_www_domain, ts_nameserver, ts_mx_record, ts_v6_only, ts_check, ts_updated
 FROM domain_crawl_list
+WHERE id > $1
 ORDER BY id
-LIMIT $1 OFFSET $2
+LIMIT $2
 `
 
 type CrawlDomainParams struct {
-	Limit  int64
-	Offset int64
+	ID    int64
+	Limit int64
 }
 
 func (q *Queries) CrawlDomain(ctx context.Context, arg CrawlDomainParams) ([]DomainCrawlList, error) {
-	rows, err := q.db.Query(ctx, CrawlDomain, arg.Limit, arg.Offset)
+	rows, err := q.db.Query(ctx, CrawlDomain, arg.ID, arg.Limit)
 	if err != nil {
 		return nil, err
 	}
