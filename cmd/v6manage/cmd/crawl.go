@@ -165,10 +165,8 @@ func domainCrawl() {
 
 		// Sleep for 2 hours
 		logg.Info().Msg("Time until next check: 10 minutes")
-		// time.Sleep(2 * time.Hour)
 		time.Sleep(10 * time.Minute)
 	}
-
 }
 
 // processDomain processes a domain and updates the database
