@@ -55,11 +55,11 @@ func domainCrawl() {
 		t := time.Now()
 		logg.Info().Msg("Starting crawl at " + t.Format("2006-01-02 15:04:05"))
 
-		var offset int64 = 0        // Offset for the database query
-		const limit int64 = 200     // Limit for the database query
-		var totalDomains int        // Total number of domains checked in this crawl
-		var totalSuccessfulJobs int // Total number of successful jobs
-		var totalFailedJobs int     // Total number of failed jobs
+		var lastProcessedID int64 = 0 // Offset for the database query
+		const limit int64 = 200       // Limit for the database query
+		var totalDomains int          // Total number of domains checked in this crawl
+		var totalSuccessfulJobs int   // Total number of successful jobs
+		var totalFailedJobs int       // Total number of failed jobs
 
 		// Inner loop
 		for {
@@ -76,7 +76,7 @@ func domainCrawl() {
 			}
 
 			// Get domains to check
-			domains, err := domainService.CrawlDomain(ctx, offset, limit)
+			domains, err := domainService.CrawlDomain(ctx, lastProcessedID, limit)
 			if err != nil {
 				logg.Error().Err(err).Msg("Could not get domains to check")
 				return
@@ -87,11 +87,19 @@ func domainCrawl() {
 				break
 			}
 
+			// Initialize the variable to track the highest ID in this batch
+			var highestIDInBatch int64 = 0
+
 			// Send jobs to the workers
 			for _, domain := range domains {
 				jobs <- domain // Send the job to the jobs channel
 				domainJobs++   // Increment the number of domains updated in this batch
 				totalDomains++ // Increment the total number of domains checked in this crawl
+
+				// Update highestIDInBatch if the current domain's ID is higher
+				if domain.ID > highestIDInBatch {
+					highestIDInBatch = domain.ID
+				}
 			}
 
 			close(jobs)                       // Close the jobs channel and wait for this batch of workers to finish
@@ -118,7 +126,8 @@ func domainCrawl() {
 
 			// Batch finished
 		BatchTimeout:
-			offset += limit                       // Update the offset for the next batch
+			// offset += limit // Update the offset for the next batch
+			lastProcessedID = highestIDInBatch // Update lastProcessedID for the next batch
 			totalSuccessfulJobs += successfulJobs // Update the total count of successful jobs
 			totalFailedJobs += failedJobs         // Update the total count of failed jobs
 			logg.Info().Msgf("Checked %v domains, Successful: %v, Failed: %v Total: %v Duration: %s", domainJobs, successfulJobs, failedJobs, totalDomains, prettyDuration(time.Since(loopTime)))

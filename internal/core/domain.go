@@ -131,10 +131,10 @@ func (s *DomainService) ListDomainHeroes(ctx context.Context, offset, limit int6
 }
 
 // CrawlDomain lists all domains available for crawling
-func (s *DomainService) CrawlDomain(ctx context.Context, offset, limit int64) ([]DomainModel, error) {
+func (s *DomainService) CrawlDomain(ctx context.Context, lastProcessedID, limit int64) ([]DomainModel, error) {
 	domains, err := s.q.CrawlDomain(ctx, db.CrawlDomainParams{
-		Offset: offset,
-		Limit:  limit,
+		ID:    lastProcessedID,
+		Limit: limit,
 	})
 	if err != nil {
 		return nil, err
