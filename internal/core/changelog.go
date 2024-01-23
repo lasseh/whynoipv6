@@ -112,6 +112,7 @@ func (s *ChangelogService) CampaignList(ctx context.Context, offset, limit int64
 			ID:         changelog.ID,
 			Ts:         changelog.Ts,
 			Site:       changelog.Site,
+			CampaignID: changelog.CampaignID,
 			Message:    changelog.Message,
 			IPv6Status: changelog.Ipv6Status,
 		})
