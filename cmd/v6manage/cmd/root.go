@@ -59,7 +59,7 @@ func init() {
 	}
 
 	// Connect to the database
-	db, err = postgres.NewPostgreSQL(cfg.DatabaseSource)
+	db, err = postgres.NewPostgreSQL(cfg.DatabaseSource + "&application_name=v6manage")
 	if err != nil {
 		log.Fatalln("Error connecting to database", err)
 	}

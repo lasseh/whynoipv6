@@ -21,7 +21,7 @@ func main() {
 	}
 
 	// Connect to the PostgreSQL database.
-	db, err := postgres.NewPostgreSQL(cfg.DatabaseSource)
+	db, err := postgres.NewPostgreSQL(cfg.DatabaseSource + "&application_name=api")
 	if err != nil {
 		log.Fatalf("Failed to connect to the database: %v", err)
 	}
