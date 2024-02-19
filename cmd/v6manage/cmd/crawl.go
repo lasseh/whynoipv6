@@ -379,75 +379,75 @@ func generateChangelog(currentDomain, newDomain core.DomainModel) (string, error
 	// Base Domain
 	if currentDomain.BaseDomain != newDomain.BaseDomain {
 		if currentDomain.BaseDomain == "unsupported" && newDomain.BaseDomain == "supported" {
-			return fmt.Sprintf("Got IPv6 record for %s", currentDomain.Site), nil
+			return fmt.Sprintf("IPv6 enabled for %s", currentDomain.Site), nil
 		}
 		if currentDomain.BaseDomain == "supported" && newDomain.BaseDomain == "unsupported" {
-			return fmt.Sprintf("Lost IPv6 record for %s", currentDomain.Site), nil
+			return fmt.Sprintf("IPv6 lost for %s", currentDomain.Site), nil
 		}
 		if currentDomain.BaseDomain == "no_record" && newDomain.BaseDomain == "supported" {
-			return fmt.Sprintf("Got IPv6 record for %s", currentDomain.Site), nil
+			return fmt.Sprintf("IPv6 enabled for %s", currentDomain.Site), nil
 		}
 		if currentDomain.BaseDomain == "no_record" && newDomain.BaseDomain == "unsupported" {
-			return fmt.Sprintf("Got IPv4 Only record for %s", currentDomain.Site), nil
+			return fmt.Sprintf("IPv4-only for %s", currentDomain.Site), nil
 		}
 		if newDomain.BaseDomain == "no_record" {
-			return fmt.Sprintf("%s has no record", currentDomain.Site), nil
+			return fmt.Sprintf("No DNS records found for %s", currentDomain.Site), nil
 		}
 	}
 	// WWW Domain
 	if currentDomain.WwwDomain != newDomain.WwwDomain {
 		if currentDomain.WwwDomain == "unsupported" && newDomain.WwwDomain == "supported" {
-			return fmt.Sprintf("Got IPv6 record for www.%s", currentDomain.Site), nil
+			return fmt.Sprintf("IPv6 enabled for www.%s", currentDomain.Site), nil
 		}
 		if currentDomain.WwwDomain == "supported" && newDomain.WwwDomain == "unsupported" {
-			return fmt.Sprintf("Lost IPv6 record for www.%s", currentDomain.Site), nil
+			return fmt.Sprintf("IPv6 lost for www.%s", currentDomain.Site), nil
 		}
 		if currentDomain.WwwDomain == "no_record" && newDomain.WwwDomain == "supported" {
-			return fmt.Sprintf("Got IPv6 record for www.%s", currentDomain.Site), nil
+			return fmt.Sprintf("IPv6 enabled for www.%s", currentDomain.Site), nil
 		}
 		if currentDomain.WwwDomain == "no_record" && newDomain.WwwDomain == "unsupported" {
-			return fmt.Sprintf("Got IPv4 Only record for www.%s", currentDomain.Site), nil
+			return fmt.Sprintf("IPv4-only for www.%s", currentDomain.Site), nil
 		}
 		if newDomain.WwwDomain == "no_record" {
-			return fmt.Sprintf("www.%s has no record", currentDomain.Site), nil
+			return fmt.Sprintf("No DNS records found for www.%s", currentDomain.Site), nil
 		}
 	}
 
 	// Nameserver
 	if currentDomain.Nameserver != newDomain.Nameserver {
 		if currentDomain.Nameserver == "unsupported" && newDomain.Nameserver == "supported" {
-			return fmt.Sprintf("Nameserver got IPv6 record for %s", currentDomain.Site), nil
+			return fmt.Sprintf("IPv6 enabled nameserver for %s", currentDomain.Site), nil
 		}
 		if currentDomain.Nameserver == "supported" && newDomain.Nameserver == "unsupported" {
-			return fmt.Sprintf("Nameserver lost IPv6 record for %s", currentDomain.Site), nil
+			return fmt.Sprintf("Nameservers degraded to IPv4-only for %s", currentDomain.Site), nil
 		}
 		if currentDomain.Nameserver == "no_record" && newDomain.Nameserver == "supported" {
-			return fmt.Sprintf("Nameserver got IPv6 record for %s", currentDomain.Site), nil
+			return fmt.Sprintf("IPv6 enabled nameserver for %s", currentDomain.Site), nil
 		}
 		if currentDomain.Nameserver == "no_record" && newDomain.Nameserver == "unsupported" {
-			return fmt.Sprintf("Nameserver got IPv4 Only record for %s", currentDomain.Site), nil
+			return fmt.Sprintf("IPv4-only nameservers for %s", currentDomain.Site), nil
 		}
 		if newDomain.Nameserver == "no_record" {
-			return fmt.Sprintf("No NS records for %s", currentDomain.Site), nil
+			return fmt.Sprintf("No NS records found for %s", currentDomain.Site), nil
 		}
 	}
 
 	// MX Record
 	if currentDomain.MXRecord != newDomain.MXRecord {
 		if currentDomain.MXRecord == "unsupported" && newDomain.MXRecord == "supported" {
-			return fmt.Sprintf("MX record got IPv6 record for %s", currentDomain.Site), nil
+			return fmt.Sprintf("IPv6 enabled MX records for %s", currentDomain.Site), nil
 		}
 		if currentDomain.MXRecord == "supported" && newDomain.MXRecord == "unsupported" {
-			return fmt.Sprintf("MX record lost IPv6 record for %s", currentDomain.Site), nil
+			return fmt.Sprintf("MX records degraded to IPv4-only for %s", currentDomain.Site), nil
 		}
 		if currentDomain.MXRecord == "no_record" && newDomain.MXRecord == "supported" {
-			return fmt.Sprintf("MX record got IPv6 record for %s", currentDomain.Site), nil
+			return fmt.Sprintf("IPv6 enabled MX records for %s", currentDomain.Site), nil
 		}
 		if currentDomain.MXRecord == "no_record" && newDomain.MXRecord == "unsupported" {
-			return fmt.Sprintf("MX record got IPv4 Only record for %s", currentDomain.Site), nil
+			return fmt.Sprintf("IPv4-only MX records for %s", currentDomain.Site), nil
 		}
 		if newDomain.MXRecord == "no_record" {
-			return fmt.Sprintf("No MX records for %s", currentDomain.Site), nil
+			return fmt.Sprintf("No Mail records found for %s", currentDomain.Site), nil
 		}
 	}
 

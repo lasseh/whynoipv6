@@ -22,6 +22,7 @@ type ChangelogResponse struct {
 	ID         int64     `json:"id"`
 	Ts         time.Time `json:"ts"`
 	Domain     string    `json:"domain"`
+	DomainURL  string    `json:"domain_url"`
 	Message    string    `json:"message"`
 	IPv6Status string    `json:"ipv6_status"`
 }
@@ -70,6 +71,7 @@ func (rs ChangelogHandler) ChangelogList(w http.ResponseWriter, r *http.Request)
 			ID:         changelog.ID,
 			Ts:         changelog.Ts,
 			Domain:     changelog.Site,
+			DomainURL:  "/domain/" + changelog.Site,
 			Message:    changelog.Message,
 			IPv6Status: changelog.IPv6Status,
 		})
@@ -105,6 +107,7 @@ func (rs ChangelogHandler) CampaignChangelogList(w http.ResponseWriter, r *http.
 			ID:         changelog.ID,
 			Ts:         changelog.Ts,
 			Domain:     changelog.Site,
+			DomainURL:  "/campaign/" + string(changelog.CampaignID.String()) + "/" + changelog.Site,
 			Message:    changelog.Message,
 			IPv6Status: changelog.IPv6Status,
 		})
