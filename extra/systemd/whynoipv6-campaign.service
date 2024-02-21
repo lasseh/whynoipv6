@@ -1,0 +1,13 @@
+[Unit]
+Description=Crawles sites in whynoipv6 database
+Wants=whynov6-crawler.timer
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/lasse/code/go/src/github.com/lasseh/whynoipv6
+ExecStart=/home/lasse/code/go/bin/crawler --domain --nameserver --asn
+User=lasse
+Group=lasse
+
+[Install]
+WantedBy=multi-user.target

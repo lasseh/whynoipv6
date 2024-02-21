@@ -102,7 +102,6 @@ func (rs CountryHandler) CountryInfo(w http.ResponseWriter, r *http.Request) {
 		Percent:     percent,
 	}
 
-	// TODO: Fix percent calculation
 	render.JSON(w, r, countryRespose)
 }
 

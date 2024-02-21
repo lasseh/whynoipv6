@@ -32,6 +32,13 @@ WHERE country_id = $1
 ORDER BY rank
 LIMIT $2 OFFSET $3;
 
+-- name: AllDomainsByCountry :many
+SELECT *
+FROM domain_view_list
+WHERE domain_view_list.country_id = $1
+ORDER BY domain_view_list.id
+LIMIT $2 OFFSET $3;
+
 -- name: ListCountry :many
 SELECT *
 FROM country

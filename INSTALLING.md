@@ -17,6 +17,9 @@ GRANT ALL PRIVILEGES ON DATABASE whynoipv6 TO whynoipv6;
 ```CREATE EXTENSION pgcrypto;```
 
 2. Run the database migrations:  
+install migrate:
+```go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest```
+
 ```make migrateup```
 
 ## Installing and Running Services
