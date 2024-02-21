@@ -43,7 +43,6 @@ func DomainStatus(domain string) (DomainResult, error) {
 	// Convert domain to ASCII for DNS lookup
 	domain, err := convertToASCII(domain)
 	if err != nil {
-		// TODO: Disable the domain if it fails to convert to ASCII
 		return DomainResult{}, fmt.Errorf("IDNA conversion error: %v", err)
 	}
 
@@ -131,7 +130,6 @@ func checkNameserver(domain string, c *dns.Client) (string, error) {
 	// log.Debug().Msgf("Checking nameservers for [%s]", domain)
 
 	// Check on the top level domain.
-	// TODO: Check if this is working as intended.
 	tld := getTopLevelDomain(domain)
 
 	// Get all nameservers for the domain
