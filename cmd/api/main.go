@@ -40,12 +40,17 @@ func main() {
 	campaignService := core.NewCampaignService(db)
 	metricService := core.NewMetricService(db)
 
+	// Message for the / endpoint.
+	router.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, "Api docs can be found at http://ipv6.fail/")
+	})
+
 	// Register API endpoints with their respective handlers.
-	router.Mount("/api/domain", rest.DomainHandler{Repo: domainService}.Routes())
-	router.Mount("/api/country", rest.CountryHandler{Repo: countryService}.Routes())
-	router.Mount("/api/changelog", rest.ChangelogHandler{Repo: changelogService}.Routes())
-	router.Mount("/api/campaign", rest.CampaignHandler{Repo: campaignService}.Routes())
-	router.Mount("/api/metric", rest.MetricHandler{Repo: metricService}.Routes())
+	router.Mount("/domain", rest.DomainHandler{Repo: domainService}.Routes())
+	router.Mount("/country", rest.CountryHandler{Repo: countryService}.Routes())
+	router.Mount("/changelog", rest.ChangelogHandler{Repo: changelogService}.Routes())
+	router.Mount("/campaign", rest.CampaignHandler{Repo: campaignService}.Routes())
+	router.Mount("/metric", rest.MetricHandler{Repo: metricService}.Routes())
 
 	// Print the registered routes for debugging purposes.
 	rest.PrintRoutes(router)
