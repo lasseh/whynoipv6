@@ -1,11 +1,11 @@
 [Unit]
-Description=WhynoIPv6: Crawler
+Description=WhynoIPv6: Campaign Crawler
 After=network-online.target postgresql-16.service
 
 [Service]
 Type=simple
 WorkingDirectory={{ project_path }}
-ExecStart={{ bin_path }}/v6manage crawl
+ExecStart={{ bin_path }}/v6manage campaign crawl
 ExecReload=/usr/bin/kill -HUP $MAINPID
 Restart=on-failure
 RestartSec=30

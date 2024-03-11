@@ -1,16 +1,16 @@
-# Service file for https://whynoipv6.com
 [Unit]
-Description=WhynoIPv6.com
-After=network-online.target postgresql-10.service
+Description=WhynoIPv6: API
+After=network-online.target postgresql-16.service
 
 [Service]
 Type=simple
-WorkingDirectory=/home/lasse/code/go/src/github.com/lasseh/whynoipv6
-ExecStart=/home/lasse/code/go/bin/whynoipv6
+WorkingDirectory={{ project_path }}
+ExecStart={{ bin_path }}/v6-api
 ExecReload=/usr/bin/kill -HUP $MAINPID
 Restart=on-failure
-User=lasse
-Group=lasse
+RestartSec=30
+User={{ user }}
+Group={{ group}}
 
 [Install]
 WantedBy=multi-user.target

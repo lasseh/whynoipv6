@@ -1,10 +1,10 @@
 [Unit]
-Description=Run the WhynoIPv6 Crawler every monday
-Requires=whynov6-crawler.service
+Description=WhyNoIPv6: Import Campaigns
+Requires=v6-campaign-import.service
 
 [Timer]
-#OnCalendar=weekly
-OnCalendar=Mon 01:00
+OnBootSec=15min
+OnCalendar=daily
 Persistent=true
 
 [Install]

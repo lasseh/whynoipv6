@@ -1,15 +1,17 @@
 [Unit]
-Description=Crawles sites in whynoipv6 database
-Wants=whynov6-crawler.timer
+Description=WhynoIPv6: Campaign Import
+After=network-online.target postgresql-16.service
 
 [Service]
-Type=oneshot
-WorkingDirectory=/home/lasse/code/go/src/github.com/lasseh/whynoipv6
-ExecStart=/home/lasse/code/go/bin/crawler --domain --nameserver --asn
-User=lasse
-Group=lasse
+Type=simple
+WorkingDirectory={{ project_path }}
+Environment="CAMPAIGN_PATH={{ ansible_env.GOPATH | default(default_gopath) }}/src/github.com/lasseh/whynoipv6-campaign/"
+ExecStart={{ bin_path }}/v6manage campaign import
+ExecReload=/usr/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=30
+User={{ user }}
+Group={{ group}}
 
 [Install]
 WantedBy=multi-user.target
-
-# TODO: Should update the git repo before running import
