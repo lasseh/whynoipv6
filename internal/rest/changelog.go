@@ -59,8 +59,8 @@ func (rs ChangelogHandler) ChangelogList(w http.ResponseWriter, r *http.Request)
 	changelogs, err := rs.Repo.List(r.Context(), paginationInput.Offset, paginationInput.Limit)
 	if err != nil {
 		// Handle any errors while fetching changelogs
-		render.Status(r, http.StatusInternalServerError)
-		render.JSON(w, r, render.M{"error": "internal server error"})
+		render.Status(r, http.StatusNotFound)
+		render.JSON(w, r, render.M{"error": "No changelog entries found"})
 		return
 	}
 
@@ -95,8 +95,8 @@ func (rs ChangelogHandler) CampaignChangelogList(w http.ResponseWriter, r *http.
 	changelogs, err := rs.Repo.CampaignList(r.Context(), paginationInput.Offset, paginationInput.Limit)
 	if err != nil {
 		// Handle any errors while fetching changelogs
-		render.Status(r, http.StatusInternalServerError)
-		render.JSON(w, r, render.M{"error": "internal server error"})
+		render.Status(r, http.StatusNotFound)
+		render.JSON(w, r, render.M{"error": "No changelog entries found for campaigns"})
 		return
 	}
 
@@ -107,7 +107,7 @@ func (rs ChangelogHandler) CampaignChangelogList(w http.ResponseWriter, r *http.
 			ID:         changelog.ID,
 			Ts:         changelog.Ts,
 			Domain:     changelog.Site,
-			DomainURL:  "/campaign/" + string(changelog.CampaignID.String()) + "/" + changelog.Site,
+			DomainURL:  "/campaign/" + encodeUUID(changelog.CampaignID) + "/" + changelog.Site,
 			Message:    changelog.Message,
 			IPv6Status: changelog.IPv6Status,
 		})
@@ -180,12 +180,14 @@ func (rs ChangelogHandler) ChangelogByCampaign(w http.ResponseWriter, r *http.Re
 	}
 
 	// Get campaign UUID from path
-	campaign := chi.URLParam(r, "uuid")
+	campaignUUID := chi.URLParam(r, "uuid")
+	// Decode uuid from shortuuid to google uuid
+	decodeID, err := decodeUUID(campaignUUID)
 
 	// Validate and parse the UUID
-	uuid, err := uuid.Parse(campaign)
+	uuid, err := uuid.Parse(decodeID.String())
 	if err != nil {
-		render.Status(r, http.StatusBadRequest)
+		render.Status(r, http.StatusNotFound)
 		render.JSON(w, r, render.M{"error": "Invalid UUID"})
 		return
 	}
@@ -194,14 +196,14 @@ func (rs ChangelogHandler) ChangelogByCampaign(w http.ResponseWriter, r *http.Re
 	changelogs, err := rs.Repo.GetChangelogByCampaign(r.Context(), uuid, paginationInput.Offset, paginationInput.Limit)
 	if err != nil {
 		render.Status(r, http.StatusNotFound)
-		render.JSON(w, r, render.M{"error": "Unable to find changelog entries for campaign " + campaign})
+		render.JSON(w, r, render.M{"error": "Unable to find changelog entries for campaign " + uuid.String()})
 		return
 	}
 
 	// If no changelogs are found, return 404
 	if len(changelogs) == 0 {
 		render.Status(r, http.StatusNotFound)
-		render.JSON(w, r, render.M{"error": "No changelog entries found for campaign " + campaign})
+		render.JSON(w, r, render.M{"error": "No changelog entries found for campaign " + uuid.String()})
 		return
 	}
 
@@ -212,6 +214,7 @@ func (rs ChangelogHandler) ChangelogByCampaign(w http.ResponseWriter, r *http.Re
 			ID:         changelog.ID,
 			Ts:         changelog.Ts,
 			Domain:     changelog.Site,
+			DomainURL:  "/campaign/" + encodeUUID(changelog.CampaignID) + "/" + changelog.Site,
 			Message:    changelog.Message,
 			IPv6Status: changelog.IPv6Status,
 		})
@@ -232,7 +235,7 @@ func (rs ChangelogHandler) ChangelogByCampaignDomain(w http.ResponseWriter, r *h
 	}
 
 	// Get campaign UUID and domain from path
-	campaign := chi.URLParam(r, "uuid")
+	campaignUUID := chi.URLParam(r, "uuid")
 	site := chi.URLParam(r, "domain")
 
 	// Validate the domain
@@ -243,8 +246,11 @@ func (rs ChangelogHandler) ChangelogByCampaignDomain(w http.ResponseWriter, r *h
 		return
 	}
 
+	// Decode uuid from shortuuid to google uuid
+	decodeID, err := decodeUUID(campaignUUID)
+
 	// Validate and parse the UUID
-	uuid, err := uuid.Parse(campaign)
+	uuid, err := uuid.Parse(decodeID.String())
 	if err != nil {
 		render.Status(r, http.StatusBadRequest)
 		render.JSON(w, r, render.M{"error": "Invalid UUID"})
@@ -255,14 +261,14 @@ func (rs ChangelogHandler) ChangelogByCampaignDomain(w http.ResponseWriter, r *h
 	changelogs, err := rs.Repo.GetChangelogByCampaignDomain(r.Context(), uuid, site, paginationInput.Offset, paginationInput.Limit)
 	if err != nil {
 		render.Status(r, http.StatusNotFound)
-		render.JSON(w, r, render.M{"error": "Unable to find changelog entries for campaign " + campaign + " and domain " + site})
+		render.JSON(w, r, render.M{"error": "Unable to find changelog entries for campaign " + campaignUUID + " and domain " + site})
 		return
 	}
 
 	// If no changelogs are found, return 404
 	if len(changelogs) == 0 {
 		render.Status(r, http.StatusNotFound)
-		render.JSON(w, r, render.M{"error": "No changelog entries found for campaign " + campaign + " and domain " + site})
+		render.JSON(w, r, render.M{"error": "No changelog entries found for campaign " + campaignUUID + " and domain " + site})
 		return
 	}
 

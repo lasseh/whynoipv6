@@ -13,6 +13,7 @@ require (
 	github.com/jackc/pgconn v1.14.1
 	github.com/jackc/pgtype v1.14.1
 	github.com/jackc/pgx/v4 v4.18.1
+	github.com/lithammer/shortuuid/v4 v4.0.0
 	github.com/miekg/dns v1.1.57
 	github.com/rs/cors v1.10.1
 	github.com/rs/zerolog v1.31.0
