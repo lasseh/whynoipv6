@@ -7,6 +7,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/render"
+	"github.com/google/uuid"
+	"github.com/lithammer/shortuuid/v4"
 	"github.com/rs/cors"
 )
 
@@ -57,4 +59,23 @@ func PrintRoutes(r *chi.Mux) {
 type PaginationInput struct {
 	Offset int64 `in:"query=offset;default=0"`
 	Limit  int64 `in:"query=limit;default=50"`
+}
+
+// encodeUUID encodes a UUID to a short UUID.
+func encodeUUID(id uuid.UUID) string {
+	id, err := uuid.Parse(id.String())
+	if err != nil {
+		// return "", err
+	}
+	su := shortuuid.DefaultEncoder.Encode(id)
+	return su
+}
+
+// decodeUUID decodes a short UUID to a UUID.
+func decodeUUID(id string) (uuid.UUID, error) {
+	decoded, err := shortuuid.DefaultEncoder.Decode(id)
+	if err != nil {
+		return uuid.Nil, err
+	}
+	return decoded, nil
 }

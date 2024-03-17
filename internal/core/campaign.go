@@ -270,19 +270,6 @@ func (s *CampaignService) ListCampaignDomain(ctx context.Context, campaignID uui
 	return list, nil
 }
 
-// UpdateCampaign updates a campaign.
-// func (s *CampaignService) UpdateCampaign(ctx context.Context, campaign CampaignModel) error {
-// 	err := s.q.UpdateCampaign(ctx, db.UpdateCampaignParams{
-// 		Name:        campaign.Name,
-// 		Description: campaign.Description,
-// 		Uuid:        campaign.UUID,
-// 	})
-// 	if err != nil {
-// 		return err
-// 	}
-// 	return nil
-// }
-
 // DeleteCampaignDomain deletes a domain from a campaign.
 func (s *CampaignService) DeleteCampaignDomain(ctx context.Context, campaignID uuid.UUID, domain string) error {
 	err := s.q.DeleteCampaignDomain(ctx, db.DeleteCampaignDomainParams{

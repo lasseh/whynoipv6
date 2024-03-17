@@ -39,13 +39,12 @@ type CampaignResponse struct {
 
 // CampaignListResponse represents a campaign.
 type CampaignListResponse struct {
-	ID int64 `json:"id"`
-	// CreatedAt   time.Time `json:"created_at"`
-	UUID        uuid.UUID `json:"uuid"`
-	Name        string    `json:"name"`
-	Description string    `json:"description"`
-	Count       int64     `json:"count"`
-	V6Ready     int64     `json:"v6_ready"`
+	ID          int64  `json:"id"`
+	UUID        string `json:"uuid"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Count       int64  `json:"count"`
+	V6Ready     int64  `json:"v6_ready"`
 }
 
 // Routes returns a router with all campaign endpoints mounted.
@@ -79,7 +78,7 @@ func (rs CampaignHandler) CampaignList(w http.ResponseWriter, r *http.Request) {
 	for _, campaign := range allCampaigns {
 		campaignList = append(campaignList, CampaignListResponse{
 			ID:          campaign.ID,
-			UUID:        campaign.UUID,
+			UUID:        encodeUUID(campaign.UUID),
 			Name:        campaign.Name,
 			Description: campaign.Description,
 			Count:       campaign.Count,
@@ -101,9 +100,10 @@ func (rs CampaignHandler) CampaignDomains(w http.ResponseWriter, r *http.Request
 
 	// Get campaign UUID from path
 	campaignUUID := chi.URLParam(r, "uuid")
-
+	// Decode uuid from shortuuid to google uuid
+	decodeID, err := decodeUUID(campaignUUID)
 	// Convert campaignUUID to uuid.UUID
-	parsedUUID, err := uuid.Parse(campaignUUID)
+	parsedUUID, err := uuid.Parse(decodeID.String())
 	if err != nil {
 		render.Status(r, http.StatusNotFound)
 		render.JSON(w, r, render.M{"error": "Invalid UUID"})
@@ -121,8 +121,8 @@ func (rs CampaignHandler) CampaignDomains(w http.ResponseWriter, r *http.Request
 	// Retrieve domains associated with the campaign
 	domains, err := rs.Repo.ListCampaignDomain(r.Context(), parsedUUID, paginationInput.Offset, paginationInput.Limit)
 	if err != nil {
-		render.Status(r, http.StatusInternalServerError)
-		render.JSON(w, r, render.M{"error": "Internal server error"})
+		render.Status(r, http.StatusNotFound)
+		render.JSON(w, r, render.M{"error": "Campaign not found"})
 		return
 	}
 	if len(domains) == 0 {
@@ -159,7 +159,7 @@ func (rs CampaignHandler) CampaignDomains(w http.ResponseWriter, r *http.Request
 	}{
 		Campaign: CampaignListResponse{
 			ID:          campaignDetails.ID,
-			UUID:        campaignDetails.UUID,
+			UUID:        encodeUUID(campaignDetails.UUID),
 			Name:        campaignDetails.Name,
 			Description: campaignDetails.Description,
 			Count:       campaignDetails.Count,
@@ -174,11 +174,13 @@ func (rs CampaignHandler) CampaignDomains(w http.ResponseWriter, r *http.Request
 // ViewCampaignDomain retrives a single domain in a campaign.
 func (rs CampaignHandler) ViewCampaignDomain(w http.ResponseWriter, r *http.Request) {
 	// Get campaign UUID and domain from path
-	campaign := chi.URLParam(r, "uuid")
+	campaignUUID := chi.URLParam(r, "uuid")
 	site := chi.URLParam(r, "domain")
 
+	// Decode uuid from shortuuid to google uuid
+	decodeID, err := decodeUUID(campaignUUID)
 	// Validate and parse the UUID
-	uuid, err := uuid.Parse(campaign)
+	uuid, err := uuid.Parse(decodeID.String())
 	if err != nil {
 		render.Status(r, http.StatusBadRequest)
 		render.JSON(w, r, render.M{"error": "Invalid UUID"})
@@ -204,7 +206,7 @@ func (rs CampaignHandler) ViewCampaignDomain(w http.ResponseWriter, r *http.Requ
 	// If no changelogs are found, return 404
 	if len(domainDetails.Site) == 0 {
 		render.Status(r, http.StatusNotFound)
-		render.JSON(w, r, render.M{"error": "No changelog entries found for campaign " + campaign + " and domain " + site})
+		render.JSON(w, r, render.M{"error": "No changelog entries found for campaign " + campaignUUID + " and domain " + site})
 		return
 	}
 
@@ -242,13 +244,13 @@ func (rs CampaignHandler) SearchDomain(w http.ResponseWriter, r *http.Request) {
 	campaignDomains, err := rs.Repo.GetCampaignDomainsByName(r.Context(), strings.ToLower(domain), paginationInput.Offset, paginationInput.Limit)
 	if err != nil {
 		render.Status(r, http.StatusNotFound)
-		render.JSON(w, r, render.M{"error": "Internal server error"})
+		render.JSON(w, r, render.M{"error": "No domains found"})
 		return
 	}
 
 	if len(campaignDomains) == 0 {
 		render.Status(r, http.StatusNotFound)
-		render.JSON(w, r, render.M{"error": "no domains found"})
+		render.JSON(w, r, render.M{"error": "No domains found"})
 		return
 	}
 
@@ -270,7 +272,7 @@ func (rs CampaignHandler) SearchDomain(w http.ResponseWriter, r *http.Request) {
 			TsV6Only:     domain.TsV6Only,
 			TsCheck:      domain.TsCheck,
 			TsUpdated:    domain.TsUpdated,
-			CampaignUUID: domain.CampaignID.String(),
+			CampaignUUID: encodeUUID(domain.CampaignID),
 		})
 	}
 
