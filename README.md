@@ -1,7 +1,5 @@
 # WhyNoIPv6
 
-Note: This repo does not represent the current version of https://whynoipv6.com/ 
-
 WhyNoIPv6.com is a website that displays the IPv6 status of the top 1 million domains as ranked by Alexa/Tranco. The website aims to raise awareness about the importance of IPv6 adoption and shame the websites that have not yet adopted IPv6.
 
 ## Why IPv6 Adoption Matters
