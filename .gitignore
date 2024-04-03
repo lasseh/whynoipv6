@@ -1,5 +1,6 @@
 app.env
 tldbwriter.toml
+sqlc.yaml
 /tmp/
 .vscode
 cmd/api/api
