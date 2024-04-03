@@ -3,7 +3,7 @@
 <div align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset=".github/images/Github-logo-white.png">
-    <img alt="Daytona logo" src=".github/images/Github-logo-black.png" width="40%">
+    <img alt="Shame!" src=".github/images/Github-logo-black.png" width="70%">
   </picture>
 </div>
 
