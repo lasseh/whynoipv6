@@ -33,7 +33,7 @@ Shaming the largest websites in the world lacking IPv6 support.
     <a href="https://twitter.com/WhyNoIPv6">Twitter</a>
   </p>
 
-<div align="center"><img src=".github/images/github-status.png" width="40%" ></div>
+<div align="center"><img src=".github/images/github-status.png" width="70%" ></div>
 
 # WhyNoIPv6
 
