@@ -6,7 +6,6 @@
   </picture>
 </div>
 <br>
-<br>
 <div align="center">
 
 [![License](https://img.shields.io/github/license/lasseh/whynoipv6)](#license)
@@ -28,7 +27,11 @@ Shaming the largest websites in the world lacking IPv6 support.
     <a href="https://twitter.com/WhyNoIPv6">Twitter</a>
   </p>
 
-<div align="center"><img src="https://raw.githubusercontent.com/lasseh/whynoipv6/master/.github/images/github-status.png"></div>
+<div align="center">
+    <a href="https://whynoipv6.com/domain/github.com/" target="_blank">
+        <img src="https://raw.githubusercontent.com/lasseh/whynoipv6/master/.github/images/github-status.png">
+    </a>
+</div>
 
 ## What is WhyNoIPv6.com?
 WhyNoIPv6.com is a specialized platform committed to monitoring and promoting the adoption of IPv6 among the 1 Million top-ranked websites and user-submitted campaigns. We offer insightful metrics to help you assess the current landscape of IPv6 implementation.
