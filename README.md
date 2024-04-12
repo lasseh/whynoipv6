@@ -2,7 +2,7 @@
 <div align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/lasseh/whynoipv6/master/.github/images/Github-logo-white.png">
-    <img alt="Shame!" src="https://raw.githubusercontent.com/lasseh/whynoipv6/master/.github/images/Github-logo-black.png" width="70%">
+    <img alt="Shame!" src="https://raw.githubusercontent.com/lasseh/whynoipv6/master/.github/images/Github-logo-black.png">
   </picture>
 </div>
 <br>
@@ -47,7 +47,7 @@ The [Tranco List](https://tranco-list.eu/) offers an alternative way to gauge a 
 This approach aims to provide a more comprehensive and reliable measure of a website's popularity and traffic, addressing some of the accuracy concerns associated with Alexa's data. As a result, the Tranco List is increasingly recognized as a valuable tool for understanding website prominence in a way that accounts for a broader spectrum of internet activity.
 
 ## Crawler
-The crawler uses 1.1.1.1 as nameserver and will check for ipv6 records on domain.com, wwww.domain.com, ns and mx records.  
+The crawler uses 1.1.1.1 as nameserver and will check for ipv6 records on domain.com, wwww.domain.com, ns and mx records.
 It will check each domain every 3 days.
 
 ## Campaigns
@@ -64,12 +64,12 @@ The complete project consists of 3 repo's, check them out here:
 <a href="https://github.com/lasseh">
   <img src="https://github.com/lasseh.png?size=50">
 </a>
-<a href="https://github.com/sklirg">
-  <img src="https://github.com/sklirg.png?size=50">
-</a>
 <a href="https://github.com/aulonm">
   <img src="https://github.com/aulonm.png?size=50">
 </a>
 <a href="https://github.com/joms">
   <img src="https://github.com/joms.png?size=50">
+</a>
+<a href="https://github.com/sklirg">
+  <img src="https://github.com/sklirg.png?size=50">
 </a>
