@@ -73,3 +73,6 @@ The complete project consists of 3 repo's, check them out here:
 <a href="https://github.com/sklirg">
   <img src="https://github.com/sklirg.png?size=50">
 </a>
+<a href="https://github.com/Foxboron">
+  <img src="https://github.com/Foxboron.png?size=50">
+</a>
