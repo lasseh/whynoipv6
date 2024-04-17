@@ -1,6 +1,6 @@
 ---
 name: Disable Service Domain
-about: 
+about: Remove a domain from the list at https://whynoipv6.com/
 title: '❌ Disable Service Domain'
 labels: ''
 assignees: lasseh
