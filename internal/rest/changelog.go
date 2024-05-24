@@ -183,6 +183,11 @@ func (rs ChangelogHandler) ChangelogByCampaign(w http.ResponseWriter, r *http.Re
 	campaignUUID := chi.URLParam(r, "uuid")
 	// Decode uuid from shortuuid to google uuid
 	decodeID, err := decodeUUID(campaignUUID)
+	if err != nil {
+		render.Status(r, http.StatusNotFound)
+		render.JSON(w, r, render.M{"error": "Invalid UUID"})
+		return
+	}
 
 	// Validate and parse the UUID
 	uuid, err := uuid.Parse(decodeID.String())
@@ -248,6 +253,11 @@ func (rs ChangelogHandler) ChangelogByCampaignDomain(w http.ResponseWriter, r *h
 
 	// Decode uuid from shortuuid to google uuid
 	decodeID, err := decodeUUID(campaignUUID)
+	if err != nil {
+		render.Status(r, http.StatusBadRequest)
+		render.JSON(w, r, render.M{"error": "Invalid UUID"})
+		return
+	}
 
 	// Validate and parse the UUID
 	uuid, err := uuid.Parse(decodeID.String())

@@ -48,7 +48,10 @@ func disableDomains() {
 	// Disable the domains
 	for _, domain := range yamlData.Domains {
 		log.Println("Disabling domain:", domain)
-		domainService.DisableDomain(ctx, domain)
+		err := domainService.DisableDomain(ctx, domain)
+		if err != nil {
+			log.Println("Error disabling domain:", domain, err)
+		}
 	}
 }
 
