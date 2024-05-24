@@ -102,6 +102,11 @@ func (rs CampaignHandler) CampaignDomains(w http.ResponseWriter, r *http.Request
 	campaignUUID := chi.URLParam(r, "uuid")
 	// Decode uuid from shortuuid to google uuid
 	decodeID, err := decodeUUID(campaignUUID)
+	if err != nil {
+		render.Status(r, http.StatusNotFound)
+		render.JSON(w, r, render.M{"error": "Invalid UUID"})
+		return
+	}
 	// Convert campaignUUID to uuid.UUID
 	parsedUUID, err := uuid.Parse(decodeID.String())
 	if err != nil {
@@ -179,6 +184,11 @@ func (rs CampaignHandler) ViewCampaignDomain(w http.ResponseWriter, r *http.Requ
 
 	// Decode uuid from shortuuid to google uuid
 	decodeID, err := decodeUUID(campaignUUID)
+	if err != nil {
+		render.Status(r, http.StatusBadRequest)
+		render.JSON(w, r, render.M{"error": "Invalid UUID"})
+		return
+	}
 	// Validate and parse the UUID
 	uuid, err := uuid.Parse(decodeID.String())
 	if err != nil {

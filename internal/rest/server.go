@@ -65,7 +65,7 @@ type PaginationInput struct {
 func encodeUUID(id uuid.UUID) string {
 	id, err := uuid.Parse(id.String())
 	if err != nil {
-		// return "", err
+		return ""
 	}
 	su := shortuuid.DefaultEncoder.Encode(id)
 	return su
