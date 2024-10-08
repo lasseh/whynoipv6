@@ -9,32 +9,53 @@ This guide provides instructions on how to set up and use the project.
 CREATE DATABASE whynoipv6;
 CREATE USER whynoipv6 with encrypted password '<removed>';
 GRANT ALL PRIVILEGES ON DATABASE whynoipv6 TO whynoipv6;
+
+GRANT USAGE ON SCHEMA public TO whynoipv6;
+GRANT CREATE ON SCHEMA public TO whynoipv6;
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO whynoipv6;
+
+CREATE EXTENSION pgcrypto;
 ```
 
-## Adding Extensions and Migrations
+# User
+Create a new user and install folders
+```bash
+useradd -m -d /opt/whynoipv6/ ipv6
+mkdir -p /opt/whynoipv6/{whynoipv6,whynoipv6-web,whynoipv6-campaign}
+chown -R ipv6:ipv6 /opt/whynoipv6
+````
 
-1. Add the required extension to the database:
-```CREATE EXTENSION pgcrypto;```
+## Clone
+Clone all the repo's
+```bash
+su - ipv6
+git clone https://github.com/lasseh/whynoipv6.git /opt/whynoipv6/whynoipv6/
+git clone https://github.com/lasseh/whynoipv6-web.git /opt/whynoipv6/whynoipv6-web/
+git clone https://github.com/lasseh/whynoipv6-campaign /opt/whynoipv6/whynoipv6-campaign/
+```
 
-2. Run the database migrations:  
-install migrate:
-```go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest```
 
+## Install
+1. Edit the env file:  
+```bash
+cp app.env.example app.env
+vim app.env
+```
+
+1. Run the database migrations:  
 ```make migrateup```
 
-## Installing and Running Services
-
-1. Install the necessary services:
-```
-go install -v github.com/eest/tranco-list-api/cmd/tldbwriter@latest
-```
-
-2. Start the services:
-```
-tldbwriter -config=tldbwriter.toml
-```
+2. Start Tranco List downloader  
+```make tldbwriter```
 
 ## Importing Data and Crawling Domains
+
+1. Copy the service files
+```bash
+cp /opt/whynoipv6/whynoipv6/extra/systemd/* /etc/systemd/
+systemctl daemon-reload
+
+```
 
 1. Import data:
 ```v6manage import```
@@ -51,3 +72,18 @@ tldbwriter -config=tldbwriter.toml
 2. Replace the existing database file with the downloaded file to update the database.
 
 
+
+# Grafana
+
+1. Create a read-only sql user:
+```sql
+CREATE USER whynoipv6_read WITH PASSWORD '<removed>';
+GRANT CONNECT ON DATABASE whynoipv6 TO whynoipv6_read;
+GRANT USAGE ON SCHEMA public TO whynoipv6_read;
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO whynoipv6_read;
+```
+
+1. Add the following to the `pg_hba.conf` file:
+```
+host  whynoipv6  whynoipv6_read
+```
