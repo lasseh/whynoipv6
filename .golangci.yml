@@ -1,0 +1,11 @@
+linters:
+  enable:
+    - errcheck
+    - gosimple
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - gofumpt
+    - goimports
+    - gosec
