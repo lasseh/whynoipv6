@@ -58,6 +58,11 @@ func importData() {
 		}
 		// Increment offset
 		offset += limit
+
+		// Print current progress if verbose
+		if verbose {
+			log.Println("Imported", offset, "sites")
+		}
 	}
 
 	// Print time it took to import

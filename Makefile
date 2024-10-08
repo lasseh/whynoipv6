@@ -8,6 +8,11 @@ run: ## Runs the application
 build: ## Builds the CLI application
 	go build -o v6manage cmd/v6manage/main.go
 
+.PHONY: install
+install: ## Builds the CLI application
+	go build -o /usr/local/bin/v6manage cmd/v6manage/main.go
+	go build -o /usr/local/bin/v6-api cmd/api/main.go
+
 .PHONY: test
 test: ## Runs short tests
 	go test ./... -short
@@ -28,6 +33,10 @@ lint: ## Runs the linter
 
 .PHONY: migrateup
 migrateup: ## Migrates up the database
+	@command -v migrate >/dev/null 2>&1 || { \
+		echo >&2 "migrate command not found, installing..."; \
+		go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest; \
+	}
 	migrate -path ./db/migrations -database $(DB_SOURCE) -verbose up
 
 .PHONY: migratedown
@@ -41,6 +50,14 @@ pgcli: ## Launches pgcli tool
 .PHONY: pgdump
 pgdump: ## Dumps the database
 	pg_dump -d "$(DB_SOURCE)" --format plain --data-only --use-set-session-authorization --quote-all-identifiers --column-inserts --file "tmp/dump-$$(date +%Y%m%d).sql"
+
+.PHONY: tldbwriter
+tldbwriter: ## Runs the tldbwriter tool
+	@command -v tldbwriter >/dev/null 2>&1 || { \
+		echo >&2 "tldbwriter command not found, installing..."; \
+		go install -v github.com/eest/tranco-list-api/cmd/tldbwriter@latest; \
+	}
+	tldbwriter -config=tldbwriter.toml
 
 .PHONY: sqlc
 sqlc: ## Generates Go code from SQL
