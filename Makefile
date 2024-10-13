@@ -10,8 +10,8 @@ build: ## Builds the CLI application
 
 .PHONY: install
 install: ## Builds the CLI application
-	go build -o /usr/local/bin/v6manage cmd/v6manage/main.go
-	go build -o /usr/local/bin/v6-api cmd/api/main.go
+	go build -o $HOME/go/bin/v6manage cmd/v6manage/main.go
+	go build -o $HOME/go/bin/v6-api cmd/api/main.go
 
 .PHONY: test
 test: ## Runs short tests

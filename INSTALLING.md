@@ -43,26 +43,47 @@ vim app.env
 ```
 
 1. Run the database migrations:  
-```make migrateup```
+```
+make migrateup
+```
 
 2. Start Tranco List downloader  
-```make tldbwriter```
+Edit the tldbwriter.toml file with database details
+```bash
+cp tldbwriter.toml.example tldbwriter.toml
+vim tldbwriter.toml
+make tldbwriter
+```
+ctrl-c after: time until next check: 1h0m9s
+ 
 
 ## Importing Data and Crawling Domains
 
 1. Copy the service files
 ```bash
-cp /opt/whynoipv6/whynoipv6/extra/systemd/* /etc/systemd/
+cp /opt/whynoipv6/whynoipv6/extra/systemd/* /etc/systemd/system
 systemctl daemon-reload
-
 ```
 
 1. Import data:
-```v6manage import```
+```
+/opt/whynoipv6/go/bin/v6manage import
+/opt/whynoipv6/go/bin/v6manage campaign import
+```
 
-2. Crawl domains:
-```v6manage crawl```
+2. Start services
+```
+systemctl enable --now whynoipv6-api
+systemctl enable --now whynoipv6-crawler
+systemctl enable --now whynoipv6-campaign-crawler
+```
 
+# Frontend
+Create folder for the html 
+```bash
+mkdir /var/www/whynoipv6.com/
+chown ipv6:ipv6 /var/www/whynoipv6.com/ 
+```
 
 ## Updating the MaxMind Geo Database
 
@@ -71,6 +92,12 @@ systemctl daemon-reload
 
 2. Replace the existing database file with the downloaded file to update the database.
 
+
+# Monitor services
+```bash
+journalctl -o cat -fu whynoipv6-c* | ccze -A
+journalctl -o cat -fu whynoipv6-api | ccze -A
+```
 
 
 # Grafana
@@ -85,5 +112,5 @@ GRANT SELECT ON ALL TABLES IN SCHEMA public TO whynoipv6_read;
 
 1. Add the following to the `pg_hba.conf` file:
 ```
-host  whynoipv6  whynoipv6_read
+host  graph.domain.com  whynoipv6_read
 ```
