@@ -76,6 +76,12 @@ func campaignCrawl() {
 			// Get domains to check
 			domains, err := campaignService.CrawlCampaignDomain(ctx, offset, limit)
 			if err != nil {
+				// Ping the sql server to see if it's up
+				if err = db.Ping(ctx); err != nil {
+					toolbox.HealthCheckUpdate(cfg.HealthcheckCampaign, toolbox.HealthFail)
+					logg.Fatal().Err(err).Msg("Database is down!")
+					return
+				}
 				logg.Error().Err(err).Msg("Could not get domains to check")
 				return
 			}
@@ -126,7 +132,7 @@ func campaignCrawl() {
 		logg.Info().Msgf("Total Domains: %v domains, Successful Jobs: %v, Failed Jobs: %v Duration: %s", totalDomains, totalSuccessfulJobs, totalFailedJobs, prettyDuration(time.Since(t)))
 
 		// Healthcheck reporting
-		toolbox.HealthCheckUpdate(cfg.HealthcheckCampaign)
+		toolbox.HealthCheckUpdate(cfg.HealthcheckCampaign, toolbox.HealthOK)
 		// Notify partyvan
 		toolbox.NotifyIrc(fmt.Sprintf("[WhyNoIPv6 Campaign] Total Domains: %v, Successful: %v, Failed: %v Duration: %s", totalDomains, totalSuccessfulJobs, totalFailedJobs, prettyDuration(time.Since(t))))
 

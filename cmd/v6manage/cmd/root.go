@@ -3,6 +3,7 @@ package cmd
 import (
 	"log"
 	"os"
+	"time"
 	"whynoipv6/internal/config"
 	"whynoipv6/internal/postgres"
 
@@ -59,9 +60,14 @@ func init() {
 	}
 
 	// Connect to the database
-	db, err = postgres.NewPostgreSQL(cfg.DatabaseSource + "&application_name=v6manage")
+	const maxRetries = 5
+	const timeout = 10 * time.Second
+	dbSource := cfg.DatabaseSource + "&application_name=v6manage"
+	db, err = postgres.NewPostgreSQL(dbSource, maxRetries, timeout)
+
 	if err != nil {
-		log.Fatalln("Error connecting to database", err)
+		log.Fatalln("Error connecting to database:", err)
 	}
+	// defer db.Close()
 
 }

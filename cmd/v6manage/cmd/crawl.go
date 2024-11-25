@@ -78,6 +78,12 @@ func domainCrawl() {
 			// Get domains to check
 			domains, err := domainService.CrawlDomain(ctx, lastProcessedID, limit)
 			if err != nil {
+				// Ping the sql server to see if it's up
+				if err = db.Ping(ctx); err != nil {
+					toolbox.HealthCheckUpdate(cfg.HealthcheckCrawler, toolbox.HealthFail)
+					logg.Fatal().Err(err).Msg("Database is down!")
+					return
+				}
 				logg.Error().Err(err).Msg("Could not get domains to check")
 				return
 			}
@@ -168,7 +174,7 @@ func domainCrawl() {
 		}
 
 		// Healthcheck reporting
-		toolbox.HealthCheckUpdate(cfg.HealthcheckCrawler)
+		toolbox.HealthCheckUpdate(cfg.HealthcheckCrawler, toolbox.HealthOK)
 		// Notify partyvan
 		toolbox.NotifyIrc(fmt.Sprintf("[WhyNoIPv6] Total Domains: %v, Successful: %v, Failed: %v Duration: %s", totalDomains, totalSuccessfulJobs, totalFailedJobs, prettyDuration(time.Since(t))))
 
