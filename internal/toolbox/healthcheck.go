@@ -8,10 +8,16 @@ import (
 	"whynoipv6/internal/logger"
 )
 
+// HealthOK and HealthFail are the status codes for successful and failed health checks, respectively.
+const (
+	HealthOK   = 0
+	HealthFail = 1
+)
+
 // HealthCheckUpdate sends a successful health check notification to BetterUptime.com.
 // The function takes a unique identifier (uuid) as input and sends an HTTP HEAD request to BetterUptime.com's API.
 // If there's an error, it will log the error message.
-func HealthCheckUpdate(uuid string) {
+func HealthCheckUpdate(uuid string, status int) {
 	var log = logger.GetLogger()
 	log = log.With().Str("service", "HealthCheckUpdate").Logger()
 	// Create an HTTP client with a 10-second timeout.
@@ -20,7 +26,7 @@ func HealthCheckUpdate(uuid string) {
 	}
 
 	// Create the URL for the BetterUptime.com API.
-	apiURL := fmt.Sprintf("https://betteruptime.com/api/v1/heartbeat/%s", uuid)
+	apiURL := fmt.Sprintf("https://uptime.betteruptime.com/api/v1/heartbeat/%s/%d", uuid, status)
 
 	// Send the HTTP HEAD request.
 	resp, err := httpClient.Head(apiURL)
