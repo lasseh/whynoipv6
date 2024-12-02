@@ -38,6 +38,16 @@ type DomainResponse struct {
 	CampaignUUID string    `json:"campaign_uuid,omitempty"`
 }
 
+// DomainLogResponse is the response structure for a domain log.
+type DomainLogResponse struct {
+	ID         int64     `json:"id"`
+	Time       time.Time `json:"time"`
+	BaseDomain string    `json:"base_domain"`
+	WwwDomain  string    `json:"www_domain"`
+	Nameserver string    `json:"nameserver"`
+	MXRecord   string    `json:"mx_record"`
+}
+
 // Routes returns a router with all domain-related endpoints mounted.
 func (rs DomainHandler) Routes() chi.Router {
 	r := chi.NewRouter()
@@ -50,6 +60,8 @@ func (rs DomainHandler) Routes() chi.Router {
 	r.Get("/topsinner", rs.TopSinner)
 	// GET /domain/{domain} - retrieve a domain by its name
 	r.Get("/{domain}", rs.RetrieveDomain)
+	// GET /domain/{domain}/log - retrieve a domain by its name
+	r.Get("/{domain}/log", rs.GetDomainLog)
 	// GET /domain/search/{domain} - search for a domain by its name
 	r.With(httpin.NewInput(PaginationInput{})).Get("/search/{domain}", rs.SearchDomain)
 
@@ -237,6 +249,35 @@ func (rs DomainHandler) TopSinner(w http.ResponseWriter, r *http.Request) {
 			TsV6Only:     domain.TsV6Only,
 			TsCheck:      domain.TsCheck,
 			TsUpdated:    domain.TsUpdated,
+		})
+	}
+	render.JSON(w, r, domainlist)
+}
+
+// GetDomainLog returns the crawler log for a domain.
+func (rs DomainHandler) GetDomainLog(w http.ResponseWriter, r *http.Request) {
+	domain := chi.URLParam(r, "domain")
+	logs, err := rs.Repo.GetDomainLog(r.Context(), domain)
+	if err != nil {
+		render.Status(r, http.StatusNotFound)
+		render.JSON(w, r, render.M{"error": "domain not found"})
+		return
+	}
+	var domainlist []DomainLogResponse
+	for _, log := range logs {
+		var data map[string]interface{}
+		if err := log.Data.AssignTo(&data); err != nil {
+			render.Status(r, http.StatusInternalServerError)
+			render.JSON(w, r, render.M{"error": "internal server error"})
+			return
+		}
+		domainlist = append(domainlist, DomainLogResponse{
+			ID:         log.ID,
+			Time:       log.Time,
+			BaseDomain: data["base_domain"].(string),
+			WwwDomain:  data["www_domain"].(string),
+			Nameserver: data["nameserver"].(string),
+			MXRecord:   data["mx_record"].(string),
 		})
 	}
 	render.JSON(w, r, domainlist)

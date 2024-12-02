@@ -47,6 +47,16 @@ type CampaignListResponse struct {
 	V6Ready     int64  `json:"v6_ready"`
 }
 
+// CampaignDomainLogResponse is the response structure for a domain log.
+type CampaignDomainLogResponse struct {
+	ID         int64     `json:"id"`
+	Time       time.Time `json:"time"`
+	BaseDomain string    `json:"base_domain"`
+	WwwDomain  string    `json:"www_domain"`
+	Nameserver string    `json:"nameserver"`
+	MXRecord   string    `json:"mx_record"`
+}
+
 // Routes returns a router with all campaign endpoints mounted.
 func (rs CampaignHandler) Routes() chi.Router {
 	r := chi.NewRouter()
@@ -57,6 +67,8 @@ func (rs CampaignHandler) Routes() chi.Router {
 	r.With(httpin.NewInput(PaginationInput{})).Get("/{uuid}", rs.CampaignDomains)
 	// GET /campaign/{campaign}/{domain} - View details of a single domain in a campaign
 	r.Get("/{uuid}/{domain}", rs.ViewCampaignDomain)
+	// GET /campaign/{campaign}/{domain}/log - View crawler of a single domain in a campaign
+	r.Get("/{uuid}/{domain}/log", rs.GetCampaignDomainLog)
 	// GET /campaign/search/{domain} - search for a domain by its name
 	r.With(httpin.NewInput(PaginationInput{})).Get("/search/{domain}", rs.SearchDomain)
 
@@ -289,4 +301,51 @@ func (rs CampaignHandler) SearchDomain(w http.ResponseWriter, r *http.Request) {
 	render.JSON(w, r, render.M{
 		"data": campaignDomainList,
 	})
+}
+
+// GetCampaignDomainLog returns the crawler log for a domain.
+func (rs CampaignHandler) GetCampaignDomainLog(w http.ResponseWriter, r *http.Request) {
+	// Get campaign UUID and domain from path
+	campaignUUID := chi.URLParam(r, "uuid")
+	domain := chi.URLParam(r, "domain")
+
+	// Decode uuid from shortuuid to google uuid
+	decodeID, err := decodeUUID(campaignUUID)
+	if err != nil {
+		render.Status(r, http.StatusBadRequest)
+		render.JSON(w, r, render.M{"error": "Invalid UUID"})
+		return
+	}
+	// Validate and parse the UUID
+	uuid, err := uuid.Parse(decodeID.String())
+	if err != nil {
+		render.Status(r, http.StatusBadRequest)
+		render.JSON(w, r, render.M{"error": "Invalid UUID"})
+		return
+	}
+
+	logs, err := rs.Repo.GetCampaignDomainLog(r.Context(), uuid, domain)
+	if err != nil {
+		render.Status(r, http.StatusNotFound)
+		render.JSON(w, r, render.M{"error": "domain not found"})
+		return
+	}
+	var domainlist []CampaignDomainLogResponse
+	for _, log := range logs {
+		var data map[string]interface{}
+		if err := log.Data.AssignTo(&data); err != nil {
+			render.Status(r, http.StatusInternalServerError)
+			render.JSON(w, r, render.M{"error": "internal server error"})
+			return
+		}
+		domainlist = append(domainlist, CampaignDomainLogResponse{
+			ID:         log.ID,
+			Time:       log.Time,
+			BaseDomain: data["base_domain"].(string),
+			WwwDomain:  data["www_domain"].(string),
+			Nameserver: data["nameserver"].(string),
+			MXRecord:   data["mx_record"].(string),
+		})
+	}
+	render.JSON(w, r, domainlist)
 }
