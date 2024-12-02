@@ -176,7 +176,9 @@ func domainCrawl() {
 		// Healthcheck reporting
 		toolbox.HealthCheckUpdate(cfg.HealthcheckCrawler, toolbox.HealthOK)
 		// Notify partyvan
-		toolbox.NotifyIrc(fmt.Sprintf("[WhyNoIPv6] Total Domains: %v, Successful: %v, Failed: %v Duration: %s", totalDomains, totalSuccessfulJobs, totalFailedJobs, prettyDuration(time.Since(t))))
+		if totalDomains > 0 {
+			toolbox.NotifyIrc(fmt.Sprintf("[WhyNoIPv6] Total Domains: %v, Successful: %v, Failed: %v Duration: %s", totalDomains, totalSuccessfulJobs, totalFailedJobs, prettyDuration(time.Since(t))))
+		}
 
 		// Sleep for 2 hours
 		logg.Info().Msg("Time until next check: 10 minutes")
@@ -376,6 +378,21 @@ func updateDomain(ctx context.Context, currentDomain, newDomain core.DomainModel
 		logg.Error().Err(err).Msgf("[%s] Could not update domain", currentDomain.Site)
 		return err
 	}
+	// CrawlerStat represents a domain statistic.
+	type DomainLog struct {
+		BaseDomain string `json:"base_domain"`
+		WwwDomain  string `json:"www_domain"`
+		Nameserver string `json:"nameserver"`
+		MxRecord   string `json:"mx_record"`
+	}
+
+	// Write a log of the check.
+	domainService.StoreDomainLog(ctx, currentDomain.ID, DomainLog{
+		BaseDomain: newDomain.BaseDomain,
+		WwwDomain:  newDomain.WwwDomain,
+		Nameserver: newDomain.Nameserver,
+		MxRecord:   newDomain.MXRecord,
+	})
 
 	return nil
 }

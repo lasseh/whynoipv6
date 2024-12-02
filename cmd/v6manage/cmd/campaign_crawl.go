@@ -342,6 +342,22 @@ func updateCampaignDomain(ctx context.Context, currentDomain, newDomain core.Cam
 		return err
 	}
 
+	// CampaignDomainLog stores a log of the latest crawl.
+	type CampaignDomainLog struct {
+		BaseDomain string `json:"base_domain"`
+		WwwDomain  string `json:"www_domain"`
+		Nameserver string `json:"nameserver"`
+		MxRecord   string `json:"mx_record"`
+	}
+
+	// Write a log of the check.
+	campaignService.StoreCampaignDomainLog(ctx, currentDomain.ID, CampaignDomainLog{
+		BaseDomain: newDomain.BaseDomain,
+		WwwDomain:  newDomain.WwwDomain,
+		Nameserver: newDomain.Nameserver,
+		MxRecord:   newDomain.MXRecord,
+	})
+
 	return nil
 }
 
