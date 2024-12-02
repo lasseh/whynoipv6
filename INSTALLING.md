@@ -104,10 +104,25 @@ journalctl -o cat -fu whynoipv6-api | ccze -A
 
 1. Create a read-only sql user:
 ```sql
-CREATE USER whynoipv6_read WITH PASSWORD '<removed>';
-GRANT CONNECT ON DATABASE whynoipv6 TO whynoipv6_read;
-GRANT USAGE ON SCHEMA public TO whynoipv6_read;
-GRANT SELECT ON ALL TABLES IN SCHEMA public TO whynoipv6_read;
+-- Create the read-only user
+CREATE USER v6stats WITH PASSWORD '<removed>';
+
+-- Grant CONNECT access to the database
+GRANT CONNECT ON DATABASE whynoipv6 TO v6stats;
+
+-- Switch to the target database
+\c whynoipv6
+
+-- Grant USAGE on all schemas
+GRANT USAGE ON SCHEMA public TO v6stats;
+
+-- Grant SELECT on all existing tables and sequences in the schema
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO v6stats;
+GRANT SELECT ON ALL SEQUENCES IN SCHEMA public TO v6stats;
+
+-- Ensure the user has SELECT rights on future tables
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO v6stats;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON SEQUENCES TO v6stats;
 ```
 
 1. Add the following to the `pg_hba.conf` file:
