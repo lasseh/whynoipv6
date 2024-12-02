@@ -2,10 +2,12 @@ package core
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 	"whynoipv6/internal/postgres/db"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgtype"
 )
 
 // CampaignService is a service for managing scans.
@@ -307,4 +309,60 @@ func (s *CampaignService) GetCampaignDomainsByName(ctx context.Context, searchSt
 		})
 	}
 	return list, nil
+}
+
+// CampaignDomainLog represents a crawler data point.
+type CampaignDomainLog struct {
+	ID   int64
+	Time time.Time
+	Data pgtype.JSONB
+}
+
+// StoreCampaignDomainLog saves a crawl log for a campaign domain.
+func (s *CampaignService) StoreCampaignDomainLog(ctx context.Context, domain int64, data interface{}) error {
+	// Encode the data to a []byte
+	dataBytes, err := json.Marshal(data)
+	if err != nil {
+		return err
+	}
+
+	// Create a new pgtype.JSONB struct
+	jsonb := &pgtype.JSONB{}
+
+	// Set the data on the pgtype.JSONB struct
+	if err := jsonb.Set(dataBytes); err != nil {
+		return err
+	}
+
+	return s.q.StoreCampaignDomainLog(ctx, db.StoreCampaignDomainLogParams{
+		DomainID: domain,
+		Data:     *jsonb,
+	})
+}
+
+// GetCampaignDomainLog retrieves all the logs for a specified domain.
+func (s *CampaignService) GetCampaignDomainLog(ctx context.Context, uuid uuid.UUID, domain string) ([]CampaignDomainLog, error) {
+	// Get the domain ID from the database
+	d, err := s.q.ViewCampaignDomain(ctx, db.ViewCampaignDomainParams{
+		CampaignID: uuid,
+		Site:       domain,
+	})
+	if err != nil {
+		return []CampaignDomainLog{}, err
+	}
+
+	logs, err := s.q.GetCampaignDomainLog(ctx, d.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	var logList []CampaignDomainLog
+	for _, log := range logs {
+		logList = append(logList, CampaignDomainLog{
+			ID:   log.ID,
+			Time: log.Time,
+			Data: log.Data,
+		})
+	}
+	return logList, nil
 }

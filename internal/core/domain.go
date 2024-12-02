@@ -2,8 +2,11 @@ package core
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 	"whynoipv6/internal/postgres/db"
+
+	"github.com/jackc/pgtype"
 )
 
 // DomainService is a service for managing scans.
@@ -348,4 +351,57 @@ func (s *DomainService) CrawlerStats(ctx context.Context) (CrawlerStat, error) {
 		TopHeroes:     stats.TopHeroes,
 		TopNameserver: stats.TopNameserver,
 	}, nil
+}
+
+// DomainLog represents a crawler data point.
+type DomainLog struct {
+	ID   int64
+	Time time.Time
+	Data pgtype.JSONB
+}
+
+// StoreDomainLog saves a crawl log for a domain.
+func (s *DomainService) StoreDomainLog(ctx context.Context, domain int64, data interface{}) error {
+	// Encode the data to a []byte
+	dataBytes, err := json.Marshal(data)
+	if err != nil {
+		return err
+	}
+
+	// Create a new pgtype.JSONB struct
+	jsonb := &pgtype.JSONB{}
+
+	// Set the data on the pgtype.JSONB struct
+	if err := jsonb.Set(dataBytes); err != nil {
+		return err
+	}
+
+	return s.q.StoreDomainLog(ctx, db.StoreDomainLogParams{
+		DomainID: domain,
+		Data:     *jsonb,
+	})
+}
+
+// GetDomainLog retrieves all the logs for a specified domain.
+func (s *DomainService) GetDomainLog(ctx context.Context, domain string) ([]DomainLog, error) {
+	// Get the domain ID from the database
+	d, err := s.q.ViewDomain(ctx, NullString(domain))
+	if err != nil {
+		return []DomainLog{}, err
+	}
+
+	logs, err := s.q.GetDomainLog(ctx, IntNull(d.ID))
+	if err != nil {
+		return nil, err
+	}
+
+	var logList []DomainLog
+	for _, log := range logs {
+		logList = append(logList, DomainLog{
+			ID:   log.ID,
+			Time: log.Time,
+			Data: log.Data,
+		})
+	}
+	return logList, nil
 }
