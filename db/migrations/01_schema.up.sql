@@ -172,6 +172,23 @@ CREATE TABLE "metrics" (
 );
 CREATE INDEX idx_metrics_measurement_time ON metrics (measurement, time DESC);
 
+CREATE TABLE "domain_log" (
+    "id" BIGSERIAL PRIMARY KEY,
+    "domain_id" BIGINT NOT NULL REFERENCES domain(id) ON DELETE CASCADE,
+    "time" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    "data" jsonb NOT NULL
+);
+CREATE INDEX idx_domain_log_id ON domain_log(domain_id);
+CREATE INDEX idx_domain_log_time ON domain_log(domain_id, time DESC);
+
+CREATE TABLE "campaign_domain_log" (
+    "id" BIGSERIAL PRIMARY KEY,
+    "domain_id" BIGINT NOT NULL REFERENCES campaign_domain(id) ON DELETE CASCADE,
+    "time" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    "data" jsonb NOT NULL
+);
+CREATE INDEX idx_campaign_domain_log_id ON campaign_domain_log(domain_id);
+CREATE INDEX idx_campaign_domain_log_time ON campaign_domain_log(domain_id, time DESC);
 
 -- VIEWS ------------------------------------------------------
 CREATE or REPLACE VIEW domain_view_list AS

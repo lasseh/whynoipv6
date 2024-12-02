@@ -85,3 +85,17 @@ UPDATE domain
 SET ts_check = stu.newSpacedTimestamp
 FROM SpacedTimestampUpdates stu
 WHERE domain.id = stu.id;
+
+-- name: StoreDomainLog :exec
+INSERT INTO domain_log(domain_id, data)
+VALUES ($1, $2)
+RETURNING *;
+
+-- name: GetDomainLog :many
+SELECT id,
+       time,
+       data
+FROM domain_log
+WHERE domain_id = $1
+ORDER BY time DESC
+LIMIT 90;

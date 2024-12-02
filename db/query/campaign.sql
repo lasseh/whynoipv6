@@ -120,3 +120,17 @@ SELECT *
 FROM campaign_domain
 WHERE site LIKE '%' || $1 || '%'
 LIMIT $2 OFFSET $3;
+
+-- name: StoreCampaignDomainLog :exec
+INSERT INTO campaign_domain_log(domain_id, data)
+VALUES ($1, $2)
+RETURNING *;
+
+-- name: GetCampaignDomainLog :many
+SELECT id,
+       time,
+       data
+FROM campaign_domain_log
+WHERE domain_id = $1
+ORDER BY time DESC
+LIMIT 90;
