@@ -208,7 +208,7 @@ CREATE or REPLACE VIEW domain_crawl_list AS
 SELECT *
 FROM domain
 WHERE (disabled is FALSE)
-  AND ((ts_check < now() - '3 days' :: interval) OR (ts_check IS NULL));
+  AND ((ts_check < now() - '1 days' :: interval) OR (ts_check IS NULL));
 -- ORDER BY id;
 
 --

@@ -73,8 +73,8 @@ FROM domain_shame_view;
 -- name: InitSpaceTimestamps :exec
 WITH DomainCount AS (SELECT count(*)::DECIMAL AS total_records
                      FROM domain),
-     IntervalCalculation AS (SELECT (NOW() - '3 days'::INTERVAL)         AS calculatedStartTime,
-                                    ('3 days'::INTERVAL) / total_records AS calculatedIntervalStep
+     IntervalCalculation AS (SELECT (NOW() - '1 days'::INTERVAL)         AS calculatedStartTime,
+                                    ('1 days'::INTERVAL) / total_records AS calculatedIntervalStep
                              FROM DomainCount),
      SpacedTimestampUpdates AS (SELECT d.id,
                                        ic.calculatedStartTime + ic.calculatedIntervalStep * 
