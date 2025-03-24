@@ -28,6 +28,9 @@ upgrade: ## Upgrades dependencies
 
 .PHONY: lint
 lint: ## Runs the linter
+	gofumpt -w .
+	goimports -w .
+	golines -w .
 	golangci-lint run
 	govulncheck ./...
 

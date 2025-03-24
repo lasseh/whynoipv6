@@ -6,3 +6,4 @@ sqlc.yaml
 cmd/api/api
 logs/
 extra/vector/
+.DS_Store
