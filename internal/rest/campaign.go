@@ -332,7 +332,7 @@ func (rs CampaignHandler) GetCampaignDomainLog(w http.ResponseWriter, r *http.Re
 	}
 	var domainlist []CampaignDomainLogResponse
 	for _, log := range logs {
-		var data map[string]interface{}
+		var data map[string]any
 		if err := log.Data.AssignTo(&data); err != nil {
 			render.Status(r, http.StatusInternalServerError)
 			render.JSON(w, r, render.M{"error": "internal server error"})

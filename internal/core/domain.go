@@ -361,7 +361,7 @@ type DomainLog struct {
 }
 
 // StoreDomainLog saves a crawl log for a domain.
-func (s *DomainService) StoreDomainLog(ctx context.Context, domain int64, data interface{}) error {
+func (s *DomainService) StoreDomainLog(ctx context.Context, domain int64, data any) error {
 	// Encode the data to a []byte
 	dataBytes, err := json.Marshal(data)
 	if err != nil {

@@ -137,7 +137,7 @@ func campaignCrawl() {
 		toolbox.NotifyIrc(fmt.Sprintf("[WhyNoIPv6 Campaign] Total Domains: %v, Successful: %v, Failed: %v Duration: %s", totalDomains, totalSuccessfulJobs, totalFailedJobs, prettyDuration(time.Since(t))))
 
 		// Store crawler metrics in the database.
-		crawlData := map[string]interface{}{
+		crawlData := map[string]any{
 			"duration": time.Since(t).Seconds(),
 			"total":    totalDomains,
 			"success":  totalSuccessfulJobs,

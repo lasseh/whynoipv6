@@ -31,7 +31,7 @@ type Metric struct {
 }
 
 // StoreMetric stores a metric data point with the given measurement name and data.
-func (s *MetricService) StoreMetric(ctx context.Context, measurement string, data interface{}) error {
+func (s *MetricService) StoreMetric(ctx context.Context, measurement string, data any) error {
 	// Encode the data to a []byte
 	dataBytes, err := json.Marshal(data)
 	if err != nil {

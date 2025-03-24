@@ -319,7 +319,7 @@ type CampaignDomainLog struct {
 }
 
 // StoreCampaignDomainLog saves a crawl log for a campaign domain.
-func (s *CampaignService) StoreCampaignDomainLog(ctx context.Context, domain int64, data interface{}) error {
+func (s *CampaignService) StoreCampaignDomainLog(ctx context.Context, domain int64, data any) error {
 	// Encode the data to a []byte
 	dataBytes, err := json.Marshal(data)
 	if err != nil {

@@ -18,7 +18,7 @@ func NewPostgreSQL(conf string, maxRetries int, timeout time.Duration) (*pgxpool
 	var pool *pgxpool.Pool
 	var err error
 
-	for i := 0; i < maxRetries; i++ {
+	for i := range maxRetries {
 		slog.Info("Attempting to connect to PostgreSQL", "attempt", i+1)
 		pool, err = pgxpool.Connect(ctx, conf)
 		if err != nil {

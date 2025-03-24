@@ -265,7 +265,7 @@ func (rs DomainHandler) GetDomainLog(w http.ResponseWriter, r *http.Request) {
 	}
 	var domainlist []DomainLogResponse
 	for _, log := range logs {
-		var data map[string]interface{}
+		var data map[string]any
 		if err := log.Data.AssignTo(&data); err != nil {
 			render.Status(r, http.StatusInternalServerError)
 			render.JSON(w, r, render.M{"error": "internal server error"})
