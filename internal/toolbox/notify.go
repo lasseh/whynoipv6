@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"time"
+
 	"whynoipv6/internal/config"
 )
 
@@ -35,7 +36,7 @@ func init() {
 
 // createHTTPClient initializes an http.Client with better default settings.
 func createHTTPClient() *http.Client {
-	var netTransport = &http.Transport{
+	netTransport := &http.Transport{
 		Dial: (&net.Dialer{
 			Timeout: 5 * time.Second,
 		}).Dial,
@@ -68,7 +69,7 @@ func NotifyIrc(m string) {
 	}
 
 	// Create a Bearer token
-	var bearer = "Bearer " + cfg.IRCToken
+	bearer := "Bearer " + cfg.IRCToken
 	req.Header.Add("Authorization", bearer)
 
 	// Send request
@@ -76,5 +77,4 @@ func NotifyIrc(m string) {
 	if err != nil {
 		log.Println(err)
 	}
-
 }

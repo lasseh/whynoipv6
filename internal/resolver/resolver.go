@@ -24,7 +24,12 @@ const (
 var log = logger.GetLogger()
 
 // var nameservers = []string{"1.1.1.1:53", "8.8.8.8:53", "9.9.9.9:53"}
-var nameservers = []string{"[2606:4700:4700::1111]:53", "[2606:4700:4700::1001]:53", "1.1.1.1:53", "1.0.0.1:53"}
+var nameservers = []string{
+	"[2606:4700:4700::1111]:53",
+	"[2606:4700:4700::1001]:53",
+	"1.1.1.1:53",
+	"1.0.0.1:53",
+}
 
 // DomainResult represents a scan result.
 type DomainResult struct {
@@ -246,7 +251,8 @@ func checkInetType(c *dns.Client, domain string, recordType uint16) bool {
 
 		r, err := performQuery(c, m)
 		if err != nil {
-			log.Err(err).Msgf("Error querying DNS for record type [%d] for domain [%s]", recordType, domain)
+			log.Err(err).
+				Msgf("Error querying DNS for record type [%d] for domain [%s]", recordType, domain)
 			return false
 		}
 
@@ -357,7 +363,6 @@ func IPLookup(domain string) (string, error) {
 	}
 
 	return "", nil
-
 }
 
 // queryDNSRecord performs a DNS query for a given query name and type.
@@ -403,7 +408,8 @@ func performQuery(c *dns.Client, m *dns.Msg) (*dns.Msg, error) {
 			// errMsg := fmt.Sprintf("Error querying DNS server [%s]: %v", nameserver, err)
 			// log.Warn().Msg(errMsg)
 			// log.Err(err).Msgf("[%v] Query error on %v", m.Question[0].Name, dns.TypeToString[m.Question[0].Qtype])
-			log.Err(err).Msgf("Error checking %v on %v", dns.TypeToString[m.Question[0].Qtype], m.Question[0].Name)
+			log.Err(err).
+				Msgf("Error checking %v on %v", dns.TypeToString[m.Question[0].Qtype], m.Question[0].Name)
 			// log.Warn().Msgf("Query: %v", m)
 			// errs = append(errs, errMsg)
 			continue // Try next nameserver on error

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+
 	"whynoipv6/internal/core"
 
 	"github.com/spf13/cobra"
@@ -38,7 +39,11 @@ func displayChangelogs() {
 
 	// Print the retrieved changelog entries
 	for _, entry := range changelogEntries {
-		fmt.Printf("[%s] %s - %s\n", entry.Ts.Format("2006-01-02 15:04:05"), entry.Site, entry.Message)
+		fmt.Printf(
+			"[%s] %s - %s\n",
+			entry.Ts.Format("2006-01-02 15:04:05"),
+			entry.Site,
+			entry.Message,
+		)
 	}
-
 }

@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"regexp"
 	"time"
+
 	"whynoipv6/internal/core"
 
 	"github.com/ggicci/httpin"
@@ -40,7 +41,8 @@ func (rs ChangelogHandler) Routes() chi.Router {
 	// GET /changelog/campaign/{uuid} - List all changelog entries for a specific campaign UUID
 	r.With(httpin.NewInput(PaginationInput{})).Get("/campaign/{uuid}", rs.ChangelogByCampaign)
 	// GET /changelog/campaign/{uuid}/{domain} - List all changelog entries for a specific domain within a campaign UUID
-	r.With(httpin.NewInput(PaginationInput{})).Get("/campaign/{uuid}/{domain}", rs.ChangelogByCampaignDomain)
+	r.With(httpin.NewInput(PaginationInput{})).
+		Get("/campaign/{uuid}/{domain}", rs.ChangelogByCampaignDomain)
 
 	return r
 }
@@ -92,7 +94,11 @@ func (rs ChangelogHandler) CampaignChangelogList(w http.ResponseWriter, r *http.
 	}
 
 	// Fetch changelogs from the repository
-	changelogs, err := rs.Repo.CampaignList(r.Context(), paginationInput.Offset, paginationInput.Limit)
+	changelogs, err := rs.Repo.CampaignList(
+		r.Context(),
+		paginationInput.Offset,
+		paginationInput.Limit,
+	)
 	if err != nil {
 		// Handle any errors while fetching changelogs
 		render.Status(r, http.StatusNotFound)
@@ -139,7 +145,12 @@ func (rs ChangelogHandler) ChangelogByDomain(w http.ResponseWriter, r *http.Requ
 	}
 
 	// Fetch changelogs for the domain from the repository
-	changelogs, err := rs.Repo.GetChangelogByDomain(r.Context(), site, paginationInput.Offset, paginationInput.Limit)
+	changelogs, err := rs.Repo.GetChangelogByDomain(
+		r.Context(),
+		site,
+		paginationInput.Offset,
+		paginationInput.Limit,
+	)
 	if err != nil {
 		render.Status(r, http.StatusNotFound)
 		render.JSON(w, r, render.M{"error": "Unable to find changelog entries for " + site})
@@ -198,17 +209,30 @@ func (rs ChangelogHandler) ChangelogByCampaign(w http.ResponseWriter, r *http.Re
 	}
 
 	// Fetch changelogs for the campaign from the repository
-	changelogs, err := rs.Repo.GetChangelogByCampaign(r.Context(), uuid, paginationInput.Offset, paginationInput.Limit)
+	changelogs, err := rs.Repo.GetChangelogByCampaign(
+		r.Context(),
+		uuid,
+		paginationInput.Offset,
+		paginationInput.Limit,
+	)
 	if err != nil {
 		render.Status(r, http.StatusNotFound)
-		render.JSON(w, r, render.M{"error": "Unable to find changelog entries for campaign " + uuid.String()})
+		render.JSON(
+			w,
+			r,
+			render.M{"error": "Unable to find changelog entries for campaign " + uuid.String()},
+		)
 		return
 	}
 
 	// If no changelogs are found, return 404
 	if len(changelogs) == 0 {
 		render.Status(r, http.StatusNotFound)
-		render.JSON(w, r, render.M{"error": "No changelog entries found for campaign " + uuid.String()})
+		render.JSON(
+			w,
+			r,
+			render.M{"error": "No changelog entries found for campaign " + uuid.String()},
+		)
 		return
 	}
 
@@ -268,17 +292,35 @@ func (rs ChangelogHandler) ChangelogByCampaignDomain(w http.ResponseWriter, r *h
 	}
 
 	// Fetch changelogs for the campaign and domain from the repository
-	changelogs, err := rs.Repo.GetChangelogByCampaignDomain(r.Context(), uuid, site, paginationInput.Offset, paginationInput.Limit)
+	changelogs, err := rs.Repo.GetChangelogByCampaignDomain(
+		r.Context(),
+		uuid,
+		site,
+		paginationInput.Offset,
+		paginationInput.Limit,
+	)
 	if err != nil {
 		render.Status(r, http.StatusNotFound)
-		render.JSON(w, r, render.M{"error": "Unable to find changelog entries for campaign " + campaignUUID + " and domain " + site})
+		render.JSON(
+			w,
+			r,
+			render.M{
+				"error": "Unable to find changelog entries for campaign " + campaignUUID + " and domain " + site,
+			},
+		)
 		return
 	}
 
 	// If no changelogs are found, return 404
 	if len(changelogs) == 0 {
 		render.Status(r, http.StatusNotFound)
-		render.JSON(w, r, render.M{"error": "No changelog entries found for campaign " + campaignUUID + " and domain " + site})
+		render.JSON(
+			w,
+			r,
+			render.M{
+				"error": "No changelog entries found for campaign " + campaignUUID + " and domain " + site,
+			},
+		)
 		return
 	}
 

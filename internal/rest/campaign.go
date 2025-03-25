@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
 	"whynoipv6/internal/core"
 
 	"github.com/ggicci/httpin"
@@ -136,7 +137,12 @@ func (rs CampaignHandler) CampaignDomains(w http.ResponseWriter, r *http.Request
 	}
 
 	// Retrieve domains associated with the campaign
-	domains, err := rs.Repo.ListCampaignDomain(r.Context(), parsedUUID, paginationInput.Offset, paginationInput.Limit)
+	domains, err := rs.Repo.ListCampaignDomain(
+		r.Context(),
+		parsedUUID,
+		paginationInput.Offset,
+		paginationInput.Limit,
+	)
 	if err != nil {
 		render.Status(r, http.StatusNotFound)
 		render.JSON(w, r, render.M{"error": "Campaign not found"})
@@ -228,7 +234,13 @@ func (rs CampaignHandler) ViewCampaignDomain(w http.ResponseWriter, r *http.Requ
 	// If no changelogs are found, return 404
 	if len(domainDetails.Site) == 0 {
 		render.Status(r, http.StatusNotFound)
-		render.JSON(w, r, render.M{"error": "No changelog entries found for campaign " + campaignUUID + " and domain " + site})
+		render.JSON(
+			w,
+			r,
+			render.M{
+				"error": "No changelog entries found for campaign " + campaignUUID + " and domain " + site,
+			},
+		)
 		return
 	}
 
@@ -263,7 +275,12 @@ func (rs CampaignHandler) SearchDomain(w http.ResponseWriter, r *http.Request) {
 	domain := chi.URLParam(r, "domain")
 
 	// Search for campaign domains
-	campaignDomains, err := rs.Repo.GetCampaignDomainsByName(r.Context(), strings.ToLower(domain), paginationInput.Offset, paginationInput.Limit)
+	campaignDomains, err := rs.Repo.GetCampaignDomainsByName(
+		r.Context(),
+		strings.ToLower(domain),
+		paginationInput.Offset,
+		paginationInput.Limit,
+	)
 	if err != nil {
 		render.Status(r, http.StatusNotFound)
 		render.JSON(w, r, render.M{"error": "No domains found"})

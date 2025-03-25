@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"time"
+
 	"whynoipv6/internal/core"
 
 	"github.com/spf13/cobra"

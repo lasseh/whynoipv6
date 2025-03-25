@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"time"
+
 	"whynoipv6/internal/postgres/db"
 
 	"github.com/jackc/pgtype"
@@ -66,7 +67,10 @@ func (s *DomainService) InsertDomain(ctx context.Context, site string) error {
 }
 
 // ListDomain lists all domains.
-func (s *DomainService) ListDomain(ctx context.Context, offset, limit int64) ([]DomainModel, error) {
+func (s *DomainService) ListDomain(
+	ctx context.Context,
+	offset, limit int64,
+) ([]DomainModel, error) {
 	domains, err := s.q.ListDomain(ctx, db.ListDomainParams{
 		Offset: offset,
 		Limit:  limit,
@@ -100,7 +104,10 @@ func (s *DomainService) ListDomain(ctx context.Context, offset, limit int64) ([]
 }
 
 // ListDomainHeroes lists all domains.
-func (s *DomainService) ListDomainHeroes(ctx context.Context, offset, limit int64) ([]DomainModel, error) {
+func (s *DomainService) ListDomainHeroes(
+	ctx context.Context,
+	offset, limit int64,
+) ([]DomainModel, error) {
 	domains, err := s.q.ListDomainHeroes(ctx, db.ListDomainHeroesParams{
 		Offset: offset,
 		Limit:  limit,
@@ -134,7 +141,10 @@ func (s *DomainService) ListDomainHeroes(ctx context.Context, offset, limit int6
 }
 
 // CrawlDomain lists all domains available for crawling
-func (s *DomainService) CrawlDomain(ctx context.Context, lastProcessedID, limit int64) ([]DomainModel, error) {
+func (s *DomainService) CrawlDomain(
+	ctx context.Context,
+	lastProcessedID, limit int64,
+) ([]DomainModel, error) {
 	domains, err := s.q.CrawlDomain(ctx, db.CrawlDomainParams{
 		ID:    lastProcessedID,
 		Limit: limit,
@@ -226,7 +236,11 @@ func (s *DomainService) DisableDomain(ctx context.Context, domain string) error 
 }
 
 // GetDomainsByName returns a list of domains by name.
-func (s *DomainService) GetDomainsByName(ctx context.Context, searchString string, offset, limit int64) ([]DomainModel, error) {
+func (s *DomainService) GetDomainsByName(
+	ctx context.Context,
+	searchString string,
+	offset, limit int64,
+) ([]DomainModel, error) {
 	domains, err := s.q.GetDomainsByName(ctx, db.GetDomainsByNameParams{
 		Column1: NullString(searchString),
 		Offset:  offset,

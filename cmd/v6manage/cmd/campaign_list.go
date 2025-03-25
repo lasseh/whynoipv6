@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+
 	"whynoipv6/internal/core"
 
 	"github.com/alexeyco/simpletable"
@@ -49,7 +50,7 @@ func listCampaign() {
 	}
 
 	// Initialize a variable to store the total domain count.
-	var totalDomainCount = 0
+	totalDomainCount := 0
 
 	// Iterate through the campaigns and add rows to the table.
 	for _, campaign := range campaigns {

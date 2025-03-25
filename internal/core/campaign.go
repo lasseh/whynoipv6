@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"time"
+
 	"whynoipv6/internal/postgres/db"
 
 	"github.com/google/uuid"
@@ -57,7 +58,11 @@ type CampaignDomainModel struct {
 }
 
 // InsertCampaignDomain inserts a domain into a campaign.
-func (s *CampaignService) InsertCampaignDomain(ctx context.Context, campaignID uuid.UUID, domain string) error {
+func (s *CampaignService) InsertCampaignDomain(
+	ctx context.Context,
+	campaignID uuid.UUID,
+	domain string,
+) error {
 	err := s.q.InsertCampaignDomain(ctx, db.InsertCampaignDomainParams{
 		CampaignID: campaignID,
 		Site:       domain,
@@ -69,7 +74,10 @@ func (s *CampaignService) InsertCampaignDomain(ctx context.Context, campaignID u
 }
 
 // CrawlCampaignDomain lists all domains available for crawling
-func (s *CampaignService) CrawlCampaignDomain(ctx context.Context, offset, limit int64) ([]CampaignDomainModel, error) {
+func (s *CampaignService) CrawlCampaignDomain(
+	ctx context.Context,
+	offset, limit int64,
+) ([]CampaignDomainModel, error) {
 	domains, err := s.q.CrawlCampaignDomain(ctx, db.CrawlCampaignDomainParams{
 		Offset: offset,
 		Limit:  limit,
@@ -101,7 +109,10 @@ func (s *CampaignService) CrawlCampaignDomain(ctx context.Context, offset, limit
 }
 
 // UpdateCampaignDomain updates a domain.
-func (s *CampaignService) UpdateCampaignDomain(ctx context.Context, domain CampaignDomainModel) error {
+func (s *CampaignService) UpdateCampaignDomain(
+	ctx context.Context,
+	domain CampaignDomainModel,
+) error {
 	err := s.q.UpdateCampaignDomain(ctx, db.UpdateCampaignDomainParams{
 		Site:         domain.Site,
 		CampaignID:   domain.CampaignID,
@@ -127,7 +138,11 @@ func (s *CampaignService) UpdateCampaignDomain(ctx context.Context, domain Campa
 }
 
 // ViewCampaignDomain list a domain.
-func (s *CampaignService) ViewCampaignDomain(ctx context.Context, uuid uuid.UUID, domain string) (CampaignDomainModel, error) {
+func (s *CampaignService) ViewCampaignDomain(
+	ctx context.Context,
+	uuid uuid.UUID,
+	domain string,
+) (CampaignDomainModel, error) {
 	d, err := s.q.ViewCampaignDomain(ctx, db.ViewCampaignDomainParams{
 		Site:       domain,
 		CampaignID: uuid,
@@ -203,7 +218,10 @@ func (s *CampaignService) GetCampaign(ctx context.Context, id uuid.UUID) (Campai
 }
 
 // CreateCampaign creates a new campaign and returns the new CampaignModel.
-func (s *CampaignService) CreateCampaign(ctx context.Context, name, description string) (CampaignModel, error) {
+func (s *CampaignService) CreateCampaign(
+	ctx context.Context,
+	name, description string,
+) (CampaignModel, error) {
 	c, err := s.q.CreateCampaign(ctx, db.CreateCampaignParams{
 		Name:        name,
 		Description: description,
@@ -220,7 +238,10 @@ func (s *CampaignService) CreateCampaign(ctx context.Context, name, description 
 }
 
 // CreateOrUpdateCampaign creates or updates a campaign.
-func (s *CampaignService) CreateOrUpdateCampaign(ctx context.Context, campaign CampaignModel) (CampaignModel, error) {
+func (s *CampaignService) CreateOrUpdateCampaign(
+	ctx context.Context,
+	campaign CampaignModel,
+) (CampaignModel, error) {
 	c, err := s.q.CreateOrUpdateCampaign(ctx, db.CreateOrUpdateCampaignParams{
 		Uuid:        campaign.UUID,
 		Name:        campaign.Name,
@@ -238,7 +259,11 @@ func (s *CampaignService) CreateOrUpdateCampaign(ctx context.Context, campaign C
 }
 
 // ListCampaignDomain lists all domains for a campaign.
-func (s *CampaignService) ListCampaignDomain(ctx context.Context, campaignID uuid.UUID, offset, limit int64) ([]CampaignDomainModel, error) {
+func (s *CampaignService) ListCampaignDomain(
+	ctx context.Context,
+	campaignID uuid.UUID,
+	offset, limit int64,
+) ([]CampaignDomainModel, error) {
 	domains, err := s.q.ListCampaignDomain(ctx, db.ListCampaignDomainParams{
 		CampaignID: campaignID,
 		Offset:     offset,
@@ -273,7 +298,11 @@ func (s *CampaignService) ListCampaignDomain(ctx context.Context, campaignID uui
 }
 
 // DeleteCampaignDomain deletes a domain from a campaign.
-func (s *CampaignService) DeleteCampaignDomain(ctx context.Context, campaignID uuid.UUID, domain string) error {
+func (s *CampaignService) DeleteCampaignDomain(
+	ctx context.Context,
+	campaignID uuid.UUID,
+	domain string,
+) error {
 	err := s.q.DeleteCampaignDomain(ctx, db.DeleteCampaignDomainParams{
 		CampaignID: campaignID,
 		Site:       domain,
@@ -285,7 +314,11 @@ func (s *CampaignService) DeleteCampaignDomain(ctx context.Context, campaignID u
 }
 
 // GetCampaignDomainsByName returns a list of domains from a campaign by name.
-func (s *CampaignService) GetCampaignDomainsByName(ctx context.Context, searchString string, offset, limit int64) ([]CampaignDomainModel, error) {
+func (s *CampaignService) GetCampaignDomainsByName(
+	ctx context.Context,
+	searchString string,
+	offset, limit int64,
+) ([]CampaignDomainModel, error) {
 	domains, err := s.q.GetCampaignDomainsByName(ctx, db.GetCampaignDomainsByNameParams{
 		Column1: NullString(searchString),
 		Offset:  offset,
@@ -319,7 +352,11 @@ type CampaignDomainLog struct {
 }
 
 // StoreCampaignDomainLog saves a crawl log for a campaign domain.
-func (s *CampaignService) StoreCampaignDomainLog(ctx context.Context, domain int64, data any) error {
+func (s *CampaignService) StoreCampaignDomainLog(
+	ctx context.Context,
+	domain int64,
+	data any,
+) error {
 	// Encode the data to a []byte
 	dataBytes, err := json.Marshal(data)
 	if err != nil {
@@ -341,7 +378,11 @@ func (s *CampaignService) StoreCampaignDomainLog(ctx context.Context, domain int
 }
 
 // GetCampaignDomainLog retrieves all the logs for a specified domain.
-func (s *CampaignService) GetCampaignDomainLog(ctx context.Context, uuid uuid.UUID, domain string) ([]CampaignDomainLog, error) {
+func (s *CampaignService) GetCampaignDomainLog(
+	ctx context.Context,
+	uuid uuid.UUID,
+	domain string,
+) ([]CampaignDomainLog, error) {
 	// Get the domain ID from the database
 	d, err := s.q.ViewCampaignDomain(ctx, db.ViewCampaignDomainParams{
 		CampaignID: uuid,

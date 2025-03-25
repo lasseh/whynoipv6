@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
 	"whynoipv6/internal/core"
 	"whynoipv6/internal/resolver"
 
@@ -47,37 +48,39 @@ func importDomainsToCampaign() {
 	log.Println("Starting Campaign Import from", cfg.CampaignPath)
 
 	// Read all the files in the campaign folder
-	err = filepath.Walk(cfg.CampaignPath, func(campaignFile string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-
-		// Check if the file is a YAML file
-		if !info.IsDir() && strings.EqualFold(filepath.Ext(campaignFile), ".yml") {
-			// Unmarshal YAML data from the file
-			yamlData, err := unmarshalYAMLFile(campaignFile)
+	err = filepath.Walk(
+		cfg.CampaignPath,
+		func(campaignFile string, info os.FileInfo, err error) error {
 			if err != nil {
-				log.Println(err)
-				return nil
+				return err
 			}
 
-			// Create or update campaign
-			err = createOrUpdateCampaign(ctx, campaignFile, yamlData)
-			if err != nil {
-				log.Println(err)
-				return nil
-			}
+			// Check if the file is a YAML file
+			if !info.IsDir() && strings.EqualFold(filepath.Ext(campaignFile), ".yml") {
+				// Unmarshal YAML data from the file
+				yamlData, err := unmarshalYAMLFile(campaignFile)
+				if err != nil {
+					log.Println(err)
+					return nil
+				}
 
-			// Sync domains with the database
-			err = syncDomainsWithDatabase(ctx, yamlData)
-			if err != nil {
-				log.Println(err)
-				return nil
-			}
-		}
-		return nil
-	})
+				// Create or update campaign
+				err = createOrUpdateCampaign(ctx, campaignFile, yamlData)
+				if err != nil {
+					log.Println(err)
+					return nil
+				}
 
+				// Sync domains with the database
+				err = syncDomainsWithDatabase(ctx, yamlData)
+				if err != nil {
+					log.Println(err)
+					return nil
+				}
+			}
+			return nil
+		},
+	)
 	if err != nil {
 		fmt.Printf("Error walking through directory %s: %v\n", cfg.CampaignPath, err)
 	}
@@ -102,7 +105,11 @@ func unmarshalYAMLFile(campaignFile string) (*CampaignYAML, error) {
 }
 
 // createOrUpdateCampaign creates a new campaign if the UUID is empty, otherwise it updates the campaign.
-func createOrUpdateCampaign(ctx context.Context, campaignFile string, yamlData *CampaignYAML) error {
+func createOrUpdateCampaign(
+	ctx context.Context,
+	campaignFile string,
+	yamlData *CampaignYAML,
+) error {
 	// Validate Campaign title and description
 	if yamlData.Title == "" || yamlData.Description == "" {
 		return fmt.Errorf("error: Campaign title or description is empty in %s", campaignFile)
@@ -131,7 +138,6 @@ func createOrUpdateCampaign(ctx context.Context, campaignFile string, yamlData *
 
 	// log.Println("Campaign created or updated:", campaign.UUID)
 	return nil
-
 }
 
 // updateCampaignUUID updates the campaign's UUID in the given YAML file and stores the updated content.
@@ -141,7 +147,11 @@ func updateCampaignUUID(yamlFilePath string, campaignData *CampaignYAML) (string
 	ctx := context.Background()
 
 	// Create a new campaign using the provided YAML data.
-	newCampaign, err := campaignService.CreateCampaign(ctx, campaignData.Title, campaignData.Description)
+	newCampaign, err := campaignService.CreateCampaign(
+		ctx,
+		campaignData.Title,
+		campaignData.Description,
+	)
 	if err != nil {
 		return "", fmt.Errorf("failed to create campaign: %w", err)
 	}
@@ -157,8 +167,7 @@ func updateCampaignUUID(yamlFilePath string, campaignData *CampaignYAML) (string
 	}
 
 	// Write the updated YAML data to the file.
-	err = os.WriteFile(yamlFilePath, updatedYAMLData, 0644)
-
+	err = os.WriteFile(yamlFilePath, updatedYAMLData, 0o644)
 	if err != nil {
 		return "", fmt.Errorf("failed to write updated YAML data to file: %w", err)
 	}
@@ -210,7 +219,12 @@ func syncDomainsWithDatabase(ctx context.Context, yamlData *CampaignYAML) error 
 			// Delete the domain from the campaign.
 			err := campaignService.DeleteCampaignDomain(ctx, campaignUUID, domainRecord.Site)
 			if err != nil {
-				return fmt.Errorf("error deleting domain %s from campaign with UUID %s: %v", domainRecord.Site, yamlData.UUID, err)
+				return fmt.Errorf(
+					"error deleting domain %s from campaign with UUID %s: %v",
+					domainRecord.Site,
+					yamlData.UUID,
+					err,
+				)
 			}
 		}
 	}

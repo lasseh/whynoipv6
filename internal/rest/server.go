@@ -27,7 +27,9 @@ func NewRouter() (*chi.Mux, error) {
 	})
 
 	r.Use(
-		render.SetContentType(render.ContentTypeJSON), // Set content-Type headers as application/json
+		render.SetContentType(
+			render.ContentTypeJSON,
+		), // Set content-Type headers as application/json
 		middleware.RealIP,    // Logs the real ip from nginx
 		middleware.Logger,    // Log API request calls
 		middleware.Recoverer, // Recover from panics without crashing server
@@ -45,10 +47,13 @@ func NewRouter() (*chi.Mux, error) {
 // PrintRoutes prints the routes of the application.
 func PrintRoutes(r *chi.Mux) {
 	log.Println("Routes:")
-	err := chi.Walk(r, func(method string, route string, handler http.Handler, middlewares ...func(http.Handler) http.Handler) error {
-		log.Printf("\t[%s]: '%s'\n", method, route)
-		return nil
-	})
+	err := chi.Walk(
+		r,
+		func(method string, route string, handler http.Handler, middlewares ...func(http.Handler) http.Handler) error {
+			log.Printf("\t[%s]: '%s'\n", method, route)
+			return nil
+		},
+	)
 	if err != nil {
 		log.Println("Error printing routes:", err)
 	}

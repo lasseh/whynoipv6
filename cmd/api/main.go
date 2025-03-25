@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"time"
+
 	"whynoipv6/internal/config"
 	"whynoipv6/internal/core"
 	"whynoipv6/internal/postgres"
@@ -26,7 +27,6 @@ func main() {
 	const timeout = 10 * time.Second
 	dbSource := cfg.DatabaseSource + "&application_name=api"
 	db, err := postgres.NewPostgreSQL(dbSource, maxRetries, timeout)
-
 	if err != nil {
 		log.Fatalln("Error connecting to database", err)
 	}
@@ -36,7 +36,6 @@ func main() {
 	router, err := rest.NewRouter()
 	if err != nil {
 		log.Fatalf("Failed to create router: %v", err)
-
 	}
 
 	// Initialize core services for managing various resources.

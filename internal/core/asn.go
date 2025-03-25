@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+
 	"whynoipv6/internal/postgres/db"
 
 	"github.com/jackc/pgx/v4"

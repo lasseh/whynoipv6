@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"time"
+
 	"whynoipv6/internal/logger"
 )
 
@@ -18,7 +19,7 @@ const (
 // The function takes a unique identifier (uuid) as input and sends an HTTP HEAD request to BetterUptime.com's API.
 // If there's an error, it will log the error message.
 func HealthCheckUpdate(uuid string, status int) {
-	var log = logger.GetLogger()
+	log := logger.GetLogger()
 	log = log.With().Str("service", "HealthCheckUpdate").Logger()
 	// Create an HTTP client with a 10-second timeout.
 	httpClient := &http.Client{
@@ -30,7 +31,6 @@ func HealthCheckUpdate(uuid string, status int) {
 
 	// Send the HTTP HEAD request.
 	resp, err := httpClient.Head(apiURL)
-
 	// If there's an error, log the error message.
 	if err != nil {
 		log.Err(err).Msg("Error while sending health check update.")

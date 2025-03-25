@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"time"
+
 	"whynoipv6/internal/core"
 
 	"github.com/spf13/cobra"
@@ -55,7 +56,6 @@ func dumpData() {
 		// for _, d := range domains {
 		// 	fmt.Println(d.Domain)
 		// }
-
 	}
 	// Print time it took to import
 	fmt.Printf("Dumped country data in: %s", time.Since(t))

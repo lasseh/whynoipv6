@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"time"
+
 	"whynoipv6/internal/core"
 	"whynoipv6/internal/geoip"
 	"whynoipv6/internal/resolver"
@@ -66,7 +67,10 @@ func campaignCrawl() {
 			failedJobs := 0                                            // Failed jobs in this batch
 			loopTime := time.Now()                                     // Start time for this batch
 			campaignJobs := make(chan core.CampaignDomainModel, limit) // Channel for jobs
-			done := make(chan bool, limit)                             // Channel for signaling completion of jobs
+			done := make(
+				chan bool,
+				limit,
+			) // Channel for signaling completion of jobs
 
 			// Start workers for this batch of jobs
 			for w := 1; w <= numWorkers; w++ {
@@ -98,7 +102,9 @@ func campaignCrawl() {
 				totalDomains++         // Increment the total number of domains checked in this crawl
 			}
 
-			close(campaignJobs)               // Close the jobs channel and wait for this batch of workers to finish
+			close(
+				campaignJobs,
+			) // Close the jobs channel and wait for this batch of workers to finish
 			timeout := time.After(jobTimeout) // Timeout for this batch of jobs
 
 			// This loop monitors the completion of domain processing jobs. It iterates up to 'domainJobs' times,
@@ -125,16 +131,26 @@ func campaignCrawl() {
 			offset += limit                       // Update the offset for the next batch
 			totalSuccessfulJobs += successfulJobs // Update the total count of successful jobs
 			totalFailedJobs += failedJobs         // Update the total count of failed jobs
-			logg.Info().Msgf("Checked %v domains, Successful: %v, Failed: %v Duraation: %s", domainJobs, successfulJobs, failedJobs, prettyDuration(time.Since(loopTime)))
+			logg.Info().
+				Msgf("Checked %v domains, Successful: %v, Failed: %v Duraation: %s", domainJobs, successfulJobs, failedJobs, prettyDuration(time.Since(loopTime)))
 		}
 
 		// Outer loop finished
-		logg.Info().Msgf("Total Domains: %v domains, Successful Jobs: %v, Failed Jobs: %v Duration: %s", totalDomains, totalSuccessfulJobs, totalFailedJobs, prettyDuration(time.Since(t)))
+		logg.Info().
+			Msgf("Total Domains: %v domains, Successful Jobs: %v, Failed Jobs: %v Duration: %s", totalDomains, totalSuccessfulJobs, totalFailedJobs, prettyDuration(time.Since(t)))
 
 		// Healthcheck reporting
 		toolbox.HealthCheckUpdate(cfg.HealthcheckCampaign, toolbox.HealthOK)
 		// Notify partyvan
-		toolbox.NotifyIrc(fmt.Sprintf("[WhyNoIPv6 Campaign] Total Domains: %v, Successful: %v, Failed: %v Duration: %s", totalDomains, totalSuccessfulJobs, totalFailedJobs, prettyDuration(time.Since(t))))
+		toolbox.NotifyIrc(
+			fmt.Sprintf(
+				"[WhyNoIPv6 Campaign] Total Domains: %v, Successful: %v, Failed: %v Duration: %s",
+				totalDomains,
+				totalSuccessfulJobs,
+				totalFailedJobs,
+				prettyDuration(time.Since(t)),
+			),
+		)
 
 		// Store crawler metrics in the database.
 		crawlData := map[string]any{
@@ -156,7 +172,11 @@ func campaignCrawl() {
 
 // processCampaignDomain processes a domain and updates it in the database.
 // Returns true if the job was successful, false if it failed
-func processCampaignDomain(ctx context.Context, jobs <-chan core.CampaignDomainModel, done chan<- bool) {
+func processCampaignDomain(
+	ctx context.Context,
+	jobs <-chan core.CampaignDomainModel,
+	done chan<- bool,
+) {
 	logg := logg.With().Str("service", "processCampaignDomain").Logger()
 	for job := range jobs {
 		// Process the job
@@ -180,7 +200,10 @@ func processCampaignDomain(ctx context.Context, jobs <-chan core.CampaignDomainM
 }
 
 // checkCampaignDomain runs all the checks on the domain.
-func checkCampaignDomain(ctx context.Context, domain core.CampaignDomainModel) (core.CampaignDomainModel, error) {
+func checkCampaignDomain(
+	ctx context.Context,
+	domain core.CampaignDomainModel,
+) (core.CampaignDomainModel, error) {
 	checkResult := core.CampaignDomainModel{}
 	logg := logg.With().Str("service", "checkCampaignDomain").Logger()
 
@@ -265,7 +288,10 @@ func checkCampaignDomain(ctx context.Context, domain core.CampaignDomainModel) (
 }
 
 // updateDomain updates the domain in the database with the check result.
-func updateCampaignDomain(ctx context.Context, currentDomain, newDomain core.CampaignDomainModel) error {
+func updateCampaignDomain(
+	ctx context.Context,
+	currentDomain, newDomain core.CampaignDomainModel,
+) error {
 	// Helper function to log and create a changelog entry.
 	createChangelog := func(domain core.CampaignDomainModel, message string, status string) {
 		_, err := changelogService.CampaignCreate(ctx, core.ChangelogModel{
@@ -439,5 +465,7 @@ func generateCampaignChangelog(currentDomain, newDomain core.CampaignDomainModel
 	}
 
 	// No change
-	return "", errors.New("Unknown change for " + currentDomain.Site + ": BaseDomain: [" + currentDomain.BaseDomain + " - " + newDomain.BaseDomain + "] WwwDomain: [" + currentDomain.WwwDomain + " - " + newDomain.WwwDomain + "] Nameserver: [" + currentDomain.Nameserver + " - " + newDomain.Nameserver + "] MXRecord: [" + currentDomain.MXRecord + " - " + newDomain.MXRecord + "]")
+	return "", errors.New(
+		"Unknown change for " + currentDomain.Site + ": BaseDomain: [" + currentDomain.BaseDomain + " - " + newDomain.BaseDomain + "] WwwDomain: [" + currentDomain.WwwDomain + " - " + newDomain.WwwDomain + "] Nameserver: [" + currentDomain.Nameserver + " - " + newDomain.Nameserver + "] MXRecord: [" + currentDomain.MXRecord + " - " + newDomain.MXRecord + "]",
+	)
 }

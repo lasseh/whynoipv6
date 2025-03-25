@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"time"
+
 	"whynoipv6/internal/core"
 	"whynoipv6/internal/geoip"
 	"whynoipv6/internal/resolver"
@@ -108,7 +109,9 @@ func domainCrawl() {
 				}
 			}
 
-			close(jobs)                       // Close the jobs channel and wait for this batch of workers to finish
+			close(
+				jobs,
+			) // Close the jobs channel and wait for this batch of workers to finish
 			timeout := time.After(jobTimeout) // Timeout for this batch of jobs
 
 			// This loop monitors the completion of domain processing jobs. It iterates up to 'domainJobs' times,
@@ -136,11 +139,13 @@ func domainCrawl() {
 			lastProcessedID = highestIDInBatch // Update lastProcessedID for the next batch
 			totalSuccessfulJobs += successfulJobs // Update the total count of successful jobs
 			totalFailedJobs += failedJobs         // Update the total count of failed jobs
-			logg.Info().Msgf("Checked %v domains, Successful: %v, Failed: %v Total: %v Duration: %s", domainJobs, successfulJobs, failedJobs, totalDomains, prettyDuration(time.Since(loopTime)))
+			logg.Info().
+				Msgf("Checked %v domains, Successful: %v, Failed: %v Total: %v Duration: %s", domainJobs, successfulJobs, failedJobs, totalDomains, prettyDuration(time.Since(loopTime)))
 		}
 
 		// Outer loop finished
-		logg.Info().Msgf("Total Domains: %v domains, Successful Jobs: %v, Failed Jobs: %v Duration: %s", totalDomains, totalSuccessfulJobs, totalFailedJobs, prettyDuration(time.Since(t)))
+		logg.Info().
+			Msgf("Total Domains: %v domains, Successful Jobs: %v, Failed Jobs: %v Duration: %s", totalDomains, totalSuccessfulJobs, totalFailedJobs, prettyDuration(time.Since(t)))
 
 		// Store crawler metrics in the database.
 		crawlData := map[string]any{
@@ -177,7 +182,15 @@ func domainCrawl() {
 		toolbox.HealthCheckUpdate(cfg.HealthcheckCrawler, toolbox.HealthOK)
 		// Notify partyvan
 		if totalDomains > 0 {
-			toolbox.NotifyIrc(fmt.Sprintf("[WhyNoIPv6] Total Domains: %v, Successful: %v, Failed: %v Duration: %s", totalDomains, totalSuccessfulJobs, totalFailedJobs, prettyDuration(time.Since(t))))
+			toolbox.NotifyIrc(
+				fmt.Sprintf(
+					"[WhyNoIPv6] Total Domains: %v, Successful: %v, Failed: %v Duration: %s",
+					totalDomains,
+					totalSuccessfulJobs,
+					totalFailedJobs,
+					prettyDuration(time.Since(t)),
+				),
+			)
 		}
 
 		// Sleep for 2 hours
@@ -474,5 +487,7 @@ func generateChangelog(currentDomain, newDomain core.DomainModel) (string, error
 		}
 	}
 
-	return "", errors.New("Unknown change for " + currentDomain.Site + ": BaseDomain: [" + currentDomain.BaseDomain + " - " + newDomain.BaseDomain + "] WwwDomain: [" + currentDomain.WwwDomain + " - " + newDomain.WwwDomain + "] Nameserver: [" + currentDomain.Nameserver + " - " + newDomain.Nameserver + "] MXRecord: [" + currentDomain.MXRecord + " - " + newDomain.MXRecord + "]")
+	return "", errors.New(
+		"Unknown change for " + currentDomain.Site + ": BaseDomain: [" + currentDomain.BaseDomain + " - " + newDomain.BaseDomain + "] WwwDomain: [" + currentDomain.WwwDomain + " - " + newDomain.WwwDomain + "] Nameserver: [" + currentDomain.Nameserver + " - " + newDomain.Nameserver + "] MXRecord: [" + currentDomain.MXRecord + " - " + newDomain.MXRecord + "]",
+	)
 }
