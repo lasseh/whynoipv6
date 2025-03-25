@@ -400,12 +400,14 @@ func updateDomain(ctx context.Context, currentDomain, newDomain core.DomainModel
 	}
 
 	// Write a log of the check.
-	domainService.StoreDomainLog(ctx, currentDomain.ID, DomainLog{
+	if err := domainService.StoreDomainLog(ctx, currentDomain.ID, DomainLog{
 		BaseDomain: newDomain.BaseDomain,
 		WwwDomain:  newDomain.WwwDomain,
 		Nameserver: newDomain.Nameserver,
 		MxRecord:   newDomain.MXRecord,
-	})
+	}); err != nil {
+		logg.Error().Err(err).Msgf("[%s] Could not store domain log", currentDomain.Site)
+	}
 
 	return nil
 }

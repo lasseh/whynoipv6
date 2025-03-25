@@ -38,7 +38,11 @@ func HealthCheckUpdate(uuid string, status int) {
 	}
 
 	// Close the response body when the function exits.
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			log.Err(err).Msg("Error while closing response body.")
+		}
+	}()
 
 	// Check if the response status code indicates success (2xx).
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {

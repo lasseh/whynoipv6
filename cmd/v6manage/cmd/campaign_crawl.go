@@ -377,12 +377,14 @@ func updateCampaignDomain(
 	}
 
 	// Write a log of the check.
-	campaignService.StoreCampaignDomainLog(ctx, currentDomain.ID, CampaignDomainLog{
+	if err := campaignService.StoreCampaignDomainLog(ctx, currentDomain.ID, CampaignDomainLog{
 		BaseDomain: newDomain.BaseDomain,
 		WwwDomain:  newDomain.WwwDomain,
 		Nameserver: newDomain.Nameserver,
 		MxRecord:   newDomain.MXRecord,
-	})
+	}); err != nil {
+		logg.Error().Err(err).Msgf("[%s] Could not store campaign domain log", currentDomain.Site)
+	}
 
 	return nil
 }

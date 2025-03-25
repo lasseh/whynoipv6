@@ -47,7 +47,9 @@ func main() {
 
 	// Message for the / endpoint.
 	router.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprint(w, "Api docs can be found at http://ipv6.fail/")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"message": "ok"}`))
 	})
 
 	// Register API endpoints with their respective handlers.

@@ -35,7 +35,7 @@ func GetLogger() zerolog.Logger {
 		if levelEnv != "" {
 			levelFromEnv, err := zerolog.ParseLevel(levelEnv)
 			if err != nil {
-				log.Println(fmt.Errorf("Defaulting to Info: %w", err))
+				log.Println(fmt.Errorf("defaulting to Info: %w", err))
 			}
 
 			logLevel = levelFromEnv
