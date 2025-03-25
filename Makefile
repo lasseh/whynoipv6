@@ -1,3 +1,4 @@
+# Load environment variables from .env if the file exists
 include ./app.env
 
 .PHONY: run
@@ -40,7 +41,9 @@ migrateup: ## Migrates up the database
 		echo >&2 "migrate command not found, installing..."; \
 		go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest; \
 	}
+	@echo "📥 Running database migrations (up)..."
 	migrate -path ./db/migrations -database $(DB_SOURCE) -verbose up
+	@echo "✅ Migrations applied successfully!"
 
 .PHONY: migratedown
 migratedown: ## Migrates down the database
