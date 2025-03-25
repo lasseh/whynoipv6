@@ -1,9 +1,25 @@
+# Environment files
 app.env
+*.env
+
 tldbwriter.toml
 sqlc.yaml
-/tmp/
-.vscode
 cmd/api/api
-logs/
 extra/vector/
+
+# Build and dependency directories
+/build/
+/dist/
+/tmp/
+
+# Logs
+/logs/
+*.log
+
+# IDE and editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
 .DS_Store
