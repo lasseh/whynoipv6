@@ -2,6 +2,7 @@ package resolver
 
 import (
 	"fmt"
+	"net"
 	"strings"
 	"sync"
 	"time"
@@ -260,7 +261,12 @@ func checkInetType(c *dns.Client, domain string, recordType uint16) bool {
 			switch rr := rr.(type) {
 			case *dns.AAAA:
 				if recordType == dns.TypeAAAA {
-					return true // IPv6 address found
+					// Validate that the IPv6 address is globally routable
+					if !isGloballyRoutableIPv6(rr.AAAA) {
+						log.Debug().Msgf("[%s] IPv6 address %s is not globally routable, skipping", domain, rr.AAAA.String())
+						continue
+					}
+					return true // Globally routable IPv6 address found
 				}
 			case *dns.A:
 				if recordType == dns.TypeA {
@@ -310,6 +316,11 @@ func queryDomainStatus(client *dns.Client, domain string, qtype uint16) (string,
 			switch rr := rr.(type) {
 			case *dns.AAAA:
 				if qtype == dns.TypeAAAA {
+					// Validate that the IPv6 address is globally routable
+					if !isGloballyRoutableIPv6(rr.AAAA) {
+						log.Debug().Msgf("[%s] IPv6 address %s is not globally routable, skipping", domain, rr.AAAA.String())
+						continue
+					}
 					log.Debug().Msgf("[%s] IPv6 Answer: %s", domain, rr.AAAA.String())
 					return IPv6Available, nil
 				}
@@ -468,4 +479,36 @@ func getTopLevelDomain(domain string) string {
 	}
 	// If it's not a valid domain or a TLD itself, return the original domain
 	return domain
+}
+
+// isGloballyRoutableIPv6 checks if an IPv6 address is globally routable.
+// Returns false for link-local (fe80::/10), loopback (::1), and unique local (fc00::/7) addresses.
+func isGloballyRoutableIPv6(ip net.IP) bool {
+	// Ensure it's an IPv6 address
+	if ip.To4() != nil {
+		return false // This is an IPv4 address
+	}
+
+	// Check for loopback (::1)
+	if ip.IsLoopback() {
+		return false
+	}
+
+	// Check for link-local (fe80::/10)
+	if ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
+		return false
+	}
+
+	// Check for unique local addresses (fc00::/7 - includes fc00::/8 and fd00::/8)
+	// First byte must be 0xfc or 0xfd
+	if len(ip) >= 1 && (ip[0] == 0xfc || ip[0] == 0xfd) {
+		return false
+	}
+
+	// Check for unspecified address (::)
+	if ip.IsUnspecified() {
+		return false
+	}
+
+	return true
 }
