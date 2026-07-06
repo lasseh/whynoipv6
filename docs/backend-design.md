@@ -8,7 +8,7 @@
 `whynoipv6-web`, plus web research on Tranco, public-resolver limits, Unbound at scale,
 Go DNS/HTTP-over-IPv6, and TimescaleDB 2.28/PG18 (all findings cited inline).
 **Convention:** every major recommendation states the rejected alternative. Open items
-are marked **[OPEN-n]** and collected in §9.
+are marked **OPEN-n** and resolved in the §9 decision log.
 
 ---
 
