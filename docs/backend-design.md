@@ -1,6 +1,7 @@
 # WhyNoIPv6 Backend Rewrite — Design Report
 
-**Status:** Round 1 proposal — for iteration, not implementation.
+**Status:** Round 1.1 — all round-1 open items resolved in operator review on 2026-07-06
+(decision log in §9); design updated accordingly. Still a proposal, not implementation.
 **Input:** `docs/backend-research-brief.md` (authoritative), study of the production
 `whynoipv6` backend, `claude/whynoipv6-team/backend` (v2 rebuild), `v6audit`
 (checker engine), `claude/whynoipv6/prompts` + `REVIEW-REPORT.md`, `whynoipv6-campaign`,
@@ -74,7 +75,7 @@ timeouts and payloads were confirmed by direct code reading. Lift **verbatim**:
 
 | Path | What it is |
 |---|---|
-| `internal/checker/resolver.go` | miekg/dns resolver: EDNS0, UDP→TCP-on-truncation, retry-once-on-next-upstream, TTL cache (30s–300s clamp, RFC 2308 negative caching), CNAME chase ≤10 hops with loop detection |
+| `internal/checker/resolver.go` | DNS resolver: EDNS0, UDP→TCP-on-truncation, retry-once-on-next-upstream, TTL cache (30s–300s clamp, RFC 2308 negative caching), CNAME chase ≤10 hops with loop detection. Behavior lifted 1:1; API ported to miekg/dns **v2** (§2.4, OPEN-9) |
 | `internal/checker/ssrf.go` | `SafeDialer`: full v4+v6 blocklists (RFC1918, CGNAT, link-local/metadata, Teredo/6to4, NAT64, ULA, AWS v6 metadata), DNS-pinned dialing — resolve once, validate, dial the literal IP |
 | `internal/checker/dns_aaaa_base.go`, `dns_aaaa_www.go` | apex/www AAAA with NXDOMAIN→`not_applicable`, CDN detection on www CNAME chain |
 | `internal/checker/dns_ns_ipv6.go` | NS with **label walk-up zone discovery** — fixes the production `co.uk` bug without a PSL |
@@ -125,7 +126,8 @@ observations and never becomes public. The mapping is **explicit per dimension**
 *Rejected — strict all-NS/all-MX = supported:* a zone with one v6-capable NS **is**
 resolvable from an IPv6-only network, and one v6 MX **does** accept mail over v6;
 requiring all hosts would shame operators who are functionally v6-ready. The all-hosts
-detail stays visible in the scan payload for the detail page. **[OPEN-1]** confirm.
+detail stays visible in the scan payload for the detail page. (**OPEN-1: decided** —
+≥1-host rule adopted.)
 
 *Rejected — dropping SPF/PTR/DNSSEC (not in brief §3.3's core list):* they cost 1–3
 cheap local-resolver queries each, come free with the engine, and feed the detail page.
@@ -218,8 +220,11 @@ classification-critical AAAA. *Rejected — all queries through local recursors:
 the 3-network GeoDNS diversity exactly where it matters (a CDN could serve AAAA to one
 region only). *Rejected — zdns as the bulk resolver library:* solid tool (it's how
 research scans do iterative resolution), but v6audit's resolver already exists, is
-integrated with the checks and the SSRF dialer, and miekg/dns v1 remains maintained
-(v2 on Codeberg is the future; migrating is a later, mechanical task — noted in §9).
+integrated with the checks and the SSRF dialer. During the lift the resolver is
+**ported to miekg/dns v2** (Codeberg — actively developed, ~2× faster; v1 is
+maintenance-mode; **OPEN-9: decided**): the port is mechanical per the official
+v1→v2 migration guide, and reverting to the v1 API is equally mechanical if v2
+misbehaves during phase-2 verification.
 
 ### 2.5 Worker / frontier model
 
@@ -419,7 +424,7 @@ CREATE TYPE domain_kind     AS ENUM ('apex', 'subdomain');
 CREATE TYPE created_by      AS ENUM ('tranco', 'campaign', 'parent_link', 'live_check');
 CREATE TYPE classification  AS ENUM ('unknown', 'inactive', 'sinner', 'partial', 'hero');
 CREATE TYPE disabled_reason AS ENUM ('dead', 'service', 'manual', 'delisted');
-CREATE TYPE resource_source AS ENUM ('discovered', 'manual');
+CREATE TYPE resource_source AS ENUM ('discovered', 'manual', 'campaign');
 CREATE TYPE check_job_status AS ENUM ('pending', 'processing', 'done', 'failed');
 ```
 
@@ -550,7 +555,8 @@ never counted against:
 
 Note www: engine maps www NXDOMAIN → `not_applicable` (site doesn't use www), which
 per the evaluation principles must not block hero — this deviates from a literal
-reading of §5.5's "www AAAA supported" and is flagged **[OPEN-2]**.
+reading of §5.5's "www AAAA supported" (**OPEN-2: decided** — `not_applicable` skips; a site without www can be a Hero,
+and www `no_record` gets the same treatment).
 
 *Rejected — deriving confirmed status in views from the scan log ("last N rows
 agree"):* correct but forces windowed queries over a hypertable on every list/detail
@@ -702,12 +708,14 @@ CREATE INDEX ON resource_host (next_check_at);
 CREATE TABLE domain_resource (
   domain_id  BIGINT NOT NULL REFERENCES domain(id) ON DELETE CASCADE,
   resource_host_id BIGINT NOT NULL REFERENCES resource_host(id),
-  source     resource_source NOT NULL,         -- discovered | manual
-  required   BOOLEAN NOT NULL DEFAULT TRUE,    -- manual entries can be advisory-only
+  source     resource_source NOT NULL,         -- discovered | manual | campaign
+  campaign_id INT REFERENCES campaign(id) ON DELETE CASCADE,  -- set iff source='campaign'
+  required   BOOLEAN NOT NULL DEFAULT TRUE,    -- manual/campaign entries can be advisory-only
   first_seen TIMESTAMPTZ NOT NULL DEFAULT now(),
   last_seen  TIMESTAMPTZ NOT NULL DEFAULT now(),
-  PRIMARY KEY (domain_id, resource_host_id)
+  UNIQUE NULLS NOT DISTINCT (domain_id, resource_host_id, source, campaign_id)
 );
+CREATE INDEX ON domain_resource (domain_id);
 CREATE INDEX ON domain_resource (resource_host_id);   -- "who depends on X" (advocacy gold)
 ```
 
@@ -725,10 +733,31 @@ existed with zero writers):
   computed as: all `required` linked hosts `supported` → `supported`; any
   `unsupported` → `unsupported` (+ flag); no links or conn not supported →
   `not_applicable`. It enters the same confirmation machinery (N=3) as other dims.
-- **Manual endpoints:** `v6ctl resource add <domain> <host> [--advisory]` writes
-  `source='manual'` links (never pruned). Manual lists attach to **domains**;
-  campaign-level manual lists are deferred — a campaign YAML `resources:` key is
-  sketched for round 2 **[OPEN-3]**.
+- **Manual endpoints — two attachment paths, both first-class from the start
+  (OPEN-3: decided, not deferred):**
+  1. **Operator:** `v6ctl resource add <domain> <host> [--advisory]` →
+     `source='manual'` links, never pruned, removed only by `v6ctl resource remove`.
+  2. **Campaign YAML:** an optional `resources:` map keyed by domain, synced with the
+     campaign (validated in the campaign repo's PR Action, imported by
+     `v6ctl campaign sync` — §7):
+
+     ```yaml
+     domains:
+         - dnb.no
+         - nettbank.dnb.no
+     resources:
+         nettbank.dnb.no:
+             - api.dnb.no
+             - static.dnb.no
+     ```
+
+     Sync upserts these as `source='campaign'` links tagged `campaign_id`; removing a
+     host from the YAML (or deleting the campaign) removes exactly those links and no
+     others. The `(domain, host, source, campaign)` uniqueness makes multi-declarer
+     overlap safe: the same dependency declared by a campaign, the operator, and
+     discovery coexists as separate provenance rows, and the roll-up dedupes by host.
+     Backwards compatible — all 28 existing YAMLs lack the key and parse unchanged.
+     Keys must reference domains listed in the same file (validation error otherwise).
 - **Classification:** resources affect **Gold only** (hero bar unchanged, shame bar
   unchanged — locked by §5.5); `resources_v4only` becomes a partial-tier flag for
   heroes-except-resources domains? No — a domain meeting the hero bar with bad
@@ -845,8 +874,9 @@ while NS exists (classic CDN/infra apex — the v2 crawler's inline rule, made
 review-only); (b) high dependency in-degree — `resource_host.dependent_count` above
 threshold (~100) *and* the host is itself a ranked domain (the fonts.googleapis.com
 shape); (c) hostname patterns from the curated `service_domains.yml` (kept, imported
-by `v6ctl`). Review via `v6ctl service-candidates list|confirm|dismiss`. Weekly
-webhook digest. **[OPEN-4]** threshold tuning needs real data.
+by `v6ctl`). Review via `v6ctl service-candidates list|confirm|dismiss`
+(**OPEN-4: decided** — CLI-only, no admin HTTP surface exists by design). Weekly
+webhook digest. The in-degree threshold stays a tuning item once phase-5 data exists.
 
 ### 4.9 Remaining tables
 
@@ -892,7 +922,7 @@ table-scanning `LIKE '%x%'` (`db/query/domain.sql:65`) dies here.
 GeoIP: MaxMind GeoLite2 ASN + Country mmdb (kept, `IncSW/geoip2` or the official
 reader). Country attribution keeps production's rule — ccTLD wins over server
 location, now PSL-correct instead of regex-on-last-label — GeoIP country as fallback
-**[OPEN-5]**.
+(**OPEN-5: decided** — keep ccTLD precedence).
 
 ## 5. API surface
 
@@ -908,14 +938,14 @@ status strings are exactly `supported|unsupported|no_record`.
 | Endpoint | Behavior (new backend) |
 |---|---|
 | `GET /domain?offset=` | Sinner list (`classification='sinner'`) by rank — matches old semantics (plain list = shame list) |
-| `GET /domain/heroes` | `classification='hero'` by rank. Hero bar is now §5.5 (old query was `mx != 'unsupported'`; the changed membership is a **deliberate, announced** break **[OPEN-6]**) |
+| `GET /domain/heroes` | `classification='hero'` by rank. Hero bar is now §5.5 (old query was `mx != 'unsupported'`; the changed membership is a **deliberate, announced** break — OPEN-6: decided) |
 | `GET /domain/topsinner` | `top_shame` join, still curated. Fix: return real Tranco `rank` (old code returned domain *id* as `rank`) |
 | `GET /domain/{domain}` | Detail from confirmed columns. Keep field names incl. `asn` = AS **name** string, `country` = name, all `ts_*` keys (map: `ts_check`→last_checked_at, dimension `ts_*`→`<d>_since`). `v6_only` now real: the `conn` status (production served a dead column) |
 | `GET /domain/{domain}/log` | Last 90 `scan` rows mapped to `{id,time,base_domain,www_domain,nameserver,mx_record}` (id = synthetic, frontend uses it as list key only) |
 | `GET /domain/search/{q}` | Trigram search, **`{"data":[...]}` envelope kept** |
 | `GET /country`, `/country/{code}`, `/country/{code}/sinners`, `/country/{code}/heroes` | Same shapes; percent from `NUMERIC(5,2)` cleanly; sinners ordered by rank (old: by id — minor fix) |
 | `GET /changelog`, `/changelog/campaign`, `/changelog/{domain}`, `/changelog/campaign/{uuid}`, `/changelog/campaign/{uuid}/{domain}` | From structured changelog; `message` + `ipv6_status` **generated at the API layer** from `(field, old, new)` via the ported `generateChangelog` ladder (`crawl.go:416-495`) — same strings, single implementation. `domain_url` rules kept (incl. empty-string cases). v2-team dropped three of these routes; they're restored — the frontend calls all five |
-| `GET /campaign` | List + `count`, `v6_ready` (v6_ready = base+www+ns supported — keep old formula for continuity **[OPEN-6]**) |
+| `GET /campaign` | List + `count`, `v6_ready` (v6_ready = base+www+ns supported — keep old formula for continuity; OPEN-6) |
 | `GET /campaign/{uuid}?offset=` | `{campaign, domains}` composite; domain rows are the shared entity's status now |
 | `GET /campaign/{uuid}/{domain}`, `.../log`, `GET /campaign/search/{q}` | Kept, incl. envelope + `campaign_uuid` field in search rows |
 | `GET /metric/overview` | Array-of-one `{time, data:{domains, base_domain, www_domain, nameserver, mx_record, heroes, top_heroes, top_nameserver}}` mapped from `stats_global_daily` latest row |
@@ -955,7 +985,7 @@ cost); else insert `check_job(pending)` → `202 {id}`. Client polls `GET /check
 
 Consumer: a dedicated goroutine in the **crawler** binary claims jobs
 (`FOR UPDATE SKIP LOCKED`, the v2 `ClaimJob` SQL — which existed with *no consumer*;
-this time the consumer is a phase-1 deliverable) and runs the full engine with a 60s
+here the consumer ships in the same phase as the endpoint, §8 phase 6) and runs the full engine with a 60s
 budget, writing the per-check 3-state JSON into `result`. Live-checked unknown hosts
 become `domain` rows (`created_by='live_check'`, rank NULL) with a 7-day frontier
 linkage, so repeat lookups are cheap and abuse doesn't permanently grow the frontier.
@@ -1060,7 +1090,8 @@ UUIDs back into the YAML working copy** — mutating a git checkout from a daemo
 Target pipeline (PR-based per brief):
 
 1. **PR validation (GitHub Actions in the campaign repo — new, tiny):** YAML schema
-   check (title/description/domains required; tolerant parse), hostname validation
+   check (title/description/domains required; optional `resources:` map per §4.6,
+   keys must reference listed domains; tolerant parse), hostname validation
    (LDH/punycode), duplicate detection (within file + across files), size cap. UUID
    **must be absent or valid** — contributors never invent UUIDs. A bot comment posts
    the parsed summary ("32 domains, 3 subdomains → parents auto-linked").
@@ -1098,7 +1129,8 @@ Makefile (`test/lint/build/generate/migrate`), `.golangci.yml`, docker-compose
 compose up green.
 
 **Phase 1 — schema + ingestion.** Migrations (§4 DDL), sqlc setup, Tranco ingester,
-campaign sync (import all 28 YAMLs), GeoIP wiring. *Verify:* 1M+~30k domain rows with
+campaign sync (import all 28 YAMLs, incl. `resources:` map support — §4.6),
+GeoIP wiring. *Verify:* 1M+~30k domain rows with
 correct kinds/parents/ranks; re-running import is a no-op (idempotency test); junk
 Tranco entries rejected with counts; integration-test suite for every query.
 
@@ -1122,8 +1154,10 @@ retention jobs observed running (`timescaledb_information.jobs`).
 **Phase 4 — API + cutover.** Full compat surface + `/ip`; golden parity tests
 (recorded production responses vs new, modulo documented deviations); OpenAPI spec +
 TS client generation; **data migration** — one-time import of production's current
-statuses as seed confirmed values and full changelog history (the site's credibility
-archive; scan history optionally sampled) **[OPEN-7]**; dual-run with the frontend
+statuses as seed confirmed values, full changelog history (the site's credibility
+archive), and the trailing **90 days** of per-scan history (**OPEN-7: decided**; the
+importer takes the window as a flag and the production dump is retained, so a deeper
+backfill stays possible later); dual-run with the frontend
 pointed at staging; DNS cutover. *Verify:* frontend E2E (playwright) against new API
 with zero visual diffs; changelog continuity (old entries render identically).
 
@@ -1146,56 +1180,31 @@ within 24h with UUID committed back.
 
 ---
 
-## 9. Open risks & decisions
+## 9. Risks & decision log
 
-Numbered items referenced throughout; each with a recommendation for round 2 sign-off.
+All round-1 open items were resolved in operator review (2026-07-06):
 
-- **[OPEN-1] NS/MX `partial` → `supported` mapping** (§2.2). Recommendation stands
-  (≥1 v6 host = functionally v6-capable); alternative (strict all-hosts) makes ~few-%
-  of hero candidates partial. Decide once, before first crawl — it defines hero
-  membership.
-- **[OPEN-2] www NXDOMAIN and the hero bar** (§4.3). Engine says `not_applicable`
-  (site doesn't use www) → doesn't block hero, consistent with §5.5's
-  not_applicable-never-counts principle but not with its literal "www AAAA supported"
-  wording. Recommendation: not_applicable skips. Note `www` **`no_record`**
-  (www exists in DNS but has neither A nor AAAA) is treated as `not_applicable` too.
-- **[OPEN-3] Campaign-level manual resource lists** (§4.6): defer; add `resources:`
-  key to campaign YAML in round 2 if wanted.
-- **[OPEN-4] Service-detection thresholds** (§4.8): in-degree ≥100 is a guess;
-  tune after phase 5 data. Also decide the review UX (CLI-only vs a private admin
-  endpoint — recommendation: CLI-only, no auth surface exists by design).
-- **[OPEN-5] Country attribution rule** (§4.9): keep ccTLD-precedence (production
-  behavior, stable stats) vs GeoIP-precedence (arguably "truer" hosting locality).
-  Recommendation: keep ccTLD precedence; it matches the advocacy framing ("Norwegian
-  sites") and the existing country numbers' meaning.
-- **[OPEN-6] Deliberate metric breaks at cutover** (§5.1): hero membership changes
-  (conn requirement added, MX rule per §5.5), `v6_only` becomes real, `co.uk`-class NS
-  results become correct. Recommendation: publish a short "methodology v2" note on
-  cutover day; the changelog-trust machinery ensures no spurious transition entries —
-  seed statuses migrate as-is and only genuinely observed changes appear.
-  Decide: do heroes/sinners lists briefly freeze during the first confirmation window
-  (2 days) or serve migrated seed values? Recommendation: serve seed values.
-- **[OPEN-7] History migration scope** (§8 phase 4): changelog = yes (credibility);
-  current statuses = yes (seed); `domain_log` per-scan history = recommend importing
-  the last 90 days only (feeds the detail sparklines through cutover), not all years.
-- **[OPEN-8] Cloudflare resolver risk** (§2.4): undocumented limits; the design
-  survives one provider throttling (quorum degrades to 2-of-2 responders and the
-  recheck lane absorbs noise), but decide a standby 4th resolver (e.g. OpenDNS) to
-  swap in by config if sustained throttling is observed.
-- **[OPEN-9] miekg/dns v1 → v2**: v1 is maintenance-mode (development moved to
-  Codeberg v2, ~2× faster); ship on v1 (ecosystem-standard, stable), schedule a
-  mechanical v2 migration once it stabilizes.
-- **[OPEN-10] `/domain` list default**: production's plain `/domain` = sinners-only.
-  Kept for compat, but the "almost there" tier means three public lists whose union
-  isn't obvious to users; frontend round should present the ladder explicitly.
-- **[OPEN-11] Live-check rate budget**: 10/IP/h + 500/h global are guesses; revisit
-  with abuse data. CAPTCHA is off the table (anonymous, no-JS-wall ethos).
+| # | Item | Decision |
+|---|---|---|
+| OPEN-1 | NS/MX `partial` mapping (§2.2) | **≥1 v6-capable host = `supported`**, as recommended |
+| OPEN-2 | www NXDOMAIN vs hero bar (§4.3) | **`not_applicable` skips** — a site without www can be a Hero; www `no_record` treated the same |
+| OPEN-3 | Campaign-level manual resource lists (§4.6) | **In scope from the start, not deferred**: campaign YAML gains an optional `resources:` map, wired through validation → sync → `domain_resource(source='campaign', campaign_id)` → roll-up |
+| OPEN-4 | Service-candidate review UX (§4.8) | **CLI-only** (`v6ctl service-candidates ...`); no admin HTTP surface. In-degree threshold stays a tuning item after phase-5 data |
+| OPEN-5 | Country attribution (§4.9) | **Keep ccTLD precedence**, GeoIP fallback |
+| OPEN-6 | Cutover behavior (§5.1) | **Serve migrated seed values immediately**; publish a "methodology v2" note for the deliberate metric shifts (hero bar, real `v6_only`, correct multi-label-TLD NS) |
+| OPEN-7 | History migration scope (§8 phase 4) | **Trailing 90 days** of per-scan history (+ full changelog, seed statuses). Importer takes the window as a flag and the production dump is retained — extensible later |
+| OPEN-8 | Cloudflare throttling contingency (§2.4) | **No pre-emptive standby**; upstream list stays config so a 4th resolver can be swapped in if it ever becomes a problem |
+| OPEN-9 | DNS library | **miekg/dns v2** (Codeberg) from day one; v1-API revert is the mechanical escape hatch if v2 misbehaves in phase-2 verification |
+| OPEN-10 | `/domain` default view (delegated to architect) | **Keep `/domain` = sinners** for compat with the frozen frontend; `/domain/almost` ships now, and the full ladder (sinner → almost-there → hero → gold) gets explicit presentation in the frontend round |
+| OPEN-11 | Live-check rate budget (§5.3) | **10/IP/h + 500/h global** adopted; revisit with abuse data. CAPTCHA stays off the table (anonymous, no-JS-wall ethos) |
 
-Primary risks outside decisions: **the confirmed-status machine is novel code** — it
-gets the heaviest unit coverage in the repo (phase 2 gate); **Unbound becomes prod
-infra** — mitigated by two instances, Grafana, and public-resolver fallback for bulk
-(config flag) in emergencies; **adoption-number shifts at cutover** could look like
-measurement bugs — mitigated by dual-run diffing (phase 4) and the methodology note.
+Remaining risks: **the confirmed-status machine is novel code** — it gets the
+heaviest unit coverage in the repo (phase 2 gate); **Unbound becomes prod infra** —
+mitigated by two instances, Grafana, and public-resolver fallback for bulk (config
+flag) in emergencies; **adoption-number shifts at cutover** could look like
+measurement bugs — mitigated by dual-run diffing (phase 4) and the methodology note;
+**miekg/dns v2 is newer code in a load-bearing spot** — phase-2/3 soak is the check,
+the v1-API revert the escape hatch.
 
 ---
 
@@ -1204,6 +1213,7 @@ measurement bugs — mitigated by dual-run diffing (phase 4) and the methodology
 | Decision | Chosen | Rejected | Why |
 |---|---|---|---|
 | Scan engine | Lift v6audit `internal/checker` | Rewrite; extend production resolver | Encodes years of RFC edge-cases; production resolver has the co.uk bug and no reachability checks |
+| DNS library | miekg/dns v2 (Codeberg) from day one | Ship v1, migrate later | Operator decision (OPEN-9); v2 is ~2× faster and actively developed, port is mechanical, v1 revert trivial |
 | Status model | 4-value public enum + 6-value internal observation | Single shared enum | `error`/`inconsistent` must exist internally and must never leak to public output (§5.5 principles) |
 | Consensus scope | apex+www AAAA only via 3 public resolvers | Consensus on all lookups | 3× public-resolver load for records that don't gate classification; ~23 qps/provider is the validated-safe budget |
 | Bulk DNS | Self-hosted Unbound ×2 | Public resolvers for everything; zdns | Volume belongs on own infra; geo-diversity only matters for the AAAA verdicts; zdns duplicates an integrated resolver |
@@ -1225,4 +1235,5 @@ measurement bugs — mitigated by dual-run diffing (phase 4) and the methodology
 
 ---
 
-*End of round-1 report. Iterate via the [OPEN-n] list in §9.*
+*End of round-1.1 report. All round-1 decisions are logged in §9; remaining
+iteration targets are the tuning items noted there.*
