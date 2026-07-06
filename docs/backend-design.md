@@ -1,7 +1,9 @@
 # WhyNoIPv6 Backend Rewrite — Design Report
 
-**Status:** Round 1.1 — all round-1 open items resolved in operator review on 2026-07-06
-(decision log in §9); design updated accordingly. Still a proposal, not implementation.
+**Status:** Round 1.2 — all round-1 open items resolved in operator review on 2026-07-06
+(decision log in §9); OPEN-3 subsequently revised: no campaign `resources:` syntax,
+campaigns express endpoint intent via `domains:` entries + the subdomain entity model.
+Still a proposal, not implementation.
 **Input:** `docs/backend-research-brief.md` (authoritative), study of the production
 `whynoipv6` backend, `claude/whynoipv6-team/backend` (v2 rebuild), `v6audit`
 (checker engine), `claude/whynoipv6/prompts` + `REVIEW-REPORT.md`, `whynoipv6-campaign`,
@@ -424,7 +426,7 @@ CREATE TYPE domain_kind     AS ENUM ('apex', 'subdomain');
 CREATE TYPE created_by      AS ENUM ('tranco', 'campaign', 'parent_link', 'live_check');
 CREATE TYPE classification  AS ENUM ('unknown', 'inactive', 'sinner', 'partial', 'hero');
 CREATE TYPE disabled_reason AS ENUM ('dead', 'service', 'manual', 'delisted');
-CREATE TYPE resource_source AS ENUM ('discovered', 'manual', 'campaign');
+CREATE TYPE resource_source AS ENUM ('discovered', 'manual');
 CREATE TYPE check_job_status AS ENUM ('pending', 'processing', 'done', 'failed');
 ```
 
@@ -708,14 +710,12 @@ CREATE INDEX ON resource_host (next_check_at);
 CREATE TABLE domain_resource (
   domain_id  BIGINT NOT NULL REFERENCES domain(id) ON DELETE CASCADE,
   resource_host_id BIGINT NOT NULL REFERENCES resource_host(id),
-  source     resource_source NOT NULL,         -- discovered | manual | campaign
-  campaign_id INT REFERENCES campaign(id) ON DELETE CASCADE,  -- set iff source='campaign'
-  required   BOOLEAN NOT NULL DEFAULT TRUE,    -- manual/campaign entries can be advisory-only
+  source     resource_source NOT NULL,         -- discovered | manual
+  required   BOOLEAN NOT NULL DEFAULT TRUE,    -- manual entries can be advisory-only
   first_seen TIMESTAMPTZ NOT NULL DEFAULT now(),
   last_seen  TIMESTAMPTZ NOT NULL DEFAULT now(),
-  UNIQUE NULLS NOT DISTINCT (domain_id, resource_host_id, source, campaign_id)
+  PRIMARY KEY (domain_id, resource_host_id)    -- operator add upgrades source to 'manual'
 );
-CREATE INDEX ON domain_resource (domain_id);
 CREATE INDEX ON domain_resource (resource_host_id);   -- "who depends on X" (advocacy gold)
 ```
 
@@ -733,31 +733,24 @@ existed with zero writers):
   computed as: all `required` linked hosts `supported` → `supported`; any
   `unsupported` → `unsupported` (+ flag); no links or conn not supported →
   `not_applicable`. It enters the same confirmation machinery (N=3) as other dims.
-- **Manual endpoints — two attachment paths, both first-class from the start
-  (OPEN-3: decided, not deferred):**
-  1. **Operator:** `v6ctl resource add <domain> <host> [--advisory]` →
-     `source='manual'` links, never pruned, removed only by `v6ctl resource remove`.
-  2. **Campaign YAML:** an optional `resources:` map keyed by domain, synced with the
-     campaign (validated in the campaign repo's PR Action, imported by
-     `v6ctl campaign sync` — §7):
-
-     ```yaml
-     domains:
-         - dnb.no
-         - nettbank.dnb.no
-     resources:
-         nettbank.dnb.no:
-             - api.dnb.no
-             - static.dnb.no
-     ```
-
-     Sync upserts these as `source='campaign'` links tagged `campaign_id`; removing a
-     host from the YAML (or deleting the campaign) removes exactly those links and no
-     others. The `(domain, host, source, campaign)` uniqueness makes multi-declarer
-     overlap safe: the same dependency declared by a campaign, the operator, and
-     discovery coexists as separate provenance rows, and the roll-up dedupes by host.
-     Backwards compatible — all 28 existing YAMLs lack the key and parse unchanged.
-     Keys must reference domains listed in the same file (validation error otherwise).
+- **Manual endpoints (OPEN-3: revised in round 1.2):** operator-only —
+  `v6ctl resource add <domain> <host> [--advisory]` writes `source='manual'` links
+  (never pruned; an operator add on an already-discovered pair upgrades it to
+  `manual`); removal only via `v6ctl resource remove`. **There is deliberately no
+  campaign YAML syntax for resources.** Campaigns express endpoint intent through the
+  `domains:` list itself: listing `api.dnb.no` alongside `dnb.no` makes it a
+  first-class `kind=subdomain` entity, auto-linked `parent_id → dnb.no` (§4.2 entity
+  model — the parent is auto-created if absent), checked with its own status and shown
+  on the parent's drill-down. Cross-domain dependencies (`fonts.googleapis.com`,
+  `cdn.sanity.io`) are exactly what auto-discovery finds without curation — and
+  hand-curated CDN lists in YAML go stale. One known gap: XHR/API endpoints that
+  never appear in static HTML aren't auto-discovered — covered by listing them in
+  `domains:` (per-entity check) or an operator `v6ctl resource add` (feeds the
+  parent's resources roll-up), whichever intent fits.
+  *Rejected — a campaign `resources:` map (round-1.1 design):* redundant with the
+  subdomain entity model for same-organization endpoints, contributor-facing schema
+  complexity, and a provenance/lifecycle machinery (per-campaign link ownership)
+  whose only real payload was third-party CDN hosts the crawler discovers anyway.
 - **Classification:** resources affect **Gold only** (hero bar unchanged, shame bar
   unchanged — locked by §5.5); `resources_v4only` becomes a partial-tier flag for
   heroes-except-resources domains? No — a domain meeting the hero bar with bad
@@ -1090,9 +1083,9 @@ UUIDs back into the YAML working copy** — mutating a git checkout from a daemo
 Target pipeline (PR-based per brief):
 
 1. **PR validation (GitHub Actions in the campaign repo — new, tiny):** YAML schema
-   check (title/description/domains required; optional `resources:` map per §4.6,
-   keys must reference listed domains; tolerant parse), hostname validation
-   (LDH/punycode), duplicate detection (within file + across files), size cap. UUID
+   check (title/description/domains required — the schema stays exactly today's
+   four keys; tolerant parse), hostname validation (LDH/punycode), duplicate
+   detection (within file + across files), size cap. UUID
    **must be absent or valid** — contributors never invent UUIDs. A bot comment posts
    the parsed summary ("32 domains, 3 subdomains → parents auto-linked").
 2. **On merge to main:** repo dispatch → operator CI (Semaphore, as wired today for
@@ -1129,7 +1122,7 @@ Makefile (`test/lint/build/generate/migrate`), `.golangci.yml`, docker-compose
 compose up green.
 
 **Phase 1 — schema + ingestion.** Migrations (§4 DDL), sqlc setup, Tranco ingester,
-campaign sync (import all 28 YAMLs, incl. `resources:` map support — §4.6),
+campaign sync (import all 28 YAMLs; subdomain entries auto-link parents — §4.2),
 GeoIP wiring. *Verify:* 1M+~30k domain rows with
 correct kinds/parents/ranks; re-running import is a no-op (idempotency test); junk
 Tranco entries rejected with counts; integration-test suite for every query.
@@ -1188,7 +1181,7 @@ All round-1 open items were resolved in operator review (2026-07-06):
 |---|---|---|
 | OPEN-1 | NS/MX `partial` mapping (§2.2) | **≥1 v6-capable host = `supported`**, as recommended |
 | OPEN-2 | www NXDOMAIN vs hero bar (§4.3) | **`not_applicable` skips** — a site without www can be a Hero; www `no_record` treated the same |
-| OPEN-3 | Campaign-level manual resource lists (§4.6) | **In scope from the start, not deferred**: campaign YAML gains an optional `resources:` map, wired through validation → sync → `domain_resource(source='campaign', campaign_id)` → roll-up |
+| OPEN-3 | Campaign-level manual resource lists (§4.6) | **Revised (round 1.2):** no campaign `resources:` syntax — campaign YAML keeps exactly today's four keys. Endpoint intent is expressed by listing hostnames in `domains:` (auto-linked as subdomain entities of their registrable parent, §4.2). #23 resources = auto-discovery + operator `v6ctl resource add` only |
 | OPEN-4 | Service-candidate review UX (§4.8) | **CLI-only** (`v6ctl service-candidates ...`); no admin HTTP surface. In-degree threshold stays a tuning item after phase-5 data |
 | OPEN-5 | Country attribution (§4.9) | **Keep ccTLD precedence**, GeoIP fallback |
 | OPEN-6 | Cutover behavior (§5.1) | **Serve migrated seed values immediately**; publish a "methodology v2" note for the deliberate metric shifts (hero bar, real `v6_only`, correct multi-label-TLD NS) |
