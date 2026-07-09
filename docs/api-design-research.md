@@ -1,6 +1,9 @@
 # WhyNoIPv6 API Redesign — Design Report
 
 **Status:** research/design round — proposes the post-compat API; not yet folded into docs/spec.
+Maintainer decisions applied 2026-07-09 (see §11 Resolved): no URL version segment; short tier
+collection paths; `meta.stability` removed; history import deferred (start fresh); tld + provider
+pivots added; mandate-tracking accepted.
 
 **Date:** 2026-07-07. Clean-slate API design after the frozen-frontend constraint was
 dropped. Input: the data-surface / feature-surface / compat-cruft spec review, the
@@ -18,8 +21,8 @@ the crawler/engine (backend-design.md §2) is unchanged. What changes is the wir
 
 ## 1. Executive summary
 
-The new API is a **read-only, anonymous, versioned JSON API under `/v1/` on
-`api.whynoipv6.com`** that serves the *real* WhyNoIPv6 data model — the 4-valued confirmed
+The new API is a **read-only, anonymous, unversioned JSON API at the root of
+`api.whynoipv6.com`** (no URL version segment) that serves the *real* WhyNoIPv6 data model — the 4-valued confirmed
 `ipv6_status` per dimension, the `classification` enum, the `class_flags[]` array, the
 `gold` boolean, and the `*_since` provenance timestamps — **directly, with no projection, no
 message rendering, and no legacy compatibility layer**. Every list is a
@@ -30,10 +33,13 @@ openapi-typescript from the same committed `openapi.yaml`.
 
 The eight headline decisions:
 
-1. **`api.whynoipv6.com/v1/` URL-path versioning.** One stable, additive-only v1, with the
-   `api.` subdomain carrying the "api" role and a bare `/v1` path prefix (no doubled
-   `/api/v1`). Reject Zalando-style media-type versioning (over-engineered for a single
-   first-party consumer) and no-versioning (a `/v1` prefix is free insurance).
+1. **`api.whynoipv6.com/` with no URL version segment.** The `api.` subdomain carries the
+   "api" role; resources sit at the root (no `/v1`, no doubled `/api/v1`). The API is
+   frontend-facing with no external consumers today, so versioning for outside users is
+   speculative; if third-party consumers ever appear, a version segment or header can be
+   introduced then (additive). Reject Zalando-style media-type versioning (over-engineered
+   for a single first-party consumer) and premature URL-path `/v1` versioning (buys nothing
+   for a no-consumer API).
 2. **Plural, verb-free, self-describing resource paths keyed by natural id.** `/domains/{host}`,
    `/countries/{code}`, `/asns/{number}`, `/campaigns/{uuid}`, `/changelog`. The legacy
    `/metric` singular, `/domain`-means-sinner, shortuuid tokens, and `{"data":[…]}`
@@ -56,8 +62,8 @@ The eight headline decisions:
    deleted outright. Raw observation values (`error`/`inconsistent`) never reach the wire
    except inside the optional `evidence` block.
 6. **RFC 9457 errors + RFC-correct HTTP.** GET/HEAD/OPTIONS for the read surface; the only
-   write is `POST /check` (the async live check). `/livez` + `/readyz` live outside `/v1`
-   and outside the public OpenAPI. One small fixed set of `problem` type URIs.
+   write is `POST /check` (the async live check). `/livez` + `/readyz` live at the root and
+   outside the public OpenAPI. One small fixed set of `problem` type URIs.
 7. **Cache-first, CDN-absorbed reads; rate-limit only the write.** Daily-batch data is
    ideal for shared caching: `Cache-Control: public` with `s-maxage` tied to crawl
    cadence, an ETag derived from the crawl generation, `304` on conditional GET, gzip +
@@ -69,14 +75,12 @@ The eight headline decisions:
    `/datasets/` with a `datapackage.json` manifest, SHA-256 checksums, a stable `latest/`
    alias, and an optional Zenodo DOI. The API itself only serves the manifest.
 
-Plus one flagged recommendation (§9): **do a best-effort, structured, one-time changelog
-history import** — no byte gate, no `legacy_*` columns — because the changelog is the
-credibility surface and the diff / change-feeds / per-domain history / "State of IPv6"
-features are hollow on a day-1 empty table; but **start `scan` history fresh** (the 2-year
-hypertable is expensive to backfill and low-value). Because the per-domain history graph
-(§5.9) is reconstructed from the changelog, the import populates its confirmed-status
-trajectory too; only the fresh-scan **latency overlay** on that graph stays empty until
-scans accumulate.
+Plus one resolved decision (§9, OPEN-9, 2026-07-09): **start fresh — no history import for
+now** (revisit later). The DNS-flip cutover carries **no data import** at all: both the
+`changelog` and the `scan` hypertable begin empty, and the changelog-sourced features (diff /
+change-feeds / per-domain history / "State of IPv6") fill over the months following launch.
+This drops the `legacy_*` changelog columns unconditionally and collapses the cutover to a
+pure DNS flip.
 
 ---
 
@@ -122,33 +126,28 @@ off the pagination path via a separate static download channel.**
 
 ### 3.1 Base URL + versioning
 
-**Decision.** All data endpoints under **`/v1/`** on **`api.whynoipv6.com`** — the `api.`
-subdomain already names the role, so the path prefix is a bare `/v1`, **not** a doubled
-`/api/v1` (which would read `api.whynoipv6.com/api/v1/...`). Real URLs are
-`https://api.whynoipv6.com/v1/domains/{host}`. v1 is a stable contract: within it, only
-additive backward-compatible changes (new fields, new endpoints, new optional query
-params). A breaking change waits for a hypothetical `/v2`. Operational endpoints (`/livez`,
-`/readyz`) and the static `/datasets/` tree live **outside** `/v1` and outside the public
-OpenAPI document.
+**Decision: no URL version segment.** All data endpoints sit at the **root of
+`api.whynoipv6.com`** — the `api.` subdomain already names the role, so there is **no `/v1`**
+and no doubled `/api/v1`. Real URLs are `https://api.whynoipv6.com/domains/{host}`. The API is
+frontend-facing with **no external / third-party consumers today**; versioning for outside
+users is therefore speculative machinery. Changes stay additive by discipline (new fields,
+new endpoints, new optional query params); a breaking change is a project decision, not a URL
+concern. If third-party consumers ever appear, a version segment or an `Accept`-header version
+can be introduced then — that is an additive move, cheap to make later and not worth paying
+for now. Operational endpoints (`/livez`, `/readyz`) were already outside any version segment
+and stay at the **root**, unchanged; the static `/datasets/` tree likewise lives at the root
+and outside the public OpenAPI document.
 
-Borrowing RIPEstat's idea without its machinery: every response's `meta` block carries a
-`stability` marker (`stable` | `beta` | `deprecated`) so we can evolve or sunset an
-endpoint by signalling, rather than by freezing shapes forever.
-
-*Rejected — doubling the segment as `api.whynoipv6.com/api/v1/`.* The `api.` subdomain and
-an `/api/` path prefix are redundant; the stutter is baked into every URL and the OpenAPI
-`servers` block and is expensive to change post-launch. Carry the "api" role once, in the
-subdomain.
+*Rejected — URL-path `/v1` versioning.* Premature for a no-consumer API: a `/v1` prefix is
+baked into every URL and the OpenAPI `servers` block for the benefit of external consumers
+who do not exist. Reintroducing a version segment later (if outside users appear) is an
+additive change, so nothing is lost by omitting it now. (The doubled `api.whynoipv6.com/api/v1`
+form was doubly rejected — the `api.` subdomain and an `/api/` path prefix are redundant.)
 *Rejected — media-type / `Accept`-header versioning (Zalando Rule 115, GitHub).* Optimized
 for a large internal microservice mesh with many independent consumer teams. Here there is
 one first-party consumer and a public read API; header versioning is harder to test, less
-discoverable, uncacheable-by-URL, and buys nothing. Stripe, GitHub REST, Google,
-Microsoft, and Twilio all expose versioned URLs — the mainstream fits us.
-*Rejected — no versioning at all.* Viable, but a bare `/v1` segment is one path component
-of insurance against the day a breaking change is unavoidable; it costs nothing now.
-*Rejected — per-endpoint semantic versioning (RIPEstat `preferred_version`).*
-Over-engineered for one maintainer; the in-band `stability` marker captures the useful
-90% at 1% of the cost.
+discoverable, uncacheable-by-URL, and buys nothing today. If a versioning need ever arrives,
+an `Accept`-header version is one of the additive options on the table.
 
 ### 3.2 Resource naming
 
@@ -158,23 +157,34 @@ Over-engineered for one maintainer; the in-band `stability` marker captures the 
 
 | Resource | Collection | Item | Natural id |
 |---|---|---|---|
-| Domain | `/v1/domains` | `/v1/domains/{host}` | `host` (lowercase punycode FQDN) |
-| Country | `/v1/countries` | `/v1/countries/{code}` | ISO-ish `CHAR(2)`, `UN` sentinel |
-| ASN / provider | `/v1/asns` | `/v1/asns/{number}` | `BIGINT` AS number, `0`=Unknown |
-| Campaign | `/v1/campaigns` | `/v1/campaigns/{uuid}` | raw canonical UUID |
-| Resource host | `/v1/resources` | `/v1/resources/{host}` | canonicalized host |
-| Changelog | `/v1/changelog` | — (feed; addressed by scope + cursor) | — |
+| Domain | `/domains` | `/domains/{host}` | `host` (lowercase punycode FQDN) |
+| Country | `/countries` | `/countries/{code}` | ISO-ish `CHAR(2)`, `UN` sentinel |
+| ASN / provider | `/asns` | `/asns/{number}` | `BIGINT` AS number, `0`=Unknown |
+| Campaign | `/campaigns` | `/campaigns/{uuid}` | raw canonical UUID |
+| Resource host | `/resources` | `/resources/{host}` | canonicalized host |
+| Changelog | `/changelog` | — (feed; addressed by scope + cursor) | — |
 
 Sub-collections: `/countries/{code}/domains`, `/asns/{number}/domains`,
 `/campaigns/{uuid}/domains`, `/domains/{host}/subdomains`, `/domains/{host}/resources`,
 `/resources/{host}/dependents`, `/domains/{host}/changelog`, `/domains/{host}/history`.
 
-The tier lists (heroes / sinners / almost / gold / mail) are **filtered views of
-`/domains`** (`?classification=hero`, `?flag=mail_missing`, `?gold=true`), each with a
-stable, shareable, query-param-canonical URL. Convenience path aliases
-(`/domains/heroes`, `/domains/sinners`, `/domains/almost`) are provided as documented
-redirects/aliases to the canonical filtered form for humans and SEO; they are not a
-second vocabulary.
+The classification tiers are promoted to their own **short, canonical plural collection
+paths** — the browse URLs the frontend links to:
+
+| Tier collection | Preset over `/domains` |
+|---|---|
+| `/heroes` | `class=hero` |
+| `/sinners` | `class=sinner` |
+| `/gold` | `gold=true` |
+| `/almost` | the "almost there" list (partial domains one step from hero) |
+| `/mail` | the mail/MX heroes track |
+
+Each is a **preset filtered view over the domain leaderboard**, sharing the exact same
+keyset/cursor pagination, §5.2 row shape, and `?country=`/`?asn=` filter composition as
+`/domains`. They accept the same additional filters, so "sinners in Norway" is
+`GET /sinners?country=no`. `GET /domains` remains the **general filterable collection** whose
+`?class=` param spans every tier (`class=partial`, etc.); the tier paths are short aliases
+over it, not a second vocabulary.
 
 **Host as a path key.** The eTLD+1 `host` is stable, unique, SEO/deep-link friendly, and
 already the schema's `UNIQUE` natural id. Canonical form (from the engine's `Canonicalize`):
@@ -184,9 +194,12 @@ the path parameter before lookup; a value that fails canonicalization is a `404`
 legitimate request). This replaces shortuuid URLs entirely; synthetic `domain.id` is
 internal-only and never appears on the wire except inside opaque cursors.
 
-*Rejected — keep `/metric` (singular) and `/domain`-means-sinner.* Path names that encode
-hidden meaning are a legacy accident; self-describing plural nouns are the AIP/Microsoft/
-Zalando consensus.
+*Rejected — keep `/metric` (singular) and `/domain`-means-sinner (`?domain=sinner`).* Path
+names that encode hidden meaning are a legacy accident; self-describing plural nouns are the
+AIP/Microsoft/Zalando consensus. Note this is **not** the same as the dedicated plural tier
+collections (`/heroes`, `/sinners`, `/gold`, `/almost`, `/mail`): those are transparent short
+aliases over the filterable `/domains` collection (a `/sinners` path is self-describing,
+whereas `/domain`-means-sinner hides meaning) and are used deliberately.
 *Rejected — shortuuid campaign tokens.* Their sole justification was preserving
 previously-shared `/campaign/{22-char}` links across the migration; moot under a DNS flip
 with a rebuilt frontend and no consumers. Serve the raw UUID (OPEN-1: an optional human
@@ -255,7 +268,6 @@ never a bare array:
     "as_of": "2026-07-07T03:41:12Z",
     "generation": 20260707,
     "count_estimate": 1003418,
-    "stability": "stable",
     "license": "CC-BY-NC-4.0"
   }
 }
@@ -276,7 +288,7 @@ about the envelope is identical.
 **Single resources** return the resource object with a sibling `meta`:
 
 ```json
-{ "host": "example.com", "...": "...", "meta": { "as_of": "...", "stability": "stable" } }
+{ "host": "example.com", "...": "...", "meta": { "as_of": "..." } }
 ```
 
 **Uniform rules across every collection:**
@@ -292,7 +304,10 @@ about the envelope is identical.
   full stop.
 - **`meta` is deliberately thin** (RIPEstat/Radar precedent): `as_of` (freshness signal),
   `generation` (integer crawl id, the ETag/cache-key seed), `count`/`count_estimate` where
-  applicable, `stability`, `license`. Never nest `items`/`data`/`points` more than one level.
+  applicable, `license`. Never nest `items`/`data`/`points` more than one level. (No
+  per-response `stability` marker: with no external API consumers and no URL versioning, a
+  `stable`/`beta`/`deprecated` flag is speculative machinery that only adds noise — it can be
+  added later if the API gains third-party users.)
 
 **`generation` and `as_of` sources (they seed the ETag/cache story, §7.1, so they must be
 deterministic across backend instances).** `generation` is the integer `YYYYMMDD` derived
@@ -328,7 +343,7 @@ Content-Type: application/problem+json
   "title": "Domain not found",
   "status": 404,
   "detail": "No crawl record for example.invalid.",
-  "instance": "/v1/domains/example.invalid"
+  "instance": "/domains/example.invalid"
 }
 ```
 
@@ -361,7 +376,7 @@ all default to it.
 ### 3.6 HTTP semantics
 
 **Decision.** The read surface is **GET** (with implicit HEAD/OPTIONS). The *only* mutating
-verb in the whole API is **`POST /v1/check`** (enqueue a live check, §6.1) — an
+verb in the whole API is **`POST /check`** (enqueue a live check, §6.1) — an
 explicitly-modelled async job, not a resource mutation. No PUT/PATCH/DELETE anywhere; no
 CSRF surface on reads.
 
@@ -381,7 +396,8 @@ asn/uuid).
 
 ### 3.7 Health endpoints
 
-**Decision.** The Kubernetes/Google z-page split, **outside** `/v1`:
+**Decision.** The Kubernetes/Google z-page split, at the **root** (they were already outside
+any version segment):
 
 - **`GET /livez`** — `200` whenever the process is running; no dependency checks. A failure
   means *restart me*.
@@ -506,7 +522,7 @@ supported for scroll-both-ways leaderboard UX.
 stateless deep links — `WHERE rank > 500000 ORDER BY rank LIMIT n`, an indexed range scan.
 **Scope of the claim (honest):** `after_rank`/`around_rank` are supported **only on the
 rank-ordered views** and mean *"rows whose global rank ≥ N, then filtered"* — **not** "the
-Nth matching row." On a sparse filter (`classification=hero` selects ~41k of 1M), ranks are
+Nth matching row." On a sparse filter (`class=hero` selects ~41k of 1M), ranks are
 sparse within the filter, so `after_rank=N` returns "heroes whose global rank > N," which is
 not "page N of heroes." The `sort=host` ordering has **no** random-access param — it is
 forward/back cursor only. If the frontend genuinely needs "page N of heroes," that requires a
@@ -523,9 +539,9 @@ cheap:
 
 | Param | Values | Backed by | Notes |
 |---|---|---|---|
-| `classification` | `hero`\|`partial`\|`sinner`\|`inactive`\|`unknown` | `idx_domain_heroes/sinners/partial` | primary filter; predicate spelled `AND rank IS NOT NULL AND NOT disabled` so the partial index is used |
-| `gold` | `true` | layered on `idx_domain_heroes` | gold ⊂ hero, cheap without its own index |
-| `country` | ISO code | `idx_domain_country` | composes with `classification` + rank order |
+| `class` | `hero`\|`partial`\|`sinner`\|`inactive`\|`unknown` | `idx_domain_heroes/sinners/partial` | primary filter (the shortened general param; presets the `/heroes`,`/sinners`,`/gold`,`/almost`,`/mail` tier paths); predicate spelled `AND rank IS NOT NULL AND NOT disabled` so the partial index is used |
+| `gold` | `true` | layered on `idx_domain_heroes` | gold ⊂ hero, cheap without its own index; the `/gold` tier path |
+| `country` | ISO code | `idx_domain_country` | composes with `class` + rank order |
 | `asn` | AS number | `idx_domain_asn` | equality cheap; sort within pays a sort |
 | `flag` | one of `class_flags` | **expensive** — scope-required (see below) | |
 | `base`/`www`/`ns`/`mx`/`conn`/`resources` | a `ipv6_status` value | **expensive** — scope-required (see below) | per-dimension confirmed-status filters (drives the mail track) |
@@ -541,7 +557,7 @@ cheap:
   the same class of unindexed predicate** — there is no `class_flags` GIN index and no
   `*_status` index, so a bare `?flag=broken_v6` or `?mx=unsupported` over all 1M rows is a
   seq scan. **Rule (scope-required):** these filters are accepted **only** when combined with
-  an indexed prefilter (`classification`, `country`, or `asn`). A bare, unscoped one returns
+  an indexed prefilter (`class`, `country`, or `asn`). A bare, unscoped one returns
   **`422 scope-required`** (§3.5) — *not* `validation-error`; the value is valid, it just
   needs a scope — with a `detail` naming the scope params that satisfy it. (OPEN-2 would add
   a `class_flags` GIN index to relax the `flag=` half of this rule.)
@@ -549,7 +565,7 @@ cheap:
   site-wide "all domains missing IPv6 mail" list (`mx=unsupported`, equivalently
   `flag=mail_missing`) is precisely the unscoped seq-scan case above. The **aggregate
   headline numbers** come from the daily `*_supported` stats counters; the **list form** is
-  offered only as a `classification`/`country`/`asn`-scoped filtered `/domains` view (§5.4).
+  offered only as a `class`/`country`/`asn`-scoped filtered `/domains` view (§5.4).
 - **Arbitrary cross-dimension boolean predicates** (`base=supported AND mx=unsupported` with
   no scope) are not offered — no composite index covers them. The public filter surface is
   the indexed axes plus the cheap layered booleans (`gold`) plus the scope-required
@@ -657,7 +673,7 @@ this to e.g. `host,rank,classification,gold` for a dense leaderboard table.
 
 ### 5.3 Domain detail
 
-`GET /v1/domains/{host}` — the summary plus informational dimensions, children, and a
+`GET /domains/{host}` — the summary plus informational dimensions, children, and a
 freshness/meta block. The heavy per-check evidence (record sets, TLS cert, per-resolver
 consensus tuples, resource lists) is served from the latest `scan_detail` under a nested
 `evidence` object (same shape as the live-check result, §6.1 — the shared `MapLiveResult`
@@ -688,7 +704,7 @@ mapper), so the detail page and the live check render identically.
   "last_checked_at": "2026-07-07T02:14:55Z",
   "created_at": "2022-05-01T00:00:00Z",
   "evidence": { "...": "latest scan_detail JSONB, per §6.1 shape (optional, ?include=evidence)" },
-  "meta": { "as_of": "2026-07-07T03:41:12Z", "generation": 20260707, "stability": "stable" }
+  "meta": { "as_of": "2026-07-07T03:41:12Z", "generation": 20260707 }
 }
 ```
 
@@ -712,45 +728,73 @@ legacy "additive keys the frozen frontend ignores" bolt-on. Observation-level ri
 (`error`/`inconsistent`) is exposed **only** inside `evidence` (OPEN-3), honoring the trust
 model's "observations are telemetry, only confirmed status is public."
 
+#### Additional per-domain attributes to store (2026-07-09)
+
+The design already stores `asn_id` and `country_id` per domain. These additional league-table
+pivots are decided; they are schema additions to fold into 05-schema.md when this report is
+folded into the spec (see §10.3):
+
+- **`tld`** — the domain's TLD / eTLD suffix (e.g. `com`, `no`, `gov`), derived for free from
+  the host at ingest (publicsuffix). Enables TLD / ccTLD registry league tables (which
+  registries / countries lead on IPv6). Low cost, high leverage. **Add now.**
+- **DNS-provider** — the `ns_host → provider` mapping (already committed via OPEN-4). The
+  **highest-leverage pivot** — one provider's default flips thousands of domains. **Add now.**
+- **Hosting/CDN provider** — a normalized `hosting`/`cdn` provider tag, mostly derivable from
+  data already collected (the checker's CNAME-chain CDN detection + the resolved IP's ASN).
+  Enables "which CDN hosts the most sinners." **Add** as the companion to the DNS-provider
+  axis.
+- **Registrar** — **defer.** Enables registrar league tables but requires RDAP lookups at 1M
+  scale (rate-limited, often redacted, real ingestion cost). Want-it-later, not round-1.
+
+The API resource model should expose **`tld`** and the provider fields on the domain resource
+(§5.2/§5.3) and as filter/pivot axes (`?tld=`, `?provider=`), under the same indexed-scope
+guardrail as the per-dimension/flag filters (OPEN-2, §4.3).
+
 ### 5.4 The ranked tier lists
 
-Heroes / sinners / almost / gold / mail are **filtered `/domains` views**, all returning the
-§5.2 summary row in the §3.4 collection envelope. Canonical URLs (query-param-stable so a
-link reproduces the exact view):
+Heroes / sinners / gold / almost / mail are **first-class short collection resources** — each
+a preset filtered view over the `/domains` leaderboard, returning the §5.2 summary row in the
+§3.4 collection envelope, sharing the exact same keyset/cursor pagination and `?country=`/
+`?asn=` filter composition. These are the canonical, shareable browse URLs the frontend links
+to:
 
 ```
-GET /v1/domains?classification=hero&sort=rank
-GET /v1/domains?classification=sinner&sort=rank
-GET /v1/domains?classification=partial&sort=rank        # the "almost there" tier
-GET /v1/domains?classification=hero&gold=true           # gold heroes
-GET /v1/domains?classification=hero&mx=supported        # mail heroes (scoped, §4.3)
+GET /heroes             # preset: class=hero
+GET /sinners            # preset: class=sinner
+GET /gold               # preset: gold=true
+GET /almost             # the "almost there" list — partial domains one step from hero
+GET /mail               # the mail/MX heroes track
 ```
 
-Convenience aliases `/domains/heroes`, `/domains/sinners`, `/domains/almost`,
-`/domains/gold` resolve to these.
+`GET /domains` stays the **general filterable collection**; the same views are reachable
+through it via the `?class=` param (`GET /domains?class=hero&sort=rank`,
+`GET /domains?class=sinner`, `GET /domains?class=partial`, `GET /domains?class=hero&gold=true`).
+Tier paths accept the same additional filters, so "sinners in Norway" is
+`GET /sinners?country=no` (equivalently `GET /domains?class=sinner&country=no`), and the
+scoped `GET /countries/{code}/domains?class=sinner` also works.
 
 **The mail track** (feature-research #10) obeys the §4.3 scope-or-stats guardrail:
 
-- **Mail-heroes** `/domains/mail-heroes` → `?classification=hero&mx=supported` (scoped, so
-  `mx=` is indexed via the `classification` prefilter).
-- **Mail-sinners** `/domains/mail-sinners` → `?classification=sinner&mx=unsupported`
-  (likewise scoped). A truly *global* mail-sinners count (every domain with `mx=unsupported`,
-  regardless of classification) is **not** a live `/domains` scan — that headline number is
-  read from the `mx_supported` daily stats counter (`domains − mx_supported`). The list form
-  is always classification/country/asn-scoped.
+- **Mail-heroes** — `GET /mail` is the canonical path (preset `class=hero&mx=supported`,
+  scoped so `mx=` is indexed via the `class` prefilter).
+- **Mail-sinners** `GET /domains?class=sinner&mx=unsupported` (likewise scoped). A truly
+  *global* mail-sinners count (every domain with `mx=unsupported`, regardless of
+  classification) is **not** a live `/domains` scan — that headline number is read from the
+  `mx_supported` daily stats counter (`domains − mx_supported`). The list form is always
+  class/country/asn-scoped.
 
 **The top-shame editorial pick** (hand-curated `top_shame`, distinct from algorithmic
 `sinner`) is its own resource, and — like every collection — returns the envelope, not a bare
 array:
 
 ```
-GET /v1/shame
+GET /shame
 ```
 ```json
 {
   "items": [ { "host": "...", "reason": "...", "added_at": "..." } ],
   "page": { "next_cursor": null, "prev_cursor": null, "has_more": false },
-  "meta": { "as_of": "...", "generation": 20260707, "count": 12, "stability": "stable" }
+  "meta": { "as_of": "...", "generation": 20260707, "count": 12 }
 }
 ```
 
@@ -773,12 +817,12 @@ needed — `page` is trivial and `meta.count` is exact.
 
 `v6_sites` is the snake_case-normalized wire name for the schema column `country.v6sites`
 (§3.3, mechanical case-normalization). `percent` is served **directly** from the
-`NUMERIC(5,2)` column (the legacy `÷10` pgtype hack is gone). `GET /v1/countries` is the
+`NUMERIC(5,2)` column (the legacy `÷10` pgtype hack is gone). `GET /countries` is the
 leaderboard, sortable by `percent`/`v6_sites` (precomputed counters → cheap, no live
-aggregation). `GET /v1/countries/{code}/domains` is the per-country list
-(`?classification=` filter over `idx_domain_country`) — **keyset-paginated with a
+aggregation). `GET /countries/{code}/domains` is the per-country list
+(`?class=` filter over `idx_domain_country`) — **keyset-paginated with a
 `count_estimate`**, because a large country can hold hundreds of thousands of domains (§4.1),
-not a bounded sub-list. Time series: `GET /v1/countries/{code}/stats` (§5.10). The `UN`
+not a bounded sub-list. Time series: `GET /countries/{code}/stats` (§5.10). The `UN`
 sentinel appears as a normal row.
 
 ### 5.6 ASN / provider
@@ -799,19 +843,22 @@ sentinel appears as a normal row.
 in this network" concept, used in both this detail representation and the ASN time-series
 (§5.10)** — the time-series' underlying `stats_asn_daily.v6_domains` column is mapped onto the
 same `count_v6` wire name so the concept has one spelling across the two representations
-(§3.3). `GET /v1/asns` is the network leaderboard (`?sort=count_v6|count_total`; real columns,
+(§3.3). `GET /asns` is the network leaderboard (`?sort=count_v6|count_total`; real columns,
 no `order=ipv4|ipv6` alias, no AS-prefix search bug — `?q=` does normal substring match).
-`GET /v1/asns/{number}/domains` lists the network's domains — **keyset-paginated with a
+`GET /asns/{number}/domains` lists the network's domains — **keyset-paginated with a
 `count_estimate`**, because a hyperscaler ASN can host tens to hundreds of thousands of
 eTLD+1s (§4.1), not a bounded sub-list. The sentinel `0` = Unknown appears as a normal group.
 This is also the **hosting-ASN league table** (feature-research #2). The **DNS-provider
-league table** needs a new `ns_host → provider` mapping table derived from collected NS data
-(OPEN-4, new data dependency) and would expose `/v1/providers` + `/v1/providers/{id}/domains`
-with binary inclusion + counts only (no scores) — flagged, not built in round 1.
+league table** (OPEN-4, resolved YES 2026-07-09) is **committed**: a new `ns_host → provider`
+mapping table derived from collected NS data (§10.3) backs `/providers` +
+`/providers/{id}/domains`, exposing binary inclusion + counts only (no scores). It is the
+highest-leverage pivot — one provider's default flips thousands of domains. A companion
+**hosting/CDN provider** axis (derived from CNAME-chain CDN detection + resolved-IP ASN) is
+likewise added (§5.3 additional attributes).
 
 ### 5.7 Campaign (composite detail)
 
-`GET /v1/campaigns` lists campaigns; the detail is a **composite** (metadata + paged members
+`GET /campaigns` lists campaigns; the detail is a **composite** (metadata + paged members
 + adoption), the genuine frontend need:
 
 ```json
@@ -838,7 +885,7 @@ the uniform three-field shape (`next_cursor`/`prev_cursor`/`has_more`) — no of
 `next_cursor`-only object. `adoption.v6_ready_percent` comes from `stats_campaign_daily`
 (`v6_ready` = base supported ∧ ns supported ∧ www ∈ {supported, not_applicable}), never
 per-entity scoring; `adoption.day` is the stats date (date granularity, §3.4). Keyed by
-**raw UUID**, not shortuuid. Time series: `GET /v1/campaigns/{uuid}/stats`.
+**raw UUID**, not shortuuid. Time series: `GET /campaigns/{uuid}/stats`.
 
 ### 5.8 Changelog event (the trust surface)
 
@@ -860,12 +907,12 @@ no synthetic epoch id, no `domain_url` string:
 `conn` and `resources` transitions and `not_applicable` transitions — the legacy R5 coverage
 filter (which admitted only `base/www/ns/mx` with 3 legacy strings) is deleted. Feeds:
 
-- `GET /v1/changelog` — global recent-transitions feed, cursor on `ts DESC`
+- `GET /changelog` — global recent-transitions feed, cursor on `ts DESC`
   (`idx_changelog_ts`), `?field=` and `?from=/&to=` windows.
-- `GET /v1/domains/{host}/changelog` — per-domain (native PK read).
-- `GET /v1/campaigns/{uuid}/changelog` — campaign-wide (members' transitions).
-- `GET /v1/campaigns/{uuid}/domains/{host}/changelog` — one member.
-- `GET /v1/countries/{code}/changelog` — **new** per-country feed (no legacy equivalent).
+- `GET /domains/{host}/changelog` — per-domain (native PK read).
+- `GET /campaigns/{uuid}/changelog` — campaign-wide (members' transitions).
+- `GET /campaigns/{uuid}/domains/{host}/changelog` — one member.
+- `GET /countries/{code}/changelog` — **new** per-country feed (no legacy equivalent).
 
 **Scoped-feed cost (from the review — the §4.3 discipline applies here too).** The
 `changelog` hypertable is keyed `(domain_id, ts, field)` with a global `idx_changelog_ts` and
@@ -885,7 +932,7 @@ immutable), not the legacy epoch-millis synthetic id.
 
 ### 5.9 Per-domain timeline / history
 
-`GET /v1/domains/{host}/history?from=&to=&interval=daily|weekly` — the trajectory graph.
+`GET /domains/{host}/history?from=&to=&interval=daily|weekly` — the trajectory graph.
 
 **Trust-consistent sourcing (important).** The per-dimension trajectory is **reconstructed
 from the `changelog`** (the authoritative confirmed transitions, the same source as §5.8),
@@ -932,12 +979,12 @@ Five routes, one query contract (`?from=&to=&interval=daily|weekly`, default `to
 sourced from the confirmed-state `stats_*_daily` tables so graphs match public lists
 exactly. All use the `{points, meta}` time-series envelope (§3.4):
 
-- `GET /v1/stats/overview` — `stats_global_daily` (the headline dashboard).
-- `GET /v1/countries/{code}/stats` — `stats_country_daily`.
-- `GET /v1/campaigns/{uuid}/stats` — `stats_campaign_daily` (incl. `v6_ready%`).
-- `GET /v1/asns/{number}/stats` — `stats_asn_daily` (exposes the `count_v6`/`count_total`
+- `GET /stats/overview` — `stats_global_daily` (the headline dashboard).
+- `GET /countries/{code}/stats` — `stats_country_daily`.
+- `GET /campaigns/{uuid}/stats` — `stats_campaign_daily` (incl. `v6_ready%`).
+- `GET /asns/{number}/stats` — `stats_asn_daily` (exposes the `count_v6`/`count_total`
   wire names, §5.6).
-- `GET /v1/domains/{host}/history` — per-domain, changelog-reconstructed (§5.9).
+- `GET /domains/{host}/history` — per-domain, changelog-reconstructed (§5.9).
 
 The overview point carries the full `stats_global_daily` payload:
 
@@ -964,7 +1011,7 @@ timing and includes unconfirmed values.
 
 ### 5.11 Resource dependencies
 
-- `GET /v1/domains/{host}/resources` — forward: what this domain depends on. Bounded small
+- `GET /domains/{host}/resources` — forward: what this domain depends on. Bounded small
   (a handful of resource hosts per domain), so no cursor is needed — but it still returns the
   uniform collection envelope (`items`, not a bare `resources` key), `ORDER BY host`, with an
   exact `meta.count`:
@@ -982,7 +1029,7 @@ timing and includes unconfirmed values.
 }
 ```
 
-- `GET /v1/resources/{host}/dependents` — reverse: **the advocacy surface**
+- `GET /resources/{host}/dependents` — reverse: **the advocacy surface**
   ("this v4-only host breaks N sites"), keyset-paginated over the **null-flag-first**
   ordering (`ORDER BY (rank IS NULL), rank, id`, §4.2 — the set mixes ranked and rank-NULL
   dependents, so the plain `(rank, id)` seek would drop the null-rank tail):
@@ -1004,7 +1051,7 @@ thousands" pressure. Empty/dormant until `crawler.resources.enabled` flips.
 
 ### 5.12 Client-IP echo (visitor banner)
 
-`GET /v1/ip` — a genuine product feature (the "are you reaching us over IPv6?" banner),
+`GET /ip` — a genuine product feature (the "are you reaching us over IPv6?" banner),
 not a wire quirk. Echoes the caller's real IP (bracketless), redesigned to an object:
 
 ```json
@@ -1024,7 +1071,7 @@ Anonymous, no auth; the only write path. **Async enqueue + poll**, never synchro
 full engine run is 60–90 s; holding an anonymous request open invites resource exhaustion).
 
 ```http
-POST /v1/check
+POST /check
 Content-Type: application/json
 
 { "host": "example.com" }
@@ -1032,14 +1079,14 @@ Content-Type: application/json
 
 ```http
 HTTP/1.1 202 Accepted
-Location: /v1/check/481529
+Location: /check/481529
 Cache-Control: no-store
 
 { "id": 481529, "host": "example.com", "status": "pending", "created_at": "..." }
 ```
 
 ```http
-GET /v1/check/481529     → 200 { "id": 481529, "host": "...", "status": "done", "cached": false, "result": { ... } }
+GET /check/481529     → 200 { "id": 481529, "host": "...", "status": "done", "cached": false, "result": { ... } }
 ```
 
 **Job id type.** The job `id` is the schema's **`BIGINT GENERATED ALWAYS AS IDENTITY`**
@@ -1082,7 +1129,7 @@ Errors are RFC 9457: invalid host → `400 invalid-parameter`; non-JSON body →
 
 ### 6.2 Embeddable SVG badge
 
-`GET /v1/badge/{host}.svg` — a shields.io-flat SVG rendered from confirmed status.
+`GET /badge/{host}.svg` — a shields.io-flat SVG rendered from confirmed status.
 
 - `Content-Type: image/svg+xml; charset=utf-8` (overrides the JSON default);
   `Cache-Control: public, max-age=86400` (daily crawl cadence); `X-Content-Type-Options:
@@ -1115,12 +1162,12 @@ Errors are RFC 9457: invalid host → `400 invalid-parameter`; non-JSON body →
   `IPv6: unknown` badge. XML-escape the host label into the SVG to prevent markup injection.
 
 **Also offer the shields.io endpoint-JSON variant** for users who want shields styling:
-`GET /v1/badge/{host}.json` → `{"schemaVersion":1,"label":"IPv6","message":"supported",
+`GET /badge/{host}.json` → `{"schemaVersion":1,"label":"IPv6","message":"supported",
 "color":"brightgreen","cacheSeconds":86400,"isError":false}`. Its `message`/`color`/`isError`
 come from the table above. This JSON deliberately uses shields.io's **camelCase** field names
 (`schemaVersion`/`cacheSeconds`/`isError`) — the one sanctioned camelCase exception (§3.3),
 dictated by shields.io's external schema. Users embed
-`https://img.shields.io/endpoint?url=https://api.whynoipv6.com/v1/badge/example.com.json`.
+`https://img.shields.io/endpoint?url=https://api.whynoipv6.com/badge/example.com.json`.
 Feature-research ranks the badge **#1** (viral distribution; every badge is a backlink) —
 promote it from "optional" to committed.
 
@@ -1191,7 +1238,7 @@ pagination path; avoids CrUX's BigQuery-only mistake that spawns unofficial mirr
   gate it)** while keeping the per-entity `rank` on the live API. Flagged as OPEN-13 alongside
   OPEN-6; it could otherwise block the headline dataset/citation deliverable.
 
-**The only dataset piece the API serves:** `GET /v1/datasets` re-reads
+**The only dataset piece the API serves:** `GET /datasets` re-reads
 `$DATASETS_DIR/manifest.json` from disk every request and returns it verbatim (the schema
 above) as `application/json`, `Cache-Control: public, max-age=300`. Missing/unparseable →
 `503 manifest-unavailable` (the only 503). nginx location split: exact `=/datasets` → API;
@@ -1206,10 +1253,10 @@ control), per scope:
 
 | Scope | Atom | JSON Feed 1.1 |
 |---|---|---|
-| Global | `/v1/changelog.atom` | `/v1/changelog.feed.json` |
-| Per-domain | `/v1/domains/{host}/changelog.atom` | `.feed.json` |
-| Per-campaign | `/v1/campaigns/{uuid}/changelog.atom` | `.feed.json` |
-| Per-country | `/v1/countries/{code}/changelog.atom` | `.feed.json` |
+| Global | `/changelog.atom` | `/changelog.feed.json` |
+| Per-domain | `/domains/{host}/changelog.atom` | `.feed.json` |
+| Per-campaign | `/campaigns/{uuid}/changelog.atom` | `.feed.json` |
+| Per-country | `/countries/{code}/changelog.atom` | `.feed.json` |
 
 The extension-less path stays the paginated JSON-API list (§5.8).
 
@@ -1219,7 +1266,7 @@ pagination** (bulk consumers are steered to the datasets, §6.3; this also honor
 feed cost cap in §5.8). Required top-level members, with their sources:
 
 - **Atom (RFC 4287, `application/atom+xml`):** feed `<id>` = the scope's canonical API URL
-  (e.g. `https://api.whynoipv6.com/v1/countries/NO/changelog`); `<updated>` = `max(ts)` in
+  (e.g. `https://api.whynoipv6.com/countries/NO/changelog`); `<updated>` = `max(ts)` in
   the window; `<title>` = the scope name ("WhyNoIPv6 — Norway", "WhyNoIPv6 — example.com",
   global "WhyNoIPv6 — recent changes"); `<link rel="self">` = the `.atom` URL,
   `<link rel="alternate">` = the extension-less JSON list URL.
@@ -1250,26 +1297,24 @@ for the JSON core (default `application/json`; `406 not-acceptable` when unsatis
 
 ### 6.6 New/flagged special endpoints
 
-- **Diff / "who went green"** (feature-research #4, not yet specified) —
-  `GET /v1/diff?from=&to=&scope=global|country|campaign` returning added-to-hero /
-  lost-hero lists. **Recommendation:** read it from the **`changelog`** (the authoritative
-  confirmed transitions), not from differencing two `stats_*` snapshots, so it reports
-  *which* domains changed, not just net counts. OPEN-7: scope granularity + exact shape.
-- **Methodology** (feature-research #8, trust lever) — `GET /v1/methodology` returns the
+- **Diff / "who went green"** (feature-research #4) — **committed** (OPEN-7, resolved YES
+  2026-07-09): `GET /diff?from=&to=&scope=global|country|campaign` returning added-to-hero /
+  lost-hero lists, read from the **`changelog`** (the authoritative confirmed transitions),
+  not from differencing two `stats_*` snapshots, so it reports *which* domains changed, not
+  just net counts. (Scope granularity + exact shape settle during OpenAPI authoring.)
+- **Methodology** (feature-research #8, trust lever) — `GET /methodology` returns the
   deterministic Hero/Partial/Sinner ladder + Gold rule + flag definitions as structured
   JSON, plus a `criteria_changelog[]` of every rule change (recalibrate Gold in the open).
   Mostly static content; the `class_flags` vocabulary it documents is the join key the
   frontend uses to select fix guides (feature-research #3, static content, no new endpoint).
-- **Contact-discovery / notification toolkit** (feature-research #9) — deferred, flagged
-  (OPEN-8): a per-domain RDAP/security.txt/RFC-2142 discovery endpoint with its own
-  rate-limit + abuse story; constraint-critical (user sends it themselves, no sending
-  infra, one-shot only). Templates are static.
-- **Government-mandate compliance tracking** (feature-research second tier) — **unhomed in
-  round 1, flagged OPEN-12.** The cheap first step is a `mandate`/`tags` field on campaigns
-  (a nullable `campaign.tags` column or a `campaign_tag` table) plus an optional `/mandates`
-  page or `?tag=` campaign filter, with citations. The `campaign` resource (§5.7) and the
-  schema `campaign` table currently have no tag/mandate field, so this needs a small schema
-  addition; deferred post-launch, called out explicitly so the maintainer decides consciously.
+- **Contact-discovery / notification toolkit** (feature-research #9) — **not built** (OPEN-8,
+  resolved NO 2026-07-09): no per-domain RDAP/security.txt/RFC-2142 discovery endpoint.
+  Templates remain static.
+- **Government-mandate compliance tracking** (feature-research second tier) — **committed**
+  (OPEN-12, resolved YES 2026-07-09; the maintainer explicitly wants this). A `tags`/`mandate`
+  capability on campaigns (a nullable `campaign.tags` column or a `campaign_tag` table, §10.3)
+  plus a `?tag=` campaign filter and a `/mandates` surface, with citations. The `campaign`
+  resource (§5.7) and the schema `campaign` table gain the tag/mandate field (§10.3).
 - **OG/social cards** — deferred; pairs with the badge renderer (same image pipeline,
   PNG/SVG), unverified impact.
 
@@ -1377,57 +1422,41 @@ single source of truth; both sides generate from it, and CI blocks drift.
 ## 9. Data-history migration — the flagged open decision
 
 The DNS-flip cutover means a fresh crawl is acceptable and the **mandatory** production data
-migration is dropped. What remains is one genuine decision.
+migration is dropped. What remained was one genuine decision, now resolved.
 
-**Recommendation: do a best-effort, structured, one-time changelog history import; start
-`scan` history fresh.**
+**Decision (OPEN-9, 2026-07-09): start fresh — no history import now; revisit later.** Both
+the `changelog` and the `scan` hypertable begin empty. The DNS-flip cutover carries **no data
+import** at all: no structured changelog loader, no entity-resolution/orphan-create step, no
+scan backfill. The changelog-sourced features (the diff / "who went green" #4, the change
+feeds §6.4, the per-domain changelog §5.8, the reconstructed history trajectory §5.9, and the
+"State of IPv6" report #6) launch empty and **fill over the months following launch** as the
+fresh crawl accumulates confirmed transitions. The fresh-scan **latency overlay** on §5.9
+likewise starts empty and fills over ~90 days. A best-effort structured changelog import
+remains a possible **later** step if the empty-history gap proves painful, but it is not part
+of round-1.
 
-Reasoning:
+Because there is no import, the schema simplification is taken **unconditionally**: drop
+`changelog.legacy_message`/`legacy_status` + the three `changelog_*_chk` CHECK constraints
+(make `old_value`/`new_value` NOT NULL outright), drop `'legacy'` from the `changelog.field`
+domain, and drop the `created_by = 'import'` enum value (no import means no orphan-created
+import rows). See §10.3 (schema) and §10.4 (cutover), both collapsed to the pure DNS-flip.
 
-- The **changelog is the credibility surface**, kept forever, and it is what powers the
-  diff / "who went green" feature (#4), the change feeds (§6.4), the per-domain changelog
-  (§5.8), and — because the per-domain history graph is **reconstructed from the changelog**
-  (§5.9) — the confirmed-status trajectory of the timeline too, plus the "State of IPv6"
-  report (#6). Launching it **empty** discards years of confirmed-transition history and
-  makes those features hollow on day 1 — a real perceived-value loss for a project whose
-  whole thesis is a *trustworthy* longitudinal record. (The one part the import does **not**
-  rescue is the fresh-scan **latency overlay** on §5.9, which starts empty and fills as scans
-  accumulate, because `scan` history starts fresh — see below.)
-- The import is **cheap and clean under the new design**: load historical transitions as
-  **native structured `(host/domain_id, ts, field, old_value, new_value)` rows** directly
-  from the retained production dump, best-effort — **no reverse message-map, no
-  `--verify-changelog` byte gate, no `legacy_*` columns, no PK-collision +1µs bump**. Rows
-  that can't be cleanly mapped to a `(field, old, new)` triple are simply dropped, not
-  shoehorned through a `field='legacy'` escape hatch.
-- **It still needs entity resolution.** The import is keyed by `domain_id`, so it carries the
-  08 §3 `Canonicalize` host→id map **and** the orphan-create step
-  (`INSERT … created_by='import'`) for historical hosts absent from the fresh Tranco crawl —
-  otherwise those changelog rows have no FK target. This makes `created_by='import'`
-  **load-bearing** (a required FK-provenance marker), not the optional "mark imported rows"
-  nicety it might read as. See §10.4.
-- **Scan history is different: start fresh.** The `scan` hypertable is a 2-year-retention
-  measurement series; backfilling it is expensive, its shape is noisier, and the latency
-  overlay degrades gracefully from an empty start (it fills in over 90 days). The credibility
-  payoff is in the *changelog*, not the raw scan log.
-
-**If the maintainer declines even the changelog import** (OPEN-9), then the schema
-simplification is unlocked: drop `changelog.legacy_message`/`legacy_status` + the three
-`changelog_*_chk` CHECK constraints (make `old_value`/`new_value` NOT NULL outright), drop
-`'legacy'` from the `changelog.field` domain, and drop the `created_by = 'import'` enum
-value. Even *with* the recommended structured import, none of the `legacy_*` machinery is
-needed — the import writes native rows — so those columns/constraints/enum-value should be
-dropped **regardless**; only `created_by = 'import'` stays, and under the recommended import
-it stays as a **required** FK-provenance marker (not optional).
+The rejected alternative — a **best-effort structured changelog import** (native
+`(domain_id, ts, field, old_value, new_value)` rows from the retained production dump, keyed
+through 08 §3 entity resolution with an orphan-create step) — was the earlier recommendation:
+it would have populated the credibility surface on day 1 rather than over months. It is set
+aside for now (revisit later) to keep the cutover a clean, zero-import DNS flip; the raw
+`scan` hypertable was always going to start fresh regardless.
 
 ### Tradeoff
 
-| | Import changelog (recommended) | Start fully fresh |
+| | Start fresh (**resolved**) | Best-effort structured import (deferred) |
 |---|---|---|
-| Day-1 changelog / diff / feeds / per-domain history trajectory / State-of-IPv6 | Populated, credible | Empty; fills over months |
-| Day-1 §5.9 latency overlay | Empty regardless (scan starts fresh) | Empty |
-| Effort | Low (structured loader + 08 §3 entity resolution) | Zero |
-| Schema | Drop `legacy_*`; keep `created_by='import'` (required) | Drop `legacy_*` **and** `'import'` |
-| Risk | Best-effort mapping may drop some rows (acceptable) | None |
+| Day-1 changelog / diff / feeds / per-domain history trajectory / State-of-IPv6 | Empty; fills over months | Populated, credible |
+| Day-1 §5.9 latency overlay | Empty | Empty regardless (scan starts fresh) |
+| Effort | Zero | Low (structured loader + 08 §3 entity resolution) |
+| Schema | Drop `legacy_*` **and** `'import'` | Drop `legacy_*`; keep `created_by='import'` (required) |
+| Risk | None | Best-effort mapping may drop some rows (acceptable) |
 
 ---
 
@@ -1468,14 +1497,18 @@ the authority for the deletions.
 - The blanket **§1.5 `no-cache, no-store`** header policy → replaced by the endpoint-class
   cache table (§7.1); see §10.5 for the matching nginx vhost rewrite.
 
-**Rewritten / added:** §3 core conventions (versioning at `api./v1`, naming, envelope, RFC
-9457, HTTP, health); §4 keyset pagination + filter grammar (incl. the `scope-required`
+**Rewritten / added:** §3 core conventions (base URL at the `api.` root with **no `/v1`
+segment** and the short tier collection paths `/heroes`,`/sinners`,`/gold`,`/almost`,`/mail`,
+naming, envelope, RFC 9457, HTTP, health); §4 keyset pagination + filter grammar (incl. the `scope-required`
 guardrail); §5 the clean resource model; §6 special endpoints (live check retained largely
 as-is in behavior but re-pathed, RFC-9457-ified, keeping the BIGINT job id and adding terminal-
 poll caching; badge promoted to committed + shields-JSON variant + the normative
 classification→label table; datasets manifest with a pinned `manifest.json` schema; **new**
-change feeds with a fixed 50-item window, CSV export, diff, methodology, mail-heroes,
-mail-sinners); §7 caching/negotiation/rate-limit/compression; §8 OpenAPI 3.0.3 workflow.
+change feeds with a fixed 50-item window, CSV export, the diff endpoint (OPEN-7, source =
+changelog), methodology, the mail track (`/mail`), and the `/mandates` surface + `?tag=`
+campaign filter (OPEN-12)); §7 caching/negotiation/rate-limit/compression; §8 OpenAPI 3.0.3
+workflow. The base surface carries **no `/v1` segment** and adds the short tier collection
+paths `/heroes`,`/sinners`,`/gold`,`/almost`,`/mail`.
 
 ### 10.2 `02-observation-model.md` / `03-state-machine.md` — remove legacy-serialization cross-references
 
@@ -1491,10 +1524,10 @@ delete in 02/03. The real edits are the scattered one-line cross-references to t
   "API compat file" pointer.
 - **03:263** — the `field = 'legacy'` (+ `legacy_message`/`legacy_status`) "phase-4 import
   rows" narrative. Rewrite to the crawler-only field set (`base|www|ns|mx|conn|resources`);
-  `'legacy'` is gone (05 drops it, §10.3). If the changelog import runs (§9), it writes
-  **native** `(field, old, new)` rows, not `field='legacy'`.
+  `'legacy'` is gone (05 drops it, §10.3). There is **no history import** (OPEN-9, start
+  fresh, §9), so the whole import-rows narrative is deleted rather than reworded.
 - **03:265** — "the legacy §5.1 changelog endpoints apply no first-confirmation filter."
-  Repoint to the new `/v1/…/changelog` endpoints (§5.8); the first-confirmation suppression
+  Repoint to the new `/…/changelog` endpoints (§5.8); the first-confirmation suppression
   rule is unchanged, only the endpoint reference.
 - **03:488** — "this serialization is a compatibility surface … gated by the parity tests in
   10-testing.md." The parity tests are deleted (§10.6); reword so the `scan_detail` /
@@ -1505,29 +1538,33 @@ delete in 02/03. The real edits are the scattered one-line cross-references to t
 data model). The `03` note that `conn`/`resources`/`not_applicable` transitions are "written
 but filtered out of legacy feeds" is removed — they are now served (§5.8).
 
-### 10.3 `05-schema.md` — changelog legacy columns + two small additions
+### 10.3 `05-schema.md` — drop changelog legacy columns; add pivots + tags
 
-- **Drop** `changelog.legacy_message`, `changelog.legacy_status`, and the three CHECK
-  constraints (`changelog_legacy_chk`, `changelog_old_value_chk`, `changelog_new_value_chk`);
-  make `old_value`/`new_value` **NOT NULL** outright. Drop `'legacy'` from the
-  `changelog.field` domain. Removable **whether or not** the history import runs (§9) — the
-  import writes native rows.
-- `created_by = 'import'`: **keep** if the recommended changelog import runs — and note it is
-  a **required** FK-provenance marker for orphan-created historical domains (§9 / §10.4), not
-  an optional flag; drop the enum value only if no import runs.
+- **Drop, unconditionally** (OPEN-9 start-fresh, no import — §9): `changelog.legacy_message`,
+  `changelog.legacy_status`, and the three CHECK constraints (`changelog_legacy_chk`,
+  `changelog_old_value_chk`, `changelog_new_value_chk`); make `old_value`/`new_value`
+  **NOT NULL** outright. Drop `'legacy'` from the `changelog.field` domain, **and** drop the
+  `created_by = 'import'` enum value — with no import there are no orphan-created import rows,
+  so the FK-provenance marker is not needed.
 - **New (small) addition — crawl freshness signal:** a single `generated_at TIMESTAMPTZ`
   recorded by the daily stats rollup, so the envelope `meta.as_of` (§3.4) has a deterministic
   source. `meta.generation` needs **no** column — it derives from
   `max(stats_global_daily.day)` as `YYYYMMDD`. (Until `generated_at` exists, `as_of` falls
   back to that day at `00:00:00Z`.)
+- **New per-domain pivot columns (committed, 2026-07-09 — §5.3 "Additional per-domain
+  attributes"):** a **`tld`** column (eTLD suffix, derived at ingest via publicsuffix) for
+  TLD/ccTLD league tables; a **DNS-provider** reference backed by a new **`ns_host → provider`
+  mapping table** (OPEN-4, resolved YES); and a normalized **hosting/CDN provider** tag
+  (derived from CNAME-chain CDN detection + the resolved IP's ASN). **Defer** a `registrar`
+  column (RDAP cost at 1M scale). These are new indexed axes exposed as `?tld=`/`?provider=`.
+- **Campaign mandate tagging (committed, OPEN-12 resolved YES — §6.6):** a nullable
+  `campaign.tags` column **or** a `campaign_tag` table, backing the `?tag=` filter and the
+  `/mandates` surface.
 - No other core change. The domain table is already clean (`base_since`, `conn_status`,
   `percent NUMERIC(5,2)`) — the misleading legacy names (`ts_curl`, `v6_only`) lived only in
   the deleted serializer, so removing R3/§2.9 removes the only place they appeared; no DDL.
-- **New data dependencies (flagged, not round-1):** the DNS-provider league table (§5.6,
-  OPEN-4) needs a new `ns_host → provider` mapping table; government-mandate tagging (§6.6,
-  OPEN-12) needs a nullable `campaign.tags` column or a `campaign_tag` table. Both deferred.
 
-### 10.4 `08-migration-cutover.md` — collapses to a DNS flip + a thin structured import
+### 10.4 `08-migration-cutover.md` — collapses to a pure DNS flip (no import)
 
 - Delete **all of §6** (byte-equality changelog transform, §6.2 reverse-map table, §6.3
   ambiguous-old canonicalization, §6.4 cross-check, §6.5 PK-collision +1µs bump, §6.6
@@ -1537,12 +1574,9 @@ but filtered out of legacy feeds" is removed — they are now served (§5.8).
   `error`/`inconsistent` exclusion) and **G7 restore-drill** as ops hygiene.
 - Delete **§13 `internal/migrate`** reverse-map/transform/parity-checker deliverables and the
   `migrate_import.go --verify-changelog` wiring.
-- **Retained, and explicitly load-bearing:** the changelog import (§9) still carries
-  **08 §3 entity resolution** (`Canonicalize` host→id) **and the orphan-create step**
-  (`INSERT … created_by='import'` for historical hosts absent from the fresh crawl) — without
-  it the imported changelog rows have no FK target. So `created_by='import'` is **required,
-  not optional** (reconciles §9's "keep only if we want to mark rows" wording: under the
-  recommended import it is mandatory).
+- **No history import (OPEN-9, start fresh — §9):** there is **no** changelog loader and **no**
+  08 §3 entity-resolution / orphan-create step in the cutover. Both `changelog` and `scan`
+  begin empty; there is no `created_by='import'` provenance to record.
 - **Two editorial-data decisions the collapse must not silently drop:**
   - **08 §4 seed statuses** — dropping them means a **cold classification start**: every
     domain sits at `unknown` until N consecutive crawl cycles confirm each dimension.
@@ -1553,18 +1587,16 @@ but filtered out of legacy feeds" is removed — they are now served (§5.8).
     source** and back the §5.4 `/shame` endpoint. They must be **re-seeded** (re-import from
     the dump, or re-enter via `v6ctl shame`) or `/shame` is empty at launch. This is a
     required cutover step, not optional.
-- **What remains:** a DNS-flip cutover (stand up the new stack, let it crawl, flip DNS) **plus**
-  the optional best-effort **structured** changelog import (§9) with its entity resolution —
-  a thin structured loader, not a reverse-mapper, with no byte gate — **plus** the `top_shame`
-  re-seed.
+- **What remains:** a pure DNS-flip cutover (stand up the new stack, let it crawl, flip DNS)
+  **plus** the `top_shame` re-seed — no data import of any kind.
 
 ### 10.5 `09-ops.md` — config registry + nginx vhost
 
 Not previously listed, but affected in two concrete ways:
 
-- **Config registry (§2.10 "Legacy migration importer"):** drop `migrate.history_window`
-  (obsolete once `scan` history starts fresh, §9) and its registry row; **keep**
-  `migrate.source_dsn` only if the changelog import runs (§9). Update the §15.1
+- **Config registry (§2.10 "Legacy migration importer"):** drop the entire importer config —
+  both `migrate.history_window` and `migrate.source_dsn` — and their registry rows, since
+  there is **no history import** (OPEN-9, start fresh, §9). Update the §15.1
   registry-completeness exception note accordingly.
 - **API nginx vhost (§7):** replace 07-api.md §1.5's blanket `no-cache, no-store` header with
   the endpoint-class caching from §7.1 (public / `s-maxage` CDN caching; badge `max-age=86400`;
@@ -1608,15 +1640,16 @@ byte-gate migration:
   **OpenAPI contract testing** (spec-first codegen + Spectral lint + Go/TS drift gate, §8).
 - **Add** as phase deliverables: OpenAPI authoring; the keyset-cursor implementation (three
   orderings); the change-feed serializers; the CSV/dataset export job + `manifest.json`; the
-  badge renderer; the §5.9 changelog-reconstruction query; the structured changelog import
-  (§9) with 08 §3 entity resolution.
+  badge renderer; the §5.9 changelog-reconstruction query; the diff endpoint (OPEN-7); the
+  `ns_host → provider` mapping + `tld`/provider pivot columns (§10.3); the campaign mandate
+  tagging + `/mandates` surface (OPEN-12). **No** changelog import task (OPEN-9, start fresh).
 
 ### 10.8 `00-overview.md` — rewrite the "frozen legacy surface" framing
 
 00 is the orientation doc every implementer reads first; several statements are now false:
 
 - **00:15** — "an HTTP API whose legacy root paths remain byte-compatible with the existing
-  frozen Vue frontend" → rewrite to the clean `api.whynoipv6.com/v1` surface serving the
+  frozen Vue frontend" → rewrite to the clean `api.whynoipv6.com` surface serving the
   confirmed model directly.
 - **00:26** — the "**Legacy API quirks are deliberate** … the §5.1 compatibility surface … is
   frozen … a quirk … is a requirement, not a bug" paragraph → **delete** it.
@@ -1639,7 +1672,7 @@ data exists or how it earns public status.
 
 | Decision made | Rejected alternative | Confidence |
 |---|---|---|
-| `api.whynoipv6.com/v1/` URL versioning (subdomain carries "api", bare `/v1`) | doubled `/api/v1`; media-type versioning; no versioning | high |
+| `api.whynoipv6.com/` root, **no URL version segment** (subdomain carries "api") | URL-path `/v1`; doubled `/api/v1`; media-type versioning | high |
 | plural verb-free paths, natural-id keys | `/metric`, `/domain`=sinner, shortuuid, synthetic ids | high |
 | `snake_case` wire (with lint-enforced case-normalization + shields.io camelCase exception) | camelCase | **medium (close call, §3.3)** |
 | `{items,page,meta}` + `{points,meta}` envelopes; counts in `meta` only | full JSON:API; bare arrays; `{"data":[…]}` | high |
@@ -1652,54 +1685,43 @@ data exists or how it earns public status.
 | §5.9 timeline reconstructed from changelog (confirmed) + scan latency overlay | reading per-dimension values from raw `scan` observations | high |
 | informational block masked to the public value set (error/inconsistent→null) | passing raw observation values on the wire | high |
 | GET-only reads + one `POST /check` (BIGINT id); RFC HTTP codes; terminal-poll cacheable | 200-with-error-body; ULID id (unflagged schema change); uncacheable poll | high |
-| `/livez` + `/readyz` outside `/v1` | single `/healthz` | high |
+| `/livez` + `/readyz` at the root (no version segment) | single `/healthz` | high |
 | cache-first + CDN; rate-limit only `POST /check` (per-IP + /64) | rate-limit reads; per-/128 | high |
 | distinct URLs for badge/feeds; `?format=csv`; static datasets + pinned `manifest.json` | Accept-negotiate everything; API-generated bulk; S3; undefined manifest | high |
 | scoped changelog feeds capped to latest-50 recent window | unbounded scoped feed with no `(scope,ts)` index | medium (OPEN-15) |
 | OpenAPI 3.0.3 + oapi-codegen(chi/strict) + openapi-typescript | ogen (3.1, displaces chi); Orval | high |
-| best-effort **structured** changelog import (w/ 08 §3 entity resolution); fresh scans | required byte-equal migration; fully fresh; scan backfill | medium-high (recommend) |
+| **start fresh** — no history import now, revisit later (§9, OPEN-9) | required byte-equal migration; best-effort structured changelog import; scan backfill | high (resolved 2026-07-09) |
 
-**Open decisions flagged for the maintainer:**
+**Resolved (2026-07-09):**
 
-- **OPEN-1** — expose the campaign natural id as raw UUID now; add a human `slug` column
-  later as a nicety? (recommend: raw UUID now, slug later)
-- **OPEN-2** — add a `class_flags` **GIN index** to allow bare cross-table `?flag=` filters,
-  or keep the `scope-required` guardrail? (recommend: guardrail; add GIN only if a flag-first
-  browse UX proves needed)
-- **OPEN-3** — expose observation-level richness (`error`/`inconsistent`) anywhere public, or
-  confirmed-only verdicts + observations in `evidence` only? (recommend: confirmed-only for
-  verdicts; raw observations only inside `evidence`)
-- **OPEN-4** — build the DNS-provider league table (new `ns_host → provider` mapping table)?
-  (flagged as a new data dependency, not round-1)
-- **OPEN-5** — ever expose the `scan_daily_adoption` cagg? If so, label `source:
-  "measurement"` and never reconcile with confirmed `stats_*`.
-- **OPEN-6** — Zenodo DOI minting for dataset snapshots (external dependency). (recommend:
-  ship versioned+checksummed+dictionaried datasets first; DOI later, gated on demand)
-- **OPEN-7** — diff endpoint scope granularity + exact shape; source = changelog (recommended)
-  vs `stats_*` differencing.
-- **OPEN-8** — contact-discovery / notification-toolkit endpoint: live/async vs precomputed,
-  and its own rate-limit/abuse story (one-shot only; no sending infra).
-- **OPEN-9** — the §9 history-import decision itself (recommend: import changelog structured,
-  best-effort, with 08 §3 entity resolution; start scans fresh).
-- **OPEN-10** — confirm that dropping shortuuid breaks previously-shared
-  `/campaign/{22-char}` links, and that this is acceptable under the DNS-flip cutover (the
-  one user-visible external-link break).
-- **OPEN-11** — "State of IPv6" periodic report (feature-research #6): cadence, publication
-  surface (static page vs dataset vs both), API endpoint vs rendered artifact. (recommend:
-  generated artifact + dataset, post-launch)
-- **OPEN-12** — government-mandate compliance tracking (§6.6): a `mandate`/`tags` field on
-  campaigns (nullable `campaign.tags` column or `campaign_tag` table) + a `/mandates` page or
-  `?tag=` filter. Currently unhomed; deferred post-launch. (recommend: cheap tag-on-campaign
-  first step, post-launch)
-- **OPEN-13** — Tranco rank redistribution terms for the bulk datasets (§6.3). Verify Tranco's
-  redistribution/citation license before shipping `rank` in `top100k/top1m/full`; cite the
-  specific list ID/permalink in-band; if restricted, omit/gate `rank` in the bulk export.
-  Constraint-adjacent (the Tranco-only / non-commercial lock).
-- **OPEN-14** — a **dense per-filter rank** (materialized, indexed) to support true "page N of
-  heroes" random access, and/or a materialized indexed `last_change` column to support a
-  "recently changed" sort. Neither is provided by `after_rank` (§4.2) or the current schema
-  (§4.3); flagged if the frontend genuinely needs them.
-- **OPEN-15** — a denormalized `(scope_id, ts)` path for scoped changelog feeds (§5.8) —
-  stamp `country_id`/campaign membership onto `changelog` or add a scoped-feed continuous
-  aggregate — to lift the latest-50 recent-window cap into full pagination. (recommend: keep
-  the cap until a scope feed is demonstrably needed deep)
+- **OPEN-1** — RESOLVED: expose the campaign natural id as the raw UUID (`/campaigns/{uuid}`).
+  A human `slug` remains a possible future nicety.
+- **OPEN-2** — RESOLVED: keep the `scope-required` guardrail for `class_flags`/per-dimension
+  filters; do **not** add a `class_flags` GIN index now.
+- **OPEN-3** — RESOLVED: confirmed-only for public verdicts; raw observation-level richness
+  (`error`/`inconsistent`) is never public, only inside `evidence`.
+- **OPEN-4** — RESOLVED: **yes**, build the DNS-provider league table (new `ns_host →
+  provider` mapping table).
+- **OPEN-5** — RESOLVED: **no**, do not expose the `scan_daily_adoption` cagg.
+- **OPEN-6** — RESOLVED: datasets are versioned + checksummed + dictionaried. DOI/Zenodo not
+  now — DOI later, gated on demand.
+- **OPEN-7** — RESOLVED: **yes**, build the diff endpoint; source = `changelog`.
+- **OPEN-8** — RESOLVED: **no** contact-discovery / notification-toolkit endpoint.
+- **OPEN-9** — RESOLVED: **start fresh** — no history import for now (revisit later). The
+  legacy changelog columns (`legacy_message`/`legacy_status`, the three CHECKs,
+  `field='legacy'`) are dropped from 05-schema, and 08-migration-cutover collapses to a pure
+  DNS-flip cutover with **no data import**. §9 and the §10.4 ledger reflect "start fresh."
+- **OPEN-10** — RESOLVED: accept dropping shortuuid and the resulting break of any
+  previously-shared `/campaign/{22-char}` links (acceptable under the DNS-flip cutover).
+- **OPEN-11** — RESOLVED: the "State of IPv6" report is a generated artifact + dataset,
+  post-launch.
+- **OPEN-12** — RESOLVED: **yes**, add government-mandate compliance tracking — a
+  `tags`/`mandate` capability on campaigns (nullable `campaign.tags` or a `campaign_tag`
+  table) + a `?tag=` filter and a `/mandates` surface. Explicitly wanted.
+- **OPEN-13** — RESOLVED: **yes**, verify Tranco's redistribution/citation terms before
+  shipping `rank` in the bulk datasets, and cite the specific list ID/permalink in-band.
+  (Action item: check the license before dataset release.)
+- **OPEN-14** — RESOLVED: **skip** — no dense per-filter rank and no materialized
+  `last_change` for now.
+- **OPEN-15** — RESOLVED: **skip** — keep the scoped-changelog-feed latest-50 recent-window
+  cap; no denormalized scope path now.
