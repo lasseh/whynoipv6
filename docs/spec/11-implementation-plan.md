@@ -1,5 +1,7 @@
 # 11 — Implementation Plan (the build task graph)
 
+_Status: Round 3.0 — API redesign folded in (docs/api-design-research.md, decisions 2026-07-09): clean root API, keyset pagination, RFC 9457, no legacy compat, no history import._
+
 **Purpose:** This file is the executable task graph that drives the autonomous build of the
 WhyNoIPv6 backend from spec files 01–10. It decomposes design §8's seven phases into
 individually-shippable tasks, each with a stable ID, governing spec sections, dependencies,
@@ -97,8 +99,11 @@ not the implementer:
    are `ON CONFLICT`, codegen is regenerated). A re-dispatched agent must not duplicate rows or
    files.
 8. **Never mutate production.** No task reads or writes the live production database or DNS.
-   Data migration (Phase 4) operates only on a *restored dump* (see 08-migration-cutover.md —
-   Scope, source of truth, and command shape); cutover is the single traffic switch at P4.G.
+   There is **no data import** (start-fresh, OPEN-9): the cutover is a pure DNS flip — a fresh
+   DB is migrated, the crawler builds confirmed state from scratch, the OpenAPI contract tests
+   go green, then DNS/upstream is switched (see 08-migration-cutover.md — DNS-flip cutover).
+   The only non-crawl-derived cutover step is the `top_shame` re-seed (P4.11). Cutover is the
+   single traffic switch at P4.G.
 
 ---
 
@@ -116,10 +121,12 @@ following hold:
 - Every phase gate P0.G … P7.G is green.
 - `make lint`, `make test`, `make test-integration`, `make vulncheck`, and `make build-linux`
   all pass on the default branch (CI green — see 09-ops.md — Makefile, `.golangci.yml`, CI).
-- The parity gates **G1–G7** (see 08-migration-cutover.md — Parity gates) are all green, with
-  **G6** being the frozen production frontend driven by Playwright against the new API with
-  zero visual diffs on the domain list, a detail page, a campaign page, and the changelog feed
-  (and old changelog entries rendering identically).
+- The **OpenAPI contract gate** is green: `make generate` (oapi-codegen `chi-server` +
+  `strict-server`, openapi-typescript, sqlc) leaves a clean tree and the Spectral/vacuum spec
+  lint passes (see 07-api.md — OpenAPI-first workflow; 08-migration-cutover.md — DNS-flip
+  cutover). There is **no** legacy/parity gate: the frozen-frontend byte-parity workstream is
+  dropped (start-fresh, DNS-flip cutover — the rebuilt frontend is co-designed against
+  `openapi.yaml`, not driven against a frozen contract).
 - The config-key registry is complete: every key present in any spec file is registered and
   appears in the startup summary (09-ops.md — Acceptance, item 1), verified by task **P7.4**.
 - The requirement-coverage matrix (Appendix A) has no `UNREACHED` row.
@@ -132,14 +139,17 @@ Tasks that share a phase but have disjoint dependency closures may run concurren
 independent fan-outs the runner should exploit:
 
 - **P0:** P0.1 (module skeleton) must land first; then P0.3 (Makefile), P0.4 (compose),
-  P0.5 (CI), P0.6 (config loader) are mutually independent and parallel; P0.2 (frontend
-  subtree import) is independent of all of them.
+  P0.5 (CI), P0.6 (config loader) are mutually independent and parallel. (P0.2 — the frozen
+  frontend subtree import — is **retired**; the frontend is rebuilt and co-designed against
+  `openapi.yaml`, so nothing in this repo depends on it.)
 - **P1:** P1.1→P1.2→P1.3→P1.4 (migrations) is a chain; P1.5 (sqlc) depends on P1.1; P1.6
   (Canonicalize) is independent and can start at phase open; P1.7/P1.8/P1.9 (Tranco/campaign/
-  geoip) are mutually independent once P1.4+P1.5+P1.6 are done; P1.10 (integration harness)
-  depends only on P1.4; **P1.11 (claim-plan spike)** depends on P1.4 (schema loadable) and
-  **P1.12 (resolver-latency spike)** depends only on P0.4 (compose+Unbound) — both are
-  gate-independent early experiments and should run as soon as their single dependency lands.
+  geoip) are mutually independent once P1.4+P1.5+P1.6 are done; P1.13 (ns_host→provider mapping)
+  and P1.14 (hosting/CDN provider tag) depend on P1.4+P1.5 and run parallel to the ingest
+  fan-out; P1.10 (integration harness) depends only on P1.4; **P1.11 (claim-plan spike)**
+  depends on P1.4 (schema loadable) and **P1.12 (resolver-latency spike)** depends only on P0.4
+  (compose+Unbound) — both are gate-independent early experiments and should run as soon as
+  their single dependency lands.
 - **P2:** P2.1 (checker lift) and P2.4 (classify, pure) are independent roots. P2.2 (consensus)
   depends on P2.1's seam. P2.3 (mapper) depends on P2.1+P2.2. P2.6 (frontier) and P2.10 (lock)
   depend only on schema and run parallel to the engine track. P2.5 (commit) is the join point
@@ -147,9 +157,13 @@ independent fan-outs the runner should exploit:
 - **P3:** P3.1 (Unbound), P3.2 (Grafana), P3.3 (backups), P3.4 (deploy units/nginx) are
   independent deploy-artifact tasks; P3.5 (rate smoothing) and P3.6 (the 1M run) are sequential
   and gated on P3.1–P3.4.
-- **P4:** the API track (P4.1→P4.2→P4.3, P4.4, P4.5) and the migration track (P4.6→{P4.7, P4.8,
-  P4.9, P4.10, P4.11, P4.12}) are independent until the gate. Within the migration track,
-  P4.7/P4.8/P4.9/P4.10/P4.11/P4.12 all depend on P4.6 but are mutually independent.
+- **P4:** OpenAPI-first, so the contract is authored early. P4.1 (baseline) → P4.5 (author
+  `openapi.yaml` + codegen + drift gate) → P4.13 (keyset/cursor engine) are the spine; the
+  endpoint tasks (P4.3 core resources + tier collections, P4.14 changelog/timeline/diff, P4.15
+  feeds/CSV, P4.16 /mandates + tags, P4.4 /ip) all implement against the generated strict
+  interfaces and can fan out once P4.5+P4.13 land. P4.11 (v6ctl shame + top_shame re-seed) is
+  independent of the API track. There is **no migration track** — the P4.6–P4.10, P4.12
+  dump-import tasks are retired (start-fresh, no import).
 - **P5:** P5.1 (registry/sweep) and P5.4 (endpoints) are independent; P5.2 depends on P5.1;
   P5.3 (enable+gold) depends on P5.1 + the classify ladder from P2.4.
 - **P6:** P6.1 (live check), P6.2 (stats), P6.3 (datasets), P6.4 (badge) are mutually
@@ -171,7 +185,7 @@ gate-independent tasks so a design flaw surfaces before the crawler is built.
 | Public-resolver load / consensus latency infeasible | **P1.12** (resolver-latency spike), verified at scale in **P3.5** | **P1.12** — runs the moment P0.4 (compose Unbound) lands |
 | Confirmed-status machine is novel code | Heaviest unit coverage in the repo: **P2.4/P2.5** + the **P2.G1** commit-machine table gate | — |
 | `miekg/dns` v2 is newer code in a load-bearing spot | **P2.1** pins it; **P2.G1/P2.G2** + the P3 soak are the check; v1-API revert is the mechanical escape hatch (design OPEN-9) | — |
-| Adoption-number shifts at cutover look like bugs | Dual-run diffing at **P4.G** (gates G2/G3) + the methodology-v2 note (design OPEN-6) | — |
+| Cold classification start (no import): every domain sits at `unknown` until N crawl cycles confirm each dimension, so day-1 hero/adoption counts read low | Accepted consciously (start-fresh, OPEN-9); flagged so the day-1 dashboard's low hero count is expected, not a bug (08-migration-cutover.md — DNS-flip cutover; verified at **P4.G**) | — |
 
 **P1.11 and P1.12 are risk gates, not optional spikes:** if P1.11 cannot show an index scan on
 `idx_domain_due` under `50 ms` at 1M rows, or P1.12 measures per-provider latency that makes
@@ -196,14 +210,12 @@ design intends.
 - **Acceptance:** `go build ./...` succeeds; `go vet ./...` clean; directory tree matches
   design §6 (a `find backend -type d` diff against the layout has no missing package dir).
 
-### P0.2 — Import frozen frontend as a subtree
-- **Governs:** design §8 Phase 0; brief §2.5 (monorepo); reference repo `whynoipv6-web`.
-- **Depends:** —
-- **Deliverables:** `frontend/` — `whynoipv6-web` imported with history preserved
-  (`git subtree add`).
-- **Acceptance:** `frontend/package.json` present; `git log --oneline -- frontend/ | wc -l`
-  is `> 1` (history preserved, not a flat copy); the frontend builds unchanged
-  (`cd frontend && npm ci && npm run build` exits green).
+### P0.2 — RETIRED (was: import frozen frontend as a subtree)
+- **Retired in Round 3.0.** The frozen-frontend compatibility constraint is dropped: the
+  frontend is **rebuilt and co-designed against `openapi.yaml`** (07-api.md — OpenAPI-first
+  workflow), not imported frozen and kept byte-compatible. No task depends on a frozen
+  `frontend/` subtree, and the openapi-typescript bindings (P4.5) are the frontend's typed
+  data layer. The ID is retired, not recycled.
 
 ### P0.3 — Makefile + `.golangci.yml`
 - **Governs:** see 09-ops.md — Makefile, `.golangci.yml`, CI (§14.1, §14.2).
@@ -251,7 +263,7 @@ design intends.
 
 ### P0.G — Phase-0 gate
 - **Governs:** design §8 Phase 0 verify.
-- **Depends:** P0.1, P0.2, P0.3, P0.4, P0.5, P0.6
+- **Depends:** P0.1, P0.3, P0.4, P0.5, P0.6
 - **Acceptance:** `make build` green (three binaries) **and** `make compose-up` green (all
   services healthy) **and** `make lint` + `make test` green. Record the `docker compose ps`
   output to `docs/gates/P0.txt`.
@@ -270,10 +282,21 @@ early risk experiments.
 - **Depends:** P0.1
 - **Deliverables:** `db/migrations/000001_base_schema.up.sql`, `…down.sql` (extensions, all
   enums, all tables, indexes incl. `idx_domain_due`, storage parameters, CHECK constraints).
+  Reflects the Round-3.0 schema: **no** `changelog.legacy_message`/`legacy_status` columns and
+  **no** `changelog_legacy_chk`/`changelog_old_value_chk`/`changelog_new_value_chk` CHECKs
+  (`old_value`/`new_value` are plain `NOT NULL`); **no** `'legacy'` value in the
+  `changelog.field` domain; **no** `created_by = 'import'` enum value. Includes the new
+  pivots: `domain.tld`, the DNS-provider reference + `ns_host → provider` mapping table, the
+  hosting/CDN provider tag, `campaign.tags` (or `campaign_tag` table), and the stats-rollup
+  `generated_at TIMESTAMPTZ` (see 05-schema.md — drop changelog legacy columns; add pivots +
+  tags).
 - **Acceptance:** migration applies on a fresh `timescale/timescaledb:latest-pg18` container;
-  `\d domain` / `\d changelog` etc. show every column in 05-schema §12's cross-check inventory;
-  the native-changelog `old_value NOT NULL` and legacy-row `legacy_message NOT NULL` CHECKs
-  reject bad inserts (05-schema §13.6); `.down.sql` drops cleanly.
+  `\d domain` / `\d changelog` etc. show every column in 05-schema §12's cross-check inventory
+  (incl. `domain.tld` and the provider tag columns, and **without** the dropped `legacy_*`
+  columns); `changelog.old_value`/`new_value` are `NOT NULL` and a NULL insert is rejected;
+  the `ns_host → provider` mapping table and `campaign` tagging surface exist; a bad-enum
+  insert on `changelog.field` (`'legacy'`) and on `created_by` (`'import'`) is rejected
+  (values removed); `.down.sql` drops cleanly.
 
 ### P1.2 — Migration 000002 (TimescaleDB)
 - **Governs:** see 05-schema.md — Migration 000002 — hypertables, columnstore, retention,
@@ -321,10 +344,14 @@ early risk experiments.
 - **Governs:** see 06-ingest.md — Canonicalize(host) — the single canonicalization rule (§1).
 - **Depends:** P0.1
 - **Deliverables:** `internal/domain/host.go` (the one `Canonicalize` function — lowercasing,
-  IDN→punycode, scheme/port/path rejection, eTLD+1 derivation).
+  IDN→punycode, scheme/port/path rejection, eTLD+1 derivation) plus the sibling **eTLD-suffix
+  (`tld`) extractor** (publicsuffix, e.g. `com`/`no`/`gov`) that feeds the `domain.tld` pivot
+  written at ingest (see 05-schema.md — add pivots + tags; 06-ingest.md — Canonicalize).
 - **Acceptance:** `TestCanonicalize` passes the full §2 vector table (see 10-testing.md —
-  Canonicalize(host) vectors); lint grep gate: no `strings.ToLower` on hostnames anywhere
-  outside `internal/domain/host.go` (06-ingest §9.1, enforced by lint per 10-testing §11).
+  Canonicalize(host) vectors), including the `tld` extraction cases (multi-label suffixes like
+  `co.uk` map to the correct registry suffix); lint grep gate: no `strings.ToLower` on
+  hostnames anywhere outside `internal/domain/host.go` (06-ingest §9.1, enforced by lint per
+  10-testing §11).
 
 ### P1.7 — Tranco ingester + `v6ctl tranco`
 - **Governs:** see 06-ingest.md — Tranco import (§2); see 05-schema.md — Ephemeral DDL — the
@@ -335,7 +362,8 @@ early risk experiments.
 - **Acceptance:** `TestTrancoImport` integration case (behind `integration` tag) on a fixture
   CSV with CRLF, `_wildcard_.ph`, mixed-case duplicates, and an IDN line yields correct
   `line_count/rejected_count/duplicate_count/imported_count/delisted`, lowest-rank-wins fold,
-  24h-spread `next_check_at` (06-ingest §9.2); re-import of the same list ID is a no-op and
+  24h-spread `next_check_at`, and a populated `domain.tld` on every inserted apex (06-ingest
+  §9.2); re-import of the same list ID is a no-op and
   `--force` re-imports (§9.3); a `>2%` delist fixture aborts with `aborted=true` and leaves
   ranks unchanged, `--force` applies (§9.4); the re-entry cases of §9.5 hold. Fixtures:
   10-testing.md.
@@ -345,15 +373,17 @@ early risk experiments.
   04-lifecycle-scheduling.md — Delist lifecycle & re-entry semantics (membership re-entry).
 - **Depends:** P1.4, P1.5, P1.6
 - **Deliverables:** `internal/campaign/` (YAML parse tolerating the format variance, idempotent
-  `Sync`, uuid write-back plumbing); `cmd/v6ctl/` verb `campaign sync`
-  (`--adopt-unknown-uuids`).
+  `Sync`, uuid write-back plumbing, **`tags`/`mandate` parsing into `campaign.tags`** —
+  OPEN-12, see 05-schema.md — Campaign mandate tagging; 06-ingest.md — Campaign repo sync);
+  `cmd/v6ctl/` verb `campaign sync` (`--adopt-unknown-uuids`).
 - **Acceptance:** `TestCampaignSync` integration case covers new-file-without-uuid (insert +
   write-back), rename (source_file update), deletion (soft-disable via uuid-set diff),
   re-appearance (re-enable, no membership churn), duplicate uuid across files (source_file
   match wins), unknown uuid rejected without the flag, subdomain entry (parent auto-created,
-  `created_by='parent_link'`, `parent_id` set), and the membership re-entry rule (06-ingest
-  §9.6); a full run over the 28 real campaign YAMLs with `--adopt-unknown-uuids` imports
-  ~30k entities with correct parents. Fixtures: 10-testing.md.
+  `created_by='parent_link'`, `parent_id` set), the membership re-entry rule (06-ingest §9.6),
+  **and `tags` from a tagged campaign YAML landing in `campaign.tags` (empty/NULL when
+  untagged, updated idempotently on re-sync)**; a full run over the 28 real campaign YAMLs with
+  `--adopt-unknown-uuids` imports ~30k entities with correct parents. Fixtures: 10-testing.md.
 
 ### P1.9 — GeoIP / ASN attribution
 - **Governs:** see 06-ingest.md — GeoIP / ASN attribution (§6); design OPEN-5 (ccTLD
@@ -365,6 +395,33 @@ early risk experiments.
   `asn_id/country_id` untouched, insert-time attribution = ccTLD-or-sentinel country + sentinel
   ASN, and sentinel ids resolved by lookup not literals (06-ingest §9.10). Fixtures:
   10-testing.md.
+
+### P1.13 — DNS-provider mapping (`ns_host → provider`) + attribution
+- **Governs:** see 06-ingest.md — DNS-provider mapping; see 05-schema.md — add pivots + tags
+  (`ns_host → provider` mapping table + `domain.dns_provider_id`); design OPEN-4 (RESOLVED
+  YES), §5.6 (DNS-provider league table), §5.3 (additional per-domain attributes).
+- **Depends:** P1.4, P1.5
+- **Deliverables:** `internal/ingest/provider.go` (the seeded `ns_host → provider` mapping +
+  `ProviderForNSHost` lookup, longest-suffix match) and the read-only **attribution writer**
+  that stamps `domain.dns_provider_id` from a domain's observed NS hosts. This is an
+  attribution step (like GeoIP, P1.9); it reads NS observations read-only and **never** touches
+  the commit/trust machine.
+- **Acceptance:** `TestProviderMapping` covers longest-suffix precedence, unknown-NS →
+  NULL/sentinel provider, and multi-NS agreement/disagreement handling per 06-ingest; the
+  stamping writer sets `domain.dns_provider_id` without writing any `scan`/`changelog`/
+  `*_status` column (grep/read-back assertion). Fixtures: 10-testing.md.
+
+### P1.14 — Hosting/CDN provider tag
+- **Governs:** see 06-ingest.md — hosting/CDN provider tag; see 05-schema.md — add pivots +
+  tags (hosting/CDN provider column); design §5.3 (additional per-domain attributes), §5.6.
+- **Depends:** P1.4, P1.5, P1.9
+- **Deliverables:** `internal/ingest/hosting.go` (normalize a hosting/CDN provider tag from the
+  checker's CNAME-chain CDN detection + the resolved IP's ASN — data already collected) and the
+  read-only writer that stamps the `domain` hosting/CDN provider column. Attribution-only; does
+  not touch the commit/trust machine.
+- **Acceptance:** `TestHostingTag` derives the correct normalized provider for a CNAME-CDN
+  fixture and for an ASN-only fixture, `NULL`/unknown when neither resolves, and writes no
+  confirmed-status column (read-back assertion). Fixtures: 10-testing.md.
 
 ### P1.10 — Integration harness (testcontainers)
 - **Governs:** see 10-testing.md — Integration harness (testcontainers + TimescaleDB) (§9);
@@ -407,10 +464,13 @@ early risk experiments.
 
 ### P1.G — Phase-1 gate
 - **Governs:** design §8 Phase 1 verify.
-- **Depends:** P1.1, P1.2, P1.3, P1.4, P1.5, P1.6, P1.7, P1.8, P1.9, P1.10, P1.11, P1.12
+- **Depends:** P1.1, P1.2, P1.3, P1.4, P1.5, P1.6, P1.7, P1.8, P1.9, P1.10, P1.11, P1.12,
+  P1.13, P1.14
 - **Acceptance:** after a full Tranco import + campaign sync on the integration DB:
   `SELECT count(*) FROM domain WHERE kind='apex' AND rank IS NOT NULL` ≈ 1,000,000;
-  `SELECT count(*) FROM campaign_domain` ≈ the sum across the 28 YAMLs; spot-check that
+  `SELECT count(*) FROM domain WHERE tld IS NOT NULL` ≈ the same (every ranked apex has a
+  derived `tld`); `SELECT count(*) FROM campaign_domain` ≈ the sum across the 28 YAMLs; a
+  tagged campaign YAML lands non-NULL `campaign.tags`; spot-check that
   subdomain entities have non-NULL `parent_id` and `created_by IN ('parent_link','campaign')`;
   re-running both imports changes zero rows (idempotency); junk-rejection counts are non-zero
   and logged; `make test-integration` green; P1.11 and P1.12 reports checked in and green.
@@ -541,7 +601,10 @@ repo plus the lease-fence chaos test.
 - **Depends:** P2.5, P2.8, P1.7, P1.8
 - **Deliverables:** `internal/crawler/sweep.go` (S1–S5 lifecycle sweep = tick step 1),
   `internal/crawler/tick.go` (daily-tick coordinator: canonical step order, per-step failure
-  containment, invokes Tranco import + campaign sync from P1.7/P1.8).
+  containment, invokes Tranco import + campaign sync from P1.7/P1.8). The stats-rollup step
+  stamps the `generated_at TIMESTAMPTZ` freshness signal on the daily stats row (the
+  deterministic source for the API envelope `meta.as_of` — see 05-schema.md — add pivots +
+  tags; 07-api.md — envelope + list-response shape).
 - **Acceptance:** `TestSweep` (integration) verifies S1–S5 in isolation and as a sequence:
   monotonic grace stamping, live-check rows skipping grace, disabled campaigns not pinning
   members, S2 re-enabling a delisted member on campaign re-enable, and a same-day second run
@@ -604,7 +667,7 @@ repo plus the lease-fence chaos test.
 - **Deliverables:** `docs/gates/phase2-parity-diff.md` (recorded divergence classes).
 - **Acceptance:** a sample run of 10k mixed-rank domains, results diffed against production's
   current statuses; every divergence class is investigated and recorded as either an expected
-  deviation (co.uk multi-label-TLD NS fix; stricter conn-based `v6_only`) or a defect to fix.
+  deviation (co.uk multi-label-TLD NS fix; the stricter conn-based connectivity definition) or a defect to fix.
   Gate is green only when no unexplained divergence class remains.
 
 ### P2.G3 — Gate: lease-fence chaos + no-double-changelog
@@ -713,182 +776,259 @@ declares the crawler operational.
 
 ---
 
-## Phase 4 — API + data migration + cutover
+## Phase 4 — API + DNS-flip cutover
 
-**Goal:** the full compatibility API surface plus `/ip`, the one-time data migration from a
-restored production dump, and the DNS cutover — behind the seven parity gates. Produces the
-shippable replacement.
+**Goal:** the clean, OpenAPI-first read API at the root of `api.whynoipv6.com` — the **real**
+confirmed model on the wire (per-dimension `{value,since}` status objects, `classification`,
+`gold`, `class_flags[]`), keyset/cursor pagination, RFC 9457 `problem+json` errors, the short
+tier collections, the changelog/timeline/diff surface, change feeds + CSV, the DNS-provider
+league table, `/mandates`, and the redesigned `/ip` — then a **pure DNS-flip cutover** with
+**no data import** (start-fresh, OPEN-9) plus the `top_shame` re-seed. Produces the shippable
+replacement. There is no legacy/compat surface and no production-parity gate; the drift gate is
+the OpenAPI contract.
 
 ### P4.1 — API server baseline
-- **Governs:** see 07-api.md — Server baseline (§1), Cross-cutting conventions (§2),
-  Acceptance (§9.10, §9.7).
+- **Governs:** see 07-api.md — server baseline, cross-cutting conventions (envelope,
+  `snake_case`, RFC 9457 errors, HTTP semantics, health, caching by endpoint class).
 - **Depends:** P1.5
-- **Deliverables:** `internal/api/router.go` (chi v5 router + middleware stack), `internal/api/
-  http.go` (pagination/error helpers), the `internal/service/` use-case layer skeleton, and
-  `cmd/api/main.go` wiring (timeouts, CORS, the NoCache header, `{"message":"ok"}` root).
-- **Acceptance:** `TestBaseline` — every JSON endpoint carries the NoCache header; CORS/timeout
-  config applies; the §1.8 baseline list passes (07 §9.10). Disabled entities are invisible
-  everywhere (07 §9.7) is asserted per-endpoint as those endpoints land.
+- **Deliverables:** `internal/api/router.go` (chi v5 router + middleware stack); `internal/api/
+  http.go` (the `{items,page,meta}` / `{points,meta}` envelope helpers; the RFC 9457
+  `application/problem+json` writer + the fixed `problem` type-URI set incl. the
+  `validation-error`/`scope-required` split; the endpoint-class `Cache-Control` +
+  deterministic `ETag`-from-crawl-`generation` helpers); `internal/api/health.go` (`/livez` +
+  `/readyz` at the root, outside the OpenAPI + CDN); the `internal/service/` use-case layer
+  skeleton; `cmd/api/main.go` wiring (timeouts, CORS, `{"message":"ok"}` root).
+- **Acceptance:** `TestBaseline` — every 4xx/5xx is `application/problem+json` with `status`
+  equal to the HTTP status line; zero-result reads are `200` with an empty `items` array (never
+  a bug-compat 404); `/livez`/`/readyz` return the z-page split and are `no-store`; the
+  endpoint-class cache table (07-api.md — caching) is applied and `ETag` derives deterministically
+  from the crawl `generation` (`= YYYYMMDD` of `max(stats_global_daily.day)`). Disabled entities
+  are invisible in every collection (asserted per-endpoint as those endpoints land). Fixtures:
+  10-testing.md.
 
-### P4.2 — Legacy serialization helpers + shortuuid codec
-- **Governs:** see 07-api.md — Cross-cutting conventions (§2.7 shortuuid, §2.8 R1–R5 legacy
-  serialization), Acceptance (§9.3, §9.4, §9.5).
-- **Depends:** P4.1, P2.4
-- **Deliverables:** `internal/api/legacy.go` (`legacyStatus`, timestamp mapping,
-  `renderChangelog`), `internal/api/uuid.go` (shortuuid codec).
-- **Acceptance:** `TestShortUUID` round-trips both directions, encode output exactly 22 chars,
-  the two negative vectors 404 with `{"error":"Invalid UUID"}` (07 §9.4); `TestLegacyStatus`
-  proves `legacyStatus(NULL)=legacyStatus(not_applicable)="no_record"` (R1) and the
-  error/inconsistent exclusion (R2) — 07 §9.3; `TestRenderChangelog` is exercised for all 16
-  table rows + both `field='legacy'` passthrough branches and the §3.12 coverage filter
-  excludes `conn`/`resources`/`not_applicable` (07 §9.5); the lint grep gate forbids
-  `not_applicable`/`error`/`inconsistent`/`unknown` literals from any legacy serializer
-  (10-testing §11). Fixtures: 10-testing.md — API serialization vectors.
+### P4.2 — RETIRED (was: legacy serialization helpers + shortuuid codec)
+- **Retired in Round 3.0.** The legacy compatibility surface is deleted (07-api.md —
+  deletions): no `legacyStatus` 3-string projection, no `renderChangelog` 16-row message ladder
+  or reverse message-map, no shortuuid codec, no `{"data":[…]}` search envelope, no zero-time
+  NULL encoding. The API serves the **real** 4-value enum via `{value,since}` status objects,
+  structured changelog rows, raw UUIDs, and the single `{items,page,meta}` envelope. The only
+  retained legacy invariant — `error`/`inconsistent` never reaching public output — is enforced
+  natively in the resource serializers (P4.3) and the masking rule, not a legacy helper. The ID
+  is retired, not recycled.
 
-### P4.3 — Legacy endpoints
-- **Governs:** see 07-api.md — Legacy endpoints (§3), Acceptance (§9.1, §9.2, §9.5, §9.7).
-- **Depends:** P4.2
-- **Deliverables:** `internal/api/{domain,country,changelog,campaign,metric,misc}.go` — every
-  endpoint of 07 §3: `GET /`, `/domain`, `/domain/heroes`, `/domain/topsinner`,
-  `/domain/{domain}`, `/domain/{domain}/log`, `/domain/search/{q}`, `/country`,
-  `/country/{code}`, `/country/{code}/heroes`, `/country/{code}/sinners`, all five
-  `/changelog*` feeds, `/campaign`, `/campaign/{uuid}`, `/campaign/{uuid}/{domain}`,
-  `/campaign/{uuid}/{domain}/log`, `/campaign/search/{q}`, `/metric/overview`, `/metric/asn`,
-  `/metric/asn/search/{q}`; their read queries in `db/query/` (the three search endpoints use
-  the `{"data":[...]}` envelope per 07 §2.2/§3.8/§3.16).
-- **Acceptance:** `Test*Parity` golden replay per §3 endpoint compares JSON-equal against a
-  recorded production fixture (07 §9.1); `TestZeroResult` covers every §2.11 404-vs-`[]` row
-  with byte-exact body (07 §9.2); `TestVisibility` — disabled domains/campaigns and rank-NULL
-  rows are absent from lists/feeds/search but resolve on entity endpoints (07 §9.7). Fixtures:
-  10-testing.md — Parity-fixture plan.
+### P4.3 — Core resource endpoints + tier collections
+- **Governs:** see 07-api.md — the resource model (domain status objects, summary/detail, the
+  ranked tier lists, country, asn/provider, campaign, resource dependencies), resource naming,
+  filter/sort grammar; design §5, §3.2.
+- **Depends:** P4.5, P4.13, P2.4, P1.13
+- **Deliverables:** `internal/api/{domain,country,asn,campaign,resource,provider}.go` and their
+  `db/query/` reads for the one clean resource set (implemented against the P4.5 generated
+  strict interfaces; each endpoint's schema is added to `openapi.yaml` and the drift gate stays
+  green):
+  - `GET /domains` — the general filterable leaderboard
+    (`?class=`/`?country=`/`?asn=`/`?tld=`/`?provider=`/`?gold=`/`?rank_min=`/`?rank_max=`/`?q=`/
+    `?sort=`/`?fields=`/`?format=`, with the **`scope-required` guardrail** on bare `flag=`/
+    per-dimension status filters) — and `GET /domains/{host}` detail (the six `{value,since}`
+    status objects, the **masked** `informational` block, `?include=evidence`);
+  - the short **tier collection paths** `GET /heroes` `GET /sinners` `GET /gold` `GET /almost`
+    `GET /mail` — presets over `/domains` sharing the same keyset pagination + `?country=`/
+    `?asn=` composition;
+  - `GET /countries` + `GET /countries/{code}` + `GET /countries/{code}/domains`;
+  - `GET /asns` + `GET /asns/{number}` + `GET /asns/{number}/domains`, plus the **DNS-provider
+    league table** `GET /providers` + `GET /providers/{id}/domains` (OPEN-4, backed by the P1.13
+    `ns_host → provider` mapping);
+  - `GET /campaigns` + `GET /campaigns/{uuid}` (composite: metadata + paged members + adoption)
+    + `GET /campaigns/{uuid}/domains`, incl. the `?tag=` filter (OPEN-12);
+  - `GET /resources/{host}` + the resource-dependency sub-collections owned by P5.4;
+  - `GET /shame` (bounded editorial list, exact `meta.count`).
+- **Acceptance:** `TestDomains`/`TestTiers`/`TestCountries`/`TestAsns`/`TestProviders`/
+  `TestCampaigns` — status objects carry the real 4-value enum **+ JSON `null`** (no
+  `legacyStatus` collapse, no `0001-01-01` zero-time); `rank` is `int`-or-`null` (never the
+  legacy `0`); each tier path returns the identical row shape + pagination as its `?class=`
+  equivalent (`/sinners?country=no` ≡ `/domains?class=sinner&country=no`); `?tld=`/`?provider=`
+  filter and the `422 scope-required` on a bare `flag=`/`mx=` hold; the `informational` block
+  masks `error`/`inconsistent`→`null` and `partial` to `null` except on `ptr`/`parity`;
+  `TestVisibility` — disabled entities and rank-NULL rows are absent from the top-level
+  leaderboard but resolve on entity + sub-collection endpoints (07-api.md — visibility).
+  Fixtures: 10-testing.md — API serialization vectors.
 
-### P4.4 — `/ip` endpoint
-- **Governs:** see 07-api.md — New endpoints (§4, the `/ip` client-IP echo).
+### P4.4 — `/ip` client-IP echo
+- **Governs:** see 07-api.md — client-IP echo; design §5.12.
 - **Depends:** P4.1
-- **Deliverables:** the `/ip` handler in `internal/api/misc.go`.
-- **Acceptance:** `TestIPParity` — golden parity against the production `/ip` response shape
-  (07 §9.1 scope). Verified over IPv6 and IPv4 client addresses.
+- **Deliverables:** the redesigned `/ip` handler in `internal/api/misc.go`.
+- **Acceptance:** `TestIP` — `GET /ip` returns the object `{ "ip": "<bracketless>",
+  "family": "ipv4|ipv6" }` with `family` derived server-side; `Cache-Control: no-store`;
+  verified over IPv6 and IPv4 client addresses.
 
-### P4.5 — OpenAPI spec + codegen
-- **Governs:** see 07-api.md — OpenAPI (spec-first) (§8); see 09-ops.md — Makefile (`generate`
-  staleness gate).
-- **Depends:** P4.3, P4.4
-- **Deliverables:** `openapi/openapi.yaml` (spec-first source for every endpoint),
-  `openapi/oapi-codegen.yaml`, `internal/api/gen/` (committed oapi-codegen output),
-  `frontend/src/api/schema.ts` (openapi-typescript output).
-- **Acceptance:** `make generate` produces sqlc + oapi-codegen + openapi-typescript output and
-  leaves a clean tree (`git diff --exit-code` green — the CI staleness gate); the generated TS
-  types match the frozen frontend's expectations (frontend still builds — P0.2 acceptance
-  re-run green).
+### P4.5 — OpenAPI 3.0.3 contract + codegen + drift gate
+- **Governs:** see 07-api.md — OpenAPI-first workflow; see 09-ops.md — Makefile (`generate`
+  staleness gate + Spectral/vacuum lint); design §8.
+- **Depends:** P4.1
+- **Deliverables:** `openapi.yaml` (hand-authored OpenAPI **3.0.3** at the repo root — the
+  single source of truth, `nullable: true` for the `null` status values). It establishes the
+  reusable **`components`**: the `{items,page,meta}` / `{points,meta}` envelopes, the keyset
+  cursor grammar, the RFC 9457 `problem` shapes (incl. `scope-required`), the `manifest.json`
+  schema (§6.3), and the badge/feed representations — plus the initial resource paths. Each
+  later endpoint task **extends** `openapi.yaml` for its paths and re-runs the drift gate;
+  `oapi-codegen.yaml`; `internal/api/gen/` (committed oapi-codegen **`chi-server` +
+  `strict-server`** output); the openapi-typescript output path (the rebuilt frontend's typed
+  data layer); the Spectral/vacuum ruleset (enforcing `snake_case`, the two envelopes, the
+  `problem+json` schema).
+- **Acceptance:** `make generate` runs oapi-codegen + openapi-typescript + sqlc and leaves a
+  clean tree (`git diff --exit-code` green — the CI drift gate); the Spectral/vacuum spec lint
+  passes; `go build ./internal/api/gen/...` compiles the generated strict interface + types
+  (endpoint handlers implement it in the later endpoint tasks, each re-running the drift gate
+  green). **This is the OpenAPI contract gate that replaces the retired production-parity
+  gates** (07/10 — no `Test*Parity` golden replay, no frozen-frontend E2E).
 
-### P4.6 — Migrate command core + preconditions + entity resolution
-- **Governs:** see 08-migration-cutover.md — Scope, source of truth, command shape (§1),
-  Preconditions (§2), Entity resolution & canonicalization (§3).
-- **Depends:** P1.7, P1.8, P4.2
-- **Deliverables:** `cmd/v6ctl/migrate_import.go` (the `migrate-import` cobra command extended with the
-  import sub-phases, flags incl. `--dry-run`/`--history-window`/`--verify-changelog`,
-  advisory-lock acquisition); `internal/migrate/resolve.go` (host→id map via `Canonicalize` +
-  lookup + §3.4 create-missing). Config keys `migrate.source_dsn`, `migrate.history_window`
-  (registry: 09-ops.md).
-- **Acceptance:** `TestMigratePreconditions` — the hard startup gates of §2 fail fast when
-  unmet; `TestResolveHostMap` — every production host resolves to a new `domain.id`, unresolved
-  hosts create entities with `created_by='import'` (08 §3.4). Runs only against a restored dump
-  DSN, never production (contract rule 8).
+### P4.6 — RETIRED (was: migrate command core + preconditions + entity resolution)
+- **Retired in Round 3.0.** No data import (start-fresh, OPEN-9): the `cmd/v6ctl/migrate_import.go`
+  command, the `internal/migrate/resolve.go` entity-resolution/orphan-create step, and the
+  `migrate.source_dsn`/`migrate.history_window` config keys are all deleted (08-migration-cutover.md
+  — DNS-flip cutover; 09-ops.md — config registry drops the importer keys). The cutover is a pure
+  DNS flip (P4.G); the only non-crawl-derived step is the `top_shame` re-seed (P4.11). The ID is
+  retired, not recycled.
 
-### P4.7 — Seed confirmed statuses + `*_since`
-- **Governs:** see 08-migration-cutover.md — Seed confirmed statuses & `*_since` mapping (§4).
-- **Depends:** P4.6
-- **Deliverables:** `internal/migrate/seed.go` (the §4 seed UPDATE of `base/www/ns/mx` +
-  `*_since` from production `ts_*`, `conn`/`resources` left NULL; §4.4 classification recompute
-  calling the shared `classify()`).
-- **Acceptance:** `TestSeedStatuses` (integration): after seeding, `domain` confirmed columns
-  match the dump's mapped values, `conn`/`resources` are NULL, and classification recompute
-  reproduces `classify()` for the seeded cross-section (08 §4).
+### P4.7 — RETIRED (was: seed confirmed statuses + `*_since`)
+- **Retired in Round 3.0.** No import means **no status seed** from a dump: the crawler builds
+  confirmed state from scratch. The consequence is a **cold classification start** — every domain
+  sits at `unknown` until N consecutive crawl cycles confirm each dimension — consciously
+  accepted and flagged (§5 risk register; 08-migration-cutover.md — DNS-flip cutover). The ID is
+  retired, not recycled.
 
-### P4.8 — Campaign + campaign_domain migration
-- **Governs:** see 08-migration-cutover.md — Campaign & `campaign_domain` migration (§5).
-- **Depends:** P4.6
-- **Deliverables:** `internal/migrate/` campaign import (identity + shortuuid preservation).
-- **Acceptance:** `TestMigrateCampaigns` (integration): campaign identities and shortuuid tokens
-  are preserved from the dump; membership re-derives by join (08 §5).
+### P4.8 — RETIRED (was: campaign + campaign_domain migration)
+- **Retired in Round 3.0.** No import: campaigns and members come **fresh** from the campaign
+  repo sync (P1.8, keyed by raw UUID), not migrated from a dump; shortuuid preservation is moot
+  (shortuuid is deleted). The ID is retired, not recycled.
 
-### P4.9 — Changelog history transform (credibility archive)
-- **Governs:** see 08-migration-cutover.md — Changelog history transform (§6); design §8
-  "Changelog history import transform".
-- **Depends:** P4.6, P4.2
-- **Deliverables:** `internal/migrate/changelog.go` (reverse-map by prefix longest/www-first,
-  canonical-ambiguous-old rule, cross-check against `ipv6_status`, legacy escape path,
-  PK-collision +1µs bump, and the `--verify-changelog` byte-equality gate reusing
-  `internal/api.renderChangelog`).
-- **Acceptance:** **Gate G1** — `v6ctl migrate-import --verify-changelog`: for every imported
-  `changelog` row, `renderChangelog(...)` (or the legacy passthrough) byte-equals the original
-  production `(message, ipv6_status)`; `TestChangelogTransform` covers the reverse-map table,
-  the ambiguous-old canonicalization, the legacy escape, and PK-collision handling (08 §6).
+### P4.9 — RETIRED (was: changelog history transform / credibility archive)
+- **Retired in Round 3.0.** No import: the `changelog` hypertable begins **empty** and fills
+  over the months following launch as the fresh crawl accumulates confirmed transitions. The
+  reverse-map transform, the `--verify-changelog` byte-equality gate (old **G1**), and
+  `internal/migrate/changelog.go` are all deleted (08-migration-cutover.md — DNS-flip cutover;
+  the changelog-sourced features §5.8/§5.9/§6.4/§6.6 launch empty). The ID is retired, not
+  recycled.
 
-### P4.10 — Per-scan history import (trailing 90 days)
-- **Governs:** see 08-migration-cutover.md — Per-scan history import (§7); design OPEN-7.
-- **Depends:** P4.6, P4.7
-- **Deliverables:** `internal/migrate/history.go` (batched, idempotent per-scan import; window
-  from `migrate.history_window`, default `2160h`).
-- **Acceptance:** `TestHistoryImport` (integration): the trailing-window scans import into the
-  hypertable, re-run is idempotent (no duplicate rows), and `--history-window` bounds the
-  imported set (08 §7).
+### P4.10 — RETIRED (was: per-scan history import, trailing 90 days)
+- **Retired in Round 3.0.** No import: the `scan` hypertable begins **empty**; the §5.9 latency
+  overlay fills over ~90 days as fresh scans accumulate. `internal/migrate/history.go` and the
+  `migrate.history_window` key are deleted. The ID is retired, not recycled.
 
-### P4.11 — `top_shame` import + `v6ctl shame` CLI
-- **Governs:** see 08-migration-cutover.md — `top_shame` import (§8); design §6 (`v6ctl shame`
-  add|remove|list); see 06-ingest.md — v6ctl shame (§7).
-- **Depends:** P4.6, P1.7
-- **Deliverables:** `internal/migrate/shame.go` (import from the retained dump's live
-  `top_shame`, `ON CONFLICT DO NOTHING`, missing-host warn-and-skip, no pruning);
-  `cmd/v6ctl/` verbs `shame add|remove|list`.
-- **Acceptance:** `TestShameImport` (integration): the 12 dump hosts resolve and insert; a
-  host that fell out of Tranco is logged and skipped without failing the migration; `shame add`
-  rejects non-apex/rank-NULL/disabled hosts (exit 1), is idempotent, and writes no changelog;
-  `shame list` shows the computed `visible` column (design §6 shame semantics; 08 §8).
+### P4.11 — `top_shame` re-seed + `v6ctl shame` CLI
+- **Governs:** see 08-migration-cutover.md — DNS-flip cutover (the `top_shame` re-seed step);
+  see 06-ingest.md — v6ctl shame; design §6 (`v6ctl shame add|remove|list`), §5.4 (`/shame`).
+- **Depends:** P1.7
+- **Deliverables:** `cmd/v6ctl/` verbs `shame add|remove|list`. The ~12 curated editorial shame
+  hosts have **no crawl-derivable source**, so they are **re-entered via the CLI at cutover**
+  (there is no dump import — the old `internal/migrate/shame.go` importer is deleted).
+- **Acceptance:** `TestShameCLI` (integration): `shame add` rejects non-apex/rank-NULL/disabled
+  hosts (exit 1), is idempotent, and writes no changelog; `shame list` shows the computed
+  `visible` column; `shame remove` deletes the row. The re-seed is a **required** cutover step —
+  `/shame` (P4.3) is empty at launch otherwise (08-migration-cutover.md — DNS-flip cutover).
 
-### P4.12 — Day-0 stats snapshot
-- **Governs:** see 08-migration-cutover.md — Day-0 stats snapshot (§9).
-- **Depends:** P4.7, P4.8
-- **Deliverables:** `internal/migrate/snapshot.go` (invokes the daily-tick stats-snapshot
-  function to produce the day-0 rows).
-- **Acceptance:** `TestDay0Snapshot` (integration): after seed + campaign import, the snapshot
-  populates the `stats_*` tables for day 0, consistent with the public list membership (08 §9).
+### P4.12 — RETIRED (was: day-0 stats snapshot from dump)
+- **Retired in Round 3.0.** No import: the day-0 `stats_*` seed row ships in migration 000003
+  (P1.3) and the daily tick's stats-rollup step (P2.9) produces subsequent rows from the fresh
+  crawl. `internal/migrate/snapshot.go` is deleted. The ID is retired, not recycled.
 
-### P4.G — Phase-4 gate (parity gates G1–G7 + cutover)
-- **Governs:** see 08-migration-cutover.md — Parity gates (§11), Cutover runbook (§10); see
-  07-api.md — Acceptance (§9); design §8 Phase 4 verify.
-- **Depends:** P4.3, P4.4, P4.5, P4.7, P4.8, P4.9, P4.10, P4.11, P4.12
-- **Deliverables:** `docs/gates/P4-parity.md` (the G1–G7 results).
-- **Acceptance:** all seven gates green:
-  - **G1** changelog byte-equality (`v6ctl migrate-import --verify-changelog`) — from P4.9.
-  - **G2** legacy-endpoint golden parity, full-fidelity byte match for every 07 §3 endpoint
-    except the G3 pair (`Test*Parity` — P4.3).
-  - **G3** membership-divergence direction for `GET /domain` and `/country/{code}/sinners`:
-    shape + rank-ascending ordering asserted, and `new_members ⊆ old_members` on each captured
-    page (not row-set equality).
-  - **G4** synthetic membership: a `base=supported,www=unsupported` entity in `/domain/almost`
-    and NOT `/domain`; a `base=unsupported` entity in `/domain` and NOT `/domain/almost`;
-    repeated country-scoped (`TestMembershipSynthetic` — 07 §9.6). **Decision:** design lists
-    G4 as a phase-4 gate but `/domain/almost` is a phase-5 endpoint; resolved by asserting the
-    membership predicate the read query uses against the seeded fixtures at G4 (phase 4), and
-    re-asserting it against the live `/domain/almost` endpoint at P5.4 (phase 5) — the simplest
-    split that keeps G4 mechanically checkable without pulling the endpoint forward.
-  - **G5** synthetic legacy-serialization branches (R1 `not_applicable`/NULL→`"no_record"`,
-    R2 error/inconsistent exclusion) — `TestLegacyStatus`/`TestLogFilter` (07 §9.3).
-  - **G6** frontend E2E (Playwright): the frozen frontend against the new API renders the
-    domain list, a detail page, a campaign page, and the changelog feed with zero visual diffs;
-    old changelog entries render identically.
-  - **G7** restore-drill: the new DB's latest backup restores to a scratch instance,
-    `SELECT count(*) FROM changelog` matches the imported count, and the API starts against the
-    restored DB with `GET /changelog` returning rows.
-  - Then the §10 cutover runbook (DNS/upstream switch) executes; the old backend stays
-    deployable and the dump retained ≥1 week (rollback window, 08 §12).
+### P4.13 — Keyset/cursor pagination engine
+- **Governs:** see 07-api.md — pagination, filtering, sorting (keyset/cursor, cursor design,
+  filter/sort grammar, count strategy); design §4.
+- **Depends:** P4.1
+- **Deliverables:** `internal/api/paginate.go` — the opaque base64url cursor codec carrying
+  `{v,g,s,f,k}`; the **three** strict-total-order seek shapes (`(rank,id)`, `host`, and the
+  null-flag-first `(rank IS NULL, rank, id)` for `dependents`); the N+1 `has_more` fetch; the
+  `after_rank`/`around_rank` deep-link range scans (rank-ordered views only); filter-fingerprint
+  validation + stale-generation re-anchoring; and the count strategy (`max(rank)` headline
+  estimate, `reltuples`/plan-row estimate for filtered/scoped, exact `count` only for the
+  bounded curated sets).
+- **Acceptance:** `TestCursor` round-trips all three orderings; a cursor whose filter fingerprint
+  `f` mismatches the request → `400 invalid-parameter`; a stale-`g` cursor re-anchors on
+  `last_rank`; the null-flag-first ordering never drops the rank-NULL tail; a bare unscoped
+  `flag=`/per-dimension status filter → `422 scope-required`; `after_rank` is rejected on the
+  `sort=host` ordering. Fixtures: 10-testing.md — keyset cursor vectors.
+
+### P4.14 — Changelog + timeline + diff endpoints
+- **Governs:** see 07-api.md — changelog event (structured), per-domain timeline/history
+  (changelog reconstruction), diff (OPEN-7); design §5.8, §5.9, §6.6.
+- **Depends:** P4.5, P4.13
+- **Deliverables:** `internal/api/{changelog,history,diff}.go` + `db/query/`:
+  - `GET /changelog` (global, cursor on `ts DESC`, `?field=`/`?from=`/`?to=`) and the per-scope
+    feeds `GET /domains/{host}/changelog`, `GET /campaigns/{uuid}/changelog`,
+    `GET /campaigns/{uuid}/domains/{host}/changelog`, `GET /countries/{code}/changelog`
+    (scoped feeds **capped to the latest-50 recent window**, OPEN-15);
+  - `GET /domains/{host}/history` — the per-dimension trajectory **reconstructed from the
+    `changelog`** (confirmed transitions replayed + the classification ladder applied per point),
+    carrying the `scan` **latency overlay only** (never raw `scan` observation values);
+  - `GET /diff?from=&to=&scope=` — added-to-hero / lost-hero lists read from the `changelog`
+    (OPEN-7), reporting *which* domains changed (not stats-snapshot differencing).
+- **Acceptance:** `TestChangelog` serves the structured row (`ts,host,field,old_value,new_value`;
+  raw 4-value enum; always non-null and distinct; incl. `conn`/`resources`/`not_applicable`
+  transitions — no coverage filter, no synthetic epoch id); `TestHistory` reconstructs from the
+  changelog (asserts `error`/`inconsistent` never appear; `classification` per point is the
+  ladder over the reconstructed confirmed state); `TestDiff` reads from the changelog; all three
+  return `200` with an empty collection on the fresh (empty-changelog) DB. Fixtures: 10-testing.md
+  — confirmed-state reconstruction vectors.
+
+### P4.15 — Change feeds (Atom + JSON-Feed) + CSV export
+- **Governs:** see 07-api.md — change feeds (Atom + JSON-Feed per scope), CSV export via content
+  negotiation; design §6.4, §6.5.
+- **Depends:** P4.14
+- **Deliverables:** `internal/api/{feed,csv}.go` + templates:
+  - the four-scope × two-format feed matrix (`/changelog.atom`, `/changelog.feed.json`, and the
+    per-domain/campaign/country `.atom` / `.feed.json` suffix URLs), each a fixed **latest-50**
+    window, item id = composite `(host, ts, field)`, human `title`/`content_text` derived
+    server-side at render time from `(field, old_value, new_value)`;
+  - `?format=csv` on the list endpoints (`/domains*`, `/countries`, `/asns`, `/changelog`,
+    search), `text/csv; charset=utf-8` + `Content-Disposition: attachment`, a defined column set
+    per list.
+- **Acceptance:** `TestFeeds` — every scope×format feed carries the required top-level members
+  (Atom `<id>`/`<updated>`/`<title>`/self+alternate links; JSON-Feed `version`/`title`/
+  `home_page_url`/`feed_url`/`items`), the latest-50 window, and the composite item id;
+  `TestCSV` — the defined column set + attachment disposition, and a stable cursor/`after_rank`-
+  anchored URL reproduces the same view. Fixtures: 10-testing.md — Atom/JSON-Feed serializer
+  vectors.
+
+### P4.16 — `/mandates` surface + campaign `?tag=` (OPEN-12)
+- **Governs:** see 07-api.md — new/flagged special endpoints (`/mandates` + `?tag=`); design
+  §6.6, OPEN-12.
+- **Depends:** P4.3
+- **Deliverables:** `internal/api/mandates.go` + `db/query/` — the `/mandates` surface over
+  tagged campaigns (with citations). The `?tag=` campaign filter itself ships in P4.3; this task
+  adds the dedicated `/mandates` view.
+- **Acceptance:** `TestMandates` — `/mandates` lists the tagged/mandate campaigns; `?tag=`
+  filters `/campaigns` to the tag; an unknown tag returns `200` with an empty collection (not
+  404). Fixtures: 10-testing.md.
+
+### P4.G — Phase-4 gate (DNS-flip cutover)
+- **Governs:** see 08-migration-cutover.md — DNS-flip cutover (cutover runbook + rollback); see
+  07-api.md — Acceptance, OpenAPI-first workflow; design §8 Phase 4 verify, OPEN-9.
+- **Depends:** P4.1, P4.3, P4.4, P4.5, P4.11, P4.13, P4.14, P4.15, P4.16
+- **Deliverables:** `docs/gates/P4-cutover.md` (the thin cutover checklist + record).
+- **Acceptance:** a pure DNS-flip cutover with **no data import** — the whole gate is the four
+  steps below (the legacy/parity gates G1–G7 are deleted; the **OpenAPI contract gate** is the
+  replacement):
+  1. **Fresh DB → migrations:** a fresh `timescale/timescaledb:latest-pg18` DB is created and
+     `v6ctl migrate up` applies 000001→latest green (both `changelog` and `scan` start empty).
+  2. **Crawl builds state:** the crawler builds confirmed state from scratch (a bounded sample
+     crawl suffices for this gate; the full 1M pass is Phase 3). The **cold classification
+     start** is expected and flagged (§5 risk register) — day-1 hero/adoption counts read low
+     until N crawl cycles confirm each dimension; this is not a bug.
+  3. **OpenAPI contract tests green:** the P4.5 drift gate is clean (`make generate` →
+     `git diff --exit-code`), the Spectral/vacuum lint passes, and the endpoint tests
+     (P4.3/P4.4/P4.13/P4.14/P4.15/P4.16) are green.
+  4. **`top_shame` re-seed (P4.11) applied** so `/shame` is non-empty at launch.
+  - Then DNS/upstream is switched. The old backend stays deployable through the rollback window
+    (08-migration-cutover.md — DNS-flip cutover). A restore-drill (backup → scratch instance →
+    API starts, `GET /changelog` reachable) is retained as ops hygiene (P3.3 / 09-ops backup
+    gate), not a production-parity gate.
 
 ---
 
 ## Phase 5 — #23 resources + classification surfacing
 
-**Goal:** the resource-dependency dimension, the gold badge, and the "almost there" surfacing.
+**Goal:** the resource-dependency dimension, the gold tier, and the resource forward/dependents
+surface (the `/almost` tier collection itself is a classification preset and ships in P4.3).
 `crawler.resources.enabled` flips to `true` at deploy; until then the crawler wrote
 `resources = not_applicable` and no gold badges existed (verified from Phase 2).
 
@@ -923,22 +1063,26 @@ shippable replacement.
   the Phase-2 invariant (`gold=false` while disabled — 03 §17.9) no longer applies. Verified on
   the P5.G fixture site.
 
-### P5.4 — `/domain/almost` + `/domain/{domain}/subdomains` + resources/dependents endpoints
-- **Governs:** see 07-api.md — New endpoints (§4: the shared `DomainSummary` row §4.1,
-  `/domain/almost` §4.2, `/domain/{domain}/subdomains` §4.3, resources + dependents §4.4–§4.5);
-  design OPEN-10.
-- **Depends:** P4.3, P5.3
-- **Deliverables:** `internal/api/resource.go` + the `/domain/almost` handler + the
-  `/domain/{domain}/subdomains` handler (parent-resolved like §3.6, children
-  `WHERE parent_id=$parent AND NOT disabled ORDER BY host ASC`, paginated); the shared §4.1
-  `DomainSummary` row builder (also embedded in §3.6); `db/query/` additions (the `/domain/almost`
-  partial-membership query and the subdomains child query); OpenAPI additions (regenerate).
-- **Acceptance:** `TestAlmostMembership` — the G4 synthetic pair now resolves against the live
-  `/domain/almost` endpoint (base=supported,www=unsupported present; base=unsupported absent);
-  `TestSubdomains` — `/domain/{domain}/subdomains` returns the §4.1 rows for an apex's
-  non-disabled children in `host ASC` order, `200 []` for a childless or `kind='subdomain'`
-  parent, and `404 {"error":"domain not found"}` for unknown/disabled/malformed parents (07 §4.3);
-  golden parity for the resources/dependents endpoints (07 §9.1); `make generate` clean.
+### P5.4 — Subdomains + resource-dependency endpoints
+- **Governs:** see 07-api.md — resource dependencies (`/domains/{host}/subdomains`,
+  `/domains/{host}/resources`, `/resources/{host}/dependents`); design §5.11, §5.3. (The
+  `/almost` tier collection is **not** here — it is a classification preset over `/domains` and
+  ships in P4.3.)
+- **Depends:** P4.3, P4.13, P5.3
+- **Deliverables:** `internal/api/resource.go` — the `/domains/{host}/subdomains` handler
+  (parent-resolved, children `WHERE parent_id=$parent AND NOT disabled ORDER BY host ASC`,
+  keyset-paged on `host`), `GET /domains/{host}/resources` (forward: bounded, exact
+  `meta.count`), and `GET /resources/{host}/dependents` (reverse advocacy surface, keyset-paged
+  over the **null-flag-first** ordering from P4.13, `count_estimate` + headline
+  `dependent_count`); `db/query/` additions; `openapi.yaml` additions (regenerate — drift gate
+  clean).
+- **Acceptance:** `TestSubdomains` — `/domains/{host}/subdomains` returns the summary rows for an
+  apex's non-disabled children in `host ASC` order, `200` empty for a childless or
+  `kind='subdomain'` parent, and `404 application/problem+json` (`type=.../not-found`) for an
+  unknown/disabled/uncanonicalizable parent; `TestDependents` — the reverse list uses the
+  null-flag-first ordering (rank-NULL dependents are not dropped) and reports
+  `resource.dependent_count`; `TestForwardResources` — forward resources carry an exact
+  `meta.count`; `make generate` clean.
 
 ### P5.G — Phase-5 gate
 - **Governs:** design §8 Phase 5 verify.
@@ -957,44 +1101,78 @@ shippable replacement.
 status badge.
 
 ### P6.1 — Live check (`POST /check` / `GET /check/{id}`) + consumer/reaper
-- **Governs:** see 07-api.md — Live check (§6); see 04-lifecycle-scheduling.md (check-job
-  consumer placement inside `cmd/crawler`); design OPEN-11 (10/IP/h + 500/h global).
-- **Depends:** P4.3, P2.11
-- **Deliverables:** `internal/api/check.go` (POST/GET envelopes, domain-side + job-side
-  dedupe, rate limits); the check-job consumer goroutines + reaper wired into `cmd/crawler`;
-  `db/query/` for `check_job`.
-- **Acceptance:** `TestLiveCheck` (integration): **Rule-0** — a completed check job leaves every
-  `domain` state column untouched except `last_requested_at`/`next_check_at`/re-enable (07
-  §9.8); dedupe (domain- and job-side) returns `cached:true` with no new job rows; the reaper
-  flips stale jobs to `failed` `≤15 min`; the §1.8 rate-limit fixtures (10/IP/h, 500/h global)
-  hold. Fixtures: 10-testing.md.
+- **Governs:** see 07-api.md — live check (async job lifecycle); see 04-lifecycle-scheduling.md
+  (check-job consumer placement inside `cmd/crawler`); design §6.1, §7.3 (rate limits).
+- **Depends:** P4.5, P2.11
+- **Deliverables:** `internal/api/check.go` — `POST /check` (`202 Accepted` + `Location:
+  /check/{id}`, the **`BIGINT` `check_job.id`** on the wire) and `GET /check/{id}` (poll to
+  terminal), domain-side + job-side dedupe, RFC 9457 errors (invalid host →
+  `400 invalid-parameter`; non-JSON body → `415 unsupported-media-type`; over quota →
+  `429 rate-limited` + `Retry-After` + the `RateLimit`/`RateLimit-Policy` structured-field
+  headers), per-IP **and per-/64-prefix** + global rate limits, and **terminal-poll caching**
+  (`done`/`failed` → `Cache-Control: public, max-age=60`; in-flight → `no-store`); the check-job
+  consumer goroutines + reaper wired into `cmd/crawler`; `db/query/` for `check_job`.
+- **Acceptance:** `TestLiveCheck` (integration): **Rule-0 (locked)** — a completed check job
+  leaves every `domain` confirmed-state column, `scan`, and `changelog` untouched except
+  `last_requested_at`/`next_check_at`/re-enable (07-api.md — Rule 0; design §6.1); dedupe
+  (domain- and job-side, 1 h window) returns `"cached": true` with no new job rows; the reaper
+  flips stale jobs to `failed` `≤15 min`; the rate-limit fixtures (10/IP/h, 500/h global, /64
+  keying) hold and emit `429 problem+json` + `Retry-After`; a terminal poll is
+  `public, max-age=60` while an in-flight poll is `no-store`. Fixtures: 10-testing.md.
 
-### P6.2 — Stats endpoints
-- **Governs:** see 07-api.md — New endpoints (§4, stats); design §4.7 (stats & dashboards).
-- **Depends:** P4.3, P4.12
+### P6.2 — Stats / overview endpoints
+- **Governs:** see 07-api.md — stats / overview (adoption over time); design §5.10.
+- **Depends:** P4.5, P2.9
 - **Deliverables:** `internal/api/stats.go` + `db/query/` reads over the `stats_*` snapshot
-  tables; OpenAPI additions.
-- **Acceptance:** `TestStatsEndpoints` — stats responses match the snapshot tables
-  (`SELECT`-equal), public graphs equal public lists (design §4.7 invariant); `make generate`
-  clean.
+  tables — the routes `GET /stats/overview` (`stats_global_daily`),
+  `GET /countries/{code}/stats`, `GET /campaigns/{uuid}/stats` (incl. `v6_ready%`),
+  `GET /asns/{number}/stats` (exposing the `count_v6`/`count_total` wire names), one query
+  contract (`?from=&to=&interval=daily|weekly`, ascending, no pagination, `≤366 rows/yr`, zero
+  rows → `200 {"points":[]}`); the **`{points,meta}`** time-series envelope with
+  `meta.source: "confirmed_state"`; `openapi.yaml` additions.
+- **Acceptance:** `TestStatsEndpoints` — responses use the `{points,meta}` envelope and match
+  the snapshot tables (`SELECT`-equal); `meta.source` is `"confirmed_state"`; public graphs equal
+  public lists (design §5.10 invariant); the `scan_daily_adoption` cagg is **not** exposed
+  (OPEN-5); `make generate` clean. (Per-domain `/domains/{host}/history` is owned by P4.14.)
 
-### P6.3 — Dataset export + nginx datasets location
-- **Governs:** see 07-api.md — Datasets (§7); see 09-ops.md — nginx vhost (§7, `/datasets/`).
-- **Depends:** P4.3, P3.4
-- **Deliverables:** `internal/api/datasets.go` + the nightly static CSV+Parquet+manifest export
-  job (`v6ctl export` + its systemd timer); the `/datasets/` nginx location + `DICTIONARY.md`.
-- **Acceptance:** `TestDatasetExport` — generated CSV/Parquet validate against `DICTIONARY.md`;
-  `nginx -t` passes and a request to `/datasets/2026-07-06/whynoipv6-top1m.csv.gz` is served
-  from disk with `Cache-Control: …immutable` while `GET /datasets` proxies to the API (09-ops
-  §15.7); manifest is short-TTL, dated snapshots immutable (07 §7).
+### P6.3 — Static dataset export + manifest + nginx datasets location
+- **Governs:** see 07-api.md — datasets (static bulk + manifest + citation); see 09-ops.md —
+  nginx vhost (`/datasets/` location split); design §6.3.
+- **Depends:** P4.5, P3.4
+- **Deliverables:** the nightly `v6ctl export` job (atomic tmp-dir `rename(2)`) producing **3
+  size tiers** (`top100k`/`top1m`/`full`) × **CSV.gz + Parquet**, each snapshot shipping a
+  Frictionless **`datapackage.json`** (per-file `path`/`bytes`/`hash: "sha256:<digest>"` +
+  Table Schema), a `SHA256SUMS`, and a `DICTIONARY.md`; the top-level **`manifest.json`** (the
+  pinned schema — `schema_version`, `generated_at`, `generation`, `license`, `attribution`,
+  `latest`, `snapshots[]`; its schema lives in `openapi.yaml` `components`); `internal/api/
+  datasets.go` (`GET /datasets` re-reads `$DATASETS_DIR/manifest.json` from disk every request,
+  `public, max-age=300`, missing/unparseable → **`503 manifest-unavailable`** — the only 503);
+  the `/datasets/` nginx location split + its systemd timer.
+- **Acceptance:** `TestDatasetExport` — generated CSV.gz + Parquet validate against
+  `datapackage.json`/`DICTIONARY.md`; `SHA256SUMS` verifies; `manifest.json` conforms to the
+  pinned schema (contract-tested via the OpenAPI `components`); `GET /datasets` returns the
+  manifest and `503 manifest-unavailable` when it is missing; `nginx -t` passes and a request to
+  a dated `…/whynoipv6-top1m.csv.gz` is served from disk with `Cache-Control: …immutable` while
+  exact `=/datasets` proxies to the API (09-ops nginx vhost); `make generate` clean.
 
-### P6.4 — Status badge (`GET /badge/{domain}.svg`)
-- **Governs:** see 07-api.md — status badge (§5), Acceptance (§9.9); design §5.2a.
-- **Depends:** P4.3
-- **Deliverables:** `internal/api/badge.go` + the pinned SVG templates; `internal/api/testdata/
-  badge/**` byte-exact fixtures.
-- **Acceptance:** `TestBadge` — the §5 acceptance list: byte-exact SVG per status, the pinned
-  `Cache-Control` value, unknown-domain behavior (07 §9.9). Fixtures: 10-testing.md.
+### P6.4 — Embeddable status badge (`GET /badge/{host}.svg` + `.json`)
+- **Governs:** see 07-api.md — embeddable SVG badge (the normative `classification`→label table,
+  shields.io endpoint-JSON variant); design §6.2 (badge promoted to committed).
+- **Depends:** P4.5
+- **Deliverables:** `internal/api/badge.go` + the **six** precompiled byte-deterministic SVG
+  variants (one per `classification`, plus the `gold` overlay on `hero`) and the `.json` shields
+  endpoint variant (deliberate **camelCase** `schemaVersion`/`cacheSeconds`/`isError` — the one
+  sanctioned exception); `internal/api/testdata/badge/**` byte-exact fixtures.
+- **Acceptance:** `TestBadge` — byte-exact SVG per the normative table (`hero`→`IPv6: supported`
+  brightgreen; `hero+gold`→`IPv6: gold`; `partial`→`IPv6: partial` yellow; `sinner`→`IPv6: no
+  IPv6` red; `inactive`→`IPv6: inactive` lightgrey; `unknown`→`IPv6: unknown` lightgrey +
+  `isError:true`); `Content-Type: image/svg+xml` + `Cache-Control: public, max-age=86400` +
+  `X-Content-Type-Options: nosniff` + `ETag` from generation; **no rate-limit**; a *valid* host
+  is **always `200`** (disabled/unknown → gray `IPv6: unknown`), a **malformed** host →
+  `400 invalid-parameter` (the declared exception to 404-on-canonicalize-failure), a suffix-less
+  path → `404`; the host label is XML-escaped into the SVG; **read-only zero side effects** (no
+  domain row inserted, no check_job enqueued, `last_requested_at` untouched — read-back
+  assertion). Fixtures: 10-testing.md — badge golden SVGs.
 
 ### P6.G — Phase-6 gate
 - **Governs:** design §8 Phase 6 verify.
@@ -1047,24 +1225,25 @@ remaining runbooks. Closes the whole build.
 
 ### P7.4 — Config-registry completeness gate
 - **Governs:** see 09-ops.md — Consolidated config registry (§2), Acceptance (§15.1, §15.2).
-- **Depends:** all key-introducing tasks (P0.6, P2.1, P2.2, P2.12, P4.6, P5.3, P6.1) — practically
-  every phase.
+- **Depends:** all key-introducing tasks (P0.6, P2.1, P2.2, P2.12, P5.3, P6.1, P6.3) —
+  practically every phase.
 - **Deliverables:** `internal/config/registry_test.go` (`TestRegistryCompleteness`).
 - **Acceptance:** every key in 09-ops §2 is registered via `viper.SetDefault` at startup,
   resolves from its documented env var, and appears in the startup config summary; a config key
   present in any spec file but absent from §2 fails the test (09-ops §15.1); env overrides for
   `WORKER_SLOTS`, `CONSENSUS_PER_PROVIDER_QPS`, `CRAWLER_RESOURCES_ENABLED`,
-  `RESOLVER_BULK_UPSTREAMS` apply with no YAML present (09-ops §15.2). The §2.10 `migrate.*`
-  keys are exempt from the `viper.SetDefault` + startup-summary assertions (v6ctl-only,
-  bound at the `migrate-import` verb, `migrate.source_dsn` has no default — 09-ops §15.1
-  exception) but are still subject to the "absent from §2 is a defect" completeness check.
+  `RESOLVER_BULK_UPSTREAMS` apply with no YAML present (09-ops §15.2). The `migrate.*` importer
+  keys no longer exist (start-fresh, OPEN-9 — 09-ops drops them from the registry), so the
+  former `migrate.*` startup-summary exemption is removed.
 
 ### P7.G — Phase-7 gate + whole-build DoD
 - **Governs:** design §8 Phase 7 verify; §3 (definition of done) above.
 - **Depends:** P7.1, P7.2, P7.3, P7.4, and every prior phase gate.
 - **Acceptance:** the P7.2 end-to-end campaign flow green; `make lint test test-integration
-  vulncheck build-linux` all green on the default branch; **every** gate G1–G7 green;
-  Appendix A has no `UNREACHED` row. Record the final DoD checklist to `docs/gates/DONE.md`.
+  vulncheck build-linux` all green on the default branch; the **OpenAPI contract gate** (P4.5
+  drift + Spectral) green and **every phase gate P0.G–P7.G** green (the legacy parity gates
+  G1–G7 are deleted); Appendix A has no `UNREACHED` row. Record the final DoD checklist to
+  `docs/gates/DONE.md`.
 
 ---
 
@@ -1097,28 +1276,30 @@ matrix against the §-headings of files 01–10; any section with no task ID is 
 | 05-schema — §7 (Tranco staging DDL) | P1.7 |
 | 05-schema — §9 (`updated_at` maintenance rule, application-side) | P2.5, P1.5 |
 | 05-schema — §10 (sqlc + data-access) | P1.5 |
-| 06-ingest — §1 (Canonicalize) | P1.6 |
-| 06-ingest — §2 (Tranco import) | P1.7 |
-| 06-ingest — §3 (campaign sync) | P1.8 |
+| 05-schema — drop changelog legacy columns; add pivots + tags (tld, `ns_host→provider` table, provider tag, campaign.tags, `generated_at`) | P1.1, P1.8, P1.13, P1.14, P2.9 |
+| 06-ingest — §1 (Canonicalize, incl. tld extraction) | P1.6 |
+| 06-ingest — §2 (Tranco import, incl. tld write) | P1.7 |
+| 06-ingest — §3 (campaign sync, incl. tags) | P1.8 |
 | 06-ingest — §4 (PR-validation Action) | P7.1 |
 | 06-ingest — §5 (resource-host registry) | P5.1 |
 | 06-ingest — §6 (GeoIP/ASN attribution) | P1.9 |
+| 06-ingest — DNS-provider mapping (`ns_host→provider`) | P1.13 |
+| 06-ingest — hosting/CDN provider tag | P1.14 |
 | 06-ingest — §7 (v6ctl shame + resource verbs) | P4.11, P5.2 |
-| 07-api — §1,§2 (baseline, cross-cutting) | P4.1, P4.2 |
-| 07-api — §3 (legacy endpoints) | P4.3 |
-| 07-api — §4 (new endpoints: /ip, /domain/almost, subdomains, resources, stats) | P4.4, P5.4, P6.2 |
-| 07-api — §5 (badge) | P6.4 |
-| 07-api — §6 (live check) | P6.1 |
-| 07-api — §7 (datasets) | P6.3 |
-| 07-api — §8 (OpenAPI) | P4.5 |
-| 08-migration-cutover — §1,§2,§3 (command, preconditions, resolve) | P4.6 |
-| 08-migration-cutover — §4 (seed statuses) | P4.7 |
-| 08-migration-cutover — §5 (campaign migration) | P4.8 |
-| 08-migration-cutover — §6 (changelog transform) | P4.9 |
-| 08-migration-cutover — §7 (per-scan history) | P4.10 |
-| 08-migration-cutover — §8 (top_shame import) | P4.11 |
-| 08-migration-cutover — §9 (day-0 snapshot) | P4.12 |
-| 08-migration-cutover — §10,§11,§12 (cutover, gates, rollback) | P4.G |
+| 07-api — server baseline, cross-cutting (envelope, snake_case, RFC 9457, HTTP, health, caching) | P4.1, P4.5 |
+| 07-api — pagination/filtering/sorting (keyset/cursor, count strategy) | P4.13 |
+| 07-api — resource model (domains + tier collections, country, asn/provider, campaign, resources) | P4.3, P5.4 |
+| 07-api — changelog event / per-domain timeline / diff (OPEN-7) | P4.14 |
+| 07-api — change feeds (Atom + JSON-Feed) + CSV export | P4.15 |
+| 07-api — /mandates + `?tag=` campaign filter (OPEN-12) | P4.16, P4.3 |
+| 07-api — /ip client-IP echo | P4.4 |
+| 07-api — embeddable SVG badge (+ shields JSON) | P6.4 |
+| 07-api — live check (async job lifecycle) | P6.1 |
+| 07-api — stats / overview (time-series envelope) | P6.2 |
+| 07-api — datasets (static bulk + manifest) | P6.3 |
+| 07-api — OpenAPI-first workflow | P4.5 |
+| 08-migration-cutover — DNS-flip cutover (fresh DB → migrate → crawl → contract tests → flip; cutover + rollback) | P4.G |
+| 08-migration-cutover — `top_shame` re-seed step | P4.11 |
 | 09-ops — §1 (config model) | P0.6 |
 | 09-ops — §2 (config registry) | P7.4 |
 | 09-ops — §3,§4,§5,§6 (filesystem, systemd, timers, deploy) | P3.4 |
@@ -1130,10 +1311,17 @@ matrix against the §-headings of files 01–10; any section with no task ID is 
 | 09-ops — §12 (liveness, heartbeats, alerts) | P2.12, P3.2 |
 | 09-ops — §13 (logging conventions) | P0.6 |
 | 09-ops — §14 (Makefile, golangci, CI) | P0.3, P0.5 |
-| 10-testing — §2–§8 (unit vectors) | co-located with P1.6, P2.1–P2.5, P4.2 |
-| 10-testing — §8.1 (parity capture harness) | P4.3 |
-| 10-testing — §9,§10 (integration harness + scenarios) | P1.10 + every integration test |
-| 10-testing — §11,§12 (make targets, coverage bars) | P0.3, enforced by all test tasks |
+| 10-testing — unit vectors (Canonicalize+tld, quorum, commit machine, classify) | co-located with P1.6, P2.1–P2.5 |
+| 10-testing — keyset cursor vectors (three orderings) | P4.13 |
+| 10-testing — RFC 9457 problem+json shapes (incl. `scope-required`) | P4.1 |
+| 10-testing — API serialization vectors (status objects, structured changelog) | P4.3, P4.14 |
+| 10-testing — confirmed-state reconstruction vectors (§5.9) | P4.14 |
+| 10-testing — Atom/JSON-Feed serializer vectors | P4.15 |
+| 10-testing — `manifest.json` schema vectors | P6.3 |
+| 10-testing — badge golden SVGs (public status vocabulary, six variants) | P6.4 |
+| 10-testing — provider mapping + hosting-tag vectors | P1.13, P1.14 |
+| 10-testing — integration harness + scenarios | P1.10 + every integration test |
+| 10-testing — make targets, coverage bars | P0.3, enforced by all test tasks |
 
 ---
 
@@ -1144,7 +1332,7 @@ The runner may execute these pairs in one agent invocation (tight coupling, shar
 - **P2.8 is fused into P2.5+P2.7** where the implementation lands in `commit.go`/`schedule.go`
   (P2.8 defines no new file); the runner may dispatch P2.8's acceptance as a follow-up check on
   the same tree rather than a separate build.
-- **P4.7 + P4.12** (seed statuses then day-0 snapshot) may share an agent — the snapshot is a
-  one-call follow-on to seeding.
+- **P4.15 + P4.14** (change feeds/CSV over the changelog endpoints) may share an agent — the
+  feed/CSV serializers are thin renderers over the changelog reads P4.14 lands.
 
 All other tasks are one-agent-per-ID.

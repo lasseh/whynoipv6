@@ -1,5 +1,7 @@
 # 04 — Lifecycle & Scheduling
 
+_Status: Round 3.0 — API redesign folded in (docs/api-design-research.md, decisions 2026-07-09): clean root API, keyset pagination, RFC 9457, no legacy compat, no history import._
+
 **Purpose:** Defines the crawl frontier (the `domain` table itself), the atomic claim query, the cadence and recheck/backoff scheduling rules applied after every scan commit, the dead/delisted lifecycles with their re-entry semantics, the daily lifecycle sweep and daily-tick step order, singleton coordination via Postgres advisory locks, and the crawler process model (worker pool, preflight, graceful shutdown, operational metrics). Everything in this file is normative; the scan-commit algorithm that *consumes* the scheduling decision is in 03-state-machine.md.
 
 **Deliverables:**
@@ -370,7 +372,7 @@ Steps (canonical order, one advisory lock for the whole sequence):
 
 1. **Lifecycle sweep** — §8, exactly as specified.
 2. **Stats snapshot** — snapshot product stats from confirmed state into the four `stats_*` tables (DDL: 05-schema.md — stats tables). The four snapshot upsert bodies live in `db/query/stats.sql` (query contents owned by 06-ingest.md — Daily stats snapshot and counter recompute; read endpoints 07-api.md). The tick-level contract pinned here: all four inserts are `INSERT ... ON CONFLICT (<pk>) DO UPDATE SET <every counter> = excluded.<col>` (PKs: `day` / `(day, country_id)` / `(day, campaign_id)` / `(asn_id, day)`). **DO UPDATE, not DO NOTHING** — this is also what makes `v6ctl stats recalc` a safe same-day re-run.
-3. **Country/ASN counter recompute** — recompute the counter columns on `country` and `asn` (ported `update_country_metrics`/`update_asn_metrics`, corrected: v6 definition = classification-based; v4 count = actual v4-only count). Scope predicate, verbatim: `rank IS NOT NULL AND NOT disabled` (the publicly-ranked predicate), so `/country` and `/metric/asn` figures match the public lists exactly. Statement bodies live in `db/query/country.sql` / `db/query/asn.sql` (query contents owned by 06-ingest.md — Daily stats snapshot and counter recompute); inherently idempotent (set-based UPDATE).
+3. **Country/ASN/DNS-provider counter recompute** — recompute the counter columns on `country`, `asn`, and `dns_provider` (ported `update_country_metrics`/`update_asn_metrics` plus the parallel `dns_provider` recompute, OPEN-4; corrected: v6 definition = classification-based; v4 count = actual v4-only count). Scope predicate, verbatim: `rank IS NOT NULL AND NOT disabled` (the publicly-ranked predicate), so `/countries`, `/asns`, and `/providers` figures match the public lists exactly. Statement bodies live in `db/query/country.sql` / `db/query/asn.sql` (query contents owned by 06-ingest.md — Daily stats snapshot and counter recompute); inherently idempotent (set-based UPDATE).
 4. **Service-domain candidate detection** — candidates only, never auto-disable. Inserts into `service_candidate` (DDL: 05-schema.md) with `ON CONFLICT (domain_id) DO NOTHING` (dismissed rows are never re-flagged; reasons are not merged into existing rows — per the idempotent-write guard). Two heuristics run in the tick:
 
    ```sql

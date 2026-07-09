@@ -1,5 +1,7 @@
 # 09 — Operations, Packaging & the Config Registry
 
+_Status: Round 3.0 — API redesign folded in (docs/api-design-research.md, decisions 2026-07-09): clean root API, keyset pagination, RFC 9457, no legacy compat, no history import._
+
 **Purpose:** Everything a single maintainer needs to build, configure, deploy, and
 run the three binaries on his own VMs. This file is the **single source of truth for
 every configuration key** across `api`, `crawler`, and `v6ctl` (§2), and it owns all
@@ -66,7 +68,7 @@ v.AutomaticEnv()
   `consensus.per_provider_qps` → `CONSENSUS_PER_PROVIDER_QPS`, `worker_slots` →
   `WORKER_SLOTS`, `crawler.resources.enabled` → `CRAWLER_RESOURCES_ENABLED`. The
   UPPERCASE deployment keys (`API_LISTEN`, `DATABASE_URL`, `GEOIP_PATH`,
-  `DATASETS_DIR`, `LOG_LEVEL`) map to themselves. The registry (§2) gives the exact
+  `DATASETS_DIR`, `PUBLIC_BASE_URL`, `LOG_LEVEL`) map to themselves. The registry (§2) gives the exact
   env name for every key.
 - **Production ships no YAML.** The deploy artifact set is exactly the three binaries
   (§3). Production runs on compiled-in defaults plus env overrides supplied by the
@@ -82,7 +84,8 @@ v.AutomaticEnv()
 exactly as the design doc's YAML blocks show them** (`claim.*`, `cadence.*`,
 `recheck_*`, `anti_flap.*`, `consensus.*`, `checks.*`, `resolver.*`, `preflight.*`,
 `worker_slots`, `service_detect.*`, `lifecycle.*`, `tranco.*`, `campaign.*`,
-`live_check.*`, `ops.*`, `unbound_stats.*`). The **single exception is
+`live_check.*`, `ops.*`, `unbound_stats.*`, `badge.*`, `datasets.*`, `feed.*`,
+`export.*`, `dns_provider.*`). The **single exception is
 `crawler.resources.enabled`**, which the design and every other spec file spell with
 the `crawler.` prefix — it is kept verbatim. (04-lifecycle-scheduling.md's §16 table
 uses the same top-level spelling as this registry — `claim.batch_size`, `cadence.default`,
@@ -135,6 +138,7 @@ needs them.
 | `API_LISTEN` | string `host:port` | `[::1]:8080` | api | 07 §1.1 | HTTP bind; IPv6 loopback by design (nginx-fronted). Override to `:8080` only for dev. |
 | `GEOIP_PATH` | string (dir) | `/var/lib/GeoIP` | crawler | 05,11 | Directory holding `GeoLite2-ASN.mmdb` + `GeoLite2-Country.mmdb`; hourly mtime check + atomic reader swap. |
 | `DATASETS_DIR` | string (dir) | `/var/lib/whynoipv6/datasets` | api, v6ctl(export) | 07 §7.2 | Dataset snapshot root; API reads `manifest.json`, `v6ctl export` writes snapshots. |
+| `PUBLIC_BASE_URL` | string (URL) | `https://api.whynoipv6.com` | api | 07 | Public origin for absolute Atom/JSON-Feed self-links (report §6.4) and any absolute dataset/manifest URLs (report §6.3); the API binds `[::1]:8080` behind nginx and cannot infer its own origin. |
 | `LOG_LEVEL` | string enum `debug\|info\|warn\|error` | `info` (api, crawler) / `warn` (v6ctl) | all | 13 | slog level (§13). |
 
 ### 2.2 Crawler engine & scheduling (top-level sections; crawler binary)
@@ -233,16 +237,37 @@ Provider names/addresses (`1.1.1.1`, `8.8.8.8`, `9.9.9.9` + their v6 forms), the
 |---|---|---|---|---|---|---|
 | `unbound_stats.control` | `UNBOUND_STATS_CONTROL` | string (cmd) | `unbound-control` | v6ctl | design §11.3 | Path/args to `unbound-control` (override for chroot setups); `v6ctl ops unbound-stats` runs the **resetting** `stats` variant. |
 
-### 2.10 Legacy migration importer (`v6ctl migrate-import`, one-shot)
+### 2.10 API serving — badge, datasets, feeds, CSV export (api binary; export job = v6ctl)
 
-One-shot cutover keys read only by `v6ctl migrate-import` (08-migration-cutover.md).
-They are **not** read by `api` or `crawler` and are therefore exempt from the §15.1
-startup-summary registry-completeness check for those two binaries (see §15.1).
+Serving-layer knobs the redesigned API introduces (07-api.md). Values track the crawl
+cadence and the report's §6/§7 defaults; behavior is normative in 07-api.md.
 
 | Key | env var | Type | Default | Owner | From | Meaning |
 |---|---|---|---|---|---|---|
-| `migrate.source_dsn` | `MIGRATE_SOURCE_DSN` | string (pgx DSN) | — (required; no default) | v6ctl | 08 | Connection string of the **legacy** production Postgres the importer reads from; must be passed or set for `migrate-import`. |
-| `migrate.history_window` | `MIGRATE_HISTORY_WINDOW` | duration | `2160h` | v6ctl | 08 | Look-back window for legacy scan-history/changelog rows to import (90d); rows older than `$T0 − history_window` are skipped. |
+| `badge.cache_ttl` | `BADGE_CACHE_TTL` | duration | `24h` | api | 07 | `Cache-Control: max-age` for `/badge/{host}.svg` + `.json` (daily crawl cadence; report §6.2/§7.1). |
+| `datasets.manifest_cache_ttl` | `DATASETS_MANIFEST_CACHE_TTL` | duration | `5m` | api | 07 | `Cache-Control: max-age` for `GET /datasets` — the manifest re-read from `DATASETS_DIR/manifest.json` each request (report §6.3). |
+| `datasets.retention_days` | `DATASETS_RETENTION_DAYS` | int | `90` | v6ctl(export) | 07 §7.4 | Daily-snapshot retention applied by `v6ctl export`; first-of-month snapshots kept forever (report §6.3). |
+| `feed.recent_window` | `FEED_RECENT_WINDOW` | int | `50` | api | 07 | Latest-N transitions per Atom/JSON-Feed scope — the fixed recent window, no pagination (report §6.4; OPEN-15 = keep the latest-50 cap). |
+| `export.csv_max_rows` | `EXPORT_CSV_MAX_ROWS` | int | `10000` | api | 07 | Row cap for `?format=csv` list responses; larger "give me everything" pulls are steered to the static datasets (report §6.5). |
+
+`DATASETS_DIR` (§2.1) is the snapshot root; `PUBLIC_BASE_URL` (§2.1) supplies the absolute
+origin for the manifest/feed URLs. The `POST /check` rate-limit keys already live in §2.7
+(`live_check.rate_ip_per_hour`, `live_check.rate_global_per_hour`,
+`live_check.dedupe_window`); the redesign's per-/64 prefix keying and the
+`RateLimit`/`RateLimit-Policy` response headers (report §7.3) are behavior, not new config,
+so nothing is added here for them.
+
+### 2.11 DNS-provider mapping (OPEN-4 — crawler builds it; v6ctl seeds it)
+
+Config for the `ns_host → provider` mapping table that backs `/providers` +
+`/providers/{id}/domains` and the `?provider=` pivot (report §5.6/§10.3). The mapping
+**table DDL is owned by 05-schema.md** and the refresh mechanism by 06-ingest.md; this file
+only registers the two tuning knobs.
+
+| Key | env var | Type | Default | Owner | From | Meaning |
+|---|---|---|---|---|---|---|
+| `dns_provider.seed_path` | `DNS_PROVIDER_SEED_PATH` | string (file) | `""` (none) | crawler, v6ctl | 06 | Path to the curated `ns_host → provider` seed mapping (YAML/CSV); empty = mapping derived from collected NS data only. |
+| `dns_provider.refresh_interval` | `DNS_PROVIDER_REFRESH_INTERVAL` | duration | `24h` | crawler | 06 | Rebuild cadence for the mapping from collected NS data (in the daily tick). |
 
 ---
 
@@ -255,7 +280,7 @@ startup-summary registry-completeness check for those two binaries (see §15.1).
   `v6ctl` (below); no config or migration files ship to the host.
 - `/etc/whynoipv6/env` — `root:whynoipv6` `0640`, env-format. Holds the secrets and any
   non-default overrides: `DATABASE_URL`, `API_LISTEN`, `GEOIP_PATH`, `DATASETS_DIR`,
-  `LOG_LEVEL`, `OPS_WEBHOOK_URL`, `OPS_HEALTHCHECK_URL` (per process),
+  `PUBLIC_BASE_URL`, `LOG_LEVEL`, `OPS_WEBHOOK_URL`, `OPS_HEALTHCHECK_URL` (per process),
   `OPS_HEALTHCHECK_TICK_URL`, and any tuning override (`WORKER_SLOTS`,
   `CRAWLER_RESOURCES_ENABLED`, …). Ansible-vault templated.
 - `/etc/whynoipv6/config.yaml` — **optional**; present only if the operator prefers YAML
@@ -278,6 +303,7 @@ DATABASE_URL=postgres://whynoipv6:__VAULT__@db.internal:5432/whynoipv6?pool_max_
 API_LISTEN=[::1]:8080
 GEOIP_PATH=/var/lib/GeoIP
 DATASETS_DIR=/var/lib/whynoipv6/datasets
+PUBLIC_BASE_URL=https://api.whynoipv6.com
 LOG_LEVEL=info
 OPS_WEBHOOK_URL=https://ops.example.net/hooks/__VAULT__
 OPS_HEALTHCHECK_URL=https://hc-ping.com/__VAULT_CRAWLER_1__
@@ -447,6 +473,17 @@ Ansible-managed). The proxy-header block and the datasets locations are normativ
 07-api.md (the proxy-header block in §1.2, the datasets layout/nginx split in §7.2/§7.6)
 and copied here because this vhost file is a deploy artifact this spec owns.
 
+Resources sit at the **root** — there is **no `/v1` segment** (report §3.1), so a single
+`location /` fronts every API path (leaderboards, `/domains*`, badge `.svg`/`.json`, the
+Atom/JSON change feeds, `/datasets`, `POST /check`). The **app owns every response
+`Cache-Control` per endpoint class** (07-api.md — Cache-Control by endpoint class; report
+§7.1: list `public, s-maxage`; badge `max-age=86400`; manifest `max-age=300`; terminal poll
+`max-age=60`; `no-store` only on `POST /check`, in-flight poll, `/ip`, health), so this vhost
+**never** sets a blanket `no-store`/`no-cache` and **never** hides the app's headers —
+the RFC 9457 `application/problem+json` Content-Type and the
+`RateLimit`/`RateLimit-Policy`/`Retry-After` response headers (report §7.3) pass through
+unmodified. Edge compression is gzip here, Brotli at the CDN (report §7.4).
+
 ```nginx
 server {
     listen 443 ssl;
@@ -456,6 +493,16 @@ server {
 
     ssl_certificate     /etc/letsencrypt/live/api.whynoipv6.com/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/api.whynoipv6.com/privkey.pem;
+
+    # --- edge compression (§7.4): gzip at the origin, Brotli at the CDN.
+    #     Covers JSON, RFC 9457 problem+json, the Atom/JSON feeds, CSV, and text SVG.
+    #     The pre-compressed dataset payloads opt out (gzip off) below. ---
+    gzip on;
+    gzip_vary on;
+    gzip_proxied any;
+    gzip_min_length 256;
+    gzip_types application/json application/problem+json application/atom+xml
+               application/feed+json text/csv image/svg+xml;
 
     # --- datasets: dated snapshots are immutable forever ---
     location ~ ^/datasets/\d{4}-\d{2}-\d{2}/ {
@@ -474,7 +521,7 @@ server {
         gzip off;
     }
 
-    # --- datasets manifest: exact match → API ---
+    # --- datasets manifest: exact match → API (app sets Cache-Control: max-age=300) ---
     location = /datasets {
         proxy_pass http://[::1]:8080;
         proxy_set_header X-Real-IP        $remote_addr;
@@ -482,7 +529,13 @@ server {
         proxy_set_header Host             $host;
     }
 
-    # --- everything else → API ---
+    # --- everything else → API: leaderboards, /domains*, badge .svg/.json, the
+    #     Atom/JSON change feeds, POST /check, /ip, health. The app owns every
+    #     Cache-Control (badge max-age=86400, lists public s-maxage, no-store on
+    #     POST /check + in-flight poll + /ip + health); do NOT add_header here and do
+    #     NOT proxy_hide_header the app's Cache-Control, the RFC 9457
+    #     application/problem+json Content-Type, or the RateLimit / RateLimit-Policy /
+    #     Retry-After headers — all pass through unmodified. ---
     location / {
         proxy_pass http://[::1]:8080;
         proxy_set_header X-Real-IP        $remote_addr;
@@ -501,7 +554,8 @@ server {
 
 `root /var/lib/whynoipv6` (not `alias`) maps `/datasets/...` directly under the
 datasets dir; nginx follows the `latest` symlink by default. `X-Real-IP` is the single
-source of truth for `GET /ip` and the `POST /check` per-IP rate limiter — trusting it is
+source of truth for `GET /ip` and the `POST /check` per-IP + per-/64 rate limiter (report
+§7.3) — trusting it is
 safe only because the API bind (`API_LISTEN=[::1]:8080`) is unreachable except through
 this proxy (07-api.md — Real client IP, §1.2). The frontend (`whynoipv6.com`) is a separate vhost owned by
 the frontend deploy, out of scope here.
@@ -789,10 +843,11 @@ the physical backup anyway.
 - **Phase-3 gate:** pgBackRest stanza created, first full backup completed, WAL archiving
   confirmed (`pgbackrest check`), and one full restore to a scratch instance succeeds —
   **before** the first production sweep is declared done.
-- **Phase-4 cutover gate (after the history import):** restore the latest backup to a
-  scratch instance; `SELECT count(*) FROM changelog` matches prod as of the backup
-  timestamp; the API binary starts against the restored DB and `GET /changelog` returns
-  rows.
+- **Phase-4 cutover gate (DNS-flip cutover, 08 — no data import):** restore the latest
+  backup to a scratch instance; `SELECT count(*) FROM changelog` on the restore matches the
+  live DB as of the backup timestamp; the API binary starts against the restored DB and
+  `GET /changelog` returns the envelope (empty `items` at launch — the changelog starts
+  fresh under the start-fresh cutover and fills from cutover onward, report §9 / 08).
 - **Quarterly:** repeat the phase-4 drill (timebox 1h) plus one spot-check that a weekly
   CSV export loads into a fresh vanilla PG (`\copy changelog FROM ...`). Record date +
   result in the ops notes.
@@ -1050,7 +1105,7 @@ CI runs on every PR and on the default branch. The pipeline: `make tidy` → `ma
 openapi-typescript output must be committed and current, honouring the brief's
 single-commit backend+frontend sync promise) → `make test` (dockerized
 Postgres+Timescale integration tests for `internal/postgres`, fake-DNS tests for
-`internal/consensus` + the resolver seam, golden-response parity tests for `internal/api`
+`internal/consensus` + the resolver seam, OpenAPI contract + response tests for `internal/api`
 — 10-testing.md) → `make vulncheck` → `make build-linux` (publishes the three release
 artifacts consumed by the Ansible deploy, §6). Any stale generated output, untidy
 go.mod, lint finding, or test failure fails the build.
@@ -1064,12 +1119,10 @@ Fixture tables live in 10-testing.md; an implementation of this file is done whe
 1. **Registry completeness:** every key in §2 is registered via `viper.SetDefault` at
    startup, resolves from its documented env var, and appears in the startup config
    summary; a config-key present in any other spec file but absent from §2 is a defect.
-   **Exception — the §2.10 `migrate.*` keys** are read only by the one-shot `v6ctl
-   migrate-import` verb, not by `api` or `crawler`: they are bound at that verb's
-   invocation (not via the shared `registerDefaults`), and `migrate.source_dsn` has no
-   default, so they are excluded from the `api`/`crawler` `viper.SetDefault` +
-   startup-summary assertions. The "present in another spec file but absent from §2 is a
-   defect" completeness rule still applies to them — they are listed in §2.10.
+   The sole no-default key is `DATABASE_URL` — required in every binary and asserted by
+   criterion 4, not by this completeness check. (There is no longer any one-shot
+   importer/`migrate.*` carve-out: the legacy migration importer and its config were
+   deleted when the cutover collapsed to a pure DNS flip, 08-migration-cutover.md.)
 2. **Env override:** setting `WORKER_SLOTS`, `CONSENSUS_PER_PROVIDER_QPS`,
    `CRAWLER_RESOURCES_ENABLED`, and `RESOLVER_BULK_UPSTREAMS` (comma-separated) via the
    environment overrides their defaults with no YAML present; the loader starts cleanly

@@ -1,5 +1,7 @@
 # 02 — Observation Model
 
+_Status: Round 3.0 — API redesign folded in (docs/api-design-research.md, decisions 2026-07-09): clean root API, keyset pagination, RFC 9457, no legacy compat, no history import._
+
 **Purpose:** Defines how raw engine results become per-dimension observations: the 7-value internal observation vocabulary and its usage rules, the consensus (quorum) resolver package with its rate control and breakers, the normative mapping tables from engine outcomes to the six core dimensions (`base`, `www`, `ns`, `mx`, `conn`, `resources`), and the worker-side Result→observation mapper. Everything downstream of an observation (confirm/pending state machine, changelog, classification) is out of scope here.
 
 **Deliverables:**
@@ -453,7 +455,7 @@ Rules and consequences:
 "conn": {"status": "<final conn observation>", "source": "https" | "http", "http_only": false, "error_type": "timeout"}
 ```
 
-`source` is present only on `supported` outcomes (row 1 → `"https"`, row 2 → `"http"`); `http_only` is always present (true only on row 2); `error_type` is copied from the https result when present and omitted on success. `http_only` is payload-only for the detail page — it is **not** a `class_flag` and does not alter the legacy `v6_only` field, which serves the confirmed `conn` status unchanged (see the API compat file).
+`source` is present only on `supported` outcomes (row 1 → `"https"`, row 2 → `"http"`); `http_only` is always present (true only on row 2); `error_type` is copied from the https result when present and omitted on success. `http_only` is payload-only for the detail page — it is **not** a `class_flag` and does not affect the confirmed `conn` dimension.
 
 ---
 

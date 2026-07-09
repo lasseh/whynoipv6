@@ -1,5 +1,7 @@
 # 05 — Database Schema, Migrations & Data Access
 
+_Status: Round 3.0 — API redesign folded in (docs/api-design-research.md, decisions 2026-07-09): clean root API, keyset pagination, RFC 9457, no legacy compat, no history import._
+
 **Purpose:** This file is the single source of truth for ALL SQL DDL in the system: every extension, enum, table, index, constraint, storage parameter, hypertable conversion, columnstore setting, retention policy, continuous aggregate, and seed row — organized as three runnable golang-migrate migration files. It also pins the migration tooling (golang-migrate embedded in `v6ctl`), the sqlc configuration and package layout, and the application-side `updated_at` maintenance rule. No other spec file may contain `CREATE`/`ALTER`/`DROP` statements; other files reference tables and columns by name and quote their own `SELECT`/`INSERT`/`UPDATE`/`DELETE` statements.
 
 **Deliverables:**
@@ -15,7 +17,7 @@
 - `internal/repository/` — port interfaces (package named here; interface contents defined by their consumers)
 - `cmd/v6ctl` `migrate` subcommand behavior (defined here; cobra wiring per the v6ctl file)
 
-**Companion files:** 00-overview.md (canonical sizing constants; spec-file map), 03 (confirmed-state commit machine — quotes the commit DML), 04 (frontier, claim loop, lifecycle — quotes the claim DML), 06 (ingest: Tranco import, campaign sync, resource sweep, daily tick — quotes its DML), 07 (API surface — quotes its read queries), 08 (migration & cutover — phase-4 importers), 09-ops.md (config-key registry, deploy, backup), 10-testing.md (migration/round-trip test fixtures).
+**Companion files:** 00-overview.md (canonical sizing constants; spec-file map), 03 (confirmed-state commit machine — quotes the commit DML), 04 (frontier, claim loop, lifecycle — quotes the claim DML), 06 (ingest: Tranco import, campaign sync, resource sweep, daily tick — quotes its DML), 07 (API surface — quotes its read queries), 08 (cutover — DNS flip; no importer, start-fresh), 09-ops.md (config-key registry, deploy, backup), 10-testing.md (migration/round-trip test fixtures).
 
 ---
 
@@ -114,8 +116,7 @@ CREATE TYPE observation AS ENUM
    'error', 'inconsistent');
 
 CREATE TYPE domain_kind     AS ENUM ('apex', 'subdomain');
-CREATE TYPE created_by      AS ENUM ('tranco', 'campaign', 'parent_link', 'live_check',
-                                     'import');  -- 'import': phase-4 history import only
+CREATE TYPE created_by      AS ENUM ('tranco', 'campaign', 'parent_link', 'live_check');
 CREATE TYPE classification  AS ENUM ('unknown', 'inactive', 'sinner', 'partial', 'hero');
 CREATE TYPE disabled_reason AS ENUM ('dead', 'service', 'manual', 'delisted');
 CREATE TYPE resource_source AS ENUM ('discovered', 'manual');
@@ -141,6 +142,18 @@ CREATE TABLE country (
   sites   INT NOT NULL DEFAULT 0,        -- recomputed by the daily tick (06)
   v6sites INT NOT NULL DEFAULT 0,        -- recomputed by the daily tick (06)
   percent NUMERIC(5,2) NOT NULL DEFAULT 0  -- (5,2): kills the legacy pgtype ÷10 hack
+);
+
+-- DNS-provider league table (OPEN-4): ns_host suffix -> provider mapping.
+-- Must precede domain (domain.dns_provider_id is a nullable FK). The crawler
+-- resolves a domain's provider by longest matching nameserver-host suffix in
+-- ns_suffixes at scan commit (06); binary inclusion + counts only, no scores.
+CREATE TABLE dns_provider (
+  id          BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  name        TEXT NOT NULL,
+  ns_suffixes TEXT[] NOT NULL DEFAULT '{}', -- nameserver host suffixes mapping to this provider
+  count_total INT NOT NULL DEFAULT 0,       -- domains mapped to this provider; recomputed by the daily tick (06), mirrors asn
+  count_v6    INT NOT NULL DEFAULT 0        -- of those, classification hero|partial; recomputed by the daily tick (06), mirrors asn
 );
 
 -- -----------------------------------------------------------------------------
@@ -215,6 +228,16 @@ CREATE TABLE domain (
   asn_id      INT NOT NULL REFERENCES asn(id),     -- sentinel row when unknown (§6);
   country_id  INT NOT NULL REFERENCES country(id), --   no serializer ever handles NULL
 
+  -- League-table pivots (07 filters/leaderboards: ?tld=, ?provider=). Filled at
+  -- ingest/commit (06); exposed on the domain resource (07 §5.2/§5.3).
+  tld              TEXT,                            -- eTLD/public suffix (publicsuffix);
+                                                    --   ingest sets it NOT NULL for apex rows (06)
+  dns_provider_id  BIGINT REFERENCES dns_provider(id), -- ns_host suffix -> provider (OPEN-4);
+                                                    --   NULL until a mapping matches
+  hosting_provider TEXT,                            -- normalized CDN/hosting tag (CNAME-chain CDN
+                                                    --   detection + resolved-IP ASN); NULL when unknown
+  -- registrar is deliberately DEFERRED (RDAP cost at 1M scale) — a future column, not added now.
+
   disabled        BOOLEAN NOT NULL DEFAULT FALSE,
   disabled_reason disabled_reason,
   disabled_at     TIMESTAMPTZ,
@@ -251,6 +274,13 @@ CREATE INDEX idx_domain_parent  ON domain (parent_id) WHERE parent_id IS NOT NUL
 CREATE INDEX idx_domain_country ON domain (country_id, classification, rank)
   WHERE rank IS NOT NULL AND NOT disabled;
 CREATE INDEX idx_domain_asn     ON domain (asn_id);
+-- Provider/TLD pivots are allowed only under an indexed public scope (OPEN-2: no
+-- GIN, no unscoped provider/tld scan). These mirror idx_domain_country's shape so
+-- the ?tld=/?provider= filters (07) compose with class + rank ordering.
+CREATE INDEX idx_domain_tld ON domain (tld, classification, rank)
+  WHERE rank IS NOT NULL AND NOT disabled;
+CREATE INDEX idx_domain_dns_provider ON domain (dns_provider_id, classification, rank)
+  WHERE dns_provider_id IS NOT NULL AND rank IS NOT NULL AND NOT disabled;
 
 -- Table storage settings: the claim/commit cycle updates every active row >=2x/day —
 -- claimed_at at claim, next_check_at + status columns at commit; the commit update
@@ -267,14 +297,19 @@ ALTER TABLE domain SET (
 
 CREATE TABLE campaign (
   id          INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  uuid        UUID NOT NULL UNIQUE,              -- from YAML; API uses shortuuid encoding
+  uuid        UUID NOT NULL UNIQUE,              -- from YAML; API exposes the raw UUID (07)
   name        TEXT NOT NULL,
   description TEXT NOT NULL DEFAULT '',
   source_file TEXT,                              -- provenance: YAML filename
+  tags        TEXT[],                            -- mandate/campaign tags (OPEN-12); backs the
+                                                 --   ?tag= filter and the /mandates surface (07).
+                                                 --   TEXT[] over a campaign_tag table: simplest
+                                                 --   form, no join (rejected: the heavier table).
   disabled    BOOLEAN NOT NULL DEFAULT FALSE,
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+CREATE INDEX idx_campaign_tags ON campaign USING gin (tags);  -- ?tag= filter + /mandates (07)
 
 CREATE TABLE campaign_domain (
   campaign_id INT NOT NULL REFERENCES campaign(id) ON DELETE CASCADE,
@@ -345,7 +380,7 @@ CREATE INDEX idx_check_job_host_done ON check_job (host, completed_at DESC)
   WHERE status = 'done';                                            -- host-side dedupe
 
 -- -----------------------------------------------------------------------------
--- Editorial picks (written only by v6ctl shame + the phase-4 importer)
+-- Editorial picks (written only by v6ctl shame add, 06)
 -- -----------------------------------------------------------------------------
 
 CREATE TABLE top_shame (
@@ -378,7 +413,7 @@ CREATE UNIQUE INDEX idx_tranco_import_list ON tranco_import (list_id) WHERE NOT 
 
 -- -----------------------------------------------------------------------------
 -- Product stats snapshots (public, API-served, forever). Snapshots of CONFIRMED
--- state, written by the daily tick (06); serve the /metric and /stats endpoints (07).
+-- state, written by the daily tick (06); serve the /stats endpoints (07).
 -- Plain tables except stats_asn_daily (~50-80k rows/day -> hypertable in 000002).
 -- -----------------------------------------------------------------------------
 
@@ -389,7 +424,10 @@ CREATE TABLE stats_global_daily (
   base_supported INT, www_supported INT, ns_supported INT, mx_supported INT,
   conn_supported INT, resources_supported INT,
   top_heroes INT,        -- Tranco top-1000 with web-facing IPv6
-  top_nameserver INT     -- Tranco top-1000 with IPv6-capable nameservers
+  top_nameserver INT,    -- Tranco top-1000 with IPv6-capable nameservers
+  generated_at TIMESTAMPTZ  -- crawl-freshness signal set by the rollup (06); deterministic
+                            --   source for the envelope meta.as_of (07). NULL -> as_of falls
+                            --   back to day at 00:00:00Z; meta.generation derives from max(day).
 );
 
 CREATE TABLE stats_country_daily (
@@ -446,26 +484,18 @@ CREATE TABLE scan_detail (
 -- on a synthetic id is possible on a hypertable and nothing consumes it.
 
 -- Structured field-level changelog. FOREVER — the credibility surface.
+-- Start-fresh (OPEN-9): no history import, so there are no legacy/unmappable rows —
+-- the legacy_message/legacy_status columns, the field='legacy' domain value, and the
+-- three legacy CHECK constraints are gone; old_value/new_value are NOT NULL outright.
 CREATE TABLE changelog (
   domain_id BIGINT NOT NULL,
   ts        TIMESTAMPTZ NOT NULL DEFAULT now(),
-  field     TEXT NOT NULL,                     -- base|www|ns|mx|conn|resources|legacy
-  old_value ipv6_status,                       -- never NULL on native rows: first
-                                               --   confirmation writes no row at all (03);
-                                               --   NULL only for field='legacy' import rows
-  new_value ipv6_status,                       -- NULL only on field='legacy' rows
-  legacy_message TEXT,                         -- verbatim production message (field='legacy' only)
-  legacy_status  TEXT,                         -- verbatim production ipv6_status (field='legacy' only)
-  PRIMARY KEY (domain_id, ts, field),
-  CONSTRAINT changelog_legacy_chk
-    CHECK ( (field = 'legacy') = (legacy_message IS NOT NULL) ),
-  CONSTRAINT changelog_old_value_chk
-    CHECK ( field = 'legacy' OR old_value IS NOT NULL ),
-  CONSTRAINT changelog_new_value_chk
-    CHECK ( field = 'legacy' OR new_value IS NOT NULL )
+  field     TEXT NOT NULL,                     -- base|www|ns|mx|conn|resources
+  old_value ipv6_status NOT NULL,              -- never NULL: the first confirmation of a
+                                               --   dimension writes no changelog row at all (03)
+  new_value ipv6_status NOT NULL,
+  PRIMARY KEY (domain_id, ts, field)
 );
--- field='legacy' is the import escape hatch for unmappable production rows (08);
--- native (post-cutover) rows never set the legacy columns.
 CREATE INDEX idx_changelog_ts ON changelog (ts DESC);  -- global recent-changes feed
 -- (The PK leads with domain_id and cannot serve the sitewide GET /changelog feed.)
 
@@ -521,6 +551,7 @@ DROP TABLE IF EXISTS resource_host;
 DROP TABLE IF EXISTS campaign_domain;
 DROP TABLE IF EXISTS campaign;
 DROP TABLE IF EXISTS domain;
+DROP TABLE IF EXISTS dns_provider;
 DROP TABLE IF EXISTS country;
 DROP TABLE IF EXISTS asn;
 DROP TYPE IF EXISTS check_job_status;
@@ -635,7 +666,7 @@ DROP MATERIALIZED VIEW IF EXISTS scan_daily_adoption;
 
 ## 5. Migration 000003 — seed data
 
-Seeds **static reference data only**: the sentinel ASN, the country list, and the day-0 stats rows. It deliberately seeds **no** `domain`, `campaign`, or `top_shame` rows — `top_shame.domain_id` FK requires phase-1 Tranco ingestion; `top_shame` population is the phase-4 importer (08) plus `v6ctl shame add` thereafter.
+Seeds **static reference data only**: the sentinel ASN, the country list, and the day-0 stats rows. It deliberately seeds **no** `domain`, `campaign`, or `top_shame` rows — `top_shame.domain_id` FK requires phase-1 Tranco ingestion; `top_shame` population at cutover is an editorial re-entry via `v6ctl shame add` (08-migration-cutover.md — DNS-flip cutover, step 2), plus `v6ctl shame add` thereafter. There is no importer (start-fresh, OPEN-9).
 
 Complete contents of `db/migrations/000003_seed.up.sql`:
 
@@ -648,7 +679,7 @@ Complete contents of `db/migrations/000003_seed.up.sql`:
 -- (asn.number = 0, country.code = 'UN'), never by literal id.
 -- =============================================================================
 
--- Sentinel ASN (attribution fallback; appears in /metric/asn as in production).
+-- Sentinel ASN (attribution fallback; appears in /asns as in production).
 INSERT INTO asn (number, name) VALUES (0, 'Unknown');
 
 -- Country reference data: 251 rows, including the sentinel
@@ -666,7 +697,7 @@ INSERT INTO country (name, code, tld) VALUES
 --      in file order, ending with:] ...
 ('Unknown', 'UN', '.UN');
 
--- Day-0 stats rows: the /metric/overview endpoint (07) reads the latest
+-- Day-0 stats rows: the /stats/overview endpoint (07) reads the latest
 -- stats_global_daily row and MUST always find one, even on first boot before
 -- the first nightly snapshot.
 INSERT INTO stats_global_daily (
@@ -679,7 +710,7 @@ ON CONFLICT (day) DO NOTHING;
 
 The elided country rows are **not optional**: the shipped migration file contains all 251 `(name, code, tld)` tuples verbatim (source: `/…/lasseh/whynoipv6/db/migrations/02_data.up.sql`, lines 5–255). The 10-testing migration fixture asserts `SELECT count(*) FROM country` = 251 and that both sentinels resolve.
 
-**Decision (day-0 stats semantics).** The design requires the seed migration to "write day-0 rows for all stats_* tables" so `/metric/overview` always has a row. Day-0 rows are defined as *the output of the nightly snapshot job run against the freshly migrated (empty) database*: one all-zeros `stats_global_daily` row for `CURRENT_DATE`, and **zero rows** for the keyed tables (`stats_country_daily`, `stats_campaign_daily`, `stats_asn_daily`) — the snapshot job writes keyed rows only for keys with members, and an empty database has none. `/metric/overview` is the only endpoint requiring a guaranteed row; the keyed endpoints serve arrays and tolerate empty series. At phase-4 cutover, `v6ctl stats recalc` (06) overwrites the day-0 row with real values — safe because every stats insert is `ON CONFLICT (<pk>) DO UPDATE`.
+**Decision (day-0 stats semantics).** The design requires the seed migration to "write day-0 rows for all stats_* tables" so `/stats/overview` always has a row. Day-0 rows are defined as *the output of the nightly snapshot job run against the freshly migrated (empty) database*: one all-zeros `stats_global_daily` row for `CURRENT_DATE`, and **zero rows** for the keyed tables (`stats_country_daily`, `stats_campaign_daily`, `stats_asn_daily`) — the snapshot job writes keyed rows only for keys with members, and an empty database has none. `/stats/overview` is the only endpoint requiring a guaranteed row; the keyed endpoints serve arrays and tolerate empty series. At phase-4 cutover, `v6ctl stats recalc` (06) overwrites the day-0 row with real values — safe because every stats insert is `ON CONFLICT (<pk>) DO UPDATE`.
 
 Complete contents of `db/migrations/000003_seed.down.sql` (dev-only; assumes no dependent data — fails on FK violations by design):
 
@@ -694,7 +725,7 @@ DELETE FROM asn;
 
 ## 6. Seed-data consumers (context, non-DDL)
 
-- **Sentinels.** `asn (number 0, name 'Unknown')` and `country (code 'UN', name 'Unknown', tld '.UN')` are the attribution fallbacks: entity insert (Tranco import, campaign sync, live-check row creation) runs attribution with no input IP, yielding ccTLD-or-sentinel country and sentinel ASN, so `domain.asn_id`/`domain.country_id` are never NULL and no serializer ever handles NULL. The crawler resolves sentinel ids **once at startup by lookup** (`SELECT id FROM asn WHERE number = 0`; `SELECT id FROM country WHERE code = 'UN'`), never by literal id. Both sentinels appear in `/metric/asn` and `/country` listings exactly as in production (the frontend already renders them).
+- **Sentinels.** `asn (number 0, name 'Unknown')` and `country (code 'UN', name 'Unknown', tld '.UN')` are the attribution fallbacks: entity insert (Tranco import, campaign sync, live-check row creation) runs attribution with no input IP, yielding ccTLD-or-sentinel country and sentinel ASN, so `domain.asn_id`/`domain.country_id` are never NULL and no serializer ever handles NULL. The crawler resolves sentinel ids **once at startup by lookup** (`SELECT id FROM asn WHERE number = 0`; `SELECT id FROM country WHERE code = 'UN'`), never by literal id. Both sentinels appear in `/asns` and `/countries` listings exactly as in production.
 - **`country.tld` matching.** Stored dot-prefixed uppercase (`'.NO'`); the crawler's ccTLD attribution normalizes its probe to `"." + strings.ToUpper(label)` before comparing (algorithm in 03's attribution section).
 - **New ASNs** are auto-registered by the crawler at scan commit (`INSERT (number, name) ON CONFLICT (number) DO NOTHING`, then re-read); existing names are never updated on later scans. The `asn` table therefore grows organically from the seed of one sentinel row.
 
@@ -707,7 +738,8 @@ DELETE FROM asn;
 ```sql
 CREATE TEMPORARY TABLE tranco_staging (
   rank INT  NOT NULL,
-  host TEXT NOT NULL          -- already canonicalized in Go; garbage lines dropped
+  host TEXT NOT NULL,         -- already canonicalized in Go; garbage lines dropped
+  tld  TEXT NOT NULL          -- publicsuffix-derived in Go at parse (06 §6.9); carried into domain.tld
 ) ON COMMIT DROP;
 ```
 
@@ -722,7 +754,7 @@ Created inside the import transaction (`ON COMMIT DROP` guarantees cleanup on bo
 | `ipv6_status` | `supported`, `unsupported`, `no_record`, `not_applicable` | Public status model. The only status type the API and classification read. Stored in `domain.*_status`/`*_pending`, `resource_host.aaaa_*`, `changelog.old_value`/`new_value`. |
 | `observation` | `supported`, `partial`, `unsupported`, `no_record`, `not_applicable`, `error`, `inconsistent` | Internal only. Raw per-scan outcomes (`scan.*`, `domain.*_observed`). `partial`, `error`, `inconsistent` never reach public output. `partial` exists for the informational `parity`/`ptr` dimensions. |
 | `domain_kind` | `apex`, `subdomain` | Tranco contributes only `apex`; campaign YAML entries may be subdomains (PSL split at import time, 06). |
-| `created_by` | `tranco`, `campaign`, `parent_link`, `live_check`, `import` | Origin audit. `import` is used only by the phase-4 history importer (08). |
+| `created_by` | `tranco`, `campaign`, `parent_link`, `live_check` | Origin audit of how a domain entered the frontier. No `import` value — start-fresh cutover, no history import (OPEN-9, 08). |
 | `classification` | `unknown`, `inactive`, `sinner`, `partial`, `hero` | Materialized output of the deterministic ladder (03). No grades, no scores. |
 | `disabled_reason` | `dead`, `service`, `manual`, `delisted` | Lifecycle table in 04. `dead`/`delisted` stay claimable on the slow lane (the `idx_domain_due` predicate admits them); `service`/`manual` leave the frontier entirely. |
 | `resource_source` | `discovered`, `manual` | `manual` links are never pruned; operator add upgrades `discovered`→`manual` (06). |
@@ -736,7 +768,7 @@ Enum evolution rule: adding values is `ALTER TYPE … ADD VALUE` in a future mig
 
 Two tables carry `updated_at`: `domain` and `campaign`. There are **no triggers**; maintenance is application-side:
 
-- **Rule:** every `UPDATE` statement against `domain` or `campaign` sets `updated_at = now()` — with exactly **one exception**: the frontier claim's lease stamp (`UPDATE domain SET claimed_at = now() WHERE id IN (…)`, 04) deliberately omits it. `claimed_at` is unindexed precisely so the lease stamp can be a HOT update; touching `updated_at` there would also corrupt the legacy `ts_updated` API field (which maps `domain.updated_at`, 07) into a claim timestamp. **Decision:** the design demonstrates `updated_at = now()` in the commit UPDATE, the Tranco upsert, and campaign sync; this rule generalizes it to *all* non-claim writers (lifecycle sweep, `v6ctl disable`, etc.) as the simplest consistent form.
+- **Rule:** every `UPDATE` statement against `domain` or `campaign` sets `updated_at = now()` — with exactly **one exception**: the frontier claim's lease stamp (`UPDATE domain SET claimed_at = now() WHERE id IN (…)`, 04) deliberately omits it. `claimed_at` is unindexed precisely so the lease stamp can be a HOT update; touching `updated_at` there would also corrupt the `updated_at` value the API serializes verbatim (07) into a claim timestamp. **Decision:** the design demonstrates `updated_at = now()` in the commit UPDATE, the Tranco upsert, and campaign sync; this rule generalizes it to *all* non-claim writers (lifecycle sweep, `v6ctl disable`, etc.) as the simplest consistent form.
 - Write paths bound by the rule (each quotes its own DML): the fenced commit UPDATE (03-state-machine.md §12.1 — Statement 1), the Tranco upsert and lifecycle sweep (06), campaign sync enable/disable/rename updates (06), and every `v6ctl` verb that mutates these tables.
 - `INSERT` paths rely on the column defaults (`DEFAULT now()`); no explicit value needed.
 - 10-testing.md carries a repository-level test asserting the claim query leaves `updated_at` unchanged while the commit bumps it.
@@ -778,7 +810,7 @@ One file per subject area. This file owns only the layout; the query contents ar
 |---|---|---|
 | `db/query/domain.sql` | frontier claim, commit UPDATE, entity lookups/ensure, list endpoints (sinners/heroes/partial/almost), search, subdomains, disable/enable | 03, 04, 06, 07 |
 | `db/query/scan.sql` | scan + scan_detail inserts, per-domain history reads, latest-detail read | 03, 07 |
-| `db/query/changelog.sql` | changelog inserts, the five legacy feeds, dataset reads | 03, 07 |
+| `db/query/changelog.sql` | changelog inserts, the scoped `/changelog` + change-feed + diff reads, dataset reads | 03, 07 |
 | `db/query/campaign.sql` | campaign list/detail/search, membership upserts, sync soft-delete | 06, 07 |
 | `db/query/resource.sql` | resource_host upsert/claim/confirm, domain_resource link/prune, dependents | 06, 07 |
 | `db/query/check_job.sql` | enqueue, claim (SKIP LOCKED), complete/fail, reaper, purge, rate-limit counts, host dedupe | 07 |
@@ -786,7 +818,7 @@ One file per subject area. This file owns only the layout; the query contents ar
 | `db/query/country.sql` | country list, counter recompute, sentinel lookup | 06, 07 |
 | `db/query/asn.sql` | asn ensure/lookup, metric list/search, counter recompute, sentinel lookup | 03, 06, 07 |
 | `db/query/tranco.sql` | tranco_import provenance insert/reads, staleness probe, delist UPDATE | 06 |
-| `db/query/shame.sql` | top_shame upsert/delete/list, topsinner read | 06, 07 |
+| `db/query/shame.sql` | top_shame upsert/delete/list, `/shame` read | 06, 07 |
 | `db/query/service_candidate.sql` | candidate upsert (`ON CONFLICT DO NOTHING`), list/confirm/dismiss | 06 |
 | `db/query/metrics.sql` | crawler_metrics checkpoint insert, unbound_stats insert | 04, 09-ops.md |
 
@@ -812,24 +844,25 @@ Every table, its writers, its readers, and the spec files that quote DML against
 
 | Table | Written by | Read by | Spec files |
 |---|---|---|---|
-| `asn` | seed (§5); crawler attribution auto-register (03); tick counter recompute (06) | API `/metric/asn*` (07); crawler sentinel lookup | 03, 06, 07 |
-| `country` | seed (§5); tick counter recompute (06) | API `/country*` (07); crawler ccTLD attribution (03) | 03, 06, 07 |
+| `asn` | seed (§5); crawler attribution auto-register (03); tick counter recompute (06) | API `/asns*` (07); crawler sentinel lookup | 03, 06, 07 |
+| `country` | seed (§5); tick counter recompute (06) | API `/countries*` (07); crawler ccTLD attribution (03) | 03, 06, 07 |
+| `dns_provider` | `v6ctl` provider-mapping seed/edit (06) | crawler ns-suffix match at commit (03/06); `/providers*` + `?provider=` filter (07) | 03, 06, 07 |
 | `domain` | Tranco upsert + lifecycle sweep (06); claim stamp + scan commit (04, 03); campaign sync entity-ensure (06); live-check `last_requested_at` touch (07); `v6ctl` disable/enable | claim query (04); all public list/detail/search endpoints + badge (07); stats snapshot + candidate detection (06); datasets (07) | 03, 04, 06, 07 |
-| `campaign` | campaign sync (06) | campaign endpoints (07); lifecycle sweep linkage (06) | 06, 07 |
+| `campaign` | campaign sync (06) | campaign + `/mandates` endpoints and the `?tag=` filter over `campaign.tags` (07); lifecycle sweep linkage (06) | 06, 07 |
 | `campaign_domain` | campaign sync membership diff (06) | campaign endpoints, campaign changelog/scan joins (07); lifecycle sweep linkage (06); stats snapshot (06) | 06, 07 |
 | `resource_host` | discovery upsert (inside scan commit, 03/06); sweep worker confirm (06) | roll-up read (03); `/domain/{domain}/resources`, `/resource/{host}/dependents` (07); service-candidate heuristic (06) | 03, 06, 07 |
 | `domain_resource` | discovery link/refresh/prune (06); `v6ctl resource add/remove` | roll-up read (03); resource endpoints (07) | 03, 06, 07 |
 | `service_candidate` | tick candidate detection (`ON CONFLICT DO NOTHING`, 06); `v6ctl service-candidates confirm/dismiss` | `v6ctl service-candidates list`; weekly webhook digest (09-ops.md) | 06 |
 | `check_job` | `POST /check` enqueue (07); consumer claim/complete (07); tick 30d purge (06) | `GET /check/{id}` (07); reaper + rate-limit counts (07) | 06, 07 |
-| `top_shame` | `v6ctl shame add/remove`; phase-4 importer (08) | `GET /domain/topsinner` (07) | 07, 08 |
+| `top_shame` | `v6ctl shame add/remove`; phase-4 `top_shame` re-seed (08) | `/shame` editorial pick (07) | 07, 08 |
 | `tranco_import` | import provenance insert (06) | unchanged-list short-circuit, staleness alert (06); `v6ctl tranco status` | 06 |
-| `stats_global_daily` | seed day-0 row (§5); tick snapshot upsert; `v6ctl stats recalc` (06) | `GET /metric/overview`, `GET /stats/overview` (07) | 06, 07 |
-| `stats_country_daily` | tick snapshot upsert (06) | `GET /stats/country/{code}` (07) | 06, 07 |
-| `stats_campaign_daily` | tick snapshot upsert (06; skips disabled campaigns) | `GET /stats/campaign/{uuid}` (07) | 06, 07 |
-| `stats_asn_daily` | tick snapshot upsert (06) | `GET /stats/asn/{number}` (07) | 06, 07 |
-| `scan` | scan commit insert (03); phase-4 90d history import (08) | per-domain graphs `/stats/domain/{domain}` + `/domain/{domain}/log` (07); `scan_daily_adoption` cagg; datasets (07) | 03, 07, 08 |
+| `stats_global_daily` | seed day-0 row (§5); tick snapshot upsert; `v6ctl stats recalc` (06) | `GET /stats/overview` (07) | 06, 07 |
+| `stats_country_daily` | tick snapshot upsert (06) | `GET /countries/{code}/stats` (07) | 06, 07 |
+| `stats_campaign_daily` | tick snapshot upsert (06; skips disabled campaigns) | `GET /campaigns/{uuid}/stats` (07) | 06, 07 |
+| `stats_asn_daily` | tick snapshot upsert (06) | `GET /asns/{number}/stats` (07) | 06, 07 |
+| `scan` | scan commit insert (03) | per-domain graphs `/stats/domain/{domain}` + `/domain/{domain}/log` (07); `scan_daily_adoption` cagg; datasets (07) | 03, 07 |
 | `scan_detail` | scan commit insert (03) | detail page latest-row read (07); debugging | 03, 07 |
-| `changelog` | scan commit insert (03); phase-4 history import (08) | five legacy `/changelog*` feeds (07); campaign changelog joins (07); datasets | 03, 07, 08 |
+| `changelog` | scan commit insert (03) | `/changelog` feeds + change-feeds (Atom/JSON-Feed) + the diff endpoint (07); campaign changelog joins (07); datasets | 03, 07 |
 | `crawler_metrics` | worker checkpoint rows every 1000 domains + idle checkpoints (04) | Grafana panels + alert rules A1/A3 (09-ops.md) | 04, 09-ops.md |
 | `unbound_stats` | `v6ctl ops unbound-stats` timer (09-ops.md) | Grafana + alert rule A5 (09-ops.md) | 09-ops.md |
 | `scan_daily_adoption` (cagg) | TimescaleDB refresh policy | Grafana; research datasets (07) | 07, 09-ops.md |
@@ -849,18 +882,23 @@ Columns whose existence is mandated by exactly one consumer elsewhere in the spe
 - `domain.claimed_at` — lease fence token; deliberately **unindexed** so lease stamping is HOT (04).
 - `domain.class_flags` — `broken_v6`, `www_missing`, `ns_missing`, `mail_missing`, `resources_v4only`; TEXT[] rather than an enum array so flags can be added without migration (03 owns the truth table).
 - `domain.gold` — badge + stats `gold` counter; false for all domains until `crawler.resources.enabled` flips at phase 5 (registry: 09-ops.md).
-- `domain.updated_at` — serialized as legacy `ts_updated`; `domain.last_checked_at` as `ts_check`; `*_since` as `ts_aaaa`/`ts_www`/`ts_ns`/`ts_mx`/`ts_curl` (07's R3 mapping).
-- `country.percent NUMERIC(5,2)` — direct serialization for `/country` (kills production's pgtype ÷10 hack, 07).
-- `asn.count_total` / `asn.count_v6`, `country.sites` / `country.v6sites` / `country.percent` — recomputed by tick step 3 over the publicly-ranked predicate (06).
+- `domain.updated_at` / `domain.last_checked_at` — serialized under their own `snake_case` names (`updated_at`, `last_checked_at`); each `*_since` column is the `since` field of its dimension's `{value, since}` status object (07 §4.1) — no `ts_*` renaming, no zero-time encoding.
+- `country.percent NUMERIC(5,2)` — direct serialization for `/countries` (kills production's pgtype ÷10 hack, 07).
+- `asn.count_total` / `asn.count_v6`, `dns_provider.count_total` / `dns_provider.count_v6`, `country.sites` / `country.v6sites` / `country.percent` — recomputed by tick step 3 over the publicly-ranked predicate (06).
 - `campaign.source_file` — sync provenance; rename detection is uuid-based, not file-based (06).
 - `scan.country_id` / `scan.asn_id` — denormalized at commit time because caggs cannot track JOINs; feed `scan_daily_adoption`'s country slice.
 - `scan.classification` — confirmed class stamped at scan time (dataset + cagg dimension), NOT recomputed from the row's observations.
-- `changelog.legacy_message` / `changelog.legacy_status` + the three CHECK constraints — phase-4 unmappable-row escape hatch (08); native rows never set them, and the CHECKs make that machine-enforced.
+- `domain.tld` — eTLD/public suffix (publicsuffix), filled at ingest (06); TLD/ccTLD league tables and the `?tld=` filter (07), indexed by `idx_domain_tld`.
+- `domain.dns_provider_id` — FK into `dns_provider` (OPEN-4), set at scan commit by longest ns-suffix match (03/06); backs `/providers*` and `?provider=` (07), indexed by `idx_domain_dns_provider`.
+- `domain.hosting_provider` — normalized CDN/hosting tag from CNAME-chain CDN detection + resolved-IP ASN (03/06); surfaced on the domain row and as the scoped `?hosting=` filter pivot (07 §4.6) — not a leaderboard collection (no stats source; no live `GROUP BY domain`).
+- `dns_provider.ns_suffixes` — nameserver-host suffixes that map to a provider; the crawler's provider match input (03/06).
+- `campaign.tags` — mandate/campaign tags (OPEN-12); the `?tag=` filter and `/mandates` surface (07), indexed by `idx_campaign_tags` (GIN).
+- `stats_global_daily.generated_at` — crawl-freshness signal set by the rollup (06); deterministic source for the envelope `meta.as_of` (07).
 - `check_job.result` — the shared-mapper JSON served verbatim by `GET /check/{id}` (07).
 - `tranco_import.line_count` / `rejected_count` / `duplicate_count` / `imported_count` / `delisted` / `aborted` / `note` — import provenance + sanity guard + staleness alert (06).
 - `resource_host.dependent_count` — maintained ±1 on link/unlink in the same statements (06); service-candidate heuristic (b) threshold input; sweep claim predicate `dependent_count > 0`.
 - `crawler_metrics.dim_counters` — JSONB per-dimension tallies **including the `lease_lost` counter** for fence aborts (03). **Decision:** `lease_lost` lives inside `dim_counters` (the design offered "a `lease_lost` counter in `dim_counters` or a dedicated column"; the JSONB key is the simplest form and needs no DDL change to extend).
-- `stats_global_daily.top_heroes` / `top_nameserver` — top-1k metrics with the pinned `rank <= 1000` / `base = 'supported'` semantics (06 owns the snapshot SQL; 07 serves them in `/metric/overview`).
+- `stats_global_daily.top_heroes` / `top_nameserver` — top-1k metrics with the pinned `rank <= 1000` / `base = 'supported'` semantics (06 owns the snapshot SQL; 07 serves them in `/stats/overview`).
 - `stats_global_daily.disabled` — the one stats column scoped `rank IS NOT NULL AND disabled` (visibility into suppression); all other stats columns use `rank IS NOT NULL AND NOT disabled` (06).
 
 ---
@@ -872,5 +910,5 @@ Columns whose existence is mandated by exactly one consumer elsewhere in the spe
 3. `SELECT count(*) FROM country` = 251; sentinel lookups (`asn.number = 0`, `country.code = 'UN'`) return exactly one row each; `SELECT count(*) FROM stats_global_daily` = 1.
 4. `sqlc generate` runs clean against the three up-files and the full `db/query/` set; generated code compiles.
 5. EXPLAIN of the claim query (04) on a seeded 1M-row fixture uses `idx_domain_due` (index scan bounded by `next_check_at <= now()`), and no query plan for the ranked list endpoints uses `idx_domain_due` — the claim-plan gate.
-6. Inserting a native changelog row with `old_value NULL`, or a `field='legacy'` row with `legacy_message NULL`, fails the CHECK constraints.
+6. Inserting a changelog row with `old_value NULL` or `new_value NULL` fails the `NOT NULL` constraint; there is no `field='legacy'` value and no legacy columns/CHECKs (start-fresh, OPEN-9).
 7. The commit UPDATE bumps `domain.updated_at`; the claim stamp does not (§9).

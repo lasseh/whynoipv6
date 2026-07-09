@@ -1,16 +1,18 @@
 # 07 — HTTP API Contract
 
-**Purpose:** The complete, self-contained HTTP contract of the public API: server baseline, the frozen legacy surface the production Vue frontend depends on (byte-level quirks included), all new endpoints, the badge, the live-check lifecycle, the datasets manifest, and the OpenAPI conventions. An implementer must be able to build `internal/api` and `openapi/openapi.yaml` from this file alone, capturing golden fixtures from the named production source files.
+_Status: Round 3.0 — API redesign folded in (docs/api-design-research.md, decisions 2026-07-09): clean root API, keyset pagination, RFC 9457, no legacy compat, no history import._
+
+**Purpose:** The complete, self-contained HTTP contract of the public API — a read-only, anonymous, **unversioned** JSON API served at the **root of `api.whynoipv6.com`**. It serves the *real* WhyNoIPv6 data model (the 4-value confirmed `ipv6_status` per dimension, the `classification` enum, `class_flags[]`, `gold`, and the `*_since` provenance timestamps) directly — no projection, no message rendering, no legacy compatibility layer. Every list is a keyset/cursor-paginated collection over an object envelope; every error is RFC 9457 `application/problem+json`; the whole surface is OpenAPI-3.0.3-first. An implementer must be able to build `internal/api` and `openapi/openapi.yaml` from this file alone, using the schema in 05-schema.md and the shared engine mapper in 02-observation-model.md.
 
 **Deliverables:**
-- `internal/api/` — chi router + middleware stack (`router.go`), one handler file per route group (`domain.go`, `country.go`, `changelog.go`, `campaign.go`, `metric.go`, `stats.go`, `resource.go`, `check.go`, `badge.go`, `datasets.go`, `misc.go`), legacy serialization helpers (`legacy.go`: `legacyStatus`, timestamp mapping, `renderChangelog`), shortuuid codec (`uuid.go`), shared pagination/error helpers (`http.go`), generated code in `internal/api/gen/` (oapi-codegen output, committed).
-- `openapi/openapi.yaml` — spec-first source of truth for every endpoint in this file.
-- The live-check **contract** (§6): POST/GET envelopes, dedupe, consumer/reaper/retention SQL. (The consumer goroutines run inside `cmd/crawler` — process placement, pool wiring, and shutdown are owned by 04-lifecycle-scheduling.md.)
-- Nginx location blocks for the API vhost and `/datasets/` (deployed via 09-ops.md).
+- `internal/api/` — chi router + middleware stack (`router.go`), one handler file per route group (`domain.go`, `country.go`, `asn.go` incl. the DNS-provider `provider.go` league table (+ the hosting-tag `?hosting=` filter, §4.6), `campaign.go`, `changelog.go`, `stats.go`, `resource.go`, `check.go`, `badge.go`, `datasets.go`, `feed.go`, `diff.go`, `mandate.go`, `misc.go`), shared helpers (`cursor.go` — the opaque keyset cursor codec and the three seek orderings; `problem.go` — the RFC 9457 problem writer; `http.go` — envelope/pagination/negotiation helpers), and generated code in `internal/api/gen/` (oapi-codegen chi + strict-server output, committed). There is **no** `legacy.go` and **no** `uuid.go`/shortuuid codec.
+- `openapi/openapi.yaml` — the hand-authored OpenAPI 3.0.3 source of truth for every endpoint in this file (§7).
+- The live-check **contract** (§5.1): POST/GET envelopes, dedupe, consumer/reaper/retention SQL. (The consumer goroutines run inside `cmd/crawler` — process placement, pool wiring, and shutdown are owned by 04-lifecycle-scheduling.md.)
+- Nginx location blocks for the API vhost, the change feeds, and `/datasets/` (deployed via 09-ops.md).
 
-**Companion files:** 05-schema.md (every table/column referenced here — this file contains **no DDL**), 04-lifecycle-scheduling.md (check-job consumer placement, frontier scheduling touched by live-check re-entry), 02-observation-model.md (the `conn` composition table and the shared engine→public dimension mapper the §6.4 live-check reader imports), 00-overview.md (sizing-constants table, monorepo layout), 09-ops.md (consolidated config-key registry, systemd/nginx deploy), 10-testing.md (golden parity fixtures and synthetic fixtures for every rule in this file).
+**Companion files:** 05-schema.md (every table/column referenced here — this file contains **no DDL**), 04-lifecycle-scheduling.md (check-job consumer placement, frontier scheduling touched by live-check re-entry, the nightly dataset/stats jobs), 02-observation-model.md (the `conn` composition table and the shared engine→public dimension mapper the §5.1 live-check reader imports), 00-overview.md (sizing-constants table, monorepo layout), 09-ops.md (consolidated config-key registry, systemd/nginx deploy, the endpoint-class caching + rate-limit vhost), 10-testing.md (native contract vectors: keyset-cursor codec, RFC 9457 shapes, Atom/JSON-Feed serializers, badge golden SVGs, the `manifest.json`/`datapackage.json` schemas, and the confirmed-state reconstruction).
 
-Reference repos: production backend `whynoipv6` (golden-fixture source, file references given per endpoint), frozen frontend `whynoipv6-web/src/services/*.ts` (caller inventory), campaign repo (live campaign UUIDs used as codec test vectors).
+Reference repos: the crawler engine and the shared `internal/domain` canonicalizer (`Canonicalize`), the `internal/crawler` result mapper (`MapLiveResult`).
 
 ---
 
@@ -18,11 +20,11 @@ Reference repos: production backend `whynoipv6` (golden-fixture source, file ref
 
 ### 1.1 Listen address
 
-Config key `API_LISTEN` (string, default `[::1]:8080`; registry: 09-ops.md). The API binds IPv6 loopback **by design**: it is always fronted by nginx, which terminates TLS and is the only process that can reach it. Document in the README: "Old API bound [::1]:PORT — kept intentional but documented." Override to `:8080` / `0.0.0.0:8080` only for docker-compose/dev.
+Config key `API_LISTEN` (string, default `[::1]:8080`; registry: 09-ops.md). The API binds IPv6 loopback **by design**: it is always fronted by nginx, which terminates TLS and is the only process that can reach it. Override to `:8080` / `0.0.0.0:8080` only for docker-compose/dev.
 
 ### 1.2 Real client IP
 
-Because the bind is loopback-only, every request arrives from nginx and the peer address is useless. Apply chi `middleware.RealIP` **first** in the chain: set the request's remote address from `X-Real-IP` if present, else the first entry of `X-Forwarded-For`, else leave the peer address. This derived address is the **single source of truth** for (a) the `GET /ip` response body and (b) `check_job.requester_ip` in the §6 rate limiter. Operator caveat (state in README): trusting these headers is safe only because the default bind is unreachable except via the local proxy; if `API_LISTEN` is opened to a non-loopback interface without a trusted proxy, per-IP rate limits become spoofable.
+Because the bind is loopback-only, every request arrives from nginx and the peer address is useless. Apply chi `middleware.RealIP` **first** in the chain: set the request's remote address from `X-Real-IP` if present, else the first entry of `X-Forwarded-For`, else the peer address. This derived address is the **single source of truth** for (a) the `GET /ip` echo body (§4.12) and (b) `check_job.requester_ip` in the §5.1 rate limiter (keyed on the /64 prefix, §6.3). Operator caveat (state in README): trusting these headers is safe only because the default bind is unreachable except via the local proxy; if `API_LISTEN` is opened to a non-loopback interface without a trusted proxy, per-IP rate limits become spoofable.
 
 Required nginx location config (deployed per 09-ops.md):
 
@@ -34,125 +36,189 @@ proxy_set_header Host             $host;
 
 ### 1.3 CORS
 
-The frontend is cross-origin (whynoipv6.com → api.whynoipv6.com). rs/cors (or chi-compatible equivalent) with production's settings plus `POST` (needed by `POST /check`; production allowed only GET/HEAD/OPTIONS — `whynoipv6/internal/rest/server.go:19-27`):
+The frontend is cross-origin (whynoipv6.com → api.whynoipv6.com). rs/cors (or a chi-compatible equivalent) with all-origin settings plus `POST` (needed by `POST /check`):
 
 - AllowedOrigins: `https://*`, `http://*` (allow-all; API is public and anonymous)
 - AllowedMethods: `GET`, `HEAD`, `OPTIONS`, `POST`
-- AllowedHeaders: `Accept`, `Authorization`, `Content-Type`, `X-CSRF-Token`
-- ExposedHeaders: `Link`
+- AllowedHeaders: `Accept`, `Content-Type`
+- ExposedHeaders: `ETag`, `Link`, `Retry-After`, `RateLimit`, `RateLimit-Policy`
 - AllowCredentials: `false`
 - MaxAge: `300`
 
 ### 1.4 Default headers
 
-All responses: `Content-Type: application/json` (default; overridden by `GET /badge/{domain}.svg` → `image/svg+xml`; dataset files are served by nginx, not the API), `X-Content-Type-Options: nosniff`, `X-Frame-Options: deny`. **Decision:** parity tests assert the media type prefix only (`application/json`), never a `charset` parameter — production's go-chi/render emitted `application/json; charset=utf-8`; either form is conformant.
+All JSON responses: `Content-Type: application/json` (overridden by `GET /badge/{host}.svg` → `image/svg+xml`, `GET /badge/{host}.json` → `application/json`, the feeds → `application/atom+xml` / `application/feed+json`, and CSV → `text/csv`; dataset files are served by nginx, not the API), plus `X-Content-Type-Options: nosniff` and `X-Frame-Options: deny`. Parity assertions test the media-type prefix only (`application/json`), never a `charset` parameter — either form is conformant.
 
-### 1.5 Cache-Control by endpoint class
+### 1.5 Cache-Control
 
-| Class | Header |
-|---|---|
-| All JSON API endpoints (legacy §3, new §4, live check §6) | `Cache-Control: no-cache, no-store, no-transform, must-revalidate, private, max-age=0` (chi `middleware.NoCache`, as production) |
-| `GET /badge/{domain}.svg` | `Cache-Control: public, max-age=3600` |
-| `GET /datasets` (manifest) | `Cache-Control: public, max-age=300` |
-| Dataset files | served statically by nginx (§7), not by the API |
+The blanket `no-cache, no-store` policy is **deleted**. Cache-Control is set **per endpoint class** — see §6.1 for the full table (cache-first `public` + `s-maxage` for the daily-batch read surface; `no-store` only for `POST /check`, the in-flight poll, `/ip`, and health). nginx applies the matching vhost policy (09-ops.md).
 
 ### 1.6 Timeouts & graceful shutdown
 
-Production had none; this is a declared cleanup. `http.Server{ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 120 * time.Second}`; per-request `middleware.Timeout(30 * time.Second)`. Graceful shutdown on SIGINT/SIGTERM: `server.Shutdown(ctx)` with a 15s drain budget. `POST /check` is async job+poll (§6), so no handler legitimately exceeds 30s.
+`http.Server{ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 120 * time.Second}`; per-request `middleware.Timeout(30 * time.Second)`. Graceful shutdown on SIGINT/SIGTERM: `server.Shutdown(ctx)` with a 15 s drain budget. `POST /check` is async job+poll (§5.1), so no handler legitimately exceeds 30 s.
 
 ### 1.7 Middleware order (outermost first)
 
-RealIP → RequestID → slog request logger → Recoverer → Timeout(30s) → CORS → security/content-type headers → per-route Cache-Control.
-
-Logging follows the shared slog conventions (design §11.5; registry of log keys in 09-ops.md).
+RealIP → RequestID → slog request logger → Recoverer → Timeout(30 s) → CORS → security/content-type headers → per-route Cache-Control (§6.1). No trailing-slash redirection middleware; routes match exactly as written. Logging follows the shared slog conventions (design §11.5; registry of log keys in 09-ops.md).
 
 ### 1.8 Baseline acceptance criteria
 
 (Fixture definitions live in 10-testing.md.)
-1. `GET /ip` with header `X-Real-IP: 2001:db8::7` returns `{"ip":"2001:db8::7"}` — not `::1` (guards the frontend `Notification.vue` `ip.includes(":")` IPv4-banner check and the §6 per-IP bucket).
+1. `GET /ip` with header `X-Real-IP: 2001:db8::7` returns `{"ip":"2001:db8::7","family":"ipv6"}` — not `::1` (guards the visitor banner and the §5.1 per-IP bucket); the address is bracketless and `family` is derived server-side (§4.12).
 2. `OPTIONS /check` preflight with `Origin: https://whynoipv6.com` and `Access-Control-Request-Method: POST` returns 2xx with `Access-Control-Allow-Origin` and `POST` in `Access-Control-Allow-Methods`.
-3. Two `POST /check` requests with different `X-Real-IP` values consume different rate-limit buckets.
+3. Two `POST /check` requests with different `X-Real-IP` values in different /64 prefixes consume different rate-limit buckets (§6.3).
 
 ---
 
-## 2. Cross-cutting conventions
+## 2. Core conventions
 
-### 2.1 Route inventory (complete)
+### 2.1 Base URL — no version segment
 
-Paths mount at the **API root** — no `/api/v1` prefix. `/metric` is **singular**. Legacy (L) shapes are frozen; new (N) endpoints serve the 4-value public enum.
+**Decision: no URL version segment.** All data endpoints sit at the **root of `api.whynoipv6.com`** — the `api.` subdomain already names the role, so there is **no `/v1`** and no doubled `/api/v1`. Real URLs are `https://api.whynoipv6.com/domains/{host}`. The API is frontend-facing with **no external / third-party consumers today**; versioning for outside users is speculative machinery. Changes stay additive by discipline (new fields, new endpoints, new optional query params); a breaking change is a project decision, not a URL concern. If third-party consumers ever appear, a version segment or an `Accept`-header version can be introduced then (an additive move). Operational endpoints (`/livez`, `/readyz`, §2.7) and the static `/datasets/` tree live at the **root** and outside the public OpenAPI document.
 
-| # | Method | Path | Class |
+*Rejected — URL-path `/v1` versioning* (premature for a no-consumer API; reintroducing a version segment later is additive) and *media-type / `Accept`-header versioning* (optimized for a large multi-consumer mesh; harder to test, uncacheable-by-URL, buys nothing today).
+
+### 2.2 Resource naming
+
+Lowercase **plural** collection nouns, **verb-free**, hierarchy as `/collection/{id}/sub-collection`, kebab-case for any multi-word segment. Item access by **stable natural id**:
+
+| Resource | Collection | Item | Natural id |
 |---|---|---|---|
-| 1 | GET | `/` | L health |
-| 2 | GET | `/ip` | L |
-| 3 | GET | `/domain` | L |
-| 4 | GET | `/domain/heroes` | L |
-| 5 | GET | `/domain/topsinner` | L |
-| 6 | GET | `/domain/almost` | N |
-| 7 | GET | `/domain/search/{q}` | L |
-| 8 | GET | `/domain/{domain}` | L (+2 additive keys) |
-| 9 | GET | `/domain/{domain}/log` | L |
-| 10 | GET | `/domain/{domain}/subdomains` | N |
-| 11 | GET | `/domain/{domain}/resources` | N |
-| 12 | GET | `/resource/{host}/dependents` | N |
-| 13 | GET | `/country` | L |
-| 14 | GET | `/country/{code}` | L |
-| 15 | GET | `/country/{code}/sinners` | L |
-| 16 | GET | `/country/{code}/heroes` | L |
-| 17 | GET | `/changelog` | L |
-| 18 | GET | `/changelog/campaign` | L |
-| 19 | GET | `/changelog/campaign/{uuid}` | L |
-| 20 | GET | `/changelog/campaign/{uuid}/{domain}` | L |
-| 21 | GET | `/changelog/{domain}` | L |
-| 22 | GET | `/campaign` | L |
-| 23 | GET | `/campaign/search/{q}` | L |
-| 24 | GET | `/campaign/{uuid}` | L |
-| 25 | GET | `/campaign/{uuid}/{domain}` | L |
-| 26 | GET | `/campaign/{uuid}/{domain}/log` | L |
-| 27 | GET | `/metric/overview` | L |
-| 28 | GET | `/metric/asn` | L |
-| 29 | GET | `/metric/asn/search/{q}` | L |
-| 30 | GET | `/stats/overview` | N |
-| 31 | GET | `/stats/country/{code}` | N |
-| 32 | GET | `/stats/campaign/{uuid}` | N |
-| 33 | GET | `/stats/asn/{number}` | N |
-| 34 | GET | `/stats/domain/{domain}` | N |
-| 35 | POST | `/check` | N |
-| 36 | GET | `/check/{id}` | N |
-| 37 | GET | `/badge/{domain}.svg` | N |
-| 38 | GET | `/datasets` | N |
+| Domain | `/domains` | `/domains/{host}` | `host` (lowercase punycode FQDN) |
+| Country | `/countries` | `/countries/{code}` | ISO-ish `CHAR(2)`, `UN` sentinel |
+| ASN / network | `/asns` | `/asns/{number}` | `BIGINT` AS number, `0`=Unknown |
+| DNS provider | `/providers` | `/providers/{id}` | `dns_provider.id` (§4.6, OPEN-4) |
+| Campaign | `/campaigns` | `/campaigns/{uuid}` | **raw canonical UUID** (OPEN-1) |
+| Resource host | `/resources` | `/resources/{host}` | canonicalized host |
+| Changelog | `/changelog` | — (feed; addressed by scope + cursor) | — |
 
-chi resolves static segments before params, so `/domain/heroes`, `/domain/topsinner`, `/domain/almost`, `/domain/search/{q}` win over `/domain/{domain}` regardless of registration order; same for `/changelog/campaign...` over `/changelog/{domain}`. No trailing-slash redirection middleware (production disabled `RedirectSlashes`); routes match exactly as written.
+Sub-collections: `/countries/{code}/domains`, `/asns/{number}/domains`, `/providers/{id}/domains`, `/campaigns/{uuid}/domains`, `/domains/{host}/subdomains`, `/domains/{host}/resources`, `/resources/{host}/dependents`, `/domains/{host}/changelog`, `/domains/{host}/history`.
 
-### 2.2 Pagination
+The classification tiers are promoted to their own **short, canonical plural collection paths** — the browse URLs the frontend links to, each a **preset filtered view over the `/domains` leaderboard** (§4.4):
 
-Query params `?offset=` and `?limit=` on every **list** endpoint that declares them below. Defaults: `offset=0`, `limit=50`; `limit` is clamped to max 100 (production `whynoipv6/internal/rest/server.go:63-67` + per-handler clamp). The frontend only ever sends `offset` and hard-assumes page size 50 in its Next-button logic — the default of 50 is wire-frozen.
+| Tier collection | Preset over `/domains` |
+|---|---|
+| `/heroes` | `class=hero` |
+| `/sinners` | `class=sinner` |
+| `/gold` | `gold=true` |
+| `/almost` | the "almost there" list (partial domains one step from hero) |
+| `/mail` | the mail/MX heroes track (`class=hero&mx=supported`) |
 
-**Decision:** input sanitization (production passed raw values through and could 500 on `LIMIT -1`): non-integer `offset`/`limit` → use the default; `offset < 0` → `0`; `limit < 1` → `50`; `limit > 100` → `100`. Never an error status for pagination params.
+Each shares the exact same keyset/cursor pagination, §4.2 row shape, and `?country=`/`?asn=`/`?tld=`/`?provider=` filter composition as `/domains`, under the §3.3 indexed-scope guardrail. `GET /sinners?country=no` ≡ `GET /domains?class=sinner&country=no`. `GET /domains` remains the **general filterable collection** whose `?class=` param spans every tier (`class=partial`, etc.); the tier paths are short aliases over it, not a second vocabulary.
 
-There is no total-count key, no `Link` header, no page envelope: list responses are bare JSON arrays (except the two `{"data":[...]}` search envelopes, §3.8/§3.16).
+**Host as a path key.** The eTLD+1 `host` is stable, unique, SEO/deep-link friendly, and already the schema's `UNIQUE` natural id. The API canonicalizes the path parameter (§2.8) before lookup; a value that fails canonicalization is a `404 not-found` (exception: the badge returns `400 invalid-parameter`, §5.2). Synthetic `domain.id` is internal-only and never appears on the wire except inside opaque cursors.
 
-### 2.3 Error envelope and status codes
+*Rejected — `/metric` (singular), `/domain`-means-sinner, shortuuid campaign tokens, synthetic ids in URLs.* All are legacy accidents; self-describing plural nouns keyed by natural id are the AIP/Microsoft/Zalando consensus. The short tier collections (`/heroes` etc.) are transparent aliases over `/domains` (self-describing), **not** the hidden-meaning `/domain`=sinner form.
 
-Every non-2xx response is `application/json` with an object carrying an `error` string. Legacy endpoints use the **byte-exact production bodies** pinned per endpoint in §3 (capitalization differs between endpoints — that is deliberate bug-compatibility). New endpoints use:
+### 2.3 Field naming — `snake_case`
 
-- `404` → `{"error":"not_found"}`
-- `400` → `{"error":"invalid_parameter","message":"<human-readable>"}` (exceptions with their own pinned bodies: `POST /check` and the badge use `{"error":"invalid_host","message":"..."}`; rate limiting uses `{"error":"rate_limited",...}` — §6)
-- `503` → `{"error":"manifest_unavailable"}` (only `GET /datasets`)
+Emit **`snake_case`** field names on the wire, uniformly, everywhere; **never mix cases within a response.** This is symmetry with the whole Postgres → sqlc → Go → OpenAPI stack and needs no per-field mapping layer. openapi-typescript generates typed TS bindings from whatever case the spec declares, so the rebuilt frontend is transform-free either way.
 
-**Decision:** all internal failures (DB down, query error) return `500 {"error":"internal server error"}` on every endpoint, legacy and new. Production mixed `"internal server error"` and `"Internal server error"`; 500 bodies are not part of the frozen contract (the frontend treats any 5xx generically), so one lowercase body is used everywhere.
+Two explicit, bounded, **lint-enforced** exceptions:
 
-### 2.4 JSON encoding rules
+- **snake_case normalization of smushed column names.** A handful of schema columns are written without a separator (`country.v6sites`); these are normalized to canonical snake_case on the wire (`v6_sites`) — a mechanical, total case-normalization, not a semantic remap. Where the same concept has two schema spellings (ASN `count_v6` in `asn` vs `v6_domains` in `stats_asn_daily`), the API picks **one** wire spelling (`count_v6`) and uses it in both the detail and the time-series (§4.6/§4.10).
+- **The shields.io badge JSON (§5.2)** emits camelCase (`schemaVersion`, `cacheSeconds`, `isError`) because those field names are dictated by shields.io's external endpoint schema. The API's *own* surface stays snake_case throughout.
 
-- Timestamps serialize via Go `time.Time` default marshaling (RFC 3339, UTC, sub-second digits as stored). NULL source timestamps on legacy endpoints serialize as the Go zero time `"0001-01-01T00:00:00Z"` (rule R3, §2.8).
-- `DATE` columns on new endpoints serialize as `"YYYY-MM-DD"` strings.
-- Empty lists are `[]`, never JSON `null` (the []-cleanup; status-code map in §2.11).
-- `NUMERIC(5,2)` (`country.percent`) serializes as a plain JSON number (e.g. `17.42`) — the new column type kills production's pgtype ÷10 hack (`country.go:61-66`).
-- Legacy `rank` is a JSON integer. **Decision:** entities with `rank IS NULL` (campaign-only domains, subdomains, live-check hosts — reachable via entity/detail endpoints only) serialize `"rank": 0`, matching production's zero-value encoding of unset struct fields.
+*Rejected — camelCase* (forces a json-tag mapping layer across the domain model and diverges from the rest of the spec, to benefit a type-generated consumer). If ever revisited, it must be decided once and linted so it never drifts.
 
-### 2.5 Hostname path-parameter canonicalization
+### 2.4 Envelope + list-response shape
 
-Every path parameter carrying a hostname — `{domain}` in routes 8, 9, 10, 11, 21, 25, 26, 34 and 20's second param, `{host}` in route 12, and the badge's `{domain}` (route 37, after stripping the `.svg` suffix) — passes through the single shared `Canonicalize()` helper before any DB lookup. One implementation, `internal/domain/host.go`, shared with the crawler and v6ctl:
+A **thin, ad-hoc envelope**, not JSON:API. There are exactly **two** collection shapes.
+
+**A. Item collections** (leaderboards, sub-collections, feeds) return a top-level object, never a bare array:
+
+```json
+{
+  "items": [ /* resource objects */ ],
+  "page": {
+    "next_cursor": "cD1yYW5rOjEwMDI...",
+    "prev_cursor": null,
+    "has_more": true
+  },
+  "meta": {
+    "as_of": "2026-07-07T03:41:12Z",
+    "generation": 20260707,
+    "count_estimate": 1003418,
+    "license": "CC-BY-NC-4.0"
+  }
+}
+```
+
+**B. Time-series collections** (`/stats/*`, `/domains/{host}/history`, the country/campaign/asn `/stats`) use **`points`** as the collection key, carry **no `page`** (bounded by the date window, never cursor-paged):
+
+```json
+{ "points": [ /* time-ordered rows */ ], "meta": { "as_of": "...", "source": "confirmed_state" } }
+```
+
+`points` is the **only** sanctioned alternate collection key. **Single resources** return the resource object with a sibling `meta`:
+
+```json
+{ "host": "example.com", "...": "...", "meta": { "as_of": "..." } }
+```
+
+**Uniform rules:**
+
+- **`page` is always `{ next_cursor, prev_cursor, has_more }`** and `prev_cursor` is **always present** (`null` when there is no previous page). Bounded non-paged item collections (campaign members, `/shame`, forward-resources) still emit a `page` with all three fields (`has_more: false`, cursors `null`) so the type never varies.
+- **Counts live only in `meta`.** A collection carries *either* `meta.count_estimate` (approximate — the default for anything derived from a large or filtered `domain` scan) *or* `meta.count` (exact — only the genuinely bounded curated sets: campaign members, `/shame`, forward-resources). A client reads count from `meta`, full stop.
+- **`meta` is deliberately thin:** `as_of` (freshness signal), `generation` (integer crawl id, the ETag/cache-key seed), `count`/`count_estimate` where applicable, `license`. Never nest `items`/`points` more than one level. No per-response `stability` marker.
+
+**`generation` and `as_of` sources** (they seed the ETag/cache story, §6.1, so they must be deterministic across backend instances). `generation` is the integer `YYYYMMDD` from **`max(stats_global_daily.day)`** (see 05-schema.md — stats tables) — an O(1) lookup, monotonic, identical on every instance, no schema change. `as_of` is the crawl-rollup completion timestamp: the cleanest source is a single `generated_at TIMESTAMPTZ` on the daily stats rollup (a one-column addition, 05-schema.md — stats tables); until it exists, `as_of` falls back deterministically to `max(stats_global_daily.day)` at `00:00:00Z`. The per-worker `crawler_metrics.run_id` UUID is **not** used.
+
+*Rejected — full JSON:API* (ceremony for a shallow graph), *bare top-level arrays* (force metadata into headers; unextendable), and the *legacy `{"data":[…]}` search envelope* (one-off inconsistency, deleted in favor of the single `{items,page,meta}` / `{points,meta}` shapes).
+
+### 2.5 Error format — RFC 9457
+
+Every 4xx/5xx is **`application/problem+json`** per RFC 9457:
+
+```http
+HTTP/1.1 404 Not Found
+Content-Type: application/problem+json
+
+{
+  "type": "https://whynoipv6.com/problems/not-found",
+  "title": "Domain not found",
+  "status": 404,
+  "detail": "No crawl record for example.invalid.",
+  "instance": "/domains/example.invalid"
+}
+```
+
+The `status` member must equal the HTTP status line. `type` URIs are stable and resolvable on the site. The fixed set — small, because there are no accounts:
+
+| `type` (relative to `/problems/`) | HTTP | When |
+|---|---|---|
+| `not-found` | 404 | unknown/uncanonicalizable domain, country, asn, provider, campaign, resource |
+| `invalid-parameter` | 400 | malformed cursor, bad `format`, malformed host on badge, non-JSON `POST /check` field |
+| `validation-error` | 422 | out-of-range/invalid enum filter value (a value not in the enum); adds `errors:[{field,reason}]` |
+| `scope-required` | 422 | a *valid* filter value that needs a companion scope to stay indexed (bare `?flag=`, bare per-dimension `?mx=`); `detail` names the scope params that satisfy it |
+| `rate-limited` | 429 | `POST /check` over quota; adds `retry_after` + `Retry-After` header (§6.3) |
+| `not-acceptable` | 406 | `Accept` cannot be satisfied on a JSON endpoint |
+| `unsupported-media-type` | 415 | `POST /check` body not JSON |
+| `manifest-unavailable` | 503 | `/datasets` manifest missing/unparseable (the only 503) |
+| `internal-error` | 500 | unexpected fault; `detail` is generic, never a stack trace |
+
+Note the deliberate split between `validation-error` (your *value* is invalid) and `scope-required` (your value is valid but needs an indexed companion scope, §3.3). Conflating the two misleads clients. The legacy byte-exact, capitalization-divergent error strings are deleted.
+
+### 2.6 HTTP semantics
+
+The read surface is **GET** (with implicit HEAD/OPTIONS). The *only* mutating verb is **`POST /check`** (enqueue a live check, §5.1) — an explicitly-modelled async job. No PUT/PATCH/DELETE; no CSRF surface on reads. No HATEOAS (REST maturity level 2): the OpenAPI document is the discoverability substitute.
+
+Status codes: `200` with the resource; `404` for an unknown entity; `400` for a malformed request/cursor/filter; `422` for a semantically-invalid enum value or a scope-required filter; `406`/`415` for negotiation failures; `429` for rate-limit; `304` on a conditional-GET cache hit; `202` on `POST /check` enqueue; `5xx` for faults. **Never** a `200`-with-error-body.
+
+**Zero-result is `200`, not `404`.** A search with no matches, a filter that selects nothing, and paging past the end all return `200` with an empty `items` array. A `404` is reserved for *the addressed entity does not exist* (unknown host/code/asn/provider/uuid). The legacy "404 on zero results / page-past-end / by-domain changelog" behavior is deleted.
+
+### 2.7 Health endpoints
+
+At the **root**, outside the public OpenAPI, outside CDN caching (`Cache-Control: no-store`), and outside rate-limiting:
+
+- **`GET /livez`** — `200` whenever the process is running; no dependency checks. A failure means *restart me*.
+- **`GET /readyz`** — `200` only when Postgres/TimescaleDB is reachable and the app can serve; a failure means *stop routing traffic without restarting*. Optional JSON body listing individual checks, but orchestration is driven off the status code.
+
+*Rejected — a single `/healthz`* (can't distinguish "restart me" from "don't route to me").
+
+### 2.8 Host path-parameter canonicalization
+
+Every path parameter carrying a hostname — `{host}` in `/domains/{host}*`, `/resources/{host}*`, campaign member routes, the change-feed scopes, and the badge's `{host}` (after stripping `.svg`/`.json`) — passes through the single shared `Canonicalize()` helper before any DB lookup. One implementation, `internal/domain/host.go`, shared with the crawler and v6ctl:
 
 ```go
 // Canonicalize returns the canonical form of a hostname:
@@ -171,785 +237,507 @@ Algorithm (in order):
 5. Post-checks: total length ≤253 octets; ≥2 labels; each label 1–63 octets; `net.ParseIP(ascii) == nil`.
 6. Return `ascii`.
 
-**Failure policy for API path params:** plain **404** — it is a lookup miss, not a client contract violation. **Decision:** the 404 body on Canonicalize failure is the same body that route returns for an unknown host (pinned per endpoint in §3/§4), so clients cannot distinguish "malformed" from "not in the database". The **one exception** is `GET /badge/{domain}.svg`, which returns `400 {"error":"invalid_host","message":"..."}` per §5. This canonicalization intentionally supersedes production's mixed behavior (production `domain.go:193` and `campaign.go:280` lowercase; the changelog handlers don't, and `campaign.go:220`/`changelog.go:141` applied a regex with a 400): previously-404 mixed-case URLs now resolve, and the regex-400 paths become Canonicalize-404s. This is NOT a bug-compat quirk — the §3 quirks cover response shapes, not lookup normalization.
-
-Where an error message echoes the domain (§3.13, §3.14), it echoes the **raw path parameter as given in the URL**, not the canonical form (production parity).
-
-### 2.6 Publicly-ranked visibility predicate
-
-```sql
-rank IS NOT NULL AND NOT disabled
-```
-
-(Columns on the `domain` table — see 05-schema.md — domain table. Only the Tranco importer writes `rank`, and Tranco is eTLD+1, so `rank IS NOT NULL` implies `kind='apex'`. `created_by` is irrelevant to visibility.)
-
-Endpoints that select ONLY rows matching this predicate, in addition to their classification filter:
-
-- `GET /domain` (sinners), `GET /domain/heroes`, `GET /domain/almost`
-- `GET /domain/topsinner` (the `top_shame` join additionally requires the predicate)
-- `GET /country/{code}/sinners`, `GET /country/{code}/heroes`
-- `GET /domain/search/{q}`
-- `GET /changelog` (global feed; see §3.12)
-
-Ordering on every ranked list: `ORDER BY rank ASC` (NULLs are excluded by the predicate). Queries must spell out `AND rank IS NOT NULL AND NOT disabled` **verbatim** so the planner's partial-index predicate-implication check is trivial (indexes `idx_domain_sinners`/`idx_domain_heroes`/`idx_domain_partial`/`idx_domain_country`, see 05-schema.md — domain table).
-
-Entity/detail endpoints are NOT rank-scoped: `GET /domain/{domain}`, `/domain/{domain}/log`, `/domain/{domain}/subdomains`, `/domain/{domain}/resources`, `/stats/domain/{domain}`, `/changelog/{domain}`, and the campaign detail/log endpoints serve any entity regardless of rank (this is how campaign domains, subdomains, and live-check hosts are viewed). Disabled entities are excluded everywhere: `GET /domain/{domain}` returns 404 for disabled rows (production parity: ViewDomain read the `disabled=FALSE` view), and every list excludes `disabled` rows.
-
-### 2.7 shortuuid codec (wire-frozen)
-
-All campaign UUIDs crossing the API boundary are encoded with `github.com/lithammer/shortuuid/v4` `DefaultEncoder` — base57 alphabet `23456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz`, fixed 22-character output. Use the latest v4.x release (production runs v4.2.0). MUST be the v4 major: v3 produces different, variable-length tokens and would 404 every previously shared campaign link. Do not hand-roll the codec.
-
-```go
-func encodeUUID(id uuid.UUID) string {           // uuid = github.com/google/uuid
-    return shortuuid.DefaultEncoder.Encode(id)   // always 22 chars
-}
-func decodeUUID(s string) (uuid.UUID, error) {
-    return shortuuid.DefaultEncoder.Decode(s)
-}
-```
-
-**Surfaces (exhaustive):**
-1. `uuid` field of campaign list/detail responses (`GET /campaign`, `GET /campaign/{uuid}`).
-2. `campaign_uuid` field of `GET /campaign/search/{q}` rows. **Decision:** changelog rows carry NO `campaign_uuid` key — verified against production `changelog.go:22-29` (the struct has exactly six fields); the campaign token appears only inside `domain_url`.
-3. `domain_url` in changelog responses: `"/campaign/{token}/{host}"`.
-4. Path params: routes 19, 20, 24, 25, 26, 32.
-
-The database stores only the canonical `UUID` column; encode/decode happens exclusively in the HTTP layer.
-
-**Decode-failure behavior (uniform, all `{uuid}` path params including `GET /stats/campaign/{uuid}`):**
-- `decodeUUID` error (character outside base57 alphabet, overflow, etc.) → `404 {"error":"Invalid UUID"}` (byte-exact production body; production `campaign.go:117-122`, `changelog.go:196-201`. Production's other handlers used 400 for the same condition — the new backend uniformly uses 404, the behavior the frontend actually exercises).
-- Token decodes but no matching non-disabled campaign row → `404 {"error":"Campaign not found"}` (production `campaign.go:132-136`).
-
-No extra length/shape validation beyond what `DefaultEncoder.Decode` performs.
-
-**Shared campaign resolver** (one helper used by routes 19, 20, 24, 25, 26, 32): decode shortuuid → `SELECT id, uuid, name, description FROM campaign WHERE uuid = $1 AND NOT disabled` → no row → `404 {"error":"Campaign not found"}`. Disabled campaigns are invisible on every UUID-addressed endpoint (announced fix; production accidentally kept them listed with zeroed counts because `campaign.disabled = FALSE` sat in a LEFT JOIN condition — `whynoipv6/db/query/campaign.sql` ListCampaign/GetCampaignByUUID).
-
-OpenAPI representation: `type: string`, `pattern: ^[2-9A-HJ-NP-Za-km-z]{22}$`, `example: bHTMghm9txZFhwMKVCiBey`.
-
-Codec test vectors (10-testing.md owns the fixture files; verified against lithammer/shortuuid/v4 v4.2.0; the first two are live campaign UUIDs from the campaign repo):
-
-| canonical UUID | shortuuid token |
-|---|---|
-| baff94c3-c4b2-4f19-be66-3247250f7868 | bHTMghm9txZFhwMKVCiBey |
-| 9b587e73-7694-46f7-b3dc-96f6a1c15317 | VeT2mCvhzny4kAiQ9oLe2r |
-| 00000000-0000-0000-0000-000000000000 | 2222222222222222222222 |
-
-Negative vectors: `GET /campaign/not-a-token` and `GET /campaign/baff94c3-c4b2-4f19-be66-3247250f7868` (raw UUID in the path — `-` is outside the alphabet) both → `404 {"error":"Invalid UUID"}`.
-
-### 2.8 Legacy serialization rules R1–R5 (normative; part of openapi.yaml + parity fixtures)
-
-**R1. Status projection.** Every field carrying an `ipv6_status` on a legacy endpoint (`base_domain`, `www_domain`, `nameserver`, `mx_record`, `v6_only` in domain/campaign detail and list rows, campaign-domain composite rows, changelog `ipv6_status`, and log rows) is serialized through ONE shared function:
-
-```go
-// legacyStatus projects the 4-value public enum + NULL onto the frozen
-// 3-string wire contract. not_applicable and never-confirmed both render
-// as "no_record" (frontend shows the amber "no record" marker).
-func legacyStatus(s *ipv6Status) string {
-    switch {
-    case s == nil:                 return "no_record" // never confirmed (NULL column)
-    case *s == NotApplicable:      return "no_record"
-    default:                       return string(*s)  // supported|unsupported|no_record
-    }
-}
-```
-
-No legacy endpoint may ever emit `not_applicable`, `error`, `inconsistent`, `unknown`, or empty string. New endpoints (§4, §6) are exempt and serve the real 4-value enum (`supported|unsupported|no_record|not_applicable`) plus JSON `null` for never-confirmed.
-
-**R2. Scan-log projection** (`GET /domain/{domain}/log` and `GET /campaign/{uuid}/{domain}/log`). Source: last 90 `scan` rows by `ts DESC` **after filtering out non-definitive rows** — a documented exception that *enforces* "error/inconsistent never become public" by exclusion, not remapping:
-
-```sql
-SELECT ts, base, www, ns, mx FROM scan
-WHERE domain_id = $1
-  AND base NOT IN ('error','inconsistent') AND www NOT IN ('error','inconsistent')
-  AND ns   NOT IN ('error','inconsistent') AND mx  NOT IN ('error','inconsistent')
-ORDER BY ts DESC LIMIT 90;
-```
-
-Per-field values then pass through R1 (`not_applicable` → `"no_record"`). Response row:
-
-```json
-{"id": 1751791845, "time": "2026-07-06T08:50:45.123456Z",
- "base_domain": "supported", "www_domain": "supported",
- "nameserver": "supported", "mx_record": "no_record"}
-```
-
-`id` = `extract(epoch from ts)::bigint` — synthetic (the frontend uses it as a list key only); epoch seconds is stable across requests. `time` = `ts` as RFC 3339.
-
-**R3. Timestamp key mapping** (`GET /domain/{domain}`, `GET /campaign/{uuid}/{domain}`, and every legacy domain-shaped row):
-
-| JSON key | Source column (`domain` table, 05-schema.md) |
-|---|---|
-| `ts_aaaa` | `base_since` |
-| `ts_www` | `www_since` |
-| `ts_ns` | `ns_since` |
-| `ts_mx` | `mx_since` |
-| `ts_curl` | `conn_since` |
-| `ts_check` | `last_checked_at` |
-| `ts_updated` | `updated_at` |
-
-NULL source columns serialize as `"0001-01-01T00:00:00Z"` (bug-compatible with production's nullable-timestamp encoding; the frontend tolerates it). No fallback substitution — do NOT substitute `last_checked_at` for a NULL `*_since`.
-
-**R4. `v6_ready` (amended formula — announced under the OPEN-6 methodology-v2 note).** For `GET /campaign` list counts, the `{campaign}` object in the composite, and `stats_campaign_daily.v6_ready`:
-
-```sql
-v6_ready := base_status = 'supported'
-        AND ns_status   = 'supported'
-        AND www_status IN ('supported', 'not_applicable')
-```
-
-Rationale (recorded): subdomain entities force `www = not_applicable`; production's strict `www = 'supported'` test would permanently pin subdomain-heavy campaigns at 0%. NULL (unconfirmed) `www` does NOT count as ready. `mx`/`conn` remain excluded from `v6_ready`, as in production.
-
-**R5. Legacy changelog collapse.** The five legacy `/changelog*` endpoints serve only rows passing the §3.12 coverage filter (`field IN ('base','www','ns','mx')`, `old_value`/`new_value` in the 3 legacy strings, `old_value IS NOT NULL`), plus `field='legacy'` passthrough rows. Because the filter admits only the 3 production strings — on which R1 is the identity — and native rows always have `old_value <> new_value`, **the SQL filter alone implements R5**: any transition involving `not_applicable` (and all `conn`/`resources` rows) is excluded before rendering, and the `renderChangelog` ladder only ever sees production's 3 strings.
-
-**Parity-test note:** golden fixtures captured from production cannot exercise R1's not_applicable/NULL branches or R2's filter (production never produces those values); 10-testing.md defines synthetic fixtures for them, keyed to this section.
-
-### 2.9 Legacy domain row shape (shared by routes 3, 4, 5, 7, 15, 16, 23; route 8 adds two keys)
-
-Production struct: `whynoipv6/internal/rest/domain.go:22-40` (`DomainResponse`). Exact keys, types, and source columns (all statuses through R1, all timestamps through R3):
-
-```json
-{
-  "rank":        1234,                       // domain.rank (int; 0 when NULL — §2.4)
-  "domain":      "example.com",              // domain.host
-  "base_domain": "supported",                // legacyStatus(domain.base_status)
-  "www_domain":  "supported",                // legacyStatus(domain.www_status)
-  "nameserver":  "supported",                // legacyStatus(domain.ns_status)
-  "mx_record":   "no_record",                // legacyStatus(domain.mx_status)
-  "v6_only":     "unsupported",              // legacyStatus(domain.conn_status) — now REAL data
-                                             //   (production served a dead column)
-  "asn":         "TELENOR-AS",               // asn.name via domain.asn_id (AS *name* string;
-                                             //   sentinel row name "Unknown")
-  "country":     "Norway",                   // country.name via domain.country_id
-                                             //   (name, not code; sentinel "Unknown")
-  "ts_aaaa":    "2024-03-01T00:00:00Z",      // R3 table
-  "ts_www":     "2024-03-01T00:00:00Z",
-  "ts_ns":      "2024-03-01T00:00:00Z",
-  "ts_mx":      "0001-01-01T00:00:00Z",
-  "ts_curl":    "2024-03-01T00:00:00Z",
-  "ts_check":   "2026-07-06T04:12:09.331Z",
-  "ts_updated": "2026-07-06T04:12:09.331Z"
-}
-```
-
-`campaign_uuid` (string, shortuuid) appears ONLY on `GET /campaign/search/{q}` rows (Go tag `omitempty`; production `domain.go:39`). `GET /domain/topsinner` rows omit `asn`/`country`? No — production set neither, so they serialize as `""` (no omitempty); see §3.5.
-
-The campaign-domain row shape (routes 24 list, 25 single) is the same **minus `rank` and `campaign_uuid`** — production `campaign.go:23-39` (`CampaignResponse`) has no rank field at all.
-
-### 2.10 Legacy changelog row shape (routes 17–21)
-
-Production struct: `whynoipv6/internal/rest/changelog.go:22-29`. Exactly six keys, always all present:
-
-```json
-{
-  "id": 1751791845123,                  // synthetic: epoch MILLISECONDS of ts (int64) — §3.12
-  "ts": "2026-07-06T08:50:45.123Z",     // changelog.ts
-  "domain": "example.com",              // domain.host via changelog.domain_id
-  "domain_url": "/domain/example.com",  // per-endpoint rule (§3.12); "" on by-domain feeds
-  "message": "IPv6 enabled for example.com",   // renderChangelog ladder (§3.12)
-  "ipv6_status": "supported"            // = new_value (projected through R1)
-}
-```
-
-### 2.11 Zero-result behavior (the complete 404-vs-[] map)
-
-**Rule.** The "empty lists return `[]` instead of JSON `null`" cleanup applies only to responses production already served as HTTP 200 with a `null` body (a serialized nil slice). It never changes a status code. Every zero-result **404** production emits is kept bug-compatibly: same status, byte-identical error JSON.
-
-**Kept 404s on zero results** (exact production bodies; content-type application/json):
-
-| Endpoint | Fires when | Response |
-|---|---|---|
-| `GET /domain/search/{q}` | 0 publicly-ranked matches | `404 {"error":"no domains found"}` |
-| `GET /campaign/search/{q}` | 0 campaign-domain matches | `404 {"error":"No domains found"}` (capital N — deliberately differs from domain search) |
-| `GET /campaign/{uuid}` | member-domain page empty: unknown/disabled campaign **or** `offset >=` member count (paging past the last page 404s — bug-compatible, frontend tolerates) **or** zero-member campaign | `404 {"error":"Campaign not found"}` |
-| `GET /campaign/{uuid}/{domain}` | single resource not found (membership miss, unknown host, or disabled domain) | `404 {"error":"Domain not found"}` |
-| `GET /changelog/{domain}` | zero changelog rows (incl. unknown/disabled/malformed host) | `404 {"error":"No changelog entries found for {domain}"}` (`{domain}` = raw path param) |
-| `GET /changelog/campaign/{uuid}` | zero changelog rows for the campaign (production's third zero-rows check, `changelog.go:229-237`) | `404 {"error":"No changelog entries found for campaign {uuid}"}` where `{uuid}` is the **decoded canonical 36-char UUID** |
-| `GET /changelog/campaign/{uuid}/{domain}` | zero rows | `404 {"error":"No changelog entries found for campaign {uuid} and domain {domain}"}` where `{uuid}` is the **shortuuid exactly as given in the URL** (production does not decode it for this message) and `{domain}` is the raw path param |
-
-Consequence: because both `{"data":[...]}`-enveloped endpoints (the two searches) 404 on zero matches, `{"data":[]}` never occurs on the legacy surface.
-
-**[]-cleanup applies (production returned 200 `null`)** — zero rows → `200 []`:
-`GET /domain`, `/domain/heroes`, `/domain/topsinner`, `/domain/{domain}/log`, `/country`, `/country/{code}/sinners`, `/country/{code}/heroes`, `/changelog`, `/changelog/campaign`, `/campaign`, `/campaign/{uuid}/{domain}/log`, `/metric/asn`, and — explicitly — `GET /metric/asn/search/{q}` (production `metric.go:132-157` has no zero-rows check; it is the one search endpoint that returns `200 []` on zero matches). `GET /metric/overview` also degrades to `200 []` if `stats_global_daily` is somehow empty — never expected, because the seed migration writes day-0 rows (§3.17).
-
-Single-resource endpoints are untouched by this rule: `GET /domain/{domain}` → `404 {"error":"domain not found"}` (lowercase, production `domain.go:156-159`) for unknown, disabled, or malformed hosts; `GET /country/{code}` → `404 {"error":"Country not found"}` for unknown codes.
-
-New endpoints (§4): lists return `200 []` on zero rows; single resources return `404 {"error":"not_found"}` except where §4 pins a different body.
+**Failure policy for API path params:** `404 not-found` — a lookup miss (`xn--`-input and equivalent Unicode input resolve to the same entity). The **one exception** is the badge (§5.2), which returns `400 invalid-parameter` because a malformed embed is not a legitimate request. The `POST /check` and badge endpoints additionally apply a reserved-TLD policy layer (reject final label ∈ {`test`, `example`, `invalid`, `localhost`, `internal`, `local`}); the read endpoints do not.
 
 ---
 
-## 3. Legacy endpoints (endpoint by endpoint)
+## 3. Pagination, filtering, sorting
 
-Golden fixtures for every endpoint in this section are captured from the named production handler and compared per 10-testing.md. "Everything else stays bug-compatible until the frontend modernization round." A versioned `/v2` API is explicitly rejected for this round.
+The master list is the Tranco top-1M ranked by rank; offset pagination is deleted.
 
-### 3.1 `GET /` — health
+### 3.1 Keyset/cursor, not offset
 
-Production: `whynoipv6/cmd/api/main.go:49-53`. Response: `200` `{"message":"ok"}`. **Decision:** production's raw bytes were `{"message": "ok"}` (space after colon); the new backend emits canonical JSON and the parity fixture asserts JSON equality, not byte equality, for this endpoint only.
+**Keyset (seek-method) pagination** is the primary access pattern for *every* collection large enough to page — `/domains`, its tier/country/asn/provider-scoped variants, the reverse `dependents` list, and campaign members. **Offset pagination is not used anywhere.** Exact `COUNT(*)` survives only on the genuinely-bounded curated sets (campaign members, `/shame`, forward-resources), where the row count is a few tens.
 
-### 3.2 `GET /ip`
+Country/asn/provider-scoped lists are **not** "small bounded": a single large country or a hyperscaler ASN can hold tens to hundreds of thousands of eTLD+1s, so they reuse the **rank keyset** (`(rank, id)`, composing with `idx_domain_country`/`idx_domain_asn` plus the `(rank, id)` tiebreaker) and report an **estimated** `count_estimate` — never an exact count. The one truly-small curated set is **campaign members** (typically tens of rows); those get an exact `meta.count` but are paged with the same cursor page type for envelope uniformity.
 
-Frontend calls `https://api.whynoipv6.com/ip` **hardcoded** (`whynoipv6-web/src/components/Notification.vue:38`); today it is served by nginx or lost code — the new API serves it natively. Response: `200` `{"ip":"<derived remote address>"}` where the address is the §1.2 RealIP result, serialized without port or brackets (e.g. `{"ip":"2001:db8::7"}`, `{"ip":"192.0.2.10"}`). No other keys.
+Rationale: offset degrades linearly with depth (walk-and-discard), is incorrect on a mutating set (the daily crawl re-ranks), whereas keyset uses a `WHERE key > :last` seek on an index — constant cost regardless of depth. Rank is the ideal keyset key on rank-ordered views: monotonic, indexable (`idx_domain_rank`), human-meaningful.
 
-### 3.3 `GET /domain?offset=&limit=` — sinner list
+**Default `/domains` scope.** The bare top-level `/domains` collection is **ranked, non-disabled rows only** (`WHERE rank IS NOT NULL AND NOT disabled`; columns on the `domain` table, see 05-schema.md — domain table). Rank-NULL entities (campaign-only hosts, subdomains, live-check hosts) are real `domain` rows reachable **only via their sub-collections** (`/campaigns/{uuid}/domains`, `/domains/{host}/subdomains`, `/resources/{host}/dependents`), never from the top-level leaderboard. `meta.count_estimate = max(rank)` is an **upper bound** (disabled ranked rows retain their rank but are filtered out), which is why it is labelled an estimate. Queries spell out `AND rank IS NOT NULL AND NOT disabled` **verbatim** so the planner's partial-index predicate-implication check is trivial (`idx_domain_heroes`/`idx_domain_sinners`/`idx_domain_partial`, see 05-schema.md — domain table).
 
-Production: `domain.go:73-108` (DomainList), query `db/query/domain.sql` ListDomain. Frontend: `DomainService.getDomainList`.
+### 3.2 Cursor design
 
-- Membership: `classification = 'sinner'` + publicly-ranked predicate. **Announced break (OPEN-6):** production's query was `base_domain='unsupported' OR www_domain='unsupported'`; new membership is base-unsupported only — domains with base supported but www unsupported leave this list and surface on `GET /domain/almost` as `partial`/`www_missing`. Response **shape** unchanged.
-- Query:
+The cursor is an **opaque base64url token**. Opacity lets the server evolve the scheme and validate staleness. It encodes:
 
-```sql
-SELECT d.*, a.name AS as_name, c.name AS country_name
-FROM domain d JOIN asn a ON a.id = d.asn_id JOIN country c ON c.id = d.country_id
-WHERE d.classification = 'sinner' AND d.rank IS NOT NULL AND NOT d.disabled
-ORDER BY d.rank ASC LIMIT $1 OFFSET $2;
 ```
-
-- Response: `200` array of §2.9 rows. Zero rows → `200 []`.
-
-### 3.4 `GET /domain/heroes?offset=&limit=`
-
-Production: `domain.go:111-150`. Frontend: `DomainService.getDomainHeroes`. Same as §3.3 with `classification = 'hero'`. Hero membership is now the confirmed-classification truth table (announced break vs production's `mx != 'unsupported'` query — OPEN-6). Response: `200` array of §2.9 rows; zero → `200 []`.
-
-### 3.5 `GET /domain/topsinner`
-
-Production: `domain.go:237-265` (TopSinner). Frontend: `DomainService.getTopShame`. Curated editorial list (`top_shame` table; writer is `v6ctl shame`, out of scope here). No pagination (production returned the whole filtered list; ≤ a dozen rows). Query pin:
-
-```sql
-SELECT d.*, a.name AS as_name, c.name AS country_name
-FROM top_shame ts
-JOIN domain d ON d.id = ts.domain_id
-JOIN asn a ON a.id = d.asn_id
-JOIN country c ON c.id = d.country_id
-WHERE d.classification = 'sinner'            -- production parity: a shamed domain that
-                                             --   ships IPv6 auto-hides; its row persists
-  AND d.rank IS NOT NULL AND NOT d.disabled  -- publicly-ranked predicate
-ORDER BY d.rank ASC;                         -- declared fix: production returned domain
-                                             --   *id* as "rank" and ordered by it
-```
-
-Response: `200` array of §2.9 rows with `rank` = the real Tranco rank (the declared fix). **Decision:** `asn` and `country` are serialized normally (from the joined names). Production left both `""` because its handler simply didn't copy the fields — an artifact, not a contract; the frontend renders these rows with the same component as other domain lists, so populated values are strictly better and shape-identical. Zero rows → `200 []`.
-
-### 3.6 `GET /domain/{domain}` — detail
-
-Production: `domain.go:153-179` (RetrieveDomain). Frontend: `DomainService.getDomainDetails`.
-
-- Path param through §2.5 Canonicalize; failure → `404 {"error":"domain not found"}`.
-- Lookup by canonical host, any kind/rank (entity endpoint, not rank-scoped). Unknown host OR `disabled = TRUE` → `404 {"error":"domain not found"}` (production parity: ViewDomain read the disabled=FALSE view).
-- Response: `200`, the §2.9 row (no `campaign_uuid`), **plus two additive keys** (new; the frozen frontend ignores unknown keys):
-  - `"subdomains"`: array (max 25) of §4.2 subdomain rows — non-disabled children (`parent_id = this.id`), `ORDER BY host ASC`, cap 25. **Decision:** embedded rows use the new-model §4.2 shape (not the legacy shape) so the future frontend reads one vocabulary; cap and order pinned here.
-  - `"subdomain_count"`: int — total count of non-disabled children (may exceed 25; the §4.2 endpoint paginates past the cap).
-- Parity fixtures MUST strip/ignore the two additive keys when comparing against production captures (note for 10-testing.md).
-
-### 3.7 `GET /domain/{domain}/log`
-
-Production: `domain.go:268-294` (GetDomainLog), query `domain.sql` GetDomainLog (LIMIT 90). Frontend: `DomainService.getDomainLog`.
-
-- Path param through Canonicalize; failure → `404 {"error":"domain not found"}`.
-- Source + row shape: rule R2 (§2.8) over the entity's `scan` rows.
-- **Decision:** unknown canonical host → `200 []` (production ran the query by name and returned the nil slice; only DB errors 404'd). Disabled entities: the row resolves for the lookup, but a disabled domain's detail 404s (§3.6) so the frontend never reaches this; serve `200 []` for disabled hosts as well (public-exclusion, §2.6). Zero rows → `200 []`.
-
-### 3.8 `GET /domain/search/{q}?offset=&limit=`
-
-Production: `domain.go:182-234` (SearchDomain), query `domain.sql` GetDomainsByName. Frontend: `DomainService.searchDomain`.
-
-- `{q}` is a substring, NOT a hostname: no Canonicalize. Processing: lowercase, then escape `%`, `_`, and `\` for the LIKE pattern (production forgot to escape — declared fix, v2 forgot too).
-- Query (trigram GIN index `idx_domain_host_trgm` serves the scan):
-
-```sql
-SELECT d.*, a.name AS as_name, c.name AS country_name
-FROM domain d JOIN asn a ON a.id = d.asn_id JOIN country c ON c.id = d.country_id
-WHERE d.host LIKE '%' || $1 || '%' ESCAPE '\'
-  AND d.rank IS NOT NULL AND NOT d.disabled     -- production parity: searched ranked+enabled view
-ORDER BY d.rank ASC LIMIT $2 OFFSET $3;
-```
-
-- Response: `200` `{"data":[ <§2.9 rows> ]}` — **envelope kept**. Zero matches → `404 {"error":"no domains found"}`.
-- Campaign matches reach the Search page via `GET /campaign/search/{q}`; this endpoint stays rank-scoped.
-
-### 3.9 `GET /country`
-
-Production: `country.go:49-77` (CountryList), query `country.sql` ListCountry. Frontend: `CountryService.getCountryList`.
-
-- Query: `SELECT name, code, sites, v6sites, percent FROM country ORDER BY sites DESC;` (production parity ordering). Counters are the current-state columns recomputed at the daily tick with the §2.6 scope, so figures match the lists exactly. The sentinel row (`code 'UN'`, name `'Unknown'`) appears exactly as it does today.
-- Row shape (production `country.go:22-28`):
-
-```json
-{"country":"Norway","country_code":"NO","sites":8231,"v6sites":2119,"percent":25.74}
-```
-
-`percent` is the `NUMERIC(5,2)` column as a JSON number (§2.4). Zero rows → `200 []`.
-
-### 3.10 `GET /country/{code}`, `/country/{code}/sinners`, `/country/{code}/heroes`
-
-Production: `country.go:80-107` (CountryInfo), `:110-159` (CountrySinners), `:162-211` (CountryHeroes). Frontend: `CountryService.*`.
-
-- `{code}` is upper-cased (`strings.ToUpper`, production parity) and matched against `country.code`. Unknown → `404 {"error":"Country not found"}` (all three routes).
-- `GET /country/{code}`: `200`, single §3.9 row.
-- `.../sinners?offset=&limit=`: `classification='sinner' AND country_id=$1` + publicly-ranked predicate, `ORDER BY rank ASC` (declared minor fix: production ordered by id) — same OPEN-6 membership narrowing as §3.3 (production used the same OR-predicate, `country.sql` ListDomainsByCountry). `200` array of §2.9 rows; zero → `200 []`.
-- `.../heroes?offset=&limit=`: `classification='hero'`, same scoping, `ORDER BY rank ASC` (production parity). `200` array; zero → `200 []`.
-
-### 3.11 Changelog rendering: the `renderChangelog` ladder (single implementation, API layer)
-
-`renderChangelog(field, old, new, host) -> (message, ipv6Status)` is defined ONLY for `field IN ('base','www','ns','mx')` and `old, new IN ('supported','unsupported','no_record')`, `old` non-NULL. `ipv6_status` in the response is always `new_value`. Exact strings, verbatim from production `internal/crawler/crawl.go:416-495` (the campaign ladder in `campaign_crawl.go` is string-identical, so one function serves all five endpoints). `{h}` = entity host; for `field='www'` the rendered name is `www.{h}`:
-
-| field | old → new | message |
-|---|---|---|
-| base | unsupported→supported OR no_record→supported | `IPv6 enabled for {h}` |
-| base | supported→unsupported | `IPv6 lost for {h}` |
-| base | no_record→unsupported | `IPv4-only for {h}` |
-| base | any→no_record | `No DNS records found for {h}` |
-| www | unsupported→supported OR no_record→supported | `IPv6 enabled for www.{h}` |
-| www | supported→unsupported | `IPv6 lost for www.{h}` |
-| www | no_record→unsupported | `IPv4-only for www.{h}` |
-| www | any→no_record | `No DNS records found for www.{h}` |
-| ns | unsupported→supported OR no_record→supported | `IPv6 enabled nameserver for {h}` |
-| ns | supported→unsupported | `Nameservers degraded to IPv4-only for {h}` |
-| ns | no_record→unsupported | `IPv4-only nameservers for {h}` |
-| ns | any→no_record | `No NS records found for {h}` |
-| mx | unsupported→supported OR no_record→supported | `IPv6 enabled MX records for {h}` |
-| mx | supported→unsupported | `MX records degraded to IPv4-only for {h}` |
-| mx | no_record→unsupported | `IPv4-only MX records for {h}` |
-| mx | any→no_record | `No Mail records found for {h}` |
-
-`field='legacy'` rows (phase-4 import escape hatch, see 05-schema.md — changelog table) **bypass the ladder**: `message = legacy_message`, `ipv6_status = legacy_status`, verbatim passthrough.
-
-### 3.12 The five `/changelog*` endpoints
-
-Production: `changelog.go` (ChangelogList `:51-84`, CampaignChangelogList `:87-124`, ChangelogByDomain `:127-181`, ChangelogByCampaign `:184-254`, ChangelogByCampaignDomain `:257-341`). Frontend: `ChangelogService.*` — it calls **all five** (the v2 rebuild dropped three; they are restored).
-
-**Coverage filter (all five endpoints; implements R5):**
-
-```sql
-WHERE (   (c.field IN ('base','www','ns','mx')
-           AND c.old_value IS NOT NULL
-           AND c.old_value  IN ('supported','unsupported','no_record')
-           AND c.new_value  IN ('supported','unsupported','no_record'))
-       OR c.field = 'legacy' )
-```
-
-`conn`/`resources` rows and any transition involving `not_applicable` ARE written to the `changelog` table (they remain queryable, appear in datasets, and are available to a future v2 API) but are NOT served by the legacy endpoints — production never emitted them, the frontend is frozen, exposing them later is purely additive.
-
-**Ordering (all feeds):** `ORDER BY c.ts DESC, c.domain_id DESC, c.field ASC`. Pagination `?offset=`/`?limit=` (default 50, max 100) on all five.
-
-**Synthetic `id`:** the `changelog` hypertable has no identity column. `id` = **epoch milliseconds of `ts`** (int64). The frontend keys rows by array index and never dereferences `id`; collisions are harmless. Pagination stability comes from the deterministic ORDER BY.
-
-**Per-endpoint scope and `domain_url`:**
-
-| Endpoint | Scope (JOINs + filters, on top of the coverage filter) | `domain_url` |
-|---|---|---|
-| `GET /changelog` | `JOIN domain d ON d.id = c.domain_id WHERE d.rank IS NOT NULL AND NOT d.disabled` — Tranco apexes only (reproduces production's implicitly-Tranco feed; campaign-only, live-check, and subdomain entities excluded; disabled excluded per the global rule) | `"/domain/{host}"` |
-| `GET /changelog/campaign` | `JOIN campaign_domain cd ON cd.domain_id = c.domain_id JOIN campaign ca ON ca.id = cd.campaign_id JOIN domain d ON d.id = c.domain_id WHERE NOT ca.disabled AND NOT d.disabled` — all campaigns, rank irrelevant. A domain in N campaigns yields N rows per change (production duplicated identically — accepted) | `"/campaign/{shortuuid(ca.uuid)}/{host}"` |
-| `GET /changelog/{domain}` | entity resolved by canonical host, any kind/rank, `NOT d.disabled` (**Decision:** disabled entities are excluded per the global §2.6 rule → their feed 404s as zero-rows) | `""` (key present, empty string — production struct has no omitempty) |
-| `GET /changelog/campaign/{uuid}` | shared campaign resolver (§2.7) + membership join, `NOT d.disabled` | `"/campaign/{shortuuid}/{host}"` |
-| `GET /changelog/campaign/{uuid}/{domain}` | shared campaign resolver + membership check + canonical host, `NOT d.disabled` | `""` |
-
-Row shape: §2.10. Zero-result behavior: §2.11 (feeds 1–2 → `200 []`; feeds 3–5 → the pinned 404 bodies).
-
-### 3.13 `GET /campaign`
-
-Production: `campaign.go:80-104` (CampaignList), query `campaign.sql` ListCampaign. Frontend: `CampaignService.getCampaignList`.
-
-- `WHERE NOT campaign.disabled` (announced fix, §2.7), `ORDER BY campaign.id ASC` (production parity).
-- Row shape (production `campaign.go:42-49`, CampaignListResponse):
-
-```json
-{"id":7,"uuid":"bHTMghm9txZFhwMKVCiBey","name":"Norwegian Banks",
- "description":"...","count":42,"v6_ready":17}
-```
-
-- `id` = `campaign.id` (int), `uuid` = shortuuid token, `count` = COUNT of `campaign_domain` members whose domain row is `NOT disabled`, `v6_ready` = R4 formula over the same member set:
-
-```sql
-SELECT ca.id, ca.uuid, ca.name, ca.description,
-       count(d.id) FILTER (WHERE NOT d.disabled) AS count,
-       count(d.id) FILTER (WHERE NOT d.disabled
-                             AND d.base_status = 'supported'
-                             AND d.ns_status   = 'supported'
-                             AND d.www_status IN ('supported','not_applicable')) AS v6_ready
-FROM campaign ca
-LEFT JOIN campaign_domain cd ON cd.campaign_id = ca.id
-LEFT JOIN domain d           ON d.id = cd.domain_id
-WHERE NOT ca.disabled
-GROUP BY ca.id
-ORDER BY ca.id ASC;
-```
-
-- A live campaign with zero members returns `count:0, v6_ready:0` (row kept — only `campaign.disabled` removes it from the list). Zero campaigns → `200 []`.
-
-### 3.14 `GET /campaign/{uuid}?offset=&limit=` — composite
-
-Production: `campaign.go:107-195` (CampaignDomains). Frontend: `CampaignService.getCampaign`.
-
-- Shared campaign resolver (§2.7): invalid token → `404 {"error":"Invalid UUID"}`; unknown or disabled → `404 {"error":"Campaign not found"}`.
-- Member domains: `JOIN campaign_domain`, exclude disabled domains, paginated. **Decision:** ordering is `ORDER BY cd.added_at ASC, d.host ASC` — production ordered by `campaign_domain.id` (insertion order); the new membership table has no id column, and `added_at` (insertion time) with a unique host tiebreak is the deterministic equivalent.
-- Empty page (unknown offset past the end, or zero members at all — production `campaign.go:151-155` checked `len(domains)==0`) → `404 {"error":"Campaign not found"}` (bug-compatible; §2.11).
-- Response `200`:
-
-```json
 {
-  "campaign": { "id":7,"uuid":"<shortuuid>","name":"...","description":"...",
-                "count":42,"v6_ready":17 },
-  "domains": [ { "domain":"dnb.no","base_domain":"supported","www_domain":"supported",
-                 "nameserver":"supported","mx_record":"supported","v6_only":"supported",
-                 "asn":"TELENOR-AS","country":"Norway",
-                 "ts_aaaa":"...","ts_www":"...","ts_ns":"...","ts_mx":"...",
-                 "ts_curl":"...","ts_check":"...","ts_updated":"..." } ]
+  "v": 1,                    // cursor schema version
+  "g": 20260707,             // crawl generation the cursor was minted against
+  "s": "rank",               // sort key
+  "f": "a3f9c1",             // filter fingerprint (hash of the normalized filter set)
+  "k": [10023, 88142]        // the seek tuple (shape depends on the sort key)
 }
 ```
 
-`campaign` = the §3.13 row shape (same count/v6_ready formulas). `domains` rows = the campaign-domain shape (§2.9 minus `rank`/`campaign_uuid`); statuses are the **shared entity's** confirmed state now (single status truth — a domain in Tranco and a campaign shows identical status in both views).
+Each sort binds a **strict total order** and its own seek tuple:
 
-### 3.15 `GET /campaign/{uuid}/{domain}` and `GET /campaign/{uuid}/{domain}/log`
-
-Production: `campaign.go:198-265` (ViewCampaignDomain), `:324-368` (GetCampaignDomainLog). Frontend: `CampaignService.getCampaignDomain`, `.getCampaignDomainLog`.
-
-- Both: shared campaign resolver (§2.7 — note: uniform 404 on invalid token; production used 400 on these two routes, superseded per §2.7), then `{domain}` through Canonicalize (failure → the route's not-found body below), then membership check (`campaign_domain` row linking the campaign and the canonical host's domain row).
-- `GET /campaign/{uuid}/{domain}`: membership miss, unknown host, or **disabled domain** (**Decision:** single campaign-domain resources 404 for disabled entities, consistent with §3.6) → `404 {"error":"Domain not found"}`. Success → `200`, single campaign-domain row (§3.14 `domains[]` element shape).
-- `GET /campaign/{uuid}/{domain}/log`: R2 rule (§2.8) over the entity's scan rows. Zero rows, unknown host, or membership miss → `200 []` (§2.11; production returned the nil slice). Row shape identical to §3.7.
-
-### 3.16 `GET /campaign/search/{q}?offset=&limit=`
-
-Production: `campaign.go:268-321` (SearchDomain), query `campaign.sql` GetCampaignDomainsByName. Frontend: `CampaignService.searchDomain`.
-
-- `{q}`: lowercase + LIKE-escape (as §3.8), no Canonicalize.
-- Scope: campaign membership, `NOT campaign.disabled AND NOT domain.disabled`; rank irrelevant (this is how unranked campaign domains reach the Search page).
+- **`rank` (default, and country/asn/provider scopes):** `(rank, id)` with `id` as the guaranteed-unique tiebreaker. Qualified `rank IS NOT NULL`, so the seek tuple is always total:
 
 ```sql
-SELECT d.*, a.name AS as_name, c2.name AS country_name, ca.uuid AS campaign_uuid
-FROM domain d
-JOIN campaign_domain cd ON cd.domain_id = d.id
-JOIN campaign ca        ON ca.id = cd.campaign_id
-JOIN asn a              ON a.id = d.asn_id
-JOIN country c2         ON c2.id = d.country_id
-WHERE d.host LIKE '%' || $1 || '%' ESCAPE '\'
-  AND NOT ca.disabled AND NOT d.disabled
-ORDER BY d.host ASC, ca.id ASC        -- Decision: production had NO ORDER BY (nondeterministic
-LIMIT $2 OFFSET $3;                   --   paging); host+campaign id is the stable equivalent
+SELECT ... FROM domain
+WHERE classification = 'hero' AND rank IS NOT NULL AND NOT disabled
+  AND (rank, id) > ($1, $2)          -- seek tuple from the cursor
+ORDER BY rank, id
+LIMIT $3 + 1;                        -- N+1 fetch → compute has_more, drop the extra
 ```
 
-- Response: `200` `{"data":[ <§2.9 rows + "campaign_uuid">"..."> ]}`. A domain in N matching campaigns yields N rows (production parity). **Decision:** `rank` serializes the shared entity's real rank (0 when NULL) — production always emitted 0 because its campaign tables had no rank column; the shared-entity model makes the real value available and the field was already present in the shape.
-- Zero matches → `404 {"error":"No domains found"}` (capital N).
-
-### 3.17 `GET /metric/overview` — fully pinned
-
-Production: `metric.go:62-80` (Overview). Frontend: `MetricService.getTotals`; `types/Metric.ts` + `MetricCrawler.vue` read **every** key.
-
-Response: JSON array with exactly one element, built from the latest `stats_global_daily` row (max `day`; see 05-schema.md — stats tables):
-
-```json
-[
-  {
-    "time": "2026-07-06T00:00:00Z",
-    "data": {
-      "domains":        1000000,
-      "base_domain":    262144,
-      "www_domain":     240000,
-      "nameserver":     410000,
-      "mx_record":      201000,
-      "heroes":         96000,
-      "top_heroes":     407,
-      "top_nameserver": 561
-    }
-  }
-]
-```
-
-- `time` = the row's `day` as an RFC 3339 timestamp at **midnight UTC** (keep it a timestamp string, not a bare date; the frontend never reads it but the type is frozen).
-- Key → column mapping: `domains`←`domains`, `base_domain`←`base_supported`, `www_domain`←`www_supported`, `nameserver`←`ns_supported`, `mx_record`←`mx_supported`, `heroes`←`heroes` (the confirmed-classification count — the membership change vs production's `base+www supported` formula is the announced OPEN-6 break), `top_heroes`←`top_heroes`, `top_nameserver`←`top_nameserver`.
-- All eight `data` keys are required; values are plain JSON numbers.
-- First-boot guarantee: the phase-4 seed migration writes day-0 rows for all `stats_*` tables, so this endpoint always has a row (OPEN-6 "serve migrated seed values immediately"). Degenerate empty table → `200 []` (§2.11), never an error.
-
-### 3.18 `GET /metric/asn?order=`
-
-Production: `metric.go:94-129` (AsnMetrics), queries `asn.sql` AsnByIPv4/AsnByIPv6. Frontend: `MetricService.fetchAsnData`.
-
-- `order` query param: default `ipv4`; allowed `ipv4|ipv6`; anything else → `400 {"error":"invalid filter parameter"}` (byte-exact production body).
-- **No pagination**: production hardcoded offset 0 / limit 50 (`metric.go:108`); `offset`/`limit` params are ignored. Always at most 50 rows.
-- Query (**Decision:** production excluded its hardcoded sentinel via `id != 1`; the new schema resolves sentinels by lookup, so the predicate becomes `number <> 0`. Deterministic tiebreak `number ASC` added — production had none):
+- **`host` (campaign members, and the `sort=host` option):** `host` alone is a unique natural id, so `host > $1` is already a strict total order — no tiebreaker, no NULL. This is the ordering for campaign members, whose `rank` is usually NULL.
+- **Nullable-rank ordering (`dependents`, §4.11):** the reverse `dependents` set mixes ranked and rank-NULL rows, ordered `rank NULLS LAST`. A plain `(rank, id) > (…)` evaluates to `UNKNOWN` on NULL rank and would drop the null-rank tail, so `dependents` uses a **null-flag-first** key:
 
 ```sql
-SELECT id, number, name, count_total, count_v6
-FROM asn
-WHERE number <> 0
-ORDER BY <count_total | count_v6> DESC, number ASC
-LIMIT 50;
+SELECT ... FROM domain
+WHERE ... AND (rank IS NULL, rank, id) > ($1, $2, $3)
+ORDER BY (rank IS NULL), rank, id
+LIMIT $4 + 1;
 ```
 
-`order=ipv4` sorts by `count_total` (production's `count_v4` column stored the total domain count — every domain has v4), `order=ipv6` by `count_v6`.
-- Row shape (production `metric.go:83-91`):
+The seek tuple is then `[is_rank_null, last_rank, last_id]`. The `rank IS NOT NULL` global-list seek is **never** reused verbatim for this nullable ordering.
 
-```json
-{"id":314,"number":2119,"name":"TELENOR-AS","count_v4":5120,"count_v6":1444}
-```
+**Staleness handling.** A cursor whose `g` differs from the current crawl generation is *re-anchored*: because rank is monotonic, the server seeks to the same `last_rank` in the current generation and continues. If the filter fingerprint `f` no longer matches the request's filters, the cursor is rejected with `400 invalid-parameter`. Bidirectional paging (`prev_cursor`) is supported.
 
-`count_v4` = `count_total - count_v6` **computed server-side** (production parity: `metric.go:98` comment "all domains have IPv4"). **Decision:** `percent_v4`/`percent_v6` are never emitted — production declared them with `omitempty` and never set them, so they never appeared on the wire; the new backend omits the fields entirely (OpenAPI schema has exactly five properties).
-- Zero rows → `200 []`.
+**Deep-link escape hatch — rank-ordered views only.** `?after_rank=500000` (and `?around_rank=500000` for a centered window) provide shareable, stateless deep links — `WHERE rank > 500000 ORDER BY rank LIMIT n`, an indexed range scan. **Honest scope:** these mean *"rows whose global rank ≥ N, then filtered"* — **not** "the Nth matching row." On a sparse filter (`class=hero` selects ~41k of 1M), `after_rank=N` returns "heroes whose global rank > N," which is not "page N of heroes." The `sort=host` ordering has **no** random-access param — forward/back cursor only. A true dense per-filter rank is **OPEN-14** (skipped).
 
-### 3.19 `GET /metric/asn/search/{q}`
+`?limit` is client-supplied with a sane cap (`default 50`, `max 200`).
 
-Production: `metric.go:132-157` (SearchAsn) + `core/metric.go:108-126`. Frontend: `MetricService.searchAsn`.
+### 3.3 Filter / sort / field-selection grammar
 
-Processing, **verbatim production semantics kept** (**Decision:** including the quirk that a name query starting with "as" loses that prefix — e.g. `Asgard` searches for `GARD`; the frontend is frozen and the quirk is harmless):
-1. `q = strings.TrimPrefix(strings.ToUpper(rawParam), "AS")`.
-2. If `q` parses as an integer: `SELECT ... FROM asn WHERE number = $1` (sentinel `number 0` findable — parity).
-3. Else: name search `WHERE name ILIKE '%' || $1 || '%' ESCAPE '\'` with LIKE-escaping of `%`/`_`/`\` (declared fix; production didn't escape).
-4. Both: `ORDER BY count_total DESC, number ASC LIMIT 100` (production ordered by its count_v4=total column; tiebreak added as §3.18).
+Filters are plain query params, aligned with response field names, and **constrained to the indexed axes**:
 
-Row shape: §3.18. Zero matches → `200 []` (the one search endpoint that never 404s — production has no zero-rows check).
+| Param | Values | Backed by | Notes |
+|---|---|---|---|
+| `class` | `hero`\|`partial`\|`sinner`\|`inactive`\|`unknown` | `idx_domain_heroes/sinners/partial` | primary filter; presets the `/heroes`,`/sinners`,`/almost`,`/mail` tier paths; predicate spelled `AND rank IS NOT NULL AND NOT disabled` |
+| `gold` | `true` | layered on `idx_domain_heroes` | gold ⊂ hero, cheap without its own index; the `/gold` tier path |
+| `country` | ISO code | `idx_domain_country` | composes with `class` + rank order |
+| `asn` | AS number | `idx_domain_asn` | equality cheap; sort within pays a sort |
+| `tld` | eTLD suffix | `idx_domain_tld` (05-schema.md — domain table) | TLD/ccTLD pivot; scope-required unless combined with an indexed prefilter |
+| `provider` | `dns_provider.id` | `idx_domain_dns_provider` (05-schema.md) | DNS-provider pivot (OPEN-4); scope-required as `tld`/`flag` |
+| `hosting` | hosting tag | `domain.hosting_provider` (05-schema.md) | hosting/CDN text-tag pivot; scope-required |
+| `flag` | one of `class_flags` | **expensive** — scope-required (below) | |
+| `base`/`www`/`ns`/`mx`/`conn`/`resources` | an `ipv6_status` value | **expensive** — scope-required (below) | per-dimension confirmed-status filters (drives the mail track) |
+| `rank_max` / `rank_min` | int | `idx_domain_rank` | cohort ranges (top-1000 etc.) |
+| `q` | substring | `idx_domain_host_trgm` | search; **does not** compose with rank ordering — host/relevance-ordered |
+| `sort` | `rank` (default) \| `-rank` \| `host` | index-dependent | each sort binds a distinct cursor ordering (§3.2) |
+| `fields` | comma list | — | sparse fieldset to trim the leaderboard row |
+| `format` | `json` (default) \| `csv` | — | content negotiation (§5.5) |
+
+**Guardrails against expensive predicates (scope-required, §2.5).**
+
+- **`flag=`, the per-dimension status filters (`mx=supported`, …), and the `tld=`/`provider=`/`hosting=` pivots are the same class of unindexed-or-selective predicate.** They are accepted **only** when combined with an indexed prefilter (`class`, `country`, or `asn`). A bare, unscoped one returns **`422 scope-required`** — *not* `validation-error`; the value is valid, it just needs a scope — with a `detail` naming the scope params that satisfy it. (OPEN-2: no `class_flags` GIN index is added now.)
+- **The global mail-heroes / mail-sinners lists are served from stats, not a live scan.** A site-wide "all domains missing IPv6 mail" list (`mx=unsupported`) is the unscoped seq-scan case. The **aggregate headline** comes from the daily `mx_supported` stats counter (`domains − mx_supported`); the **list form** is offered only as a `class`/`country`/`asn`-scoped filtered `/domains` view (§4.4).
+- **Arbitrary cross-dimension boolean predicates** (`base=supported AND mx=unsupported` with no scope) are not offered — no composite index covers them.
+- **No request-time aggregation over the live `domain` table.** Country/ASN/classification rollups are read from the precomputed `stats_*` daily tables, never `GROUP BY domain` live.
+
+*Note.* No `-last_change` sort — no `last_change` column or index exists, and the keyset design requires every sort to bind an indexable strict total order. "What changed recently" is served by the changelog feed (§4.8, indexed on `ts`). A materialized `last_change` is **OPEN-14** (skipped).
+
+### 3.4 Count strategy
+
+**No exact `COUNT(*)` on the hot path.** Counts always live in `meta` (§2.4).
+
+- The **global list** `meta.count_estimate` is served from **`max(rank)` of the current generation** — an O(1) lookup, the "your rank / ~N" denominator, labelled an estimate because disabled ranked rows create small gaps.
+- **Filtered global views and the country/asn/provider-scoped lists** get an **estimated** `count_estimate` (`reltuples` for the unfiltered table; the EXPLAIN plan row estimate for a filtered query). These scopes can be very large, so an exact count is never taken.
+- **Bounded curated sets** (campaign members, `/shame`, forward-resources) get an **exact** `meta.count`.
+
+`has_more` on every page is computed with the **N+1 fetch** (select `limit+1`, return `limit`).
 
 ---
 
-## 4. New endpoints
+## 4. The resource model
 
-New endpoints serve the real public model: statuses are the 4-value enum `supported|unsupported|no_record|not_applicable` or `null` (never confirmed); classifications are `unknown|inactive|sinner|partial|hero`; flags are `broken_v6|www_missing|ns_missing|mail_missing|resources_v4only`. No R1 projection anywhere in this section.
+Every representation serves the **real** status/classification/gold/flags model. The canonical building block is the domain row; everything else composes from it.
 
-### 4.1 Shared new-model domain row (`DomainSummary`)
+### 4.1 Domain — the status object convention
 
-**Decision:** one row schema serves `GET /domain/almost`, the `subdomains` listings (standalone + embedded in §3.6), and it deliberately embeds the same `statuses`/`as_of` vocabulary as the §6 `confirmed` object:
+Each of the six dimensions is a **status object**, so per-dimension provenance rides along:
+
+```json
+"status": {
+  "base":      { "value": "supported",    "since": "2024-11-03T00:00:00Z" },
+  "www":       { "value": "supported",    "since": "2025-01-19T00:00:00Z" },
+  "ns":        { "value": "supported",    "since": "2023-08-01T00:00:00Z" },
+  "mx":        { "value": "unsupported",  "since": "2025-06-02T00:00:00Z" },
+  "conn":      { "value": "supported",    "since": "2025-01-19T00:00:00Z" },
+  "resources": { "value": null,           "since": null }
+}
+```
+
+`value` is the 4-value enum (`supported`/`unsupported`/`no_record`/`not_applicable`) **or JSON `null`** when the dimension has never been confirmed (`resources` is `null` everywhere until `crawler.resources.enabled` flips). `since` is the `*_since` column (05-schema.md — domain table), `null` when never confirmed. No `legacyStatus` collapse, no `ts_aaaa` renaming, no `"0001-01-01T00:00:00Z"` zero-time — real enum, real names, `null` for absent.
+
+### 4.2 Domain summary (list row)
+
+The row returned in every `/domains*` collection:
 
 ```json
 {
   "host": "example.com",
-  "rank": 1234,                          // int or null (subdomains/campaign hosts: null)
-  "kind": "apex",                        // "apex" | "subdomain"
+  "rank": 10023,
+  "kind": "apex",
+  "parent": null,
   "classification": "partial",
-  "class_flags": ["www_missing"],        // [] when none
+  "class_flags": ["www_missing", "mail_missing"],
   "gold": false,
-  "statuses": {
-    "base": "supported", "www": "unsupported", "ns": "supported",
-    "mx": "not_applicable", "conn": "supported", "resources": null
+  "status": {
+    "base":      { "value": "supported",   "since": "2024-11-03T00:00:00Z" },
+    "www":       { "value": "unsupported", "since": "2025-05-10T00:00:00Z" },
+    "ns":        { "value": "supported",   "since": "2023-08-01T00:00:00Z" },
+    "mx":        { "value": "unsupported", "since": "2025-06-02T00:00:00Z" },
+    "conn":      { "value": "supported",   "since": "2025-01-19T00:00:00Z" },
+    "resources": { "value": null,          "since": null }
   },
-  "as_of": "2026-07-06T04:12:09.331Z",   // domain.last_checked_at; null if never scanned
-  "country_code": "NO",                  // country.code via country_id ("UN" sentinel)
-  "asn": { "number": 2119, "name": "TELENOR-AS" }   // sentinel {0,"Unknown"}
+  "tld": "com",
+  "country": { "code": "NO", "name": "Norway" },
+  "asn":     { "number": 2119, "name": "Telenor Norge AS" },
+  "dns_provider":     { "id": 12, "name": "Cloudflare" },
+  "hosting_provider": "Amazon CloudFront",
+  "last_checked_at": "2026-07-07T02:14:55Z"
 }
 ```
 
-Source columns: `host`, `rank`, `kind`, `classification`, `class_flags`, `gold`, the six `*_status` columns, `last_checked_at`, joined `country.code`, `asn.number`/`asn.name`.
+`rank` is `int` or **JSON `null`** (campaign-only, subdomains, live-check hosts) — never the legacy `0`. `class_flags` is the ordered array (`broken_v6`/`www_missing`/`ns_missing`/`mail_missing`/`resources_v4only`); a `partial` domain may legitimately carry `[]`. `country`/`asn` are **embedded objects**, not display-name strings. `tld` (bare eTLD suffix, `domain.tld`), `dns_provider` (embedded `{id,name}` from the `dns_provider` mapping via `domain.dns_provider_id`, `null` when unmapped), and `hosting_provider` (the normalized `domain.hosting_provider` TEXT tag as a plain string, `null` when unset) are the new per-domain pivots (05-schema.md — domain table; OPEN-4). `?fields=` can trim this to e.g. `host,rank,classification,gold`.
 
-### 4.2 `GET /domain/almost?offset=&limit=` — the "almost there" tier
+### 4.3 Domain detail
 
-- Membership: `classification = 'partial'` + publicly-ranked predicate; `ORDER BY rank ASC`; pagination §2.2 (served by `idx_domain_partial`).
-- Response: `200` array of §4.1 rows. Zero → `200 []`.
-- This is where base-supported/www-unsupported domains land after the §3.3 sinner-membership narrowing (OPEN-6/OPEN-10: `/domain` stays sinners for the frozen frontend; the full ladder presentation is a frontend-round concern).
-
-### 4.3 `GET /domain/{domain}/subdomains?offset=&limit=`
-
-- Parent resolved like §3.6 (Canonicalize; unknown or disabled → `404 {"error":"domain not found"}` — **Decision:** reuse the parent detail route's body since this is a sub-resource of it).
-- Children: `WHERE parent_id = $parent AND NOT disabled ORDER BY host ASC` + pagination. Any `kind='apex'` parent may have children; `kind='subdomain'` rows have none (→ `200 []`).
-- Response: `200` array of §4.1 rows (children are `kind:"subdomain"`, `rank:null`, `statuses.www` always `"not_applicable"` or `null` by the kind-aware check rules). Zero → `200 []`.
-- Exists for pagination past the 25-row embed cap in §3.6.
-
-### 4.4 `GET /domain/{domain}/resources`
-
-Per-host dependency list (issue #23; tables `resource_host` + `domain_resource`, see 05-schema.md — resources tables).
-
-- Parent resolved as §4.3 (404 body `{"error":"domain not found"}` for unknown/disabled/malformed).
-- **Decision:** no pagination — linked hosts per domain are bounded small (discovery caps per fetch); `ORDER BY rh.host ASC`.
-
-```sql
-SELECT rh.host, rh.aaaa_status, rh.last_checked_at,
-       dr.source, dr.required, dr.first_seen, dr.last_seen
-FROM domain_resource dr
-JOIN resource_host rh ON rh.id = dr.resource_host_id
-WHERE dr.domain_id = $1
-ORDER BY rh.host ASC;
-```
-
-- Response `200`:
-
-```json
-[
-  {
-    "host": "fonts.googleapis.com",
-    "status": "unsupported",             // resource_host.aaaa_status: 4-value enum or null
-    "source": "discovered",              // "discovered" | "manual"
-    "required": true,
-    "first_seen": "2026-05-01T04:11:00Z",
-    "last_seen":  "2026-07-06T04:12:09Z",
-    "last_checked_at": "2026-07-06T02:00:41Z"   // null if never swept
-  }
-]
-```
-
-Zero links → `200 []` (also the constant answer while `crawler.resources.enabled=false`, pre-phase-5).
-
-### 4.5 `GET /resource/{host}/dependents?offset=&limit=` — reverse dependency lookup
-
-- `{host}` through Canonicalize; failure or no `resource_host` row → `404 {"error":"not_found"}`.
-- **Decision:** composite response (mirrors the §3.14 composite precedent); `dependents` paginated per §2.2, scope = linked domains `NOT disabled` (any kind/rank — advocacy view), `ORDER BY d.rank ASC NULLS LAST, d.host ASC`.
+`GET /domains/{host}` — the summary plus informational dimensions, children, and a freshness/meta block. The heavy per-check evidence (record sets, TLS cert, per-resolver consensus tuples, resource lists) is served from the latest `scan_detail` under a nested `evidence` object (same shape as the live-check result, §5.1 — the shared `MapLiveResult` mapper), optional via `?include=evidence`.
 
 ```json
 {
-  "resource": {
-    "host": "fonts.googleapis.com",
-    "status": "unsupported",                    // aaaa_status or null
-    "dependent_count": 48211,                   // resource_host.dependent_count
-    "last_checked_at": "2026-07-06T02:00:41Z"
+  "host": "example.com",
+  "rank": 10023,
+  "kind": "apex",
+  "parent": null,
+  "classification": "partial",
+  "class_flags": ["www_missing", "mail_missing"],
+  "gold": false,
+  "status": { "...": "six status objects as in §4.1" },
+  "informational": {
+    "dnssec": "supported",
+    "ptr":    "partial",
+    "smtp":   "unsupported",
+    "parity": "supported",
+    "latency_v4_ms": 41,
+    "latency_v6_ms": 38
   },
-  "dependents": [
-    { "host": "example.com", "rank": 1234, "kind": "apex",
-      "classification": "hero", "gold": false,
-      "source": "discovered", "required": true }
-  ]
+  "tld": "com",
+  "country": { "code": "NO", "name": "Norway", "tld": ".NO" },
+  "asn":     { "number": 2119, "name": "Telenor Norge AS" },
+  "dns_provider":     { "id": 12, "name": "Cloudflare" },
+  "hosting_provider": "Amazon CloudFront",
+  "subdomain_count": 3,
+  "disabled": false,
+  "last_checked_at": "2026-07-07T02:14:55Z",
+  "created_at": "2022-05-01T00:00:00Z",
+  "evidence": { "...": "latest scan_detail JSONB, per §5.1 shape (optional, ?include=evidence)" },
+  "meta": { "as_of": "2026-07-07T03:41:12Z", "generation": 20260707 }
 }
 ```
 
-Dependent-row keys: §4.1 subset (`host`,`rank`,`kind`,`classification`,`gold`) + link attributes (`source`,`required`). Zero dependents → `"dependents": []` (200).
+`informational` dimensions are **advisory** — they never gate classification. They are served as latest-observation values with the **public-masking rule the trust model requires everywhere** (03 §1 / the 05 enum registry: `error` and `inconsistent` never reach public output; `partial` is public only for `ptr`/`parity`):
 
-### 4.6 `GET /stats/*` — time-series for graphs
+| Field | Allowed wire values |
+|---|---|
+| `dnssec` | `supported` \| `unsupported` \| `no_record` \| `not_applicable` \| `null` |
+| `smtp` | `supported` \| `unsupported` \| `no_record` \| `not_applicable` \| `null` |
+| `ptr` | above **plus** `partial` |
+| `parity` | above **plus** `partial` |
 
-Five routes, one query-parameter contract:
+A latest observation of `error` or `inconsistent` maps to **`null`** (never leaks); a raw `partial` on `dnssec`/`smtp` also maps to `null`. `subdomains[]` are a native sub-collection (`/domains/{host}/subdomains`). Observation-level richness (`error`/`inconsistent`) is exposed **only** inside `evidence` (OPEN-3).
 
-- `?from=YYYY-MM-DD` (inclusive), `?to=YYYY-MM-DD` (inclusive), `?interval=daily|weekly`.
-- **Decision (defaults):** `to` = today UTC, `from` = `to` − 90 days, `interval` = `daily`.
-- Validation: unparseable date, `from > to`, or `interval` outside the enum → `400 {"error":"invalid_parameter","message":"..."}`.
-- **Decision (weekly semantics):** `interval=weekly` returns ONE row per ISO week — the row with the greatest `day` (or `ts`) inside that week within range (latest snapshot sampling, not averaging), reported under its own real `day`. SQL shape: `SELECT DISTINCT ON (date_trunc('week', day)) ... ORDER BY date_trunc('week', day), day DESC`, re-sorted ascending for output.
-- Output ordering: ascending by `day`/`ts`. No pagination (bounded by the date range; a year of dailies is ≤366 rows). Zero rows in range → `200 []`.
-- All values are JSON numbers; `day` is `"YYYY-MM-DD"`.
+### 4.4 The ranked tier lists
 
-**`GET /stats/overview`** — from `stats_global_daily` (every column; scope: publicly-ranked, except `disabled` which counts ranked-but-disabled — see 05-schema.md — stats tables):
+Heroes / sinners / gold / almost / mail are **first-class short collection resources** — each a preset filtered view over the `/domains` leaderboard, returning the §4.2 summary row in the §2.4 collection envelope, sharing the exact same keyset/cursor pagination and `?country=`/`?asn=`/`?tld=`/`?provider=` composition:
+
+```
+GET /heroes             # preset: class=hero
+GET /sinners            # preset: class=sinner
+GET /gold               # preset: gold=true
+GET /almost             # the "almost there" list — partial domains one step from hero
+GET /mail               # the mail/MX heroes track (class=hero&mx=supported)
+```
+
+`GET /domains` stays the **general filterable collection**; the same views are reachable via `?class=` (`GET /domains?class=hero&sort=rank`, `GET /domains?class=partial`, `GET /domains?class=hero&gold=true`). Tier paths accept the same additional filters, so "sinners in Norway" is `GET /sinners?country=no` (≡ `GET /domains?class=sinner&country=no`, ≡ the scoped `GET /countries/NO/domains?class=sinner`).
+
+**The mail track** obeys the §3.3 scope-or-stats guardrail:
+
+- **Mail-heroes** — `GET /mail` is canonical (preset `class=hero&mx=supported`, scoped so `mx=` is indexed via the `class` prefilter).
+- **Mail-sinners** — `GET /domains?class=sinner&mx=unsupported` (likewise scoped). A truly *global* mail-sinners count is **not** a live `/domains` scan — that headline number is read from the `mx_supported` daily stats counter (`domains − mx_supported`). The list form is always class/country/asn-scoped.
+
+**The top-shame editorial pick** (hand-curated `top_shame`, distinct from algorithmic `sinner`) is its own resource, returning the envelope:
+
+```
+GET /shame
+```
+```json
+{
+  "items": [ { "host": "...", "reason": "...", "added_at": "..." } ],
+  "page": { "next_cursor": null, "prev_cursor": null, "has_more": false },
+  "meta": { "as_of": "...", "generation": 20260707, "count": 12 }
+}
+```
+
+A small bounded editorial list (the ~12 curated picks), so no cursor — `page` is trivial and `meta.count` is exact. (`top_shame` must be re-seeded at cutover, 08-migration-cutover.md — it has no crawl-derivable source.)
+
+### 4.5 Country
 
 ```json
-[{ "day":"2026-07-06","domains":1000000,"sinners":610000,"partial":180000,
-   "heroes":96000,"gold":12000,"inactive":80000,"unknown":4000,"disabled":30000,
-   "base_supported":262144,"www_supported":240000,"ns_supported":410000,
-   "mx_supported":201000,"conn_supported":250000,"resources_supported":90000,
-   "top_heroes":407,"top_nameserver":561 }]
+{
+  "code": "NO",
+  "name": "Norway",
+  "tld": ".NO",
+  "sites": 8421,
+  "v6_sites": 2103,
+  "percent": 24.97,
+  "meta": { "as_of": "...", "generation": 20260707 }
+}
 ```
 
-**`GET /stats/country/{code}`** — `{code}` upper-cased, matched on `country.code`; unknown → `404 {"error":"Country not found"}` (same body as §3.10 — it is the same resolver). Rows from `stats_country_daily`:
+`v6_sites` is the snake_case-normalized wire name for the schema column `country.v6sites` (§2.3). `percent` is served **directly** from the `NUMERIC(5,2)` column (the legacy `÷10` pgtype hack is gone). `GET /countries` is the leaderboard, sortable by `percent`/`v6_sites` (precomputed counters → cheap, no live aggregation). `GET /countries/{code}/domains` is the per-country list (`?class=` filter over `idx_domain_country`) — **keyset-paginated with a `count_estimate`** (a large country can hold hundreds of thousands of domains, §3.1). Time series: `GET /countries/{code}/stats` (§4.10). The `UN` sentinel appears as a normal row. `GET /countries/{code}/changelog` is the per-country feed (§4.8).
+
+### 4.6 ASN / network / provider
 
 ```json
-[{ "day":"2026-07-06","domains":8231,"sinners":5200,"partial":900,"heroes":2100,
-   "base_supported":2119,"conn_supported":2050 }]
+{
+  "number": 2119,
+  "name": "Telenor Norge AS",
+  "count_total": 4210,
+  "count_v6": 1876,
+  "count_v4": 2334,
+  "meta": { "as_of": "...", "generation": 20260707 }
+}
 ```
 
-**`GET /stats/campaign/{uuid}`** — shared campaign resolver (§2.7: `404 {"error":"Invalid UUID"}` / `404 {"error":"Campaign not found"}`, disabled → 404). Rows from `stats_campaign_daily` (gaps for periods when the campaign was disabled are served as-is; clients tolerate missing days):
+`count_v4` is **synthesized server-side** (`count_total − count_v6`) — not stored. `count_v6`/`count_total` are the **canonical wire names**, used in both this detail representation and the ASN time-series (§4.10); the time-series' underlying `stats_asn_daily.v6_domains` column is mapped onto the same `count_v6` wire name (§2.3). `GET /asns` is the network leaderboard (`?sort=count_v6|count_total`; real columns, no `order=ipv4|ipv6` alias; `?q=` does normal substring match with no AS-prefix bug). `GET /asns/{number}/domains` lists the network's domains — **keyset-paginated with a `count_estimate`** (a hyperscaler ASN can host hundreds of thousands of eTLD+1s, §3.1). The sentinel `0` = Unknown appears as a normal group. This is the **hosting-ASN league table**.
+
+**The DNS-provider league table** (OPEN-4, resolved YES) is **committed**: the `dns_provider` mapping table (`ns_suffixes[] → provider`, 05-schema.md — dns_provider table; `domain.dns_provider_id` set at scan commit by longest ns-suffix match) backs `GET /providers` + `GET /providers/{id}` + `GET /providers/{id}/domains`, keyed by `dns_provider.id`, exposing binary inclusion + counts only (no scores). It is the highest-leverage pivot — one provider's default flips thousands of domains. Provider detail row:
 
 ```json
-[{ "day":"2026-07-06","domains":42,"v6_ready":17,"sinners":12,"partial":9,
-   "heroes":18,"base_supported":30,"www_supported":25,"ns_supported":28,
-   "mx_supported":22,"conn_supported":26 }]
+{
+  "id": 12,
+  "name": "Cloudflare",
+  "count_total": 210344,
+  "count_v6": 198021,
+  "count_v4": 12323,
+  "meta": { "as_of": "...", "generation": 20260707 }
+}
 ```
 
-**`GET /stats/asn/{number}`** — `{number}` is the AS number (decimal integer; a leading `AS`/`as` prefix is accepted and stripped, matching §3.19's normalization). Non-numeric after stripping → `400 {"error":"invalid_parameter","message":"..."}`; unknown AS number → `404 {"error":"not_found"}`. Rows from `stats_asn_daily` (`day` is a TIMESTAMPTZ column; serialize its UTC date part as `"YYYY-MM-DD"`):
+`/providers/{id}/domains` is keyset-paginated with a `count_estimate` (§3.1), like the ASN scope. `?provider=` (§3.3) filters `/domains*` by `dns_provider_id`, backed by `idx_domain_dns_provider`.
+
+**Provider leaderboard count source (resolved — mirror ASN).** `dns_provider` carries stored `count_total`/`count_v6` columns (05-schema.md — dns_provider table), recomputed by the daily tick's counter step exactly like `asn` (06-ingest.md — §10.6 Country/ASN/DNS-provider counter recompute; the provider set is small, so the exact reset+recompute is trivially cheap). The leaderboard therefore serves **exact** `count_total`/`count_v6` with `count_v4` synthesized server-side (`count_total − count_v6`, never stored), identical to the ASN shape above — "counts, not scores." The scoped list `/providers/{id}/domains` still reports `count_estimate` (a large provider can host hundreds of thousands of eTLD+1s, §3.1); only the leaderboard row itself carries exact counts.
+
+The companion **hosting/CDN provider** axis is `domain.hosting_provider` — a normalized TEXT tag (CNAME-chain CDN detection + resolved-IP ASN), **not** an id-keyed resource. It surfaces on the domain row (§4.2/§4.3) as a plain string and as a `?hosting=` pivot on `/domains*` under the same scope-required guardrail (§3.3). A precomputed hosting league table (aggregating the tag) needs a stats source rather than a live `GROUP BY domain` (§3.3); until one exists it is a scoped filter, not a leaderboard collection.
+
+### 4.7 Campaign (composite detail)
+
+`GET /campaigns` lists campaigns (with a `?tag=` filter, §5.6); the detail is a **composite** (metadata + paged members + adoption):
 
 ```json
-[{ "day":"2026-07-06","domains":5120,"v6_domains":1444,"sinners":3300,"heroes":990 }]
+{
+  "uuid": "3f2b...",
+  "name": "Norwegian Banks",
+  "description": "Retail banks operating in Norway",
+  "source_file": "campaigns/no-banks.yaml",
+  "tags": ["mandate:eu-2030", "sector:banking"],
+  "disabled": false,
+  "adoption": { "v6_ready_percent": 41.7, "day": "2026-07-07" },
+  "domains": {
+    "items": [ /* §4.2 domain summary rows, typically rank:null */ ],
+    "page": { "next_cursor": null, "prev_cursor": null, "has_more": false }
+  },
+  "meta": { "as_of": "2026-07-07T03:41:12Z", "generation": 20260707, "count": 17 }
+}
 ```
 
-**`GET /stats/domain/{domain}`** — per-domain history straight from `scan` (2-year retention bounds the range). Entity resolved as §3.7 (Canonicalize; **Decision:** unknown host → `200 []`, disabled → `200 []`, consistent with §3.7 — this is `/domain/{domain}/log`'s new-model sibling). The R2 definitive-rows filter applies (extended to `conn`/`resources`); **Decision:** `interval=daily` returns at most one row per UTC day (the latest qualifying scan of that day), `weekly` the latest qualifying scan per ISO week:
+Members are ordinary domain rows joined via `campaign_domain`, **ordered by `host` and paged with the same keyset cursor** as every other collection (§3.2 — `host` is a unique key, so the seek is total even though members' `rank` is usually NULL). Campaign members are a genuinely-bounded set, so `meta.count` is **exact**. `adoption.v6_ready_percent` comes from `stats_campaign_daily` (`v6_ready` = base supported ∧ ns supported ∧ www ∈ {supported, not_applicable}), never per-entity scoring; `adoption.day` is the stats date. **Keyed by raw UUID** (OPEN-1), not shortuuid. `tags` backs the mandate surface (OPEN-12; the `campaign.tags` TEXT[] column, 05-schema.md — campaign table). Time series: `GET /campaigns/{uuid}/stats`.
 
-```sql
-SELECT DISTINCT ON (date_trunc($bucket, ts))
-       ts, base, www, ns, mx, conn, resources, classification
-FROM scan
-WHERE domain_id = $1 AND ts >= $from AND ts < $to + INTERVAL '1 day'
-  AND base NOT IN ('error','inconsistent') AND www  NOT IN ('error','inconsistent')
-  AND ns   NOT IN ('error','inconsistent') AND mx   NOT IN ('error','inconsistent')
-  AND conn NOT IN ('error','inconsistent') AND resources NOT IN ('error','inconsistent')
-ORDER BY date_trunc($bucket, ts), ts DESC;
-```
+### 4.8 Changelog event (the trust surface)
+
+Served **structured**, one row per confirmed dimension transition — no message rendering, no synthetic epoch id, no `domain_url` string:
 
 ```json
-[{ "ts":"2026-07-06T04:12:09.331Z",
-   "statuses":{"base":"supported","www":"supported","ns":"supported",
-               "mx":"not_applicable","conn":"supported","resources":"supported"},
-   "classification":"hero" }]
+{
+  "ts": "2026-07-06T03:32:10Z",
+  "host": "example.com",
+  "field": "www",
+  "old_value": "unsupported",
+  "new_value": "supported"
+}
 ```
 
-(Core-dimension `scan` columns never contain `partial`, so after the filter the values are exactly the 4-value public enum.)
+`ts` is a full RFC 3339 **timestamp** (event time). `old_value`/`new_value` are the raw 4-value enum, always non-null, always distinct. **All native fields are served**, including `conn` and `resources` transitions and `not_applicable` transitions — the legacy coverage filter (which admitted only `base/www/ns/mx` with 3 legacy strings) is deleted. Feeds:
 
-### 4.7 `GET /datasets`
+- `GET /changelog` — global recent-transitions feed, cursor on `ts DESC` (`idx_changelog_ts`, see 05-schema.md — changelog table), `?field=` and `?from=/&to=` windows.
+- `GET /domains/{host}/changelog` — per-domain (native PK read).
+- `GET /campaigns/{uuid}/changelog` — campaign-wide (members' transitions).
+- `GET /campaigns/{uuid}/domains/{host}/changelog` — one member.
+- `GET /countries/{code}/changelog` — per-country feed (no legacy equivalent).
 
-Serves the datasets manifest — full contract in §7.
+**Scoped-feed cost (§3.3 discipline).** The `changelog` hypertable is keyed `(domain_id, ts, field)` with a global `idx_changelog_ts` and the per-domain PK, but **no `(scope_id, ts)` index**. A naive per-country / per-campaign feed can scan far back through the global `ts` index probing a sparse scope. So the scoped changelog feeds (per-country, per-campaign) are **capped to a fixed recent window** — the latest 50 transitions (matching §5.4), never deep-paginated; bulk consumers are steered to the datasets (§5.3). A denormalized `(country_id/campaign, ts)` path is **OPEN-15** (skipped); until it exists, the recent-window cap is the guardrail. The global and per-domain feeds are index-backed and paginate normally.
+
+The item id for feed serializations (§5.4) is the composite `(host, ts, field)` (stable, immutable), not a synthetic epoch id.
+
+### 4.9 Per-domain timeline / history
+
+`GET /domains/{host}/history?from=&to=&interval=daily|weekly` — the trajectory graph.
+
+**Trust-consistent sourcing.** The per-dimension trajectory is **reconstructed from the `changelog`** (the authoritative confirmed transitions, the same source as §4.8), **not** read from the raw `scan` hypertable. Reading `scan` would (a) leak `error`/`inconsistent` into public output — locked as "never reach public output" (03 §1) — and (b) mix a noisy per-scan observation trajectory with the smooth confirmed one. Instead the API **replays the changelog** to reconstruct the confirmed per-dimension state as of each day in the window, and applies the deterministic classification ladder to those confirmed values to stamp `classification` per point — a pure function of confirmed state, fully trust-consistent. The only value taken from `scan` is the **latency overlay** (`latency_v4_ms`/`latency_v6_ms`), a genuinely per-scan measurement carrying no confirmed-status semantics.
+
+```json
+{
+  "host": "example.com",
+  "points": [
+    {
+      "day": "2026-07-01",
+      "base": "supported", "www": "supported", "ns": "supported",
+      "mx": "unsupported", "conn": "supported", "resources": null,
+      "classification": "partial",
+      "latency_v4_ms": 41, "latency_v6_ms": 38
+    }
+  ],
+  "meta": { "retention_days": 730, "as_of": "..." }
+}
+```
+
+`day` is date granularity. `resources` is `null` (never confirmed, per §4.1) — the confirmed-never `null`, correct here because the source is the confirmed reconstruction. No pagination (`points` collection); `interval=weekly` samples the reconstructed state at each week boundary, not averaging. **Day-1 note:** the trajectory is changelog-sourced and starts empty (OPEN-9, start fresh), filling as the fresh crawl accumulates confirmed transitions; the latency overlay likewise fills as scans accumulate.
+
+### 4.10 Stats / overview (adoption over time)
+
+Five routes, one query contract (`?from=&to=&interval=daily|weekly`, default `to=today` UTC, `from=to−90d`, ascending, no pagination, `≤366 rows/yr`, zero rows → `200 {"points":[]}`), sourced from the confirmed-state `stats_*_daily` tables so graphs match public lists exactly. All use the `{points, meta}` time-series envelope (§2.4). `interval=weekly` returns one row per ISO week — the latest snapshot in that week (`SELECT DISTINCT ON (date_trunc('week', day)) ... ORDER BY date_trunc('week', day), day DESC`, re-sorted ascending), not averaging. Validation: unparseable date, `from > to`, or bad `interval` → `400 invalid-parameter`.
+
+- `GET /stats/overview` — `stats_global_daily` (the headline dashboard).
+- `GET /countries/{code}/stats` — `stats_country_daily`.
+- `GET /campaigns/{uuid}/stats` — `stats_campaign_daily` (incl. `v6_ready%`).
+- `GET /asns/{number}/stats` — `stats_asn_daily` (exposes the `count_v6`/`count_total` wire names, §4.6).
+- `GET /domains/{host}/history` — per-domain, changelog-reconstructed (§4.9).
+
+The overview point carries the full `stats_global_daily` payload (see 05-schema.md — stats tables):
+
+```json
+{
+  "points": [
+    {
+      "day": "2026-07-06",
+      "domains": 1003418, "heroes": 41022, "partial": 88310, "sinners": 210144,
+      "inactive": 512900, "unknown": 151042, "gold": 3110, "disabled": 8933,
+      "base_supported": 260113, "www_supported": 241889, "ns_supported": 402231,
+      "mx_supported": 180334, "conn_supported": 251004, "resources_supported": 0,
+      "top_heroes": 512, "top_nameserver": 690
+    }
+  ],
+  "meta": { "as_of": "...", "source": "confirmed_state" }
+}
+```
+
+`meta.source: "confirmed_state"` is deliberate: if the measurement-flavored `scan_daily_adoption` cagg is ever exposed (OPEN-5 — resolved NO), it must be labelled `source: "measurement"` and never reconciled with these numbers.
+
+The country / campaign / asn `/stats` points carry their table's columns (`stats_country_daily`, `stats_campaign_daily` incl. `v6_ready`, `stats_asn_daily` with `v6_domains` mapped to `count_v6`); `day` serializes as `"YYYY-MM-DD"` (UTC date part for TIMESTAMPTZ `day` columns). `GET /campaigns/{uuid}/stats` uses the raw-UUID resolver; unknown/disabled → `404 not-found`. `GET /asns/{number}/stats` accepts a leading `AS`/`as` prefix (stripped); non-numeric after stripping → `400 invalid-parameter`; unknown AS → `404 not-found`.
+
+### 4.11 Resource dependencies
+
+- `GET /domains/{host}/resources` — forward: what this domain depends on. Bounded small (a handful of resource hosts per domain), so no cursor is needed — but it still returns the uniform collection envelope (`items`, not a bare `resources` key), `ORDER BY host`, with an exact `meta.count` (tables `resource_host` + `domain_resource`, see 05-schema.md — resources tables):
+
+```json
+{
+  "items": [
+    { "host": "fonts.googleapis.com", "aaaa_status": "unsupported",
+      "source": "discovered", "required": true,
+      "first_seen": "2025-02-01", "last_seen": "2026-07-06",
+      "last_checked_at": "2026-07-07T01:00:00Z" }
+  ],
+  "page": { "next_cursor": null, "prev_cursor": null, "has_more": false },
+  "meta": { "as_of": "...", "generation": 20260707, "count": 4 }
+}
+```
+
+`aaaa_status` is `resource_host.aaaa_status` (the 4-value enum or `null`). Zero links → `items: []` (also the constant answer while `crawler.resources.enabled=false`, pre-phase-5).
+
+- `GET /resources/{host}/dependents` — reverse: **the advocacy surface** ("this v4-only host breaks N sites"), keyset-paginated over the **null-flag-first** ordering (`ORDER BY (rank IS NULL), rank, id`, §3.2 — the set mixes ranked and rank-NULL dependents):
+
+```json
+{
+  "resource": { "host": "fonts.googleapis.com", "aaaa_status": "unsupported",
+                "dependent_count": 41022, "last_checked_at": "..." },
+  "items": [ /* §4.2 domain summary rows depending on it, + link attrs source/required */ ],
+  "page": { "next_cursor": "...", "prev_cursor": null, "has_more": true },
+  "meta": { "as_of": "...", "generation": 20260707, "count_estimate": 41022 }
+}
+```
+
+`resource.dependent_count` (`resource_host.dependent_count`) is the headline counter; the paged `items` carry a `meta.count_estimate` because the dependent set can be very large. This powers the `resources_v4only` flag narrative. `{host}` through Canonicalize; no `resource_host` row → `404 not-found`. Empty/dormant until `crawler.resources.enabled` flips.
+
+### 4.12 Client-IP echo (visitor banner)
+
+`GET /ip` — a genuine product feature (the "are you reaching us over IPv6?" banner). Echoes the caller's real IP (§1.2), bracketless, as an object:
+
+```json
+{ "ip": "2001:df0:...:1", "family": "ipv6" }
+```
+
+`Cache-Control: no-store` (per-caller). `family` (`ipv6`|`ipv4`) is derived server-side so the frontend doesn't sniff for `:`. No other keys. This replaces the legacy `{"ip":"..."}` shape.
 
 ---
 
-## 5. `GET /badge/{domain}.svg` — status badge
+## 5. Special endpoints
 
-**Route.** chi pattern `GET /badge/{domain}.svg` (chi matches a static suffix after a param within one segment; the `.svg` is part of the route, never part of the `domain` param). A `.svg`-less path (`GET /badge/example.com`) is a route miss → plain 404.
+### 5.1 Live check — `POST /check` / `GET /check/{id}`
 
-**Input handling.** Strip the `.svg` suffix, then normalize and validate with the SAME function chain as `POST /check` step 1 (§6.2): `Canonicalize()` (lowercase, IDNA Lookup ToASCII punycode, strict LDH, ≤253 octets, ≥2 labels, no IP literals) plus the reserved-TLD policy layer (reject final label ∈ {`test`, `example`, `invalid`, `localhost`, `internal`, `local`}). Failure → **400** `{"error":"invalid_host","message":"..."}` (standard JSON error, not an SVG; malformed hosts are not legitimate embeds). This is the **declared exception** to the §2.5 404-on-failure rule.
+Anonymous, no auth; the only write path. **Async enqueue + poll**, never synchronous (a full engine run is 60–90 s; holding an anonymous request open invites resource exhaustion).
 
-**Lookup.** `SELECT classification, gold, disabled FROM domain WHERE host = $1`. Entity endpoint — not rank-scoped: any kind/origin (Tranco apex, campaign domain, subdomain, live-check host) resolves. **Read-only, zero side effects**: never inserts a domain row, never enqueues a check_job, never touches `last_requested_at`.
+```http
+POST /check
+Content-Type: application/json
 
-**Badge selection (first match wins):**
-
-| Condition | Message | Message color |
-|---|---|---|
-| no row, `disabled = TRUE` (any reason), or `classification = 'unknown'` | `unknown` | `#9f9f9f` (gray) |
-| `classification = 'hero' AND gold` | `gold` | `#d4af37` |
-| `classification = 'hero'` | `supported` | `#4c1` |
-| `classification = 'partial'` | `partial` | `#dfb317` |
-| `classification = 'sinner'` | `unsupported` | `#e05d44` |
-| `classification = 'inactive'` | `inactive` | `#9f9f9f` |
-
-Always **HTTP 200** for a valid host — a 404 renders as a broken image in READMEs. Disabled → gray `unknown` implements public exclusion for this endpoint; it deliberately differs from `GET /domain/{domain}`'s 404-on-disabled (which is production parity and does not bind this new endpoint). Badge copy is public status vocabulary, NOT ladder branding: a README badge never says "sinner"/"hero" (owners won't embed self-shaming badges). The copy/color table is ONE Go constant table — the single place to reword.
-
-**Rendering.** shields.io flat style, label `IPv6` (label bg `#555`, white text), six precompiled variants of one template — fixed geometry + `textLength`, byte-deterministic, no font measurement, no dependencies:
-
-```svg
-<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="20" role="img" aria-label="IPv6: {MSG}"><title>IPv6: {MSG}</title><linearGradient id="s" x2="0" y2="100%"><stop offset="0" stop-color="#bbb" stop-opacity=".1"/><stop offset="1" stop-opacity=".1"/></linearGradient><clipPath id="r"><rect width="{W}" height="20" rx="3" fill="#fff"/></clipPath><g clip-path="url(#r)"><rect width="37" height="20" fill="#555"/><rect x="37" width="{MW}" height="20" fill="{COLOR}"/><rect width="{W}" height="20" fill="url(#s)"/></g><g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" font-size="110" text-rendering="geometricPrecision"><text x="195" y="150" transform="scale(.1)" fill="#010101" fill-opacity=".3" textLength="270">IPv6</text><text x="195" y="140" transform="scale(.1)" textLength="270">IPv6</text><text x="{TX}" y="150" transform="scale(.1)" fill="#010101" fill-opacity=".3" textLength="{TL}">{MSG}</text><text x="{TX}" y="140" transform="scale(.1)" textLength="{TL}">{MSG}</text></g></svg>
+{ "host": "example.com" }
 ```
 
-Geometry table (`W = 37 + MW`, `TX = (37 + MW/2) × 10`, `TL = (MW − 10) × 10`):
+```http
+HTTP/1.1 202 Accepted
+Location: /check/481529
+Cache-Control: no-store
 
-| MSG | MW | W | TX | TL |
-|---|---|---|---|---|
-| gold | 38 | 75 | 560 | 280 |
-| supported | 69 | 106 | 715 | 590 |
-| partial | 53 | 90 | 635 | 430 |
-| unsupported | 81 | 118 | 775 | 710 |
-| inactive | 59 | 96 | 665 | 490 |
-| unknown | 61 | 98 | 675 | 510 |
+{ "id": 481529, "host": "example.com", "status": "pending", "created_at": "..." }
+```
 
-**Headers.** Per §1: `Content-Type: image/svg+xml`, `Cache-Control: public, max-age=3600`, global `X-Content-Type-Options: nosniff`. No ETag, no rate-limit special-casing — one indexed PK lookup + string template is cheaper than any JSON endpoint.
+```http
+GET /check/481529     → 200 { "id": 481529, "host": "...", "status": "done", "cached": false, "result": { ... }, "confirmed": { ... } }
+```
 
-**Interactions.** Pre-phase-5, `domain.gold` is false for everyone (`crawler.resources.enabled=false`), so heroes render `supported` — correct, no special case. Documented usage string: `![IPv6](https://api.whynoipv6.com/badge/example.com.svg)`.
+**Rule 0 (locked):** the live check writes only `check_job.result` and **never advances confirmed state** — no `scan` rows, no `*_pending`/`*_observed`, no `last_checked_at`, no `classification`, no `changelog`, no country/ASN counters. Anonymous POSTs must not accelerate the N-consecutive-scan confirmation. The POST handler's lifecycle re-entry (§5.1.6) may set `last_requested_at`/`next_check_at` and re-enable dead/delisted rows (it *schedules* frontier work, never *advances* confirmed state), and the consumer inserts the initial `domain` row for unknown hosts (§5.1.5 step 2). `check_job` rows are public data; sequential BIGINT ids are enumerable and that is accepted.
 
-**Acceptance criteria** (fixtures in 10-testing.md): golden-file test per variant (six SVGs byte-exact); unknown host → 200 gray `unknown`; disabled host → 200 gray `unknown`; `xn--`-input and equivalent Unicode input render the same badge; `.svg`-less path → 404 (route miss); invalid host → 400 JSON.
+**Job id type.** The job `id` is the schema's `BIGINT GENERATED ALWAYS AS IDENTITY` (`check_job.id`, see 05-schema.md — check_job table), served as an integer. If unguessable poll tokens are later judged worthwhile, changing `check_job.id` to UUIDv7/ULID is a deliberate schema change to list in 05 with that rationale — not assumed here.
 
-**Scope note:** ships phase 6, priority "ship-when-cheap"; nothing else references it, so cutting it needs no spec change.
+#### 5.1.1 `POST /check` — processing order
 
----
+Body: `{"host": "<host>"}`.
 
-## 6. Live check — `POST /check` / `GET /check/{id}`
+1. **Parse + validate.** A body that is not JSON → `415 unsupported-media-type`. A body that lacks the `host` key or has a non-string value → `400 invalid-parameter`. Then `Canonicalize(host)` (§2.8), then the `POST /check`-only policy layer: reject IP literals (already dead at Canonicalize) and reserved TLDs (final label ∈ {`test`, `example`, `invalid`, `localhost`, `internal`, `local`}). Failure → `400 invalid-parameter`. (SSRF is already handled by the engine's pinned dialer; these rejections are the API-boundary layer on top.)
+2. **Rate limit (§6.3).** Count `check_job` rows for this `requester_ip` /64 prefix with `created_at > now() - interval '1 hour'`; limit `live_check.rate_ip_per_hour` (default 10). Then the global count over the same window; limit `live_check.rate_global_per_hour` (default 500). Exceeded → `429 rate-limited` (problem+json with `retry_after`) + `Retry-After` header. `retry_after = ceil(3600 − (now − min(created_at)))` seconds over the counted window rows.
+3. **Lifecycle re-entry** (runs after rate limiting, before dedupe, on every POST whose host already has a `domain` row — including dedupe hits): apply §5.1.6.
+4. **Dedupe, domain-side.** If a `domain` row exists and `last_checked_at >= now() - interval '1 hour'` (`live_check.dedupe_window`), load its latest `scan_detail`, run the shared mapper (§5.1.4) over `details`, and return `200` with a **synthetic done envelope**: `id: null`, `host`, `status:"done"`, `cached:true`, `created_at`/`completed_at` = the scan_detail `ts`, `error:null`, `result` = mapper output, `confirmed` = §5.1.3's object from the domain row. No job row is created.
+5. **Dedupe, job-side.** Else if a `check_job` for the same canonical host has `status='done' AND completed_at >= now() - interval '1 hour'`, return `200` with that job's §5.1.3 envelope, `cached` overridden to `true`.
+6. Else `INSERT INTO check_job (host, requester_ip) VALUES ($1, $2)` → status `pending`; return `202 { "id":..., "host":..., "status":"pending", "created_at":... }` (exactly these four keys) + `Location: /check/{id}` + `Cache-Control: no-store`.
 
-### 6.1 Rule 0 — live checks never touch confirmed state
+#### 5.1.2 `GET /check/{id}`
 
-The live-check consumer runs the engine and writes its result ONLY to `check_job.result`. It never inserts `scan` or `scan_detail` rows and never updates any `domain` column except the initial row insert for unknown hosts (§6.5 step 2). Confirmed statuses, pending counters (`*_pending`, `*_pending_count`), `*_observed`, `last_checked_at`, `next_check_at`, `classification`, changelog rows, and country/ASN counters advance exclusively via frontier scans. The POST handler's lifecycle re-entry writes (§6.6) — `last_requested_at = now()` and, for `dead`/`delisted` rows, `next_check_at = now()` / re-enable — are allowed alongside the initial row insert: they *schedule* frontier work, they never *advance* confirmed state. Rationale: the anti-flap N-consecutive-scans rule assumes daily cadence; anonymous POSTs must not be able to accelerate a confirmed transition. `check_job` rows and results are public data; sequential BIGINT ids are enumerable and that is accepted (no auth, nothing sensitive).
-
-### 6.2 `POST /check` — processing order
-
-Body: `{"domain": "<host>"}`.
-
-1. **Parse + validate.** **Decision:** a body that is not valid JSON, lacks the `domain` key, or has a non-string value → `400 {"error":"invalid_host","message":"body must be {\"domain\":\"<hostname>\"}"}` (one 400 vocabulary for the endpoint). Then `Canonicalize(host)` (§2.5), then the POST /check-only policy layer on top: reject IP literals (already dead at Canonicalize) and reserved TLDs — final label ∈ {`test`, `example`, `invalid`, `localhost`, `internal`, `local`}. Failure → `400 {"error":"invalid_host","message":"..."}`. (SSRF is already handled by the engine's pinned dialer; these rejections are the API-boundary layer on top.)
-2. **Rate limit.** Count `check_job` rows for this `requester_ip` (§1.2 RealIP) with `created_at > now() - interval '1 hour'`; limit `live_check.rate_ip_per_hour` (default 10). Then the global count over the same window; limit `live_check.rate_global_per_hour` (default 500). Exceeded → `429 {"error":"rate_limited","scope":"ip","retry_after_s":1042}` (or `"scope":"global"`) + `Retry-After: 1042` header. **Decision:** `retry_after_s = ceil(3600 − (now − min(created_at))` in seconds`)` over the counted window rows — the time until the oldest counted row ages out; the header carries the same integer.
-3. **Lifecycle re-entry** (**Decision:** runs after rate limiting, before dedupe, on every POST whose host already has a `domain` row — including requests answered from dedupe): apply §6.6.
-4. **Dedupe, domain-side.** If a `domain` row exists and `last_checked_at >= now() - interval '1 hour'` (`live_check.dedupe_window`), load its latest `scan_detail` row, run the shared result mapper (§6.4) over `details`, and return `200` with a **synthetic done envelope**: `id: null`, `host`, `status:"done"`, `cached:true`, `created_at` = the scan_detail `ts`, `completed_at` = the same `ts`, `error:null`, `result` = mapper output (`checked_at` = that `ts`, `duration_ms` = `scan_detail.duration_ms`), `confirmed` = §6.3's object from the domain row. No job row is created. (`last_checked_at` is written only by frontier commits, so live checks never count as "scanned" for this window.)
-5. **Dedupe, job-side.** Else if a `check_job` for the same canonical host has `status='done' AND completed_at >= now() - interval '1 hour'`, return `200` with that job's §6.3 envelope, `cached` overridden to `true` (id = the existing job's id).
-6. Else `INSERT INTO check_job (host, requester_ip) VALUES ($1, $2)` → status `pending`; return `202 {"id":123,"host":"example.com","status":"pending","created_at":"2026-07-06T10:00:00Z"}` (exactly these four keys).
-
-### 6.3 `GET /check/{id}`
-
-`{id}` must parse as a positive int64; non-numeric or no row → `404 {"error":"not_found"}` (**Decision:** non-numeric ids are lookup misses, same body). Success → `200`:
+`{id}` must parse as a positive int64; non-numeric or no row → `404 not-found`. Success → `200`:
 
 ```json
 {
   "id": 123,
   "host": "example.com",
   "status": "pending",           // pending|processing|done|failed
-  "cached": false,               // false on every job row; true only in §6.2 dedupe envelopes
+  "cached": false,               // false on every job row; true only in §5.1.1 dedupe envelopes
   "created_at": "2026-07-06T10:00:00Z",
   "completed_at": null,          // set when done|failed
   "error": null,                 // short string when failed
-  "result": null,                // object below when done
-  "confirmed": null              // object below when a domain row exists
+  "result": null,                // object (§5.1.3) when done
+  "confirmed": null              // object (§5.1.3) when a domain row exists
 }
 ```
 
-`result` (produced by the shared mapper §6.4; statuses use the raw-observation vocabulary `supported|unsupported|no_record|not_applicable|error` — plus `inconsistent` for base/www when the resolver quorum split; live results are raw observations, explicitly NOT confirmed state):
+**Poll caching.** A terminal (`done`/`failed`) job is immutable, so it is served `Cache-Control: public, max-age=60` (a job id is minted per request, so this is safe); `pending`/`processing` stay `no-store`. Recommended client poll interval is **2 s** (documented in the OpenAPI). This closes the one anonymous read path the CDN otherwise cannot absorb without adding a limiter to a read path.
+
+#### 5.1.3 Result + confirmed objects
+
+`result` (produced by the shared mapper §5.1.4; statuses use the raw-observation vocabulary `supported|unsupported|no_record|not_applicable|error` — plus `inconsistent` for base/www when the resolver quorum split; live results are raw observations, explicitly NOT confirmed state):
 
 ```json
 {
@@ -966,33 +754,32 @@ Body: `{"domain": "<host>"}`.
 }
 ```
 
-`confirmed` (from the `domain` row; `null` if no row exists or nothing confirmed yet — i.e. all six statuses NULL):
+`confirmed` (from the `domain` row; `null` if no row exists or nothing confirmed yet — all six statuses NULL), computed at **read time** on every `GET /check/{id}` and on dedupe responses:
 
 ```json
 {"classification":"partial","class_flags":["mail_missing"],"gold":false,
- "statuses":{"base":"supported","www":"supported","ns":"supported",
-             "mx":"unsupported","conn":"supported","resources":null},
+ "status":{"base":{"value":"supported","since":"..."}, "...": "six §4.1 status objects"},
  "as_of":"2026-07-06T04:12:09.331Z"}
 ```
 
-(`as_of` = `domain.last_checked_at`.) `confirmed` is computed at **read time** on every `GET /check/{id}` and on dedupe responses.
+(`as_of` = `domain.last_checked_at`.)
 
-### 6.4 Shared result mapper (one implementation, three consumers)
+#### 5.1.4 Shared result mapper (one implementation, four consumers)
 
 `MapLiveResult(sr checker.ScanResult) → result JSON`. Applies the engine→public dimension mapping exactly (keys are the PUBLIC dimension names, not engine check names):
 
 - `base` ← `dns_aaaa_base`; `www` ← `dns_aaaa_www` (consensus-composite observations, including `inconsistent` on quorum split)
 - `ns` ← `dns_ns_ipv6` (engine `partial` → `supported`); `mx` ← `dns_mx_ipv6` (`partial` → `supported`)
-- `conn` ← the worker-side https/http composition table (02-observation-model.md — `conn` composition owns the table; `https_ipv6` with `http_ipv6` fallback)
+- `conn` ← the worker-side https/http composition table (02-observation-model.md — `conn` composition; `https_ipv6` with `http_ipv6` fallback)
 - `tls`, `parity`, `dnssec`, `ptr`, `spf` ← informational, raw engine status; `smtp` ← informational with `partial` → `unsupported`
 - `latency` ← `latency_ipv4`/`latency_ipv6` (`{"v4_ms":int|null,"v6_ms":int|null}`)
-- `resources` is NOT engine-mapped: it is the registry roll-up, computed **read-only** over the run's `resource_discovery` host list against confirmed `resource_host.aaaa_status` (discovery `error` → `error`; `not_applicable` → `not_applicable`; hosts missing or unswept in the registry are NULL → `error` — the defer branch; while `crawler.resources.enabled=false` → `not_applicable`). No registry rows are written on this path, per Rule 0.
+- `resources` is NOT engine-mapped: it is the registry roll-up, computed **read-only** over the run's `resource_discovery` host list against confirmed `resource_host.aaaa_status` (discovery `error` → `error`; `not_applicable` → `not_applicable`; missing/unswept → NULL → `error`; while `crawler.resources.enabled=false` → `not_applicable`). No registry rows are written on this path, per Rule 0.
 
-Because `scan_detail.details` stores the engine ScanResult serialization, the same mapper serves the domain-side dedupe path (§6.2 step 4). This mapper is ALSO the single mapping used by the frontier worker before the confirmed-status commit — one mapping, three consumers (frontier worker, live-check consumer, dedupe reader). Implementation lives with the crawler-facing mapping code; the API imports it (02-observation-model.md — the Result→observation mapper, `internal/crawler/observe.go`).
+Because `scan_detail.details` stores the engine ScanResult serialization, the same mapper serves the domain-side dedupe path (§5.1.1 step 4) and the domain-detail `evidence` block (§4.3). It is ALSO the mapping the frontier worker uses before the confirmed-status commit — one mapping, four consumers. Implementation lives with the crawler-facing mapping code (02-observation-model.md — `internal/crawler/observe.go`); the API imports it.
 
-### 6.5 Consumer (contract; runs in `cmd/crawler` — placement, pool lifecycle, and shutdown in 04-lifecycle-scheduling.md)
+#### 5.1.5 Consumer (contract; runs in `cmd/crawler` — placement/pool/shutdown in 04-lifecycle-scheduling.md)
 
-Dedicated goroutine pool: `live_check.workers` (default 4) slots; poll every 2s when idle.
+Dedicated goroutine pool: `live_check.workers` (default 4) slots; poll every 2 s when idle.
 
 1. Claim one job:
 
@@ -1007,114 +794,124 @@ WHERE id = (
 ) RETURNING id, host;
 ```
 
-2. Ensure a `domain` row: `INSERT INTO domain (host, kind, parent_id, rank, created_by, last_requested_at) VALUES ($host, $kind, $parent_id, NULL, 'live_check', now()) ON CONFLICT (host) DO NOTHING`. `kind` via the campaign-import PSL helper; `parent_id` set only if the registrable parent row ALREADY exists — live checks never auto-ensure parents (a `parent_link` row would grant permanent frontier eligibility, letting abuse grow the frontier). New rows keep the column default `next_check_at = now()`, so the frontier scans the host promptly.
-3. Run the full engine with a 60s context budget (`live_check.job_budget`), panic-recovered.
+2. Ensure a `domain` row: `INSERT INTO domain (host, kind, parent_id, rank, created_by, last_requested_at) VALUES ($host, $kind, $parent_id, NULL, 'live_check', now()) ON CONFLICT (host) DO NOTHING`. `kind` via the PSL helper; `parent_id` set only if the registrable parent row ALREADY exists — live checks never auto-ensure parents. New rows keep the default `next_check_at = now()`, so the frontier scans the host promptly.
+3. Run the full engine with a 60 s context budget (`live_check.job_budget`), panic-recovered.
 4. On success: `UPDATE check_job SET status='done', result=$1, completed_at=now() WHERE id=$2`. On error/timeout: `UPDATE check_job SET status='failed', error=$2, completed_at=now() WHERE id=$3`. Nothing else is written (Rule 0).
 
-**Reaper** (same goroutine, every 60s) — guarantees every poller terminates ≤15 min:
+**Reaper** (same goroutine, every 60 s) — guarantees every poller terminates ≤15 min:
 
 ```sql
 UPDATE check_job SET status='failed', error='timed out', completed_at=now()
 WHERE status IN ('pending','processing') AND created_at < now() - interval '15 minutes';
 ```
 
-**Retention** (daily tick, owned by 04-lifecycle-scheduling.md): `$1` = `live_check.retention` (duration, default 720h = 30d; registry: 09-ops.md).
+**Retention** (daily tick, owned by 04-lifecycle-scheduling.md): `$1` = `live_check.retention` (duration, default 720 h = 30 d).
 
 ```sql
 DELETE FROM check_job WHERE created_at < now() - $1;
 ```
 
-### 6.6 Lifecycle re-entry (POST-handler writes on existing rows)
+#### 5.1.6 Lifecycle re-entry (POST-handler writes on existing rows)
 
-Every `POST /check` for an existing host sets `last_requested_at = now()` — this is the "live-check origin within 7 days" linkage evaluated by the daily lifecycle sweep (window `lifecycle.live_check_linkage`, default 168h), and it extends the frontier life of any rank-NULL row a user actively watches. Additionally:
+Every `POST /check` for an existing host sets `last_requested_at = now()` — the "live-check origin within 7 days" linkage evaluated by the daily lifecycle sweep (`lifecycle.live_check_linkage`, default 168 h), extending the frontier life of any rank-NULL row a user watches. Additionally:
 
 - `disabled_reason = 'delisted'` → re-enable: clear `disabled`, `disabled_reason`, `disabled_at`; `orphaned_at = NULL`; `next_check_at = now()`.
-- `disabled_reason = 'dead'` → leave disabled but set `next_check_at = now()`: recovery happens via the pulled-in frontier scan, which commits through the trust machine and runs its re-enable/reset step if the domain actually resolves.
+- `disabled_reason = 'dead'` → leave disabled but set `next_check_at = now()`: recovery happens via the pulled-in frontier scan.
 - `disabled_reason IN ('service','manual')` → the live check runs and returns its result, but never re-enables.
 
-Once `last_requested_at` ages past the window, the sweep delists the row; a later POST refreshes it and re-enables per the rules above. New hosts get `created_by='live_check'`, `rank NULL`, `last_requested_at = now()` (§6.5 step 2).
+Config keys (crawler config; registry: 09-ops.md): `live_check.workers`, `live_check.job_budget`, `live_check.reclaim_after`, `live_check.fail_after`, `live_check.retention`, `live_check.rate_ip_per_hour`, `live_check.rate_global_per_hour`, `live_check.dedupe_window`.
 
-*Rejected — synchronous inline check:* a full engine run can take 60–90s (SMTP/HTTP timeouts); holding an anonymous HTTP request open that long invites trivial resource-exhaustion abuse. Job + poll matches ready.chair6.net-class tools.
+*Rejected — synchronous inline check:* a full engine run can take 60–90 s; holding an anonymous request open that long invites trivial resource-exhaustion abuse. Job + poll matches ready.chair6.net-class tools.
 
-### 6.7 Config keys (crawler config; registry: 09-ops.md)
+### 5.2 Embeddable SVG badge
 
-`live_check.workers` (int, 4), `live_check.job_budget` (duration, 60s), `live_check.reclaim_after` (duration, 5m), `live_check.fail_after` (duration, 15m), `live_check.retention` (duration, 720h), `live_check.rate_ip_per_hour` (int, 10), `live_check.rate_global_per_hour` (int, 500), `live_check.dedupe_window` (duration, 1h).
+`GET /badge/{host}.svg` — a shields.io-flat SVG rendered from confirmed status. Feature-research ranks the badge **#1** (viral distribution; every badge is a backlink) — committed, not optional.
 
----
+- `Content-Type: image/svg+xml; charset=utf-8`; `Cache-Control: public, max-age=86400`; `X-Content-Type-Options: nosniff`; an `ETag` from the crawl generation; **no rate-limit** (CDN-cacheable).
+- **Read-only, zero side effects:** never inserts a domain row, never enqueues a check_job, never touches `last_requested_at`. Not rank-scoped (any kind/origin resolves).
+- The `.svg` suffix is part of the route pattern, not the `{host}` param; a suffix-less path is a route-miss `404`.
+- **Declared exception to the 404-on-canonicalize-failure rule:** an invalid host (Canonicalize failure or reserved-TLD, §2.8) → `400 invalid-parameter` JSON (a malformed embed is not a legitimate request). A *valid* host is **always `200`** (a `404` renders as a broken image); disabled/unknown → the gray `IPv6: unknown` badge. XML-escape the host label into the SVG to prevent markup injection.
 
-## 7. Datasets
+Six precompiled byte-deterministic variants, one per `classification`(+`gold`) input. Copy is **public status vocabulary**, never ladder branding — a README badge never says "sinner"/"hero". The mapping is normative:
 
-### 7.1 Hosting decision
+| `classification` (+ `gold`) | SVG message label | shields color | `isError` (JSON variant) |
+|---|---|---|---|
+| `hero` | `IPv6: supported` | `brightgreen` | `false` |
+| `hero` + `gold: true` | `IPv6: gold` | `brightgreen` (gold accent) | `false` |
+| `partial` | `IPv6: partial` | `yellow` | `false` |
+| `sinner` | `IPv6: no IPv6` | `red` | `false` |
+| `inactive` | `IPv6: inactive` | `lightgrey` | `false` |
+| no row / `disabled` / `unknown` | `IPv6: unknown` | `lightgrey` | `true` |
 
-Datasets live under the `/datasets/` path on the API origin (`api.whynoipv6.com`). No separate vhost: one cert, one DNS name, one CORS story, one nginx server block. All file references in the manifest are origin-relative absolute paths (`/datasets/...`). *Rejected — API-generated exports on demand* (1M-row × N-format generation belongs in a batch job writing static files; the API serves only the manifest) and *rejected — S3* (operator runs own hardware + nginx; a directory is the 20-line solution).
+`sinner`'s label is `no IPv6` (not "unsupported" or "no record"). `unknown` sets `isError:true` so shields renders it as a genuine error. First match wins: no row / `disabled` / `unknown` → gray `unknown`; then `hero+gold` → gold; `hero` → supported; `partial` → partial; `sinner` → no IPv6; `inactive` → inactive. The six SVGs are shields.io-flat, label `IPv6`, fixed-geometry `textLength` (byte-deterministic, no font measurement, no dependencies); the exact template and per-label geometry constants are **golden-file fixtures in 10-testing.md** (§7.4 badge goldens, re-scoped to this six-variant table). The copy/color table is ONE Go constant table — the single place to reword.
 
-### 7.2 On-disk layout
+**Shields.io endpoint-JSON variant** for users who want shields styling: `GET /badge/{host}.json` → `{"schemaVersion":1,"label":"IPv6","message":"supported","color":"brightgreen","cacheSeconds":86400,"isError":false}`. `message`/`color`/`isError` come from the table above. This JSON deliberately uses shields.io's **camelCase** field names (the one sanctioned camelCase exception, §2.3). Users embed `https://img.shields.io/endpoint?url=https://api.whynoipv6.com/badge/example.com.json`. Documented usage string: `![IPv6](https://api.whynoipv6.com/badge/example.com.svg)`.
 
-Config key `DATASETS_DIR` (string, default `/var/lib/whynoipv6/datasets`; registry: 09-ops.md), shared by the API binary and `v6ctl export`:
+**Pre-phase-5 interaction:** `domain.gold` is false for everyone (`crawler.resources.enabled=false`), so heroes render `supported` — correct, no special case.
+
+### 5.3 Datasets — static bulk + manifest + citation
+
+Bulk data is a **separate static channel**, not the paginated API (keeps scrapers off the pagination path; avoids the BigQuery-only mistake that spawns unofficial mirrors).
+
+- **Served statically by nginx** under `/datasets/` (not the API). Config key `DATASETS_DIR` (string, default `/var/lib/whynoipv6/datasets`; registry: 09-ops.md), shared by the API binary and `v6ctl export`. Nightly `v6ctl export` (owned by 04-lifecycle-scheduling.md, after the stats tick) produces, atomically (tmp-dir `rename(2)`), 3 size tiers (`top100k`, `top1m`, `full`) × formats **CSV.gz + Parquet** (+ optionally JSONL for the append-only changelog history). Columns: `host, rank, kind, parent, classification, class_flags, gold, {6 confirmed statuses}, {6 since-timestamps}, tld, country, asn, dns_provider, hosting_provider, last_checked`. `top100k`/`top1m` use the publicly-ranked predicate; `full` = all non-disabled scannable entities. Dailies retained 90 d, first-of-month forever.
+- **Self-describing + verifiable (OPEN-6):** each snapshot ships a Frictionless **`datapackage.json`** — a `resources[]` array with per-file `path`, `bytes`, `hash: "sha256:<digest>"` (always the `sha256:` prefix; a bare hash means MD5 to the spec), and a Table Schema of column names/types — plus a `SHA256SUMS` file and a `DICTIONARY.md`.
+
+On-disk layout:
 
 ```
 /var/lib/whynoipv6/datasets/
-├── manifest.json                      # rewritten atomically after every export
+├── manifest.json                      # the one file the API serves; rewritten atomically after every export
 ├── DICTIONARY.md                      # column + status-semantics docs
-├── latest -> 2026-07-06               # symlink to newest COMPLETE snapshot
-├── 2026-07-06/                        # immutable once published
+├── latest -> 2026-07-07               # symlink to newest COMPLETE snapshot
+├── 2026-07-07/                        # immutable once published
+│   ├── datapackage.json               # Frictionless: files, hashes, Table Schema
 │   ├── whynoipv6-top100k.csv.gz
 │   ├── whynoipv6-top100k.parquet
 │   ├── whynoipv6-top1m.csv.gz
 │   ├── whynoipv6-top1m.parquet
 │   ├── whynoipv6-full.csv.gz
 │   ├── whynoipv6-full.parquet
-│   └── SHA256SUMS                     # sha256sum -c compatible, all 6 files
-└── 2026-07-05/ ...
+│   └── SHA256SUMS                     # sha256sum -c compatible
+└── 2026-07-06/ ...
 ```
 
-File naming: `whynoipv6-{size_tier}.{format}`, `size_tier ∈ {top100k, top1m, full}`, `format ∈ {csv.gz, parquet}`. Public URLs: `https://api.whynoipv6.com/datasets/{YYYY-MM-DD}/whynoipv6-top1m.csv.gz`, `.../datasets/latest/whynoipv6-top1m.csv.gz` (stable URL for scripts), `.../datasets/DICTIONARY.md`. Retention: dailies 90 days, first-of-month forever.
-
-Export content (produced by nightly `v6ctl export`, Parquet via `parquet-go/parquet-go`; job ownership 04-lifecycle-scheduling.md/09-ops.md): columns host, rank, kind, parent, classification + flags, gold, the six confirmed statuses + since-timestamps, country, asn, last_checked. `top100k`/`top1m` use the publicly-ranked predicate; `full` includes all non-disabled scannable entities (any kind/origin). `DICTIONARY.md` documents every column and the status semantics (incl. what "confirmed" means).
-
-### 7.3 `manifest.json` schema (= the response schema of `GET /datasets`)
+- **The top-level `manifest.json` is a distinct index over snapshots, not an alias of a per-snapshot `datapackage.json`.** Its schema is pinned (this is the response schema of `GET /datasets`, added to the OpenAPI `components` so the drift gate §7 contract-tests it):
 
 ```json
 {
   "schema_version": 1,
-  "generated_at": "2026-07-06T04:30:00Z",
-  "dictionary": "/datasets/DICTIONARY.md",
+  "generated_at": "2026-07-07T04:10:00Z",
+  "generation": 20260707,
+  "license": "CC-BY-NC-4.0",
+  "attribution": "Data: whynoipv6.com (CC-BY-NC-4.0). Ranks: Tranco list <id>.",
   "latest": {
-    "date": "2026-07-06",
-    "files": [
-      {
-        "size_tier": "top1m",
-        "format": "csv.gz",
-        "path": "/datasets/2026-07-06/whynoipv6-top1m.csv.gz",
-        "bytes": 48211334,
-        "sha256": "hex-encoded, 64 chars",
-        "rows": 1000000
-      }
-    ]
+    "date": "2026-07-07",
+    "path": "datasets/2026-07-07/",
+    "datapackage_url": "/datasets/2026-07-07/datapackage.json"
   },
   "snapshots": [
-    { "date": "2026-07-06", "files": [ /* same file object shape */ ] }
+    {
+      "date": "2026-07-07",
+      "path": "datasets/2026-07-07/",
+      "tiers": ["top100k", "top1m", "full"],
+      "formats": ["csv.gz", "parquet"],
+      "datapackage_url": "/datasets/2026-07-07/datapackage.json",
+      "sha256sums_url": "/datasets/2026-07-07/SHA256SUMS"
+    }
   ]
 }
 ```
 
-Field semantics: `schema_version` (int, starts at 1) versions the *export column schema* documented in DICTIONARY.md — bump whenever exported columns change. `generated_at` RFC 3339 UTC. `rows` = data rows excluding the CSV header (identical for the csv.gz/parquet pair of a tier). `path` is origin-relative and always points at the **dated** (immutable) path, never `latest/`, so `sha256` stays valid. `snapshots` is sorted newest-first and lists every snapshot currently retained on disk. `latest` duplicates the newest complete snapshot's entry. Every snapshot entry contains exactly 6 files (3 tiers × 2 formats).
+`schema_version` (int) versions this index shape and the exported column set, and bumps whenever either changes. Each `snapshots[]` entry points at that snapshot's `datapackage.json` (which lists the actual files, hashes, and Table Schema). `snapshots` is sorted newest-first and lists every snapshot currently retained; `latest` duplicates the newest complete snapshot's entry.
 
-### 7.4 Atomic publish procedure (nightly `v6ctl export`, after the stats tick)
+- **Citable:** the **dated (immutable) path** is the citation anchor; a stable `/datasets/latest/whynoipv6-top1m.csv.gz` alias is the convenience URL for scripts. An optional **Zenodo Concept DOI** + per-snapshot **Version DOI** (monthly/quarterly cadence) is a later additive step gated on demand (OPEN-6), outside the daily crawler.
+- **License in-band:** **CC-BY-NC-4.0** stated in the manifest, the OpenAPI `info` block, and `DICTIONARY.md`, with the required attribution string. **Tranco rank redistribution (OPEN-13):** CC-BY-NC-4.0 covers *our* derived measurements; it does not by itself grant the right to redistribute Tranco's ranking, which the datasets re-publish as a `rank` column. **Action item before dataset release:** verify Tranco's redistribution/citation terms, cite the specific list ID/permalink in `DICTIONARY.md` + `datapackage.json` + the manifest `attribution`, and honor its attribution requirement; **if Tranco restricts bulk rank redistribution, omit `rank` from the public bulk export (or gate it)** while keeping per-entity `rank` on the live API.
 
-1. Write all 6 files + `SHA256SUMS` into `$DATASETS_DIR/{date}.tmp/`; fsync files.
-2. `rename({date}.tmp, {date})` — snapshot becomes visible complete-or-not-at-all.
-3. Repoint latest atomically: `ln -sfn {date} $DATASETS_DIR/latest.tmp && mv -T latest.tmp latest` (rename(2), no window where `latest` is missing).
-4. Prune per retention (delete expired daily dirs; keep first-of-month).
-5. Regenerate `manifest.json` from the directory tree (source of truth = what is on disk), write `manifest.json.tmp`, rename over `manifest.json`.
+**Atomic publish** (nightly): write all files + `datapackage.json` + `SHA256SUMS` into `{date}.tmp/`, fsync, `rename({date}.tmp, {date})`; repoint `latest` via `ln -sfn` + `mv -T` (rename(2), no missing window); prune per retention; regenerate `manifest.json` from the directory tree, write `manifest.json.tmp`, rename over `manifest.json`. On any failure before the snapshot rename, delete the `.tmp` dir and fire the ops webhook; the previous manifest/latest stay correct.
 
-On any failure before step 2, delete the `.tmp` dir and fire the ops webhook; the previous manifest/latest remain untouched and correct.
+**The only dataset piece the API serves:** `GET /datasets` re-reads `$DATASETS_DIR/manifest.json` from disk every request and returns it verbatim as `application/json`, `Cache-Control: public, max-age=300`. Missing/unparseable → `503 manifest-unavailable` (the only 503).
 
-### 7.5 `GET /datasets` (API side)
-
-Reads `$DATASETS_DIR/manifest.json` and returns it **verbatim** as `application/json` with `Cache-Control: public, max-age=300`. **Decision:** re-read from disk on every request (the file is a few KB; no in-process cache, no invalidation bug class). Missing or unparseable file → `503 {"error":"manifest_unavailable"}`.
-
-### 7.6 nginx split (sibling locations in the api.whynoipv6.com server block; deployed per 09-ops.md)
+nginx location split (sibling locations in the api.whynoipv6.com server block; deployed per 09-ops.md):
 
 ```nginx
 # exact match: manifest endpoint → API (§1.2 proxy_set_header block applies)
@@ -1124,7 +921,6 @@ location = /datasets {
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header Host            $host;
 }
-
 # dated snapshots: immutable forever
 location ~ ^/datasets/\d{4}-\d{2}-\d{2}/ {
     root /var/lib/whynoipv6;
@@ -1132,7 +928,6 @@ location ~ ^/datasets/\d{4}-\d{2}-\d{2}/ {
     add_header Access-Control-Allow-Origin "*";
     gzip off;   # payloads are pre-compressed (.csv.gz) or binary (.parquet)
 }
-
 # latest/ symlink + DICTIONARY.md: mutable, short TTL
 location /datasets/ {
     root /var/lib/whynoipv6;
@@ -1143,29 +938,82 @@ location /datasets/ {
 }
 ```
 
-(`root`, not `alias`, so `/datasets/...` maps directly under `/var/lib/whynoipv6/`; nginx follows the `latest` symlink by default.)
+### 5.4 Change feeds — Atom + JSON Feed per scope
+
+The changelog is the only account-free **push** channel and near-zero cost (the structured changelog rendered as a feed). Feed representations are exposed as **distinct suffix URLs** (keeps CDN cache keys clean; embeddable in READMEs/feed readers), per scope:
+
+| Scope | Atom | JSON Feed 1.1 |
+|---|---|---|
+| Global | `/changelog.atom` | `/changelog.feed.json` |
+| Per-domain | `/domains/{host}/changelog.atom` | `.feed.json` |
+| Per-campaign | `/campaigns/{uuid}/changelog.atom` | `.feed.json` |
+| Per-country | `/countries/{code}/changelog.atom` | `.feed.json` |
+
+The extension-less path stays the paginated JSON-API list (§4.8).
+
+**Feed-level contract.** Every feed is a **fixed recent window of the latest 50 transitions, no pagination** (bulk consumers → datasets §5.3; honors the scoped-feed cap in §4.8). Required top-level members:
+
+- **Atom (RFC 4287, `application/atom+xml`):** feed `<id>` = the scope's canonical API URL (e.g. `https://api.whynoipv6.com/countries/NO/changelog`); `<updated>` = `max(ts)` in the window; `<title>` = the scope name ("WhyNoIPv6 — Norway", "WhyNoIPv6 — example.com", global "WhyNoIPv6 — recent changes"); `<link rel="self">` = the `.atom` URL, `<link rel="alternate">` = the extension-less JSON list URL.
+- **JSON Feed 1.1 (`application/feed+json`):** `version` (`https://jsonfeed.org/version/1.1`), `title`, `home_page_url` (the list URL), `feed_url` (the `.feed.json` URL), `items`.
+
+Per item: `id`/`guid` = the composite `(host, ts, field)`; `date_published` = `ts` (RFC 3339); the human `title`/`content_text` is derived **server-side at render time** from `(field, old_value, new_value)` — e.g. "example.com now supports IPv6 on www" — freshly, not from any frozen message table.
+
+### 5.5 CSV export via content negotiation
+
+**`?format=csv`** on the list endpoints (`/domains*`, `/countries`, `/asns`, `/providers`, `/changelog`, search results) — a query param keeps the CDN cache key clean and the shareable URL stable. `Content-Type: text/csv; charset=utf-8`, `Content-Disposition: attachment`. A defined column set per list (the §4.2 summary-row columns for `/domains`). The stable, cursor- or `after_rank`-anchored URL means a shared link reproduces the same view. Larger "give me everything" pulls are steered to the static datasets (§5.3), not deep CSV pagination.
+
+*Rejected — `Accept: text/csv` negotiation* (needs `Vary: Accept`, invisible in a shared link). `Accept` is reserved for the JSON core (default `application/json`; `406 not-acceptable` when unsatisfiable).
+
+### 5.6 Diff, methodology, mandates
+
+- **Diff / "who went green"** (OPEN-7, resolved YES): `GET /diff?from=&to=&scope=global|country|campaign` returning added-to-hero / lost-hero lists, read from the **`changelog`** (the authoritative confirmed transitions), not from differencing two `stats_*` snapshots, so it reports *which* domains changed, not just net counts. (Scope granularity + exact shape settle during OpenAPI authoring.)
+- **Methodology** (trust lever): `GET /methodology` returns the deterministic Hero/Partial/Sinner ladder + Gold rule + flag definitions as structured JSON, plus a `criteria_changelog[]` of every rule change (recalibrate Gold in the open). Mostly static content; the `class_flags` vocabulary it documents is the join key the frontend uses to select fix guides.
+- **Government-mandate compliance tracking** (OPEN-12, resolved YES — explicitly wanted): the campaign `tags`/mandate capability (the `campaign.tags` TEXT[] column with GIN index `idx_campaign_tags`, 05-schema.md — campaign table) backs a **`?tag=`** filter on `GET /campaigns` and a **`GET /mandates`** surface (campaigns tagged as mandates, with citations). The `campaign` resource (§4.7) exposes `tags`.
+- **Contact-discovery / notification toolkit** (OPEN-8, resolved NO) — **not built**; templates remain static.
+- **OG/social cards** — deferred; pairs with the badge renderer (same image pipeline), unverified impact.
 
 ---
 
-## 8. OpenAPI (spec-first)
+## 6. Caching, content negotiation, rate limiting, compression
 
-- `openapi/openapi.yaml` is the committed source of truth for every route in §2.1 (~38 paths). OpenAPI 3.1. Legacy quirks are documented **explicitly**: the `{"data":[...]}` envelopes, the `{campaign, domains}` composite, shortuuid `pattern`/`example` (§2.7), singular `/metric`, the 3-string legacy status enum vs the 4-value new-model enum (two named schemas: `LegacyStatus`, `PublicStatus`), the pinned error bodies as named `Error*` response schemas, the zero-time timestamp convention, and the 404-vs-[] map as per-operation responses.
-- `make generate` runs **oapi-codegen** (`github.com/oapi-codegen/oapi-codegen/v2`, latest release, chi-server **strict-server** mode → handler interfaces + typed models in `internal/api/gen/`) and **openapi-typescript** (TS types + client for `frontend/`). Handlers implement the generated strict-server interface; hand-written code never redefines wire types.
-- **Generated-code gate:** CI regenerates and fails on any diff (`git diff --exit-code` after `make generate`) — the monorepo's single-commit sync promise. Generated output is committed.
-- The spec doubles as the parity-fixture skeleton: every legacy operation carries `x-production-source: <file:line>` (the references in §3) so 10-testing.md fixture capture is mechanical.
-- *Rejected — code-first swaggo annotations:* comment-derived specs drift and can't express the legacy envelopes precisely; with a frozen contract, the spec is where the contract lives.
+Daily-batch, fully-public data behind a CDN is the ideal caching case; caching + a CDN is the single biggest performance lever for an anonymous read-heavy site facing viral traffic.
+
+### 6.1 Caching by endpoint class
+
+| Class | `Cache-Control` | Validators |
+|---|---|---|
+| List / leaderboard / stats (`/domains*`, `/countries*`, `/asns*`, `/providers*`, `/stats/*`, `/changelog`) | `public, max-age=300, s-maxage=<until-next-crawl>, stale-while-revalidate=600, stale-if-error=86400` | `ETag` from crawl `generation` (+ query fingerprint); `Last-Modified` from crawl ts; honor `If-None-Match` → `304` |
+| Domain / country / asn / provider / campaign detail | as above; ETag tied to that entity's last confirmed transition | `304` on `If-None-Match` |
+| Change feeds (`*.atom`, `*.feed.json`) | `public, max-age=300` | `ETag` from generation |
+| Badge SVG/JSON (`/badge/*`) | `public, max-age=86400` | `ETag` from generation |
+| Datasets manifest (`/datasets`) | `public, max-age=300` | — |
+| Static datasets (nginx) | dated dirs `immutable, max-age=31536000`; `latest/` + `DICTIONARY.md` `max-age=3600` | nginx auto ETag |
+| Live check poll (`GET /check/{id}`) — **terminal** (`done`/`failed`) | `public, max-age=60` (immutable job) | — |
+| Live check (`POST /check`, `GET /check/{id}` while `pending`/`processing`), `/ip` | `no-store` | — |
+| Health (`/livez`,`/readyz`) | `no-store` | — |
+
+Use `public` (never `private`) — there is no per-user data, and `public` is what unlocks CDN edge caching. **ETags must be deterministic across backend instances** — derive from the crawl `generation` (`= YYYYMMDD` of `max(stats_global_daily.day)`, §2.4) + query fingerprint (for lists) or the entity's last confirmed-transition ts (for detail), never from a per-process hash.
+
+### 6.2 Content negotiation
+
+`Accept`-header negotiation for the JSON core (default `application/json`; `406 not-acceptable` when unsatisfiable, as a Problem Detail). Genuinely-different representations are **distinct URLs**, not `Accept` variants: badge `.svg`/`.json`, feeds `.atom`/`.feed.json`, CSV `?format=csv`. Set `Vary: Accept` on any Accept-negotiated endpoint and `Vary: Accept-Encoding` everywhere compression applies.
+
+### 6.3 Rate limiting
+
+**Only `POST /check` is rate-limited** — cacheable GETs (including the now-cacheable terminal poll responses, §5.1.2) are absorbed by the CDN and need no limiter. Keyed on the **CDN-forwarded real client IP** (§1.2), on the **/64 prefix** (not the /128): per-IP `live_check.rate_ip_per_hour` (default 10) and global `live_check.rate_global_per_hour` (default 500), counted over `check_job` rows in a 1 h window. On breach: `429 rate-limited` (Problem Detail with `retry_after`) + `Retry-After` header. Emit the IETF-draft **`RateLimit`** + **`RateLimit-Policy`** structured-field headers (RFC 9651 syntax); optionally mirror legacy `X-RateLimit-*`. Limiting on the /64 stops address rotation and avoids over-throttling NAT'd CGNAT IPv4 users; keep limits generous — the endpoint is a public good. Encourage (don't require) a descriptive `User-Agent` / optional `?sourceapp=` for high-volume research clients.
+
+### 6.4 Compression
+
+gzip + Brotli at the **nginx/CDN edge** for all JSON / CSV / SVG-text / Atom responses over ~256 bytes, with `Vary: Accept-Encoding` (Brotli preferred, gzip fallback). The Go origin emits uncompressed bodies (simpler; origin sits behind nginx+CDN). BREACH-class risk is a non-issue — responses are public data with no secrets or tokens. Don't double-compress the pre-compressed dataset files or the tiny SVG badge.
 
 ---
 
-## 9. Acceptance criteria (summary; fixtures live in 10-testing.md)
+## 7. OpenAPI-first workflow
 
-1. **Golden parity:** one recorded production fixture per §3 endpoint (source files named per endpoint), compared JSON-equal (byte-equal where pinned); `GET /domain/{domain}` comparisons strip the two additive keys (§3.6).
-2. **Zero-result map:** one fixture per row of the §2.11 404 table asserting status + exact body (garbage query `zzzzqqqq` for the searches; a valid campaign with `offset=10000` for the paging case), plus `GET /metric/asn/search/zzzzqqqq` → `200 []` and each []-cleanup endpoint → `200 []`.
-3. **R1/R2 synthetics:** fixtures exercising `not_applicable`→`"no_record"`, NULL→`"no_record"`, and R2's error/inconsistent row exclusion (production can't produce these).
-4. **Codec:** §2.7 vectors round-trip both directions; encode output exactly 22 chars; the two negative vectors 404 with `{"error":"Invalid UUID"}`.
-5. **Ladder totality:** `renderChangelog` is exercised for all 16 table rows + both `field='legacy'` passthrough branches; the §3.12 coverage filter provably excludes `conn`/`resources`/`not_applicable` rows.
-6. **Membership synthetics:** an entity with confirmed `base=supported, www=unsupported` appears in `/domain/almost` and NOT in `/domain`; one with `base=unsupported` appears in `/domain` and NOT in `/domain/almost`; repeated for the country-scoped pair.
-7. **Visibility:** disabled domains appear on no list, feed, stats, or search response; disabled campaigns 404 on all UUID routes and vanish from `/campaign` and `/changelog/campaign`; rank-NULL rows never appear on ranked lists but resolve on entity endpoints.
-8. **Live check:** Rule-0 assertion (a completed check job leaves every `domain` state column untouched except `last_requested_at`/`next_check_at`/re-enable per §6.6); dedupe (domain-side and job-side) returns `cached:true` without new job rows; reaper flips stale jobs to `failed` ≤15 min; rate-limit fixtures per §1.8.
-9. **Badge:** §5 acceptance list.
-10. **Baseline:** §1.8 list; every JSON endpoint carries the NoCache header; badge and manifest carry their pinned Cache-Control values.
+A hand-authored **`openapi.yaml` (OpenAPI 3.0.3)** at the repo root is the single source of truth; both sides generate from it, and CI blocks drift.
+
+- **Version 3.0.3, not 3.1.** oapi-codegen mainline (the chi-server + strict-server generators) does not yet support 3.1. Since chi v5 is locked, oapi-codegen `chi-server` + `strict-server` is the natural spec-first Go path. This API's payloads — the status/classification enums, aggregate percentages, cursor pagination, RFC 9457 errors — are all expressible in 3.0.3 (using `nullable: true` for the `null` status values), so the 3.1 gap costs nothing.
+- **Go side:** `github.com/oapi-codegen/oapi-codegen/v2` (latest release) generates server interface + types + request validation in `internal/api/gen/` (committed); handlers implement the generated strict-server interface; hand-written code never redefines wire types. *Rejected — ogen* (native 3.1 but owns the router/server, displacing the locked chi v5).
+- **Frontend side:** **openapi-typescript** (types, zero runtime deps) + **openapi-fetch** (tiny typed fetch wrapper) — the thin gold standard for a read-only public API, composing with Vue 3.5 + Pinia. The snake_case wire (§2.3) yields snake_case TS property names — non-idiomatic but fully type-safe. *Rejected — Orval/Hey-API/Kubb* (batteries this API doesn't need yet).
+- **Drift gate:** `make generate` runs oapi-codegen (Go) + openapi-typescript (TS); CI regenerates and `git diff --exit-code`s to block staleness, and lints the spec with Spectral/vacuum (enforcing the snake_case rule, the `{items,page,meta}`/`{points,meta}` envelopes, and the `problem+json` error schema). The `manifest.json` schema (§5.3), the keyset cursor grammar, the RFC 9457 problem shapes, and the badge/feed representations are all in `components` so the gate covers them. This replaces the deleted API-compat parity testing against the old backend.
+- **Discoverability:** serve `openapi.json` at a stable path with Redoc/Swagger UI; additionally publish an `llms.txt` docs index. A read-only MCP server is a cheap later add. Do **not** add a free-account+API-key gate — it violates the anonymous lock.

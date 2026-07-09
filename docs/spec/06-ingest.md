@@ -1,6 +1,8 @@
 # 06 — Ingest & Contribution Pipeline
 
-**Purpose:** This file specifies every path by which hostnames and their metadata enter the system: the single host-canonicalization rule, the daily Tranco top-1M import cycle, the campaign-repo sync pipeline (PR validation, UUID trust, idempotent import, bot write-back), the resource-host registry (discovery, sweep, link maintenance), and GeoIP/ASN attribution. It additionally owns the query bodies for the daily tick's product-stats snapshot and the country/ASN counter recompute (§10) — the aggregation logic behind every `/stats` and `/metric` endpoint. It is the authority for all ingest-side SQL (SELECT/INSERT/UPDATE/DELETE only — DDL lives in 05-schema.md) and for the v6ctl verbs `tranco import|status`, `campaign sync|validate`, `resource add|remove`, `shame add|remove|list`, and `stats recalc`.
+_Status: Round 3.0 — API redesign folded in (docs/api-design-research.md, decisions 2026-07-09): clean root API, keyset pagination, RFC 9457, no legacy compat, no history import._
+
+**Purpose:** This file specifies every path by which hostnames and their metadata enter the system: the single host-canonicalization rule, the daily Tranco top-1M import cycle, the campaign-repo sync pipeline (PR validation, UUID trust, idempotent import, bot write-back), the resource-host registry (discovery, sweep, link maintenance), and GeoIP/ASN attribution. It additionally owns the query bodies for the daily tick's product-stats snapshot and the country/ASN counter recompute (§10) — the aggregation logic behind every `/stats` endpoint. It is the authority for all ingest-side SQL (SELECT/INSERT/UPDATE/DELETE only — DDL lives in 05-schema.md) and for the v6ctl verbs `tranco import|status`, `campaign sync|validate`, `resource add|remove`, `shame add|remove|list`, `provider add|remove|list` (the `dns_provider` mapping seed), and `stats recalc`.
 
 **Deliverables:**
 - `internal/domain/host.go` — `Canonicalize(host)` (the one canonicalization function)
@@ -10,10 +12,10 @@
 - `internal/crawler/resourcesweep.go` — resource-host sweep worker (runs inside `cmd/crawler`)
 - resource discovery/prune/counter statements executed inside the per-domain commit transaction (transaction machinery owned by 03-state-machine.md)
 - `db/query/stats.sql`, `db/query/country.sql`, `db/query/asn.sql` — the four `stats_*` snapshot upserts and the ported `update_country_metrics`/`update_asn_metrics` counter recomputes (§10), called by the daily tick steps 2–3 (04-lifecycle-scheduling.md — The daily tick) and by `v6ctl stats recalc`
-- `cmd/v6ctl` verbs: `tranco import`, `tranco status`, `campaign sync`, `campaign validate`, `resource add`, `resource remove`, `shame add|remove|list`, `stats recalc`
+- `cmd/v6ctl` verbs: `tranco import`, `tranco status`, `campaign sync`, `campaign validate`, `resource add`, `resource remove`, `shame add|remove|list`, `provider add|remove|list`, `stats recalc`
 - `.github/workflows/validate.yml` in the campaign repository (PR validation Action)
 
-**Companion files:** 05-schema.md (all DDL: `domain`, `campaign`, `campaign_domain`, `resource_host`, `domain_resource`, `tranco_import`, `asn`, `country`, `top_shame`, the Tranco staging table), 02-observation-model.md (bulk-resolver seam and bogon filter used by the resource sweep, the attribution answer-set ordering, and the resources roll-up algorithm that turns confirmed host statuses into the `resources` observation), 03-state-machine.md (the per-domain commit transaction the discovery statements run inside; it consumes the roll-up's observation), 04-lifecycle-scheduling.md (daily tick step order, lifecycle sweep, advisory-lock package `internal/lock`), 07-api.md (the `/stats/*`, `/metric/overview`, `/metric/asn`, `/country` serializers that read the §10 snapshot/counter columns, and the `v6_ready`/`top_heroes`/`top_nameserver`/`count_v4` read-side formulas), 09-ops.md (config-key registry, systemd timers, ops webhook), 00-overview.md (canonical sizing constants), 10-testing.md (all fixtures and test vectors named here).
+**Companion files:** 05-schema.md (all DDL: `domain`, `campaign`, `campaign_domain`, `resource_host`, `domain_resource`, `tranco_import`, `asn`, `country`, `top_shame`, the Tranco staging table), 02-observation-model.md (bulk-resolver seam and bogon filter used by the resource sweep, the attribution answer-set ordering, and the resources roll-up algorithm that turns confirmed host statuses into the `resources` observation), 03-state-machine.md (the per-domain commit transaction the discovery statements run inside; it consumes the roll-up's observation), 04-lifecycle-scheduling.md (daily tick step order, lifecycle sweep, advisory-lock package `internal/lock`), 07-api.md (the `/stats/*`, `/stats/overview`, `/asns`, `/countries` serializers that read the §10 snapshot/counter columns, and the `v6_ready`/`top_heroes`/`top_nameserver`/`count_v4` read-side formulas), 09-ops.md (config-key registry, systemd timers, ops webhook), 00-overview.md (canonical sizing constants), 10-testing.md (all fixtures and test vectors named here).
 
 Hard constraints restated where relevant: this system is public/anonymous (no accounts/auth); Tranco is the ONLY ranked list source, top-1M eTLD+1 (pay-level domains); newest stack — current Go toolchain, PG18 + TimescaleDB, pgx/v5, slog, chi v5, cobra, viper, sqlc.
 
@@ -93,8 +95,8 @@ One execution, numbered. HTTP client: 60s total timeout per request, no retries 
    - network/HTTP error → reschedule.
 3. **Download:** `GET https://tranco-list.eu/top-1m.csv.zip` with **conditional GET**: send `If-None-Match` with the ETag remembered from the last successful download (the endpoint serves a strong ETag + Last-Modified and honors 304 — verified live 2026-07-06). This is the standard list = pay-level domains (eTLD+1 is the default artifact; no variant selection). **Decision:** the ETag is held in process memory only (no DB column); a fresh process sends an unconditional GET, which merely re-downloads ~7 MB. A **304** response means the artifact has not propagated despite a new list ID → treat as a non-success attempt, reschedule. Network/HTTP error → reschedule.
 4. **Unzip:** exactly one inner file, always named `top-1m.csv`. A zip without that inner file → treat as parse failure: fire ops webhook ERROR, reschedule.
-5. **Parse:** `rank,domain` CSV with **CRLF line endings**, no header. Per line: split on the first comma; parse rank as a positive integer; pass the host field through `Canonicalize` (§1). The live list contains `_wildcard_.ph`-style entries and mixed-case junk (largely already punycode: 1,452 `xn--` entries, pure ASCII). Lines failing rank-parse or Canonicalize are counted in `rejected_count`, logged at debug, and skipped. Track `line_count` = raw CSV lines read.
-6. **Stage:** open one transaction. Create the session-scoped Tranco staging table `tranco_staging (rank int, host text)` — its definition (temporary, `ON COMMIT DROP`) lives in 05-schema.md — Tranco staging table — and bulk-load the parsed rows via `pgx` `CopyFrom`.
+5. **Parse:** `rank,domain` CSV with **CRLF line endings**, no header. Per line: split on the first comma; parse rank as a positive integer; pass the host field through `Canonicalize` (§1). The live list contains `_wildcard_.ph`-style entries and mixed-case junk (largely already punycode: 1,452 `xn--` entries, pure ASCII). Lines failing rank-parse or Canonicalize are counted in `rejected_count`, logged at debug, and skipped. Track `line_count` = raw CSV lines read. On each surviving line also compute the host's ICANN public suffix via `publicsuffix-go` (§3.4's in-memory PSL) and stage it as `tld` (§6.9) — a pure derivation from the already-parsed host, no lookup.
+6. **Stage:** open one transaction. Create the session-scoped Tranco staging table `tranco_staging (rank int, host text, tld text)` — its definition (temporary, `ON COMMIT DROP`) lives in 05-schema.md — Tranco staging table — and bulk-load the parsed rows via `pgx` `CopyFrom`.
 7. **Counters:** compute inside the transaction:
    - `valid_rows` = `SELECT count(*) FROM tranco_staging` (post-rejection, pre-dedup). **Decision:** `valid_rows` is the pre-dedup row count (the guard measures list health; canonicalization folds are counted separately).
    - `duplicate_count` = `SELECT count(*) - count(DISTINCT host) FROM tranco_staging`. `duplicate_count > 0` is **normal, not an error** (canonicalization can fold two raw lines into one host).
@@ -118,14 +120,15 @@ One execution, numbered. HTTP client: 60s total timeout per request, no retries 
 10. **Upsert** (still inside the step-6 transaction). **Staging dedup first:** a naive `ON CONFLICT DO UPDATE` fed duplicate hosts aborts the entire transaction (SQLSTATE 21000, "ON CONFLICT DO UPDATE command cannot affect row a second time") — the source SELECT dedupes with `DISTINCT ON (host)`, **lowest rank wins**. Rows present in today's list get re-entry semantics; new rows get `next_check_at` spread across the next 24h (prevents a thundering herd) and insert-time attribution (§6.5: ccTLD-or-sentinel country, sentinel ASN — implemented here as a set-based join). `$1` = sentinel `asn.id`, `$2` = sentinel `country.id` (both resolved by lookup at run start, never hardcoded — §6.7):
 
     ```sql
-    INSERT INTO domain (host, rank, next_check_at, created_by, asn_id, country_id)
+    INSERT INTO domain (host, rank, next_check_at, created_by, asn_id, country_id, tld)
     SELECT DISTINCT ON (s.host)
            s.host,
            s.rank,
            now() + (random() * interval '24 hours'),
            'tranco',
            $1,
-           COALESCE(c.id, $2)
+           COALESCE(c.id, $2),
+           s.tld
     FROM tranco_staging s
     LEFT JOIN country c ON c.tld = '.' || upper(substring(s.host from '[^.]+$'))
     ORDER BY s.host, s.rank ASC              -- MIN(rank) wins the fold
@@ -139,7 +142,7 @@ One execution, numbered. HTTP client: 60s total timeout per request, no retries 
       updated_at  = now();
     ```
 
-    `imported_count` = the statement's affected-row count. Existing rows keep their `created_by`, confirmed statuses, classification, and attribution (the conflict SET list deliberately touches none of them). The `LEFT JOIN country` implements the §6.5 insert-time country rule set-based: the final DNS label of the host, upper-cased and dot-prefixed, probed against `country.tld` (seed form `.NO`); no match → sentinel. **Decision:** this SQL join is the normative implementation of insert-time attribution for the Tranco path (equivalent to the per-host Go rule in §6.5, because the final label of the ICANN public suffix always equals the host's final DNS label).
+    `imported_count` = the statement's affected-row count. Existing rows keep their `created_by`, confirmed statuses, classification, attribution, and `tld` (the conflict SET list deliberately touches none of them; `tld` is immutable — a pure function of the immutable host, §6.9). The `LEFT JOIN country` implements the §6.5 insert-time country rule set-based: the final DNS label of the host, upper-cased and dot-prefixed, probed against `country.tld` (seed form `.NO`); no match → sentinel. **Decision:** this SQL join is the normative implementation of insert-time attribution for the Tranco path (equivalent to the per-host Go rule in §6.5, because the final label of the ICANN public suffix always equals the host's final DNS label).
 
     **Re-entry semantics** (why each CASE arm exists):
     - `delisted` → re-enabled directly (confirmed state was never reset — it is merely ≤30d stale; the immediate rescan via `next_check_at = now()` refreshes it; no changelog implications beyond real transitions).
@@ -198,7 +201,7 @@ Sync serializes across processes with the `JobCampaignSync` session-level adviso
 
 ### 3.2 YAML format (normative)
 
-Exactly four top-level keys per file; unknown keys are a validation error:
+Exactly five top-level keys per file; unknown keys are a validation error:
 
 | Key | Type | Required |
 |---|---|---|
@@ -206,6 +209,9 @@ Exactly four top-level keys per file; unknown keys are a validation error:
 | `description` | non-empty string | yes |
 | `uuid` | UUID string | no — only the import bot ever writes it |
 | `domains` | non-empty list of hostname strings | yes |
+| `tags` | list of strings (mandate/campaign tags, OPEN-12) | no |
+
+**Decision (tags — OPEN-12):** `tags` are **free-form**, not a fixed enum — a bounded vocabulary would need a maintained registry that rejects legitimate new mandates, and the `/mandates` surface (07-api.md) derives its facet list from the distinct tags actually in use. Each tag is normalized to lowercase and must match `^[a-z0-9][a-z0-9-]{0,31}$` (kebab-case, ≤32 chars); ≤16 tags per file; whitespace-only/empty tags are a validation error; duplicates (post-normalization) are folded. The parsed, normalized list is written verbatim to `campaign.tags` (05-schema.md — campaign) by sync (§3.3); the `?tag=` filter and `/mandates` (07-api.md) read it. Registrar tagging is **not** added (deferred, §6.10).
 
 **Decision:** the list key is **`domains`** — verified against all 29 files in the live campaign repo and production's Go struct (`yaml:"domains"`); the design doc's phrase "`list` of hostnames" described the type, not the key. The parser (`internal/campaign`) is tolerant of the format variance found in the repo: 0/2/4-space indents, comments, trailing spaces (plain `gopkg.in/yaml.v3` unmarshal into a typed struct with `KnownFields(true)` gives exactly this: YAML-standard tolerance plus unknown-key errors).
 
@@ -218,7 +224,7 @@ After acquiring the lock, run `git -C <campaign.repo_path> pull --ff-only <campa
 1. **Parse** every root-level `*.yml`/`*.yaml` per §3.2. Every domain entry goes through `Canonicalize` (§1) **before** entity lookup/creation and membership diff; entries failing it are skipped and counted under `rejected + reasons`. Then hosts are **deduped within each file** (first occurrence wins). The importer must never fail or warn on a host present in multiple campaign files: that is N legitimate membership rows for one domain row (membership model, 05-schema.md — campaign tables). Files failing schema/hostname/size validation (§4.2 checks, minus the git-diff UUID check) are rejected and reported; a rejected file **never partially imports**.
 2. **Duplicate-uuid guard:** if one uuid appears in >1 file, keep the file whose path equals the DB's `campaign.source_file` for that uuid and reject the others; if none matches, reject all of them. (This defeats a copied-uuid file coexisting with the original.)
 3. **Files with uuid** — DB backstop first: a file whose uuid does not exist in `campaign` is REJECTED and reported (`"unknown uuid — invented or DB drift; remove the uuid field to register as a new campaign"`). Exception: `v6ctl campaign sync --adopt-unknown-uuids` inserts campaigns using the file's uuid — used once during the production-data migration (the existing YAML files already carry production uuids; see 08-migration-cutover.md), never in cron/webhook paths. For known uuids, upsert by uuid:
-   - update `name` (from `title`) and `description`;
+   - update `name` (from `title`), `description`, and `tags` (the normalized `tags` list per §3.2, or `NULL`/empty when the key is absent);
    - if `source_file` differs, update it and log `"campaign renamed: old.yml → new.yml"`;
    - if `disabled = true`, set `disabled = false, updated_at = now()` and log `"campaign re-enabled (file re-appeared)"` — campaign row, memberships, and domain state were all preserved on soft delete, so the campaign reappears fully populated with no re-import and no changelog noise.
 
@@ -227,7 +233,7 @@ After acquiring the lock, run `git -C <campaign.repo_path> pull --ff-only <campa
    a. **Ensure entity** per host (§3.4): existing `domain` row by host, else create.
    b. **Additions:** `INSERT INTO campaign_domain (campaign_id, domain_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`. On membership addition to an **existing** domain row, apply the re-entry rule (same as Tranco step 10): `disabled_reason = 'delisted'` → re-enable (`disabled=false, disabled_reason=NULL, disabled_at=NULL`) + `next_check_at = now()`; `'dead'` → keep disabled, `next_check_at = now()`; `'service'`/`'manual'` → unchanged.
    c. **Removals:** `DELETE FROM campaign_domain WHERE campaign_id = $1 AND domain_id <> ALL($2::bigint[])` (`$2` = desired ids). Membership removal deletes the membership row **only** — the entity remains; the lifecycle sweep handles orphaning (§3.6).
-4. **Files without uuid:** first run `SELECT uuid FROM campaign WHERE source_file = $file` — if a row exists AND its uuid appears in no repo file, REUSE that uuid (a previous write-back push failed; this makes write-back idempotent and prevents duplicate campaigns). Otherwise generate a fresh UUIDv4. Insert `campaign (uuid, name, description, source_file)` + memberships (per step 3's ensure/diff) inside the import transaction.
+4. **Files without uuid:** first run `SELECT uuid FROM campaign WHERE source_file = $file` — if a row exists AND its uuid appears in no repo file, REUSE that uuid (a previous write-back push failed; this makes write-back idempotent and prevents duplicate campaigns). Otherwise generate a fresh UUIDv4. Insert `campaign (uuid, name, description, source_file, tags)` (`tags` = the normalized §3.2 list, or NULL) + memberships (per step 3's ensure/diff) inside the import transaction.
 5. **Deletion (uuid-set diff, not source_file diff):** after steps 3–4:
 
    ```sql
@@ -251,7 +257,7 @@ Campaign YAML is the **only** subdomain source (Tranco contributes only `kind='a
 
 Per canonicalized host:
 
-1. `registrable := publicsuffix eTLD+1 of host` (ICANN section). Error (host **is** a public suffix, or the TLD is unknown) → the entry is invalid: rejected in PR validation; skipped + counted in sync.
+1. `registrable := publicsuffix eTLD+1 of host` (ICANN section). Error (host **is** a public suffix, or the TLD is unknown) → the entry is invalid: rejected in PR validation; skipped + counted in sync. The same PSL evaluation also yields the host's public suffix (eTLD); capture it as `domain.tld` (§6.9) on every entity insert in steps 2–3 (apex, auto-created parent, and subdomain rows all get it — identical to the parent's for subdomains).
 2. `host == registrable` → ensure a `domain` row: `kind='apex'`, `parent_id=NULL`. If absent, insert with `created_by='campaign'`, `rank=NULL`, `next_check_at=now()`, insert-time attribution (§6.5).
 3. `host != registrable` → `kind='subdomain'`:
    a. Ensure the **parent** row for `registrable` first: if absent, insert `kind='apex'`, `created_by='parent_link'`, `rank=NULL`, `parent_id=NULL`, `next_check_at=now()`, insert-time attribution. The auto-created parent is a first-class entity (crawled, classified independently).
@@ -298,7 +304,8 @@ A single workflow in the **campaign repository**, new and tiny. It runs only on 
 
 ### 4.2 Checks (per changed file, in order)
 
-- **YAML schema (blocking):** tolerant parse per §3.2; exactly the four keys `title` (non-empty string, required), `description` (non-empty string, required), `uuid` (optional), `domains` (required, non-empty list). Unknown keys → error.
+- **YAML schema (blocking):** tolerant parse per §3.2; exactly the five keys `title` (non-empty string, required), `description` (non-empty string, required), `uuid` (optional), `domains` (required, non-empty list), `tags` (optional list of strings). Unknown keys → error.
+- **Tags (blocking):** if `tags` is present, each entry must normalize to `^[a-z0-9][a-z0-9-]{0,31}$` (lowercase kebab, ≤32 chars) with ≤16 tags per file (§3.2 Decision); an empty/whitespace or over-long/over-count tag fails, listing the file and offending tag.
 - **UUID trust (blocking, diff vs main):** contributors never invent UUIDs. Compare each file's `uuid:` value between the PR head and the merge-base with main (rename detection disabled — `--no-renames` — so renames appear as delete+add):
   - **Added file:** `uuid` must be absent or empty — UNLESS its value equals the uuid of **exactly one** file deleted in the same PR (a git rename, possibly undetected as such). Then it passes, and the bot comment states loudly: `"rename detected: old.yml → new.yml (uuid preserved)"`.
   - **Modified file:** `uuid` must be byte-identical to the value in main (absent stays absent — only the bot commit ever adds one).
@@ -577,11 +584,57 @@ Every code path that inserts a `domain` row outside a scan commit — Tranco imp
 
 ### 6.7 Sentinels and seeds
 
-Seed data (migration ordering in 05-schema.md: sentinels land with the asn/country seed rows, before any domain row): `asn (number 0, name 'Unknown')`; `country (code 'UN', name 'Unknown', tld '.UN')`. The schema uses IDENTITY ids, so every component (crawler, ingest, campaign sync) resolves sentinel ids **once at startup/run-start by lookup** (`SELECT id FROM asn WHERE number = 0`; `SELECT id FROM country WHERE code = 'UN'`), never by literal id. Both sentinels appear in `/metric/asn` and `/country` listings exactly as they do in production (the frontend already renders them).
+Seed data (migration ordering in 05-schema.md: sentinels land with the asn/country seed rows, before any domain row): `asn (number 0, name 'Unknown')`; `country (code 'UN', name 'Unknown', tld '.UN')`. The schema uses IDENTITY ids, so every component (crawler, ingest, campaign sync) resolves sentinel ids **once at startup/run-start by lookup** (`SELECT id FROM asn WHERE number = 0`; `SELECT id FROM country WHERE code = 'UN'`), never by literal id. Both sentinels appear in `/asns` and `/countries` listings exactly as they do in production.
 
 ### 6.8 mmdb hot reload
 
 The crawler stats the two mmdb files hourly; on mtime change it opens new readers, swaps them via `atomic.Pointer[geoip2.Reader]`, and `Close()`s the old ones. Startup and each swap log the databases' build epochs (slog key `geoip.build_epoch`); the loaded build epoch is also exported in `crawler_metrics` for the Grafana >30d staleness alert (09-ops.md). A plain systemd restart after update is an acceptable operational substitute; the mtime swap avoids interrupting long crawl runs. Reload interval and filenames are fixed, not config.
+
+---
+
+### 6.9 TLD pivot (`domain.tld`) — insert-time, publicsuffix-derived
+
+`domain.tld` (05-schema.md — domain) extends §6's per-domain derivation to the league-table pivots. It is set at **insert** (not scan commit) by every path that creates a `domain` row, from the host's ICANN public suffix via the same `publicsuffix-go` library §3.4 uses for eTLD+1 — one derived write, no new lookup (the PSL is in-memory; the crawler never consults it — PSL at import/validation time only, §3.4 Decision). Stored **lowercase, no leading dot** (e.g. `no`, `gov`, `co.uk`) — distinct from `country.tld`'s dot-prefixed uppercase `.NO` form.
+
+- **Apex entity** (`kind='apex'`): `tld` = the host's ICANN public suffix (`dnb.no`→`no`, `bbc.co.uk`→`co.uk`, `x.gov`→`gov`). Guaranteed non-NULL — every host reaching an insert has a registrable domain (a bare public suffix is rejected: §3.4 step 1 / Canonicalize's ≥2-label rule).
+- **Subdomain entity** (`kind='subdomain'`): `tld` = the host's public suffix, identical to its parent's (`api.bbc.co.uk`→`co.uk`). Set the same way per row, never inherited by reference.
+
+Insert paths and how each obtains it (no path adds a lookup):
+- **Campaign ensure-entity (§3.4):** the `registrable`/public-suffix PSL call already runs per host; step 1 captures the eTLD and every apex/parent-link/subdomain insert stores it.
+- **Tranco import (§2.2):** step 5 already runs Go per line; it computes the public suffix via `publicsuffix-go` and stages it (`tranco_staging.tld`), and step 10's set-based INSERT carries `s.tld`. **Decision:** `tld` is computed in Go at parse — **not** via the SQL final-label trick §2.2 uses for country — because that trick is correct only for ccTLD attribution (which keys on the final DNS label), whereas the `tld` pivot must carry the **full** multi-label public suffix (`co.uk`, not `uk`); computing it in SQL would make Tranco's `co.uk` domains disagree with campaign-sourced ones and corrupt the `?tld=` facet.
+- **Live-check row creation (07-api.md):** the initial insert sets `tld` the same way (07 owns that path).
+
+Existing rows never rewrite `tld` — it is a pure function of the immutable host (the Tranco and campaign conflict arms deliberately leave it untouched).
+
+### 6.10 DNS-provider and hosting/CDN provider — scan-commit derived
+
+`domain.dns_provider_id` (OPEN-4) and `domain.hosting_provider` (05-schema.md — domain) are recomputed inside **every** scan-commit transaction, on the same UPDATE as `asn_id`/`country_id`, from data the scan already collected — no extra DNS queries, no mmdb. §6.6's timing rules apply verbatim: deferred scans (base observation `error`/`inconsistent`, no commit) and live checks (Rule 0, 07-api.md) never touch them, so a transient resolver failure never nulls a domain's provider.
+
+**`dns_provider_id` — the DNS-provider league table (OPEN-4, resolved YES 2026-07-09).** Input: the nameserver hosts the checker already resolved — the keys of the `dns_ns_ipv6` result's `details["nameservers"]` map (01-engine.md — §11.3), carried in the scan result the commit consumes (same "part of the commit unit" property §6.2 relies on for attribution). For `kind='subdomain'` the NS check ran against the host's own delegated zone, so its NS set is used directly. Algorithm:
+
+1. Collect the domain's NS host set (canonical, lowercase) from the scan result. Empty (NS check non-definitive) → set `dns_provider_id = NULL`, done.
+2. For each NS host, find the `dns_provider` row (05-schema.md — dns_provider) with the **longest** entry in `ns_suffixes[]` the NS host matches on a label boundary (`ns == suffix` or `ns` ends with `"." + suffix`).
+3. The **longest matching suffix across all providers and all NS hosts** wins → set `dns_provider_id`; no match → NULL. (`ns_suffixes` are curated unambiguous, so a domain's NS set normally maps to one provider; the longest-match tie-break is defined for completeness.)
+
+This is a pure lookup against the in-memory `dns_provider` snapshot (small; loaded once per run and refreshed like the country map). It powers `/providers` + `/providers/{id}/domains` and the `?provider=` filter (07-api.md — §5.6), indexed by `idx_domain_dns_provider` (05-schema.md).
+
+**`hosting_provider` — the hosting/CDN axis.** A **normalized** tag derived from data already in the scan result, in order:
+
+1. **CDN via CNAME chain:** if the base/www AAAA check set `details["cdn_detected"] = true` (01-engine.md — §11.2), map the matched CDN suffix in `details["cname_target"]`/`cname_chain` to a normalized tag using the **same** fixed CDN-suffix list §11.2 already carries: `cloudfront.net`→`cloudfront`; `cloudflare.net`/`cdn.cloudflarenet.com`→`cloudflare`; `akamaiedge.net`/`akamai.net`/`edgekey.net`→`akamai`; `fastly.net`→`fastly`; `azureedge.net`→`azure`; `edgecastcdn.net`→`edgecast`; `stackpathdns.com`→`stackpath`; `googleapis.com`→`google`.
+2. **Else hosting-ASN fallback:** if the resolved input IP's ASN (already looked up for `asn_id`, §6.3 — no new lookup) is in a small curated hosting/cloud-ASN→tag set (e.g. AWS, GCP, Azure, OVH, Hetzner, DigitalOcean), use that tag.
+3. **Else** → NULL.
+
+**Decision:** `hosting_provider` is a denormalized normalized-TEXT tag (05-schema.md — domain), **not** an FK — the CDN-suffix map and the hosting-ASN map are code constants, and the ASN fallback already has its own `asn` row, so a second reference table would duplicate `asn`. Both maps are Go constants co-located with the commit-path attribution helpers, single-sourced with §11.2's CDN-suffix list. Only **normalized** tags are written (raw `asn.name` org strings are deliberately not used — that would defeat a clean league facet). Registrar attribution is **deliberately not derived** here (RDAP cost at 1M scale — deferred, §10.3).
+
+### 6.11 `v6ctl provider` — dns_provider seed and maintenance
+
+The `dns_provider` table (05-schema.md — dns_provider) has a **single** write path: the operator verb group (matching the other reference-data verbs; no HTTP admin surface). It is seeded once from a curated list of major managed-DNS operators and their nameserver-host suffixes (Cloudflare `cloudflare.com`, AWS `awsdns-*`/`amazonaws.com`, Google `googledomains.com`, Azure `azure-dns.*`, …) and maintained as new operators appear.
+
+- **`v6ctl provider add <name> <suffix> [<suffix>...]`** — upsert the provider by `name`; append the given nameserver-host suffixes to `ns_suffixes` (deduped). Suffixes are stored lowercase, no leading dot.
+- **`v6ctl provider remove <name>`** — delete the provider row. Domains keep their last `dns_provider_id` until the next scan-commit recompute nulls it (§6.10 is self-healing).
+- **`v6ctl provider list`** — print each provider with its suffix set and current mapped-domain count (`SELECT count(*) FROM domain WHERE dns_provider_id = $1`).
+
+**Decision:** the mapping is **primarily** seeded via this verb (a checked-in seed script calling `provider add`) — it is reference **data**, belonging in the DB the same way the `asn`/`country` seeds do (05-schema.md — seeds), not tunable behavior. Two operational knobs are registered in the 09-ops.md config registry (§2.11): `dns_provider.seed_path` (optional path to a curated `ns_host → provider` seed file; default `""` = no file, mapping seeded by the verb and derived from collected NS data only) and `dns_provider.refresh_interval` (default `24h` — the cadence at which the in-memory provider snapshot this section loads is rebuilt from the table + collected NS data, "refreshed like the country map", §6.10). New v6ctl verb group `provider add|remove|list` — flagged for the 09-ops.md verb inventory / systemd surface and registered in the deliverables above.
 
 ---
 
@@ -597,11 +650,11 @@ The crawler stats the two mmdb files hourly; on mtime change it opens new reader
   ON CONFLICT (domain_id) DO UPDATE SET reason = EXCLUDED.reason;
   ```
 
-  Idempotent: re-add updates `reason`, preserves `added_at`; `--reason` omitted ⇒ NULL. If the domain's current `classification <> 'sinner'`, **warn but succeed**: `"added; will not render on /domain/topsinner until classified sinner"` — rows are durable picks, visibility is computed at read time (the topsinner query pin, 07-api.md), matching production where fixed domains stay in the table but drop out of the view.
+  Idempotent: re-add updates `reason`, preserves `added_at`; `--reason` omitted ⇒ NULL. If the domain's current `classification <> 'sinner'`, **warn but succeed**: `"added; will not render on /shame until classified sinner"` — rows are durable picks, visibility is computed at read time (the `/shame` visibility predicate, 07-api.md), matching production where fixed domains stay in the table but drop out of the view.
 - **`v6ctl shame remove <host>`** — resolve host to `domain_id` (unknown host → exit 1), `DELETE FROM top_shame WHERE domain_id = $1`; 0 rows deleted → print `"not on the shame list"`, exit 0.
 - **`v6ctl shame list`** — print all rows joined to domain: `host, rank, classification, reason, added_at, visible` where `visible = (classification = 'sinner' AND rank IS NOT NULL AND NOT disabled)`, ordered by rank.
 
-Migration note: the seed migration does **not** populate `top_shame` (its FK needs phase-1 ingestion); population is the phase-4 importer (08-migration-cutover.md) plus `v6ctl shame add` thereafter.
+Migration note: the seed migration does **not** populate `top_shame` (its FK needs phase-1 ingestion); population at cutover is an editorial re-entry via `v6ctl shame add` (08-migration-cutover.md — DNS-flip cutover, step 2), plus `v6ctl shame add` thereafter. There is no importer — start-fresh cutover, no history import (OPEN-9).
 
 ---
 
@@ -644,7 +697,7 @@ Hardcoded constants (deliberately not config): v6ctl advisory-lock wait 5m; disc
 
 ## 10. Daily stats snapshot and counter recompute
 
-This section owns the SQL query bodies for **daily tick step 2** (product-stats snapshot) and **daily tick step 3** (country/ASN counter recompute) — the tick step order, advisory lock (`JobDailyTick`), and failure containment are owned by 04-lifecycle-scheduling.md — The daily tick. The same six statements are re-run verbatim by `v6ctl stats recalc` (§10.7) and by the migration importer's final sub-phase (08-migration-cutover.md — Day-0 stats snapshot). The columns they populate are read by the `/stats/*`, `/metric/overview`, `/metric/asn`, and `/country` serializers (07-api.md).
+This section owns the SQL query bodies for **daily tick step 2** (product-stats snapshot) and **daily tick step 3** (country/ASN/DNS-provider counter recompute) — the tick step order, advisory lock (`JobDailyTick`), and failure containment are owned by 04-lifecycle-scheduling.md — The daily tick. The same snapshot upserts and counter recomputes are re-run verbatim by `v6ctl stats recalc` (§10.7), which the cutover runbook invokes once at DNS flip to seed the first real snapshot (08-migration-cutover.md — DNS-flip cutover). The columns they populate are read by the `/stats/*`, `/stats/overview`, `/asns`, and `/countries` serializers (07-api.md).
 
 These are snapshots of **confirmed** domain state (the `domain.*_status`, `domain.classification`, `domain.gold` columns), **never** scan-derived: public graphs must match the public lists exactly, and a continuous aggregate over raw observations would wobble with scan timing and include unconfirmed values. All DDL (`stats_global_daily`, `stats_country_daily`, `stats_campaign_daily`, `stats_asn_daily`, and the `country`/`asn` counter columns) lives in 05-schema.md — stats tables and the `country`/`asn` tables.
 
@@ -714,7 +767,7 @@ While `crawler.resources.enabled = false` (§5), `resources_status` is NULL ever
 
 ### 10.3 `stats_country_daily` snapshot (`db/query/stats.sql`)
 
-Grouped by `domain.country_id` over the publicly-ranked scope; rows are written only for countries that have ≥1 publicly-ranked member (an empty country produces no row — its `/stats/country/{code}` series simply has no point that day, which clients tolerate). `base_supported` here equals the country's `v6sites` counter (§10.6) by construction.
+Grouped by `domain.country_id` over the publicly-ranked scope; rows are written only for countries that have ≥1 publicly-ranked member (an empty country produces no row — its `/countries/{code}/stats` series simply has no point that day, which clients tolerate). `base_supported` here equals the country's `v6sites` counter (§10.6) by construction.
 
 ```sql
 INSERT INTO stats_country_daily (
@@ -780,7 +833,7 @@ ON CONFLICT (day, campaign_id) DO UPDATE SET
 
 ### 10.5 `stats_asn_daily` snapshot (`db/query/stats.sql`)
 
-Grouped by `domain.asn_id` over the publicly-ranked scope; `day` is a TIMESTAMPTZ (UTC midnight). `v6_domains` uses the §10.1 v6-enabled predicate. The sentinel ASN (number 0) appears as a normal group, exactly as in the `/metric/asn` listing.
+Grouped by `domain.asn_id` over the publicly-ranked scope; `day` is a TIMESTAMPTZ (UTC midnight). `v6_domains` uses the §10.1 v6-enabled predicate. The sentinel ASN (number 0) appears as a normal group, exactly as in the `/asns` listing.
 
 ```sql
 INSERT INTO stats_asn_daily (day, asn_id, domains, v6_domains, sinners, heroes)
@@ -802,7 +855,7 @@ ON CONFLICT (asn_id, day) DO UPDATE SET
 
 ### 10.6 Country/ASN counter recompute (`db/query/country.sql`, `db/query/asn.sql`)
 
-Tick step 3: the ported `update_country_metrics` / `update_asn_metrics` recomputes, **corrected** (design §2.6 step 3): the v6 count is the classification-based v6-enabled predicate (§10.1), and the total count is over the publicly-ranked scope (production's proc counted *all* domains, ignoring rank/disabled). Both are set-based `UPDATE`s and inherently idempotent.
+Tick step 3: the ported `update_country_metrics` / `update_asn_metrics` recomputes plus the parallel `dns_provider` recompute (OPEN-4), **corrected** (design §2.6 step 3): the v6 count is the classification-based v6-enabled predicate (§10.1), and the total count is over the publicly-ranked scope (production's proc counted *all* domains, ignoring rank/disabled). All three are set-based `UPDATE`s and inherently idempotent.
 
 Each recompute is **two statements**: a reset of every dimension row to zero, then a targeted update from the aggregate. The reset is required for correctness — a country or ASN whose last publicly-ranked domain is delisted or disabled must fall to `0/0/0`; a JOIN-only update (production's form) would leave a stale non-zero count on rows absent from the aggregate. The daily row churn (≤251 countries, ~50–80k ASNs) is negligible.
 
@@ -850,6 +903,27 @@ FROM (
 WHERE a.id = agg.asn_id;
 ```
 
+`dns_provider` (`db/query/asn.sql` — colocated with the ASN recompute; OPEN-4 DNS-provider league table) — identical shape to `asn`, keyed by `domain.dns_provider_id`, over the same publicly-ranked scope, so `GET /providers` counts match the public lists exactly. `count_v4 = count_total − count_v6` is synthesized server-side in 07-api.md §4.6 (never stored), mirroring ASN. The provider set is small (tens to low hundreds of rows), so the reset+recompute is trivially cheap:
+
+```sql
+-- statement 1: reset
+UPDATE dns_provider SET count_total = 0, count_v6 = 0;
+
+-- statement 2: recompute over the publicly-ranked scope
+UPDATE dns_provider p SET
+  count_total = agg.count_total,
+  count_v6    = agg.count_v6
+FROM (
+  SELECT dns_provider_id,
+         count(*)                                                     AS count_total,
+         count(*) FILTER (WHERE classification IN ('partial','hero')) AS count_v6
+  FROM domain
+  WHERE rank IS NOT NULL AND NOT disabled AND dns_provider_id IS NOT NULL
+  GROUP BY dns_provider_id
+) agg
+WHERE p.id = agg.dns_provider_id;
+```
+
 ### 10.7 `v6ctl stats recalc`
 
-- **`v6ctl stats recalc`** — runs the four §10.2–§10.5 snapshot upserts and the two §10.6 counter recomputes for `CURRENT_DATE`, in one transaction, against the configured pool. It is the manual/break-glass and migration entry point to the identical code the tick calls (shared `internal/crawler` helper — the query bodies are single-sourced in `db/query/*.sql`). **Decision:** it does **not** acquire `JobDailyTick`; every statement is idempotent and value-identical to the tick's, so a concurrent tick is harmless (last writer wins with the same numbers). Read/write; exit 0 on success, exit 1 on DB error. Used by the phase-4 migration importer to write day-0 rows (08-migration-cutover.md — Day-0 stats snapshot): on a freshly migrated DB it produces one all-zeros-or-seed `stats_global_daily` row for the cutover date, keyed rows only for keys with members, and the initial `country`/`asn` counters — all computed identically to every subsequent nightly tick.
+- **`v6ctl stats recalc`** — runs the four §10.2–§10.5 snapshot upserts and the three §10.6 counter recomputes (country, ASN, DNS-provider) for `CURRENT_DATE`, in one transaction, against the configured pool. It is the manual/break-glass and migration entry point to the identical code the tick calls (shared `internal/crawler` helper — the query bodies are single-sourced in `db/query/*.sql`). **Decision:** it does **not** acquire `JobDailyTick`; every statement is idempotent and value-identical to the tick's, so a concurrent tick is harmless (last writer wins with the same numbers). Read/write; exit 0 on success, exit 1 on DB error. Available as the manual/break-glass recompute at cutover to seed the first real stats snapshot on the freshly migrated DB (08-migration-cutover.md — DNS-flip cutover): on a freshly migrated DB it produces one all-zeros-or-seed `stats_global_daily` row for the cutover date, keyed rows only for keys with members, and the initial `country`/`asn` counters — all computed identically to every subsequent nightly tick.

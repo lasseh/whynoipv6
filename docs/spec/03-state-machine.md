@@ -1,5 +1,7 @@
 # 03 — Confirmed-Status State Machine (the trust core)
 
+_Status: Round 3.0 — API redesign folded in (docs/api-design-research.md, decisions 2026-07-09): clean root API, keyset pagination, RFC 9457, no legacy compat, no history import._
+
 **Purpose:** This file specifies the confirmed-status commit machine — the single code path that turns per-scan observations into public, confirmed IPv6 state, changelog entries, and classification. It is the trust core of the whole system: every public status, every changelog row, and every hero/partial/sinner verdict flows through the algorithm defined here, exactly once per scanned domain, in one atomic per-domain transaction protected by a lease fence.
 
 **Deliverables:**
@@ -7,7 +9,7 @@
 - `internal/crawler` — the commit unit: dead-signal computation, the per-dimension confirm/pending loop, streak maintenance, scheduling computation, the one-`pgx.Batch`-in-one-`pgx.Tx` write unit, lease-fence handling, and the resource-link persistence statements (files: `commit.go`, `commit_sql.go` or the sqlc-generated equivalents under `internal/postgres` + `db/query/commit.sql`).
 - `internal/domain` — `classify.go`: the pure classification ladder, flags, and gold computation (zero dependencies), plus the `Dimension`, `IPv6Status`, `Observation`, `Classification` Go types mirroring the DB enums.
 
-**Companion files:** 02 (observation production: engine adaptation, consensus quorum, conn composition, resources roll-up, and the answer-set order the attribution input IP is drawn from — everything that produces this file's per-dimension inputs), 06-ingest.md (§6 GeoIP/ASN attribution — the sole owner of the ASN + ccTLD attribution algorithm that resolves input `A`), 04 (claim query, lease stamping, frontier — everything that produces the snapshot this file consumes), 05-schema.md (all DDL: `domain`, `scan`, `scan_detail`, `changelog`, `resource_host`, `domain_resource`), 09-ops.md (config-key registry), 00-overview.md (canonical sizing constants), 10-testing.md (fixtures and parity tests for everything asserted here).
+**Companion files:** 02 (observation production: engine adaptation, consensus quorum, conn composition, resources roll-up, and the answer-set order the attribution input IP is drawn from — everything that produces this file's per-dimension inputs), 06-ingest.md (§6 GeoIP/ASN attribution — the sole owner of the ASN + ccTLD attribution algorithm that resolves input `A`), 04 (claim query, lease stamping, frontier — everything that produces the snapshot this file consumes), 05-schema.md (all DDL: `domain`, `scan`, `scan_detail`, `changelog`, `resource_host`, `domain_resource`), 09-ops.md (config-key registry), 00-overview.md (canonical sizing constants), 10-testing.md (fixtures and contract tests for everything asserted here).
 
 ---
 
@@ -260,11 +262,11 @@ While `crawler.resources.enabled=false`, `resources_status` is NULL for every do
 ## 11. Changelog write rules
 
 - **One row per confirmed transition**, written in the same transaction as the transition itself (step 2's `changelog_rows`). Columns: `(domain_id, ts, field, old_value, new_value)` with `ts = T` — the same T as the scan row, so a changelog entry always joins exactly one scan row.
-- `field` ∈ `base | www | ns | mx | conn | resources` on native rows. `field = 'legacy'` (with the `legacy_message`/`legacy_status` columns) exists ONLY for phase-4 import rows; the crawler never writes it.
+- `field` ∈ `base | www | ns | mx | conn | resources` — the six core dimensions, the exact `changelog.field` domain (see 05-schema.md — `changelog`). The crawler is the sole writer of changelog rows; there is no history import and no `'legacy'` field.
 - `old_value` and `new_value` are `ipv6_status` values, both always NOT NULL and (by construction of step 2) always distinct on native rows.
-- **First-confirmation rule (normative): the NULL→value bootstrap transition NEVER writes a changelog row — suppression happens at write time, not at read time.** Consequently `old_value` is never NULL on native rows and the legacy §5.1 changelog endpoints apply no first-confirmation filter (see 05-schema.md — `changelog` for the CHECK constraints enforcing this shape).
+- **First-confirmation rule (normative): the NULL→value bootstrap transition NEVER writes a changelog row — suppression happens at write time, not at read time.** Consequently `old_value` is never NULL and the changelog endpoints (07-api.md — change feeds) apply no first-confirmation filter (see 05-schema.md — `changelog` for the constraints enforcing this shape).
 - Step R writes no changelog rows, and the first post-reset commits write none (bootstrap rule again). A resurrected domain has a clean changelog.
-- **Seeded values are confirmed values.** The phase-4 seed import writes production's current statuses directly into the `d_status` columns (`d_since` from production data where available, else import time; `d_pending = NULL`, `d_pending_count = 0`). The anti-flap N-consecutive rule therefore governs the first post-cutover divergence, and a real divergence publishes an ordinary changelog entry once confirmed.
+- **Cold classification start — no seed import.** Start-fresh cutover (OPEN-9; 08-migration-cutover.md — §1): no production statuses are seeded. Every domain begins with all `d_status = NULL` (`unknown`, `d_pending = NULL`, `d_pending_count = 0`) and is confirmed dimension-by-dimension by the fresh crawl over N consecutive scans; each first confirmation is the NULL→value bootstrap that writes **no** changelog row (the first-confirmation rule above). The changelog therefore records only genuine post-cutover transitions, and the day-1 dashboard's confirmed counts rise from the cold-start baseline to their true values over the first ~N days.
 - Rows written while a domain is disabled simply become visible again on re-enable (public filtering is read-side); for `dead` recoveries there are none, because of Step R.
 - 0–6 rows per commit (at most one per dimension per scan; multiple dimensions can transition in the same scan — e.g. a domain dropping its AAAA can flip `base`, `www`, and `conn` in one commit once each pending count matures).
 
@@ -485,7 +487,7 @@ Every commit writes exactly one row into each (including non-counting scans and 
 - The NS/MX per-host AAAA detail inside `results` is capped at 4 NS hosts / 5 MX hosts plus the `total`/`checked`/`ipv6_count` counters (02's `checks.max_ns_lookups`/`max_mx_lookups`).
 - `conn` is the derived composition object; `http_only=true` only in the connection-refused-plus-HTTP-works fallback case. It is payload-only — NOT a class flag.
 
-The detail page and the live-check dedupe path both read the latest `scan_detail` row through the shared `MapLiveResult` mapper (02), so this serialization is a compatibility surface: changing a key is a breaking change gated by the parity tests in 10-testing.md.
+The detail page and the live-check dedupe path both read the latest `scan_detail` row through the shared `MapLiveResult` mapper (02), so this serialization is a stable contract: changing a key is a breaking change gated by the OpenAPI contract tests in 10-testing.md.
 
 ## 15. Failure handling & metrics
 

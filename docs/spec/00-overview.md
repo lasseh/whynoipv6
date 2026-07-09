@@ -1,5 +1,7 @@
 # 00 — Overview, Layout, Sizing & Conventions
 
+_Status: Round 3.0 — API redesign folded in (docs/api-design-research.md, decisions 2026-07-09): clean root API, keyset pagination, RFC 9457, no legacy compat, no history import._
+
 **Purpose:** The entry point to the WhyNoIPv6 backend implementation spec. It states what the system is, restates the hard constraints verbatim, fixes the final monorepo layout, and is the **single source** for two things every other file cites by name: the canonical sizing-constants table and the project glossary. It also carries the spec-file index, the reading order, and the spec conventions (single-source rules, `**Decision:**` markers, cross-reference form) that all ten content files obey.
 
 **Deliverables:** This file governs no Go package. It defines the repository's top-level directory tree (every other file's package paths must resolve inside it), the named sizing constants, and the shared vocabulary. It produces documentation only.
@@ -12,7 +14,7 @@
 
 WhyNoIPv6 is a public, anonymous measurement service that answers, for the world's most-visited websites, *"does this site work over IPv6, and if not, why not?"* The new backend is **one Go module with three binaries** — `api` (the public HTTP surface), `crawler` (the autonomous scanning daemon), and `v6ctl` (the operator CLI) — over **PostgreSQL 18 + TimescaleDB 2.28 (Community edition)**, laid out hexagonally (pure domain core, port interfaces, adapters at the edge). The scanning core is the **v6audit checker engine lifted nearly verbatim** (15 checks, two-phase conditional execution, SSRF-pinned dialer, IPv6 self-preflight), with all scoring and grading deleted.
 
-The heart of the system is a **crawl → confirm → publish pipeline.** Every scannable host is one row in the `domain` table with a `next_check_at`; crawler workers claim due rows with `FOR UPDATE SKIP LOCKED` — the table *is* the frontier, so there is no queue and no in-memory materialization of due domains (the failure mode that killed both prior schedulers). Each claimed host is scanned once per day no matter how many lists it is on. The two classification-critical lookups (apex AAAA and www AAAA) are resolved through **three public resolvers concurrently with a 2-of-3 quorum**; everything else goes through **local Unbound recursors**. Raw per-scan observations land append-only in TimescaleDB hypertables, but a dimension's **public status advances only when a new value is definitive, quorum-confirmed, and has held for N consecutive daily scans** — and only a confirmed transition writes a `changelog` row. From the confirmed statuses the system deterministically computes a public **classification** (hero / partial / sinner / inactive) and serves it — with no grades and no numeric scores — through an HTTP API whose legacy root paths remain byte-compatible with the existing frozen Vue frontend.
+The heart of the system is a **crawl → confirm → publish pipeline.** Every scannable host is one row in the `domain` table with a `next_check_at`; crawler workers claim due rows with `FOR UPDATE SKIP LOCKED` — the table *is* the frontier, so there is no queue and no in-memory materialization of due domains (the failure mode that killed both prior schedulers). Each claimed host is scanned once per day no matter how many lists it is on. The two classification-critical lookups (apex AAAA and www AAAA) are resolved through **three public resolvers concurrently with a 2-of-3 quorum**; everything else goes through **local Unbound recursors**. Raw per-scan observations land append-only in TimescaleDB hypertables, but a dimension's **public status advances only when a new value is definitive, quorum-confirmed, and has held for N consecutive daily scans** — and only a confirmed transition writes a `changelog` row. From the confirmed statuses the system deterministically computes a public **classification** (hero / partial / sinner / inactive) and serves it — with no grades and no numeric scores — through a clean, OpenAPI-first HTTP API served at the root of `api.whynoipv6.com` (no `/v1` segment) that exposes the confirmed model directly: the real 4-value per-dimension statuses, keyset-paginated tier collections, RFC 9457 errors, and a `snake_case` wire. There is no legacy compatibility layer and no frozen-frontend contract.
 
 ## 2. Hard constraints (locked — restated verbatim)
 
@@ -23,7 +25,7 @@ These are the non-negotiable constraints of the whole build. They are restated i
 - **Deterministic hero / partial / sinner ladder — NO grades or scores.** Classification is a materialized enum (`unknown | inactive | sinner | partial | hero`) computed by a deterministic first-match ladder over confirmed statuses. There is no numeric score, no letter grade, and no quality index anywhere in the system. `scoring.go` is deleted from the lifted engine and nothing may reintroduce a numeric quality signal.
 - **Tranco-only, top-1M eTLD+1.** The only ranked-list source is Tranco (top 1,000,000 pay-level / eTLD+1 domains). There is no other list ingest. `tldbwriter` and its sources are gone.
 - **Newest stack, pinned where a pin is load-bearing.** Current Go toolchain; PostgreSQL 18 + TimescaleDB 2.28 (modern columnstore API, never the deprecated `timescaledb.compress` API); `pgx/v5`; `log/slog`; `chi` v5; `cobra`; `viper`; `sqlc` (v2, pgx/v5). The one hard version pin is the DNS library: **`codeberg.org/miekg/dns`** (pre-1.0, pinned at an exact `v0.6.x`; `github.com/miekg/dnsv2` is a dead path and must never be imported).
-- **Legacy API quirks are deliberate.** The §5.1 compatibility surface (offset pagination at fixed page size, shortuuid URLs, the `{"data": [...]}` search envelope, the `{campaign, domains}` composite, singular root paths, loopback-only bind) is frozen so the existing Vue frontend works unchanged. A "quirk" in the legacy surface is a requirement, not a bug.
+- **Modern, versionless read-only API surface.** The public HTTP API is a clean, OpenAPI-first surface served at the **root** of `api.whynoipv6.com` (no `/v1` segment, no doubled `/api/v1`): plural verb-free resource paths with short tier collections (`/heroes`, `/sinners`, `/gold`, `/almost`, `/mail`) and a general `/domains?class=…` filter, keyset/cursor pagination (no offset), a consistent `{items, page, meta}` list envelope (never a bare array or a `{"data":[…]}` quirk), `snake_case` on the wire, RFC 9457 `application/problem+json` errors, and per-dimension `{value, since}` status objects serving the real 4-value `ipv6_status` enum + JSON `null`. There is **no** legacy compatibility layer, no `legacyStatus` projection, no shortuuid URLs, and no frozen-frontend contract — the frontend is rebuilt and co-designed against the committed `openapi.yaml`.
 
 ## 3. Non-goals
 
@@ -32,7 +34,7 @@ These are the non-negotiable constraints of the whole build. They are restated i
 - No second ranked list, no crowd-submitted ranking, no non-Tranco top list.
 - No job queue, message broker, or external scheduler (River/Redis/NATS explicitly rejected — the frontier is a DB column + `SKIP LOCKED`).
 - No horizontal DB sharding, multi-region write, or cloud-managed database — the target is one operator's VMs.
-- No frontend work in this repo beyond keeping the API contract frozen; the Vue app is a separate, unchanged deployment.
+- No frontend work in *this* build: the Vue app is rebuilt and co-designed against the committed `openapi.yaml` as a separate deployment (its subtree is not compiled by this workflow); the cutover is a DNS flip.
 - No mutation of history: `scan`, `scan_detail`, and `changelog` are append-only.
 
 ## 4. Monorepo layout (final form)
@@ -54,7 +56,7 @@ whynoipv6/                     # monorepo root ("whynoipv6-new" is the seed)
       api/main.go              # HTTP server process wiring + slog install [07,09]
       crawler/main.go          # frontier workers + check-job consumer + daily tick + preflight [04]
       v6ctl/                   # cobra CLI: tranco, campaign, resource, shame, disable, service-candidates,
-                               #   export, stats recalc, migrate (schema DDL), migrate-import (one-time data) [05,06,08]
+                               #   export, stats recalc, migrate (schema DDL) [05,06,08]
 
     internal/
       domain/                  # entities, enums, Canonicalize, classification ladder — PURE, zero deps [02,03,06]
@@ -67,18 +69,17 @@ whynoipv6/                     # monorepo root ("whynoipv6-new" is the seed)
       repository/              # port interfaces (consumer-defined) [05]
       postgres/                # sqlc-generated queries (db/) + hand-written adapters [05]
       service/                 # use-case layer the api handlers call [07]
-      api/                     # chi router, handlers, legacy mappers, gen/ (oapi-codegen) [07]
+      api/                     # chi router, handlers, keyset pagination, feeds/badges/datasets/CSV serializers, gen/ (oapi-codegen) [07]
       geoip/                   # MaxMind mmdb readers + attribution + hot reload [06]
       notify/                  # ops-webhook + healthchecks.io ping client [09]
       config/                  # viper loader, all three binaries [09]
       lock/                    # advisory-lock singleton coordination [04]
-      migrate/                 # one-time production import + parity gate [08]
 
     db/
       migrations/              # golang-migrate: 001 base schema, 002 timescale, 003 seed + migrations.go go:embed [05]
       query/                   # sqlc query sources [05; contents owned by 03/04/06/07]
 
-  frontend/                    # imported from whynoipv6-web (Vue 3, frozen); OUT OF SCOPE for this build — not compiled by the workflow [P0.2]
+  frontend/                    # rebuilt Vue 3 app, co-designed against openapi/openapi.yaml; OUT OF SCOPE for this build — not compiled by the workflow
     package.json               #   separate Node manifest root; the Opus build never touches this subtree
 
   openapi/
@@ -97,9 +98,9 @@ whynoipv6/                     # monorepo root ("whynoipv6-new" is the seed)
     spec/                      # THIS spec set (00–11)
 ```
 
-**Decision:** The Go module is rooted at `backend/`, not at repo top — this matches design §6, brief §2.5, and the plan's P0.1 (`backend/go.mod`), and lets the frozen `frontend/` (P0.2) sit as a sibling with its own Node manifest root. Every `make` target, `go build ./...`, and `sqlc`/lint invocation runs from `backend/`; `.golangci.yml` and `sqlc.yaml` therefore live with the module under `backend/`, while the orchestrating `Makefile` (`cd backend && …` plus generate targets) and `compose.yaml` sit at the monorepo root. The `frontend/` subtree is present for the monorepo's completeness but is **out of scope for this build** — the autonomous workflow never compiles it (brief §8); only P0.2 imports it, and nothing else references it.
+**Decision:** The Go module is rooted at `backend/`, not at repo top — this matches design §6, brief §2.5, and the plan's P0.1 (`backend/go.mod`), and lets the rebuilt `frontend/` sit as a sibling with its own Node manifest root. Every `make` target, `go build ./...`, and `sqlc`/lint invocation runs from `backend/`; `.golangci.yml` and `sqlc.yaml` therefore live with the module under `backend/`, while the orchestrating `Makefile` (`cd backend && …` plus generate targets) and `compose.yaml` sit at the monorepo root. The `frontend/` subtree is present for the monorepo's completeness but is **out of scope for this build** — the autonomous workflow never compiles it (brief §8); it is rebuilt and co-designed against `openapi/openapi.yaml`, and nothing in this build references it.
 
-**Decision:** The final tree adds two `internal/` packages the design §6 layout tree did not enumerate but its own body text delivers: `internal/lock` (advisory-lock coordination, owned by 04-lifecycle-scheduling.md) and `internal/migrate` (one-time production import + parity gate, owned by 08-migration-cutover.md). Both are load-bearing deliverables of their owning files; the §6 tree was illustrative, not exhaustive.
+**Decision:** The final tree adds one `internal/` package the design §6 layout tree did not enumerate but its own body text delivers: `internal/lock` (advisory-lock coordination, owned by 04-lifecycle-scheduling.md). It is a load-bearing deliverable of its owning file; the §6 tree was illustrative, not exhaustive. (There is no `internal/migrate`: 08-migration-cutover.md collapses to a pure DNS-flip cutover with no data import — see §10.4 of the API redesign report.)
 
 **Decision:** `internal/postgres/db/` holds the sqlc-generated code (never hand-edited) and `internal/api/gen/` holds the oapi-codegen output (committed); both are generated subpackages of their hand-written parent, consistent with the deliverables in 05-schema.md and 07-api.md. The campaign-definition repository (`.github/workflows/validate.yml` and the campaign YAML files) is a **separate repo** and is not part of this tree; 06-ingest.md governs the one workflow file this project contributes to it.
 
@@ -139,6 +140,11 @@ The shared vocabulary. Definitions here are canonical; the owning file for each 
 
 - **Entity / kind.** A scannable host = one row in `domain`. Its `kind` is `apex` (an eTLD+1 pay-level domain, the Tranco unit) or `subdomain` (a campaign-specified host below an apex). One entity is scanned once per day regardless of how many campaigns reference it. [04, 05]
 - **eTLD+1 / pay-level domain.** The registrable domain one label below the effective TLD (e.g. `bbc.co.uk`, not `www.bbc.co.uk` and not `co.uk`). The Tranco top-1M unit and the meaning of `kind='apex'`. [06]
+- **TLD.** The effective TLD / public suffix of a host (`com`, `no`, `co.uk`, `gov`), derived at ingest via publicsuffix and stored on `domain.tld`. Backs the TLD/ccTLD league tables and the `?tld=` filter axis. [05, 06]
+- **DNS provider / hosting provider.** Two normalized provider attributions on a domain: the **DNS provider** resolved from the domain's nameserver host through the `ns_host → provider` mapping table (the highest-leverage pivot — one provider's default flips thousands of domains); the **hosting/CDN provider** derived from CNAME-chain CDN detection plus the resolved IP's ASN. Both back the `?provider=` filter and the provider league tables. Registrar attribution is deferred. [05, 06]
+- **Tier collections.** The short canonical plural browse paths `/heroes`, `/sinners`, `/gold`, `/almost`, `/mail` — each a preset filtered view over the `/domains` leaderboard (`class=hero`, `class=sinner`, `gold=true`, the "almost there" partials, the mail/MX track), sharing the same row shape, keyset pagination, and `?country=`/`?asn=` composition as `/domains`. They are aliases over the general `/domains?class=…` collection, not a second vocabulary. [07]
+- **Keyset cursor.** The opaque base64url pagination token over a strict total order (`(rank, id)` on rank-sorted views, `host` on curated sets, a null-flag-first key on the nullable-rank dependents list), replacing offset pagination on every large collection. Encodes the synthetic `domain.id` internally; there is no exact `COUNT(*)` on the hot path. [07]
+- **Mandate tags.** Free-form `tags` on a campaign (backing `?tag=` and the `/mandates` surface) that mark government-mandate / compliance-tracking campaigns. A campaign-metadata capability, not a per-domain classification signal. [05, 06]
 - **Dimension.** One measured facet of a domain's IPv6 posture. **Core dimensions** (six): `base`, `www`, `ns`, `mx`, `conn`, `resources` — each carries a 5-column confirm/pending group on `domain` and can gate classification. **Informational dimensions**: `dnssec`, `ptr`, `smtp`, `parity`, `latency_v4_ms`, `latency_v6_ms` — latest observation only, never gate classification. [03, 05]
 - **Observation.** A single per-dimension, per-scan raw outcome; the 7-valued internal `observation` enum (`supported | partial | unsupported | no_record | not_applicable | error | inconsistent`). Produced by the mapping/quorum layer before any commit. `partial`, `error`, and `inconsistent` never become public. [02]
 - **Confirmed status.** The public, durable per-dimension value; the 4-valued `ipv6_status` enum (`supported | unsupported | no_record | not_applicable`). It changes only when a definitive observation has been confirmed by the state machine. "Observation vs confirmed status" is the raw-vs-trusted distinction at the core of the design. [03]
@@ -169,9 +175,9 @@ The spec is built to be implemented front-to-back with the pure core first. Reco
 5. **03-state-machine.md** — the confirmed-status commit machine (the trust core; the subtlest component).
 6. **04-lifecycle-scheduling.md** — the frontier, claim loop, scheduling, sweeps, and the crawler process wiring that drives 01–03.
 7. **06-ingest.md** — how entities and metadata enter (Tranco, campaigns, resources, attribution).
-8. **07-api.md** — the public HTTP surface, frozen legacy quirks included.
+8. **07-api.md** — the public HTTP surface: the clean modern API (root base, tier collections, keyset pagination, RFC 9457, `snake_case`, OpenAPI-first).
 9. **09-ops.md** — config registry, packaging, deploy, backup, observability (read alongside 04/07 for the keys they introduce).
-10. **08-migration-cutover.md** — the one-time production import and cutover runbook (last, because it depends on the full schema and API).
+10. **08-migration-cutover.md** — the DNS-flip cutover runbook (last, because it depends on the full schema and API): stand up the new stack, let it crawl, flip DNS, re-seed `top_shame`. No data import — the system starts fresh.
 11. **10-testing.md** — the fixtures and gates; consulted continuously, not once. Every acceptance criterion elsewhere resolves to a fixture table here.
 
 ## 8. Spec conventions (normative for all files)
@@ -185,12 +191,12 @@ The spec is built to be implemented front-to-back with the pure core first. Reco
 | **02-observation-model.md** | Observation vocabulary, the consensus quorum resolver, engine-outcome→observation mapping, `conn` composition, `resources` roll-up. | `internal/consensus`, `internal/crawler/observe.go`, `internal/domain/observation.go` |
 | **03-state-machine.md** | The confirmed-status commit machine: confirm/pending loop, dead signal, streaks, changelog, classification ladder, the one-`pgx.Batch` write unit. | `internal/crawler` (commit), `internal/domain/classify.go` |
 | **04-lifecycle-scheduling.md** | Frontier, atomic claim query, cadence/recheck/backoff, dead/delisted lifecycles, daily sweep + tick, advisory locks, crawler process model. | `internal/crawler` (frontier/schedule/sweep/tick/metrics), `internal/lock`, `cmd/crawler` |
-| **05-schema.md** | **ALL SQL DDL**: extensions, enums, tables, indexes, hypertables, columnstore, retention, continuous aggregate, seed; migration + sqlc tooling. | `db/migrations`, `db/query` layout, `sqlc.yaml`, `internal/postgres`, `internal/repository`, `cmd/v6ctl migrate` |
-| **06-ingest.md** | `Canonicalize`, Tranco import cycle, campaign sync, resource registry/sweep, GeoIP/ASN attribution; the ingest v6ctl verbs. | `internal/domain/host.go`, `internal/ingest`, `internal/campaign`, `internal/geoip`, `internal/crawler/resourcesweep.go`, `cmd/v6ctl` |
-| **07-api.md** | The complete HTTP contract: server baseline, frozen legacy surface, new endpoints, badge, live check, datasets, OpenAPI. | `internal/api`, `internal/service`, `openapi/openapi.yaml` |
-| **08-migration-cutover.md** | One-time production import (`v6ctl migrate-import`), changelog transform, parity gates, cutover runbook + rollback. | `cmd/v6ctl/migrate_import.go`, `internal/migrate` |
+| **05-schema.md** | **ALL SQL DDL**: extensions, enums, tables, indexes, hypertables, columnstore, retention, continuous aggregate, seed; the `ns_host → provider` mapping table and the `tld` / DNS-provider / hosting-provider / campaign-`tags` pivot columns; migration + sqlc tooling. | `db/migrations`, `db/query` layout, `sqlc.yaml`, `internal/postgres`, `internal/repository`, `cmd/v6ctl migrate` |
+| **06-ingest.md** | `Canonicalize`, Tranco import cycle, campaign sync (incl. mandate `tags`), resource registry/sweep, GeoIP/ASN attribution, `tld` derivation + DNS-provider (`ns_host → provider`) / hosting-provider attribution; the ingest v6ctl verbs. | `internal/domain/host.go`, `internal/ingest`, `internal/campaign`, `internal/geoip`, `internal/crawler/resourcesweep.go`, `cmd/v6ctl` |
+| **07-api.md** | The complete HTTP contract: server baseline (root base, no `/v1`), the clean resource model + tier collections, keyset pagination + filter grammar, RFC 9457 errors, `snake_case` envelope, badge, async live check, change feeds, CSV export, static datasets + manifest, diff + `/mandates` surfaces, OpenAPI-3.0.3-first. | `internal/api`, `internal/service`, `openapi/openapi.yaml` |
+| **08-migration-cutover.md** | The pure DNS-flip cutover runbook + rollback (no data import — start fresh); the `top_shame` re-seed; the cold-classification-start caveat; retained restore-drill hygiene. | `cmd/v6ctl` (`shame` re-seed) — no dedicated package |
 | **09-ops.md** | **The consolidated config-key registry** (single source), systemd/nginx/Unbound/pgBackRest/GeoIP/Grafana deploy, logging, Makefile/CI. | `internal/config`, `internal/notify`, `deploy/**`, root `Makefile`/`.golangci.yml`/`compose.yaml` |
-| **10-testing.md** | **ALL test fixtures and vectors**: quorum/mapping/classification tables, parity capture-and-replay, integration scenarios, coverage bar. | `*_test.go`, `internal/api/testdata/**`, `testdata/parity/capture.go`, test Make targets |
+| **10-testing.md** | **ALL test fixtures and vectors**: quorum/mapping/classification tables, OpenAPI contract vectors (keyset-cursor codec, RFC 9457 shapes, Atom/JSON-Feed serializers, `manifest.json` schema, badge golden SVGs), integration scenarios, coverage bar. | `*_test.go`, `internal/api/testdata/**`, test Make targets |
 
 ### 8.2 Single-source rules (violating any is a defect)
 
@@ -208,4 +214,4 @@ Where the design doc is ambiguous or silent at a point a spec file must be concr
 
 - **Between spec files**, cite as `see NN-name.md — <section name>` (e.g. "see 05-schema.md — `domain`", "see 03-state-machine.md — classification ladder"). Cross-references between spec files are encouraged; they are how the self-contained files stay consistent.
 - **Never** defer normative content to the design doc — no "see backend-design.md". Every file copies the normative content it needs IN. The design doc and the audit trail are provenance, not a live dependency of the implementer.
-- **Reference repos** (the v6audit engine to lift, the production backend and frozen frontend for parity fixtures, the campaign repo) are cited by repo-relative path where code is lifted or a golden fixture is captured; they are the only external inputs an implementer reads besides `docs/spec/*`.
+- **Reference repos** (the v6audit engine to lift, the production backend for domain-model provenance, the campaign repo) are cited by repo-relative path where code is lifted or a golden fixture is captured; they are the only external inputs an implementer reads besides `docs/spec/*`.

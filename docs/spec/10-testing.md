@@ -1,12 +1,18 @@
 # 10 — Test Plan
 
+_Status: Round 3.0 — API redesign folded in (docs/api-design-research.md, decisions 2026-07-09): clean root API, keyset pagination, RFC 9457, no legacy compat, no history import._
+
 **Purpose:** This file is the single source for every test vector, golden fixture, and
 integration scenario the implementation must satisfy. Where other spec files state
 *acceptance criteria* (properties the code must have), this file owns the concrete
 *fixture tables* that prove them — the exhaustive quorum/mapping/classification vectors,
-the parity-fixture capture-and-replay plan, the testcontainers integration scenarios,
-and the coverage bar per package. An implementer builds the test suite from this file
-alone, citing the companion files only for the shapes under test.
+the native API contract vectors (envelope, status-object, keyset cursor, RFC 9457,
+badge/feed/CSV serializers), the testcontainers integration scenarios, and the coverage
+bar per package. An implementer builds the test suite from this file alone, citing the
+companion files only for the shapes under test. There is no parity/golden-capture plan
+against the old backend: the frozen-frontend compatibility surface is dropped, the API is
+served natively at `api.whynoipv6.com` root, and the contract is pinned by `openapi.yaml`
+(the drift gate, §8.1), not by recorded production goldens.
 
 **Deliverables:**
 
@@ -15,13 +21,12 @@ alone, citing the companion files only for the shapes under test.
 - `internal/crawler/observe_test.go` — base/www, conn, ns/mx, resources mapper vectors (§4).
 - `internal/crawler/commit_test.go` — anti-flap / commit-machine sequences (§5).
 - `internal/domain/classify_test.go` — classification truth-table + flags + gold vectors (§6).
-- `internal/api/*_test.go` — `legacyStatus`, `renderChangelog`, shortuuid codec, badge renderer vectors (§7); golden parity + synthetic fixtures (§8).
-- `internal/api/testdata/parity/**`, `internal/api/testdata/badge/**` — recorded golden JSON and byte-exact SVG files.
+- `internal/api/*_test.go` — status-object, envelope, keyset cursor codec, RFC 9457, badge/CSV/feed/manifest serializer, and §5.9 reconstruction vectors (§7); native API contract + behavioral fixtures (§8).
+- `internal/api/testdata/badge/**`, `internal/api/testdata/feed/**` — byte-exact SVG golden files and Atom/JSON-Feed golden bodies.
 - `internal/postgres/*_integration_test.go`, `internal/crawler/*_integration_test.go` — testcontainers integration suite (§9, §10), all behind the `integration` build tag.
-- `testdata/parity/capture.go` (build tag `capture`) — the production recording harness (§8.1).
-- Make targets `test`, `test-integration`, `capture-fixtures`, `lint` (§11); per-package coverage bar (§12).
+- Make targets `test`, `test-integration`, `generate` (OpenAPI drift gate, §8.1), `lint` (§11); per-package coverage bar (§12).
 
-**Companion files:** 05-schema.md (all DDL under test — this file quotes SELECT/UPDATE/INSERT but never CREATE/ALTER), 02-observation-model.md (mapper/quorum semantics the §3–§4 vectors verify), 03-state-machine.md (commit algorithm the §5 sequences verify), 04-lifecycle-scheduling.md (claim query, sweep, lease fence the §9–§10 integration tests exercise), 06-ingest.md (Canonicalize, Tranco/campaign/resource/attribution acceptance the §2/§10 tables prove), 07-api.md (**authoritative** for every endpoint shape, error body, and route the §7–§8 fixtures assert against — this file never restates a response shape, it cites `07-api.md — §N`), 09-ops.md (CI wiring and the consolidated config-key registry — this file names config keys but does not define them), 00-overview.md (canonical sizing constants cited by name).
+**Companion files:** 05-schema.md (all DDL under test — this file quotes SELECT/UPDATE/INSERT but never CREATE/ALTER), 02-observation-model.md (mapper/quorum semantics the §3–§4 vectors verify), 03-state-machine.md (commit algorithm the §5 sequences verify), 04-lifecycle-scheduling.md (claim query, sweep, lease fence the §9–§10 integration tests exercise), 06-ingest.md (Canonicalize, Tranco/campaign/resource/attribution acceptance the §2/§10 tables prove), 07-api.md (**authoritative** for every endpoint shape, problem+json error body, and route the §7–§8 fixtures assert against — this file never restates a response shape; §7–§8 cite the design concept by the report section that decided it, which the coherence pass maps onto the rewritten `07-api.md — §N` anchors), 09-ops.md (CI wiring and the consolidated config-key registry — this file names config keys but does not define them), 00-overview.md (canonical sizing constants cited by name).
 
 ---
 
@@ -29,19 +34,19 @@ alone, citing the companion files only for the shapes under test.
 
 ### 1.1 Test taxonomy
 
-Three tiers, distinguished by Go build tags so `go test ./...` runs only the first:
+Two tiers, distinguished by Go build tags so `go test ./...` runs only the first:
 
 | Tier | Build tag | Needs | Runs in |
 |---|---|---|---|
-| **Unit** (vector tables, pure functions) | none | nothing (no DB, no network) | `make test`, every push |
+| **Unit** (vector tables, pure functions, serializer golden files) | none | nothing (no DB, no network) | `make test`, every push |
 | **Integration** (real Postgres/TimescaleDB) | `//go:build integration` | Docker (testcontainers) | `make test-integration`, CI + pre-merge |
-| **Capture** (record production goldens) | `//go:build capture` | network to `api.whynoipv6.com` | `make capture-fixtures`, manual/one-shot |
 
-Golden replay (comparing the new API against already-recorded `testdata/parity/*.json`)
-is a **unit** test — it reads committed files, needs no network, and gates every push.
-Only *recording* the goldens needs the network, and that is the `capture`-tagged harness
-(§8.1). Fixtures are committed to the repo; the production API is the frozen reference,
-so a golden is re-captured only when a maintainer deliberately re-baselines.
+There is **no** capture/replay tier: the API is served natively (no frozen production
+reference to record against). Contract fidelity is proven two ways, both offline: the
+committed serializer golden files (badge SVGs §7.6, Atom/JSON-Feed bodies §7.7, byte-exact,
+gating every push) and the **OpenAPI drift gate** (§8.1) — `openapi.yaml` regenerated into
+Go+TS with `git diff --exit-code`, plus Spectral/vacuum lint of the spec. A golden is
+re-baselined only when a maintainer deliberately changes the serializer and reviews the diff.
 
 ### 1.2 House style (all tiers)
 
@@ -59,8 +64,9 @@ so a golden is re-captured only when a maintainer deliberately re-baselines.
 - No global state between cases; each `t.Run` builds its own inputs. Integration tests
   get a fresh schema per test via a template-database clone (§9.1), never a shared mutable DB.
 - Every fixture file is UTF-8, LF line endings, and ends in a trailing newline; byte-exact
-  goldens (badge SVGs §7.4, pinned error bodies §8.3) are compared with `bytes.Equal`, not
-  string normalization.
+  goldens (badge SVGs §7.6, Atom/JSON-Feed bodies §7.7) are compared with `bytes.Equal`, not
+  string normalization. JSON response bodies (envelope §7.2, problem+json §7.4) are compared
+  with `cmp.Diff` after decode to `any` (key order / whitespace ignored), never byte-equal.
 
 ### 1.3 Consensus/mapper test seam (in-process loopback DNS)
 
@@ -309,7 +315,7 @@ conn=`unsupported` produced by rows 3/4 is downgraded to `error` if preflight is
 Row 5a is already preflight-gated inside the table. `error` outcomes (5b/5c) are **never**
 overridden by `P=supported`. On `supported` outcomes, assert the `scan_detail.details.conn`
 payload carries `source` (`"https"` row 1, `"http"` row 2) and `http_only` (true only row 2);
-`http_only` is payload-only and does not become a flag or alter `v6_only`.
+`http_only` is payload-only and does not become a flag or alter the confirmed `conn` dimension.
 
 ### 4.4 `ns` / `mx` / informational vectors (every row of the remaining-dimension table)
 
@@ -562,244 +568,362 @@ integration-verified in §10.2).
 ## 7. API serialization vectors (normative)
 
 Tests the pure serialization helpers in `internal/api`. Shapes are authoritative in
-07-api.md — these tables fix the *values*.
+07-api.md — these tables fix the *values*. Every wire field is `snake_case`; every status is
+the **real** 4-value enum (`supported`/`unsupported`/`no_record`/`not_applicable`) **or JSON
+`null`** — there is no `legacyStatus` 3-string projection, no zero-time encoding, no key
+renaming (design report §5.1). The single-serializer masking invariant (`error`/`inconsistent`
+never reach public output) replaces the deleted `legacyStatus` invariant and is asserted in
+§7.1.
 
-### 7.1 `legacyStatus` projection (07-api.md — §2.8 R1)
+### 7.1 Status-object serialization — `{value, since}` per dimension incl. `null`
 
-| name | input `*ipv6_status` | output string |
-|---|---|---|
-| nil_never_confirmed | nil | `no_record` |
-| not_applicable | `not_applicable` | `no_record` |
-| supported | `supported` | `supported` |
-| unsupported | `unsupported` | `unsupported` |
-| no_record | `no_record` | `no_record` |
+Each of the six dimensions serializes as a **status object** `{ "value": <enum|null>,
+"since": <ts|null> }` (design report §5.1; 07-api.md — domain status object). `value` is the
+4-value enum or `null` when never confirmed; `since` is the `*_since` column (05-schema.md —
+domain per-dimension `*_since`) or `null`. The serializer is pure over the confirmed columns.
 
-Negative invariant (property test over the enum + nil): `legacyStatus` output is always one of
-exactly `{"supported","unsupported","no_record"}` and **never** `not_applicable`, `error`,
-`inconsistent`, `unknown`, or empty string. Any future enum value must map or the test fails.
-
-### 7.2 `renderChangelog` ladder (07-api.md — §3.11; 16 rows)
-
-`renderChangelog(field, old, new, host) → (message, ipv6_status)`, defined only for
-`field ∈ {base,www,ns,mx}`, `old,new ∈ {supported,unsupported,no_record}`, `old ≠ nil`.
-`host = "dnb.no"`; for `field=www` the rendered name is `www.dnb.no`. `ipv6_status` is always
-`new`.
-
-| name | field | old→new | message |
+| name | dimension confirmed value | `*_since` | wire `{value, since}` |
 |---|---|---|---|
-| base_enabled_from_unsup | base | unsupported→supported | `IPv6 enabled for dnb.no` |
-| base_enabled_from_norec | base | no_record→supported | `IPv6 enabled for dnb.no` |
-| base_lost | base | supported→unsupported | `IPv6 lost for dnb.no` |
-| base_v4only | base | no_record→unsupported | `IPv4-only for dnb.no` |
-| base_no_dns | base | supported→no_record | `No DNS records found for dnb.no` |
-| www_enabled | www | unsupported→supported | `IPv6 enabled for www.dnb.no` |
-| www_lost | www | supported→unsupported | `IPv6 lost for www.dnb.no` |
-| www_v4only | www | no_record→unsupported | `IPv4-only for www.dnb.no` |
-| www_no_dns | www | supported→no_record | `No DNS records found for www.dnb.no` |
-| ns_enabled | ns | unsupported→supported | `IPv6 enabled nameserver for dnb.no` |
-| ns_degraded | ns | supported→unsupported | `Nameservers degraded to IPv4-only for dnb.no` |
-| ns_v4only | ns | no_record→unsupported | `IPv4-only nameservers for dnb.no` |
-| ns_no_ns | ns | supported→no_record | `No NS records found for dnb.no` |
-| mx_enabled | mx | unsupported→supported | `IPv6 enabled MX records for dnb.no` |
-| mx_degraded | mx | supported→unsupported | `MX records degraded to IPv4-only for dnb.no` |
-| mx_v4only | mx | no_record→unsupported | `IPv4-only MX records for dnb.no` |
-| mx_no_mx | mx | supported→no_record | `No Mail records found for dnb.no` |
+| base_supported | supported | 2024-11-03 | `{"value":"supported","since":"2024-11-03T00:00:00Z"}` |
+| www_unsupported | unsupported | 2025-05-10 | `{"value":"unsupported","since":"2025-05-10T00:00:00Z"}` |
+| mx_no_record | no_record | 2025-06-02 | `{"value":"no_record","since":"2025-06-02T00:00:00Z"}` |
+| www_not_applicable | not_applicable | 2024-01-01 | `{"value":"not_applicable","since":"2024-01-01T00:00:00Z"}` |
+| resources_never | NULL | NULL | `{"value":null,"since":null}` |
 
-That is the four "enabled" rows (each covering both `unsupported→supported` and
-`no_record→supported`) plus 12 others = the 16 distinct messages. Assert the two enabled
-variants per field render the identical string (the ambiguous-old collapse the phase-4 importer
-relies on, §8.5). Plus two passthrough rows: `field='legacy'` returns `(legacy_message,
-legacy_status)` verbatim, bypassing the ladder.
+**Masking invariant (property test over the observation enum + NULL — the trust wire rule,
+03 §1 / 05 enum registry):** a confirmed column is only ever `supported`/`unsupported`/
+`no_record`/`not_applicable`/NULL, so `error`/`inconsistent`/`unknown` **cannot** appear as a
+status `value` — the serializer has no case for them and a totality switch (§12) fails the
+build if one is added without a mapping. `since` is `null` **iff** `value` is `null`. Any
+serializer that would emit the string `error`, `inconsistent`, or `unknown` as a status value
+fails the §11 lint gate.
 
-**Coverage-filter proof (07-api.md — §3.12 / R5):** a property test feeds the ladder's input
-domain the full cross-product of `field ∈ {base,www,ns,mx,conn,resources}` × transitions incl.
-`not_applicable`, then asserts the SQL filter (quoted from 07) `WHERE old_value IS NOT NULL AND
-field IN ('base','www','ns','mx') AND old_value IN (...) AND new_value IN (...)` admits exactly
-the 16-row domain (plus `field='legacy'`), and that a row whose `(old,new)` collapse to the same
-string under R1 (e.g. `not_applicable`→`no_record` where the other side is already `no_record`)
-is omitted.
+**Informational-dimension masking (design report §5.3; advisory, never gates classification).**
+The four informational fields serialize latest-observation values through a public mask:
 
-### 7.3 shortuuid codec (07-api.md — §2.7)
-
-Round-trip both directions; encode output exactly 22 chars.
-
-| name | canonical UUID | token |
+| field | allowed wire values | masks to `null` when |
 |---|---|---|
-| live_campaign_1 | `baff94c3-c4b2-4f19-be66-3247250f7868` | `bHTMghm9txZFhwMKVCiBey` |
-| live_campaign_2 | `9b587e73-7694-46f7-b3dc-96f6a1c15317` | `VeT2mCvhzny4kAiQ9oLe2r` |
-| zero_uuid | `00000000-0000-0000-0000-000000000000` | `2222222222222222222222` |
+| `dnssec` | `supported`\|`unsupported`\|`no_record`\|`not_applicable`\|`null` | raw is `error`/`inconsistent`/`partial` |
+| `smtp` | same as `dnssec` | raw is `error`/`inconsistent`/`partial` |
+| `ptr` | above **plus** `partial` | raw is `error`/`inconsistent` |
+| `parity` | above **plus** `partial` | raw is `error`/`inconsistent` |
 
-For each: `encodeUUID(uuid) == token` (len 22) **and** `decodeUUID(token) == uuid`. Negative
-vectors (both → `404 {"error":"Invalid UUID"}` via the path-param handler, exact body):
+Assert `partial` is public **only** on `ptr`/`parity`; a `partial` on `dnssec`/`smtp` → `null`.
+`error`/`inconsistent` → `null` on all four. Observation-level richness (`error`/`inconsistent`)
+appears **only** inside the `evidence` object (design report §5.3, OPEN-3) — never as a status
+or informational value; the §8.4 native test proves it never leaks outside `evidence`.
 
-| name | path param | reason |
+### 7.2 Collection & single-resource envelope (`{items,page,meta}` / `{points,meta}`)
+
+The two sanctioned collection shapes (design report §3.4; 07-api.md — envelope). Serializer
+vectors over synthetic result sets:
+
+| name | shape | asserts |
 |---|---|---|
-| garbage_token | `not-a-token` | `-` outside base57 alphabet |
-| raw_uuid_in_path | `baff94c3-c4b2-4f19-be66-3247250f7868` | raw UUID not accepted (`-` outside alphabet) |
+| item_collection | `{items[], page, meta}` | top-level object (never a bare array); `page` = exactly `{next_cursor, prev_cursor, has_more}`; `meta` thin (`as_of`, `generation`, count, `license`) |
+| prev_cursor_present | `page` on page 1 | `prev_cursor` **always present**, `null` when no previous page |
+| bounded_set | campaign members / `/shame` / forward-resources | `page` all-`null` cursors + `has_more:false`; `meta.count` **exact** |
+| large_or_filtered | `/domains`, `/heroes`, country/asn-scoped | `meta.count_estimate` (never `count`); no exact count |
+| time_series | `{points[], meta}` | key is **`points`**, **no `page`**; `meta` carries `source` |
+| single_resource | resource object + sibling `meta` | object, not wrapped in `items`; `meta.as_of` present |
 
-Pin the version: `github.com/lithammer/shortuuid/v4` (v4.x); a v3 import would produce
-variable-length tokens and fail the len-22 assertion — the test *is* the version guard.
+Negative invariants: no collection ever serializes as a bare top-level array; the legacy
+`{"data":[…]}` search envelope never appears; a count is **never** an `items`-sibling (only in
+`meta`); `points` is the only alternate collection key (never both `items` and `points`).
 
-### 7.4 Badge renderer golden SVGs (07-api.md — §5)
+### 7.3 Keyset cursor codec (design report §4.2)
 
-Six byte-exact golden files `internal/api/testdata/badge/{gold,supported,partial,unsupported,inactive,unknown}.svg`,
-each rendered from the geometry table (07-api.md — §5; `W,MW,TX,TL` per message) with the
-message color from the selection table. The renderer is a pure `(classification, gold, disabled)
-→ []byte`; assert `bytes.Equal` against the golden. Classification→badge mapping vectors:
+The cursor is an **opaque base64url token** encoding `{v, g, s, f, k}` (schema version, crawl
+generation, sort key, filter fingerprint, seek tuple). Pure encode/decode helpers.
 
-| name | row (classification, gold, disabled) | message | color |
+| name | sort | seek tuple `k` | ordering under test |
 |---|---|---|---|
-| badge_gold | hero, gold=true, false | `gold` | `#d4af37` |
-| badge_supported | hero, gold=false, false | `supported` | `#4c1` |
-| badge_partial | partial, —, false | `partial` | `#dfb317` |
-| badge_unsupported | sinner, —, false | `unsupported` | `#e05d44` |
-| badge_inactive | inactive, —, false | `inactive` | `#9f9f9f` |
-| badge_unknown_class | unknown, —, false | `unknown` | `#9f9f9f` |
-| badge_unknown_norow | (no row) | `unknown` | `#9f9f9f` |
-| badge_unknown_disabled | (any), —, **disabled=true** | `unknown` | `#9f9f9f` |
+| rank_ordering | `rank` | `[rank, id]` | `(rank, id)` strict total order; `rank IS NOT NULL` scope |
+| host_ordering | `host` | `[host]` | `host` alone unique — no tiebreaker, no NULL (campaign members) |
+| dependents_ordering | `rank_nulls_last` | `[is_rank_null, rank, id]` | null-flag-first key; NULL-rank tail not dropped |
 
-The three `unknown`-message rows (no row, unknown classification, disabled) all render the
-**same** `unknown.svg` byte-for-byte. Handler-level badge tests (input handling, 200-always,
-`.svg`-less 404, invalid-host 400) are in §10.6.
+Assertions:
+- **Round-trip:** `decode(encode(c)) == c` for each ordering; the token is base64url and
+  contains no human-readable rank (**opacity** — a client cannot parse rank out of it).
+- **Generation re-anchor:** a cursor whose `g` ≠ current crawl generation is accepted and
+  re-seeks to the same `last_rank` in the current generation (rank is monotonic) — not rejected.
+- **Filter-fingerprint rejection:** a cursor whose `f` no longer matches the request's
+  normalized filter set → `400 invalid-parameter` (§7.4). The cursor is valid only for the
+  sort+filter it was minted under.
+- **Garbage token** (non-base64url / undecodable / wrong `v`) → `400 invalid-parameter`.
+- **`after_rank` / `around_rank` deep-link parse** (rank-ordered views only): `?after_rank=N`
+  → `WHERE rank > N ORDER BY rank`; `?around_rank=N` → centered window. Assert the `sort=host`
+  ordering exposes **no** random-access param (forward/back cursor only) and that `after_rank`
+  on a non-rank sort is rejected. Semantics are "global rank ≥ N, then filtered" — **not**
+  "the Nth matching row" (design report §4.2, the honest scope of the claim).
+
+The deep-page **constant-cost** and **stable-order-under-a-mutating-set** properties need a
+live DB and are the integration test §10.7 — this section covers only the pure codec.
+
+### 7.4 RFC 9457 `problem+json` shapes (design report §3.5)
+
+Every 4xx/5xx is `application/problem+json`. One vector per problem type; assert `Content-Type`
+media-type prefix `application/problem+json`, the `status` member **equals** the HTTP status
+line, and `type`/`title` match the fixed registry:
+
+| name | `type` (rel. `/problems/`) | HTTP | trigger under test |
+|---|---|---|---|
+| not_found | `not-found` | 404 | unknown host/country/asn/campaign/resource |
+| invalid_parameter | `invalid-parameter` | 400 | malformed cursor / bad `format` / malformed badge host |
+| validation_error | `validation-error` | 422 | enum filter value not in the enum; carries `errors:[{field,reason}]` |
+| scope_required | `scope-required` | 422 | a **valid** `flag=`/per-dimension filter with no indexed scope; `detail` names the satisfying scope params |
+| rate_limited | `rate-limited` | 429 | `POST /check` over quota; carries `retry_after` + `Retry-After` header |
+| not_acceptable | `not-acceptable` | 406 | `Accept` unsatisfiable on a JSON endpoint |
+| unsupported_media_type | `unsupported-media-type` | 415 | `POST /check` body not JSON |
+| manifest_unavailable | `manifest-unavailable` | 503 | `/datasets` manifest missing/unparseable (the only 503) |
+| internal_error | `internal-error` | 500 | unexpected fault; `detail` generic, never a stack trace |
+
+Assert the deliberate `validation-error` (value not in enum) vs `scope-required` (valid value,
+needs an indexed companion) **split** — a bare `?flag=broken_v6` and a bare `?mx=unsupported`
+both return `scope-required`, not `validation-error`. Negative invariant (replaces the deleted
+byte-exact legacy error bodies): **no** handler ever emits a `200`-with-error-body or the legacy
+`{"error":"…"}` envelope; every error is a problem document with the matching status code.
+
+### 7.5 CSV export rows (design report §6.5)
+
+`?format=csv` on the list endpoints (`/domains*`, `/countries`, `/asns`, `/changelog`, search).
+`Content-Type: text/csv; charset=utf-8`, `Content-Disposition: attachment`. A defined column
+set per list — for `/domains` the summary-row columns (`host, rank, kind, parent,
+classification, class_flags, gold, base, www, ns, mx, conn, resources, country, asn,
+last_checked_at`). Golden CSV vector:
+
+| name | row | asserts |
+|---|---|---|
+| csv_header | header line | exact column order + names (snake_case) |
+| csv_hero | a `hero` domain | `class_flags` joined (pipe-separated), statuses are the enum strings |
+| csv_null_rank | a `rank:null` campaign/subdomain row | `rank` cell **empty**, never `0` |
+| csv_null_status | `resources` never confirmed | `resources` cell **empty**, never `no_record` |
+
+The stable `after_rank`/cursor-anchored URL reproduces the same view; "give me everything" is
+steered to the static datasets (§7.8 manifest / design report §6.3), not deep CSV pagination.
+
+### 7.6 Badge renderer golden SVGs — public status vocabulary (design report §6.2)
+
+Six byte-exact golden files `internal/api/testdata/badge/{supported,gold,partial,no-ipv6,inactive,unknown}.svg`,
+one per badge variant. Copy is the **public status vocabulary**, never ladder branding — a
+README badge never says "sinner"/"hero" (design report §6.2). The renderer is a pure
+`(classification, gold, disabled) → []byte`; assert `bytes.Equal` against the golden. The
+`(classification+gold) → message/color` mapping is normative (07-api.md — badge is authoritative
+for exact geometry/hex; the shields color names below are from the report):
+
+| name | input `(classification, gold, disabled)` | SVG message | shields color | `.json` `isError` |
+|---|---|---|---|---|
+| badge_supported | hero, false, false | `IPv6: supported` | `brightgreen` | false |
+| badge_gold | hero, **true**, false | `IPv6: gold` | `brightgreen` (gold accent) | false |
+| badge_partial | partial, —, false | `IPv6: partial` | `yellow` | false |
+| badge_no_ipv6 | sinner, —, false | `IPv6: no IPv6` | `red` | false |
+| badge_inactive | inactive, —, false | `IPv6: inactive` | `lightgrey` | false |
+| badge_unknown_class | unknown, —, false | `IPv6: unknown` | `lightgrey` | **true** |
+| badge_unknown_norow | (no domain row) | `IPv6: unknown` | `lightgrey` | true |
+| badge_unknown_disabled | (any), —, **disabled=true** | `IPv6: unknown` | `lightgrey` | true |
+
+The three `unknown` rows (no row, unknown classification, disabled) render the **same**
+`unknown.svg` byte-for-byte. Assert the host label is **XML-escaped** into the SVG (markup-
+injection guard). The shields **`.json` variant** (`GET /badge/{host}.json`) uses shields.io's
+sanctioned **camelCase** field names (`schemaVersion`/`cacheSeconds`/`isError`) — the one wire
+camelCase exception (design report §3.3/§6.2); a vector asserts `message`/`color`/`isError` come
+from the table above. Handler-level badge tests (200-always on any valid host, `.svg`-less
+route-miss 404, invalid-host 400 as `problem+json`, `Cache-Control`) are in §10.6.
+
+### 7.7 Change-feed serializers — Atom + JSON Feed 1.1 (design report §6.4)
+
+Byte-exact golden feed bodies `internal/api/testdata/feed/**`, rendered by a pure serializer
+from a fixture set of structured `changelog` rows (`host, ts, field, old_value, new_value`).
+Every feed is a **fixed recent window of the latest 50 transitions, no pagination**. The
+four-scope × two-format matrix (global / per-domain / per-campaign / per-country × Atom /
+JSON-Feed) is mechanically generated from one fixture set:
+
+- **Atom (RFC 4287, `application/atom+xml`):** golden validates as well-formed XML; `<id>` =
+  the scope's canonical extension-less API URL; `<updated>` = `max(ts)` in the window;
+  `<title>` = the scope name; `<link rel="self">` = the `.atom` URL, `<link rel="alternate">`
+  = the extension-less JSON list URL; per-entry `<id>` = the composite `(host, ts, field)`.
+- **JSON Feed 1.1 (`application/feed+json`):** golden validates against the 1.1 schema;
+  top-level `version` (`https://jsonfeed.org/version/1.1`), `title`, `home_page_url`,
+  `feed_url`, `items[]`; per item `id`/`date_published` (`ts`, RFC 3339) and a `content_text`
+  **derived server-side at render time** from `(field, old_value, new_value)` freshly (e.g.
+  "example.com now supports IPv6 on www") — **not** from the deleted frozen 16-row message
+  table. The item id is the composite `(host, ts, field)`, never a synthetic epoch id.
+
+Assert the human `title`/`content_text` is generated from the structured tuple (no `renderChangelog`
+ladder), and that `conn`/`resources`/`not_applicable` transitions **appear** in feeds (the deleted
+R5 coverage filter is gone). The scoped-feed 50-row window cap is proven behaviorally in §10.7.
+
+### 7.8 `manifest.json` schema (design report §6.3)
+
+The datasets index (`GET /datasets`) serialized/validated against the pinned schema:
+`schema_version` (int), `generated_at`, `generation`, `license`, `attribution`, `latest{date,
+path, datapackage_url}`, `snapshots[]{date, path, tiers, formats, datapackage_url,
+sha256sums_url}`. This schema lives in the OpenAPI `components`, so the §8.1 drift gate
+contract-tests it like any other response. Vectors:
+
+| name | asserts |
+|---|---|
+| manifest_roundtrip | a golden `manifest.json` decodes into the type and re-encodes identically |
+| manifest_schema | the golden validates against the OpenAPI `components` schema |
+| manifest_missing | a missing/unparseable `$DATASETS_DIR/manifest.json` → `503 manifest-unavailable` problem (§7.4) |
+
+Per-snapshot `datapackage.json` / `SHA256SUMS` are static nginx artifacts (design report §6.3),
+not API responses — out of scope for these serializer vectors.
+
+### 7.9 Changelog-reconstruction for the history trajectory (design report §5.9)
+
+The per-domain history trajectory (`GET /domains/{host}/history`) is **reconstructed from the
+`changelog`**, not read from the raw `scan` hypertable (design report §5.9 — the trust-consistent
+sourcing rule). Pure function: given a host's ordered `changelog` rows, a `[from,to]` window, and
+an `interval` (`daily`/`weekly`), replay the transitions to reconstruct the confirmed
+per-dimension state as of each point, then apply the deterministic classification ladder
+(§6 / 03 §10) to stamp `classification` per point.
+
+| name | input | expected `points[]` |
+|---|---|---|
+| recon_single_flip | one `www: unsupported→supported` at 2026-07-03 | pre-flip days carry `www:"unsupported"`, post-flip `www:"supported"`; `classification` recomputed each day |
+| recon_multi_dim | interleaved `base`/`mx` transitions | each day reflects the confirmed state as of that day; `classification` follows the ladder |
+| recon_null_dim | `resources` never in changelog | `resources: null` on every point (never `no_record`) |
+| recon_latency_overlay | latency from `scan` | `latency_v4_ms`/`latency_v6_ms` are the **only** values taken from `scan` |
+
+Assert `error`/`inconsistent` **never** appear in any point (reconstruction is over confirmed
+transitions only — the changelog carries only the 4-value enum), proving the trajectory is
+trust-consistent and cannot leak observation-level noise.
 
 ---
 
-## 8. Parity-fixture plan
+## 8. Native API contract & behavioral vectors
 
-Golden fixtures prove the new API is byte/JSON-compatible with the frozen production API for
-every legacy endpoint, plus synthetic fixtures for the branches production can never emit.
-Endpoint **shapes** are authoritative in 07-api.md — this section owns the fixture files and the
-capture/replay mechanism, never a response shape.
+There is **no** parity/golden-capture plan: the frozen-frontend compat surface is dropped and
+there is no production reference to record against (design report §10.6). This section owns the
+native contract fixtures — the OpenAPI drift gate and the behavioral tests that prove the real
+status/classification/gold/flags model reaches the wire correctly. Endpoint **shapes** are
+authoritative in 07-api.md; this section never restates a response shape, it cites the design
+concept and 07.
 
-### 8.1 Capture method (named)
+### 8.1 OpenAPI contract / drift gate (design report §8)
 
-Production `https://api.whynoipv6.com` is the live frozen reference. The recorder is a
-`//go:build capture` test, `testdata/parity/capture.go`, run by `make capture-fixtures`:
+`openapi.yaml` (OpenAPI **3.0.3**, hand-authored at the repo root) is the single source of
+truth; both sides generate from it and CI blocks drift.
 
-1. For each legacy endpoint in 07-api.md — §2.1 route inventory (classes marked **L**), issue
-   an HTTP `GET` against `$WHYNOIPV6_PROD_BASE` (default `https://api.whynoipv6.com`) using a
-   fixed, curated set of **stable** path params (below) and record the raw response body +
-   status + `Content-Type` prefix into `testdata/parity/<slug>.golden.json`, where `<slug>`
-   encodes method+path+params. Each golden file carries a header comment with the production
-   handler `file:line` (the `x-production-source` from 07-api.md — §8), so a capture is
-   mechanically re-runnable and auditable.
-2. Curated stable params (chosen because they resolve on the production DB and are unlikely to
-   churn): domain `dnb.no` (a known hero/partial), a known sinner from the `top_shame` list
-   (`github.com` per 07-api.md history-import list), country `NO`, a live campaign UUID
-   `bHTMghm9txZFhwMKVCiBey` (from §7.3), an ASN with v6 domains, and the garbage query
-   `zzzzqqqq` for zero-result rows.
-3. Goldens are committed. The production API is not called again unless a maintainer re-baselines
-   (`make capture-fixtures`); the diff on re-baseline is reviewed like any code change.
+- **Drift gate (`make generate` + `git diff --exit-code`):** `make generate` runs oapi-codegen
+  (Go strict-server interface + types + request validation) and openapi-typescript (TS types);
+  CI regenerates and fails if the working tree differs — generated code that drifts from the
+  spec is a build failure. Assert `go build ./...` compiles the generated strict interface and
+  that every handler implements it (a compile-time contract, not a runtime test).
+- **Spec lint (Spectral/vacuum):** the spec itself is linted, enforcing the `snake_case` wire
+  rule (§3.3), the `{items,page,meta}` / `{points,meta}` envelope shapes (§7.2), and the
+  `application/problem+json` error schema (§7.4). A spec that violates these fails the gate.
+- **Components coverage:** the keyset cursor grammar (§7.3), the RFC 9457 problem shapes (§7.4),
+  the badge/feed representations (§7.6/§7.7), and the `manifest.json` schema (§7.8) are all in
+  OpenAPI `components`, so the drift gate contract-tests them like any other response.
 
-Replay is a plain unit test (`internal/api/parity_test.go`, no build tag): spin the new API
-handler over a **seeded** integration DB (§9) loaded with fixture rows chosen to reproduce the
-captured entities, issue the same request, and compare.
+This gate replaces the deleted "API-compat parity testing against the old backend" workstream
+(design report §10.7). Wiring lives in 09-ops.md (CI); this file states what it must cover.
 
-### 8.2 Comparison modes (per 07-api.md pins)
+### 8.2 Tier-path ⇄ `/domains?class=` equivalence (design report §5.4)
 
-- **JSON-equal** (default): decode both bodies to `any`, `cmp.Diff` — key order and whitespace
-  ignored. Used for all list/detail endpoints.
-- **byte-equal**: exact bytes. Used only where 07 pins it (badge SVGs §7.4; the pinned 404/error
-  bodies §8.3). `GET /` health is the one documented JSON-equal-not-byte-equal exception (07-api.md
-  — §3.1: production emitted `{"message": "ok"}` with a space; the new backend emits canonical JSON).
-- **Content-Type**: assert the media-type prefix only (`application/json`), never the `charset`
-  parameter (07-api.md — §1 decision).
-- **Additive-key strip**: `GET /domain/{domain}` comparisons strip the two additive keys
-  (`subdomains`, `subdomain_count`) before diffing against the production capture (07-api.md — §3.6).
+The short tier collections are presets over the general `/domains` filter. Assert each tier path
+returns **identical** `items` + envelope to the equivalent `/domains?class=` query against the
+same seeded DB (same keyset cursor, same order):
 
-One golden replay case per **L** endpoint in the route inventory (07-api.md — §2.1), source
-file named per endpoint in 07-api.md — §3.
+| tier path | equivalent `/domains` query |
+|---|---|
+| `GET /heroes` | `GET /domains?class=hero` |
+| `GET /sinners` | `GET /domains?class=sinner` |
+| `GET /gold` | `GET /domains?gold=true` |
+| `GET /almost` | the "almost there" preset (partial, one step from hero) |
+| `GET /mail` | `GET /domains?class=hero&mx=supported` (scoped so `mx=` is indexed via `class`) |
 
-### 8.3 Zero-result 404 / `[]`-cleanup fixtures (07-api.md — §2.11)
+Assert the filter param is **`class`** (not `classification`), that there is **no `/v1`** URL
+segment (served at root), and that tier paths accept the same additional filters — `GET
+/sinners?country=no` ≡ `GET /domains?class=sinner&country=no`, and the scoped `GET
+/countries/{code}/domains?class=sinner` also resolves.
 
-One fixture per row of the kept-404 table (07-api.md — §2.11), asserting status **and** exact
-body (byte-equal), because production's capitalization differs per endpoint:
+### 8.3 Membership & visibility (native)
 
-| endpoint (garbage input) | status | exact body |
-|---|---|---|
-| `GET /domain/search/zzzzqqqq` | 404 | `{"error":"no domains found"}` |
-| `GET /campaign/search/zzzzqqqq` | 404 | `{"error":"No domains found"}` (capital N) |
-| `GET /campaign/{valid}?offset=10000` | 404 | `{"error":"Campaign not found"}` |
-| `GET /campaign/{valid}/nosuchhost.example` | 404 | `{"error":"Domain not found"}` |
-| `GET /changelog/nosuchhost.example` | 404 | `{"error":"No changelog entries found for nosuchhost.example"}` |
-| `GET /changelog/campaign/{valid-uuid-no-rows}` | 404 | `{"error":"No changelog entries found for campaign <decoded-36-char-uuid>"}` |
-| `GET /changelog/campaign/{uuid}/{domain-no-rows}` | 404 | `{"error":"No changelog entries found for campaign <shortuuid-as-given> and domain <raw-domain>"}` |
+Reframed from the deleted legacy membership synthetics onto the real model:
 
-Plus the `[]`-cleanup rows returning `200 []` on zero rows (each endpoint in the 07-api.md — §2.11
-list), and explicitly `GET /metric/asn/search/zzzzqqqq → 200 []`. The 404-message endpoints assert
-which uuid form appears: `/changelog/campaign/{uuid}` echoes the **decoded** canonical 36-char
-UUID; `/changelog/campaign/{uuid}/{domain}` echoes the **shortuuid as given**; the echoed domain
-is the **raw** path param, not the canonical form (07-api.md — §2.5).
+- **Membership ladder:** an entity confirmed `base=supported, www=unsupported` appears on `GET
+  /almost` carrying `www_missing` in `class_flags`, and **not** on `GET /heroes`; a confirmed
+  `base=unsupported` appears on `GET /sinners` and not `/almost`. Repeat for the
+  `/countries/{code}/domains?class=sinner` vs `?class=hero` pair.
+- **Visibility:** a `disabled=true` domain appears on **no** list, feed, stats, or search
+  response and returns `404 not-found` on `GET /domains/{host}`; a `disabled=true` campaign
+  returns `404` on every UUID route and vanishes from `GET /campaigns` and its changelog feed; a
+  `rank IS NULL` entity never appears on a ranked list (top-level `/domains` is `WHERE rank IS
+  NOT NULL AND NOT disabled`, design report §4.1) but resolves on `GET /domains/{host}` and via
+  its sub-collections (`/campaigns/{uuid}/domains`, `/domains/{host}/subdomains`).
+- **Zero-result is `200`, not `404`** (design report §3.6): a search with no matches, a filter
+  selecting nothing, and paging past the end all return `200` with empty `items` — the legacy
+  bug-compatible 404-on-zero-results is deleted. `404` is reserved for an addressed entity that
+  does not exist.
 
-### 8.4 Synthetic fixtures — branches production never produces
+### 8.4 Trust-wire masking (native) — `error`/`inconsistent` never leak
 
-Production only ever emitted `supported|unsupported|no_record` and never the 4-value enum's
-`not_applicable`/`error`/`inconsistent`, so these are hand-built DB states + expected responses,
-keyed to the 07-api.md rule they prove:
+Seed `scan`/`scan_detail` rows carrying `error`/`inconsistent` per-dimension observations, then
+assert **no** list, detail, feed, changelog, or history response body ever contains the strings
+`error`, `inconsistent`, or `unknown` as a status/informational value — they appear **only**
+inside the nested `evidence` object (design report §5.3, OPEN-3; `?include=evidence`). This is
+the native successor to the deleted `legacyStatus` projection: the wire carries the real 4-value
+enum + `null`, and observation-level richness is confined to `evidence`. Compose with §7.1
+(status-object masking) and §7.9 (reconstruction never emits `error`/`inconsistent`).
 
-- **R1 projection (07-api.md — §2.8):** a `domain` row with `www_status='not_applicable'`,
-  `mx_status=NULL` → `GET /domain/{domain}` serializes both as `"no_record"`; a campaign
-  composite row and a changelog `ipv6_status` likewise. Assert no legacy body ever contains the
-  strings `not_applicable`, `error`, `inconsistent`, `unknown`.
-- **R2 log filter (07-api.md — §2.8):** seed `scan` rows for one domain mixing definitive and
-  `error`/`inconsistent` per-dimension values; `GET /domain/{domain}/log` returns **only** the
-  rows where none of base/www/ns/mx is `error`/`inconsistent` (quote the R2 SELECT from 07),
-  each surviving field passed through R1, `id = extract(epoch from ts)::bigint`, capped at 90.
-  Same for `GET /campaign/{uuid}/{domain}/log`.
-- **R3 timestamp mapping (07-api.md — §2.8):** a domain with `base_since=NULL` serializes
-  `ts_aaaa: "0001-01-01T00:00:00Z"` (Go zero time), no fallback substitution; each `ts_*` key
-  maps to its source column per the R3 table.
-- **R4 `v6_ready` (07-api.md — §2.8):** a subdomain-heavy campaign member with
-  `www_status='not_applicable'` counts as `v6_ready` when `base='supported' AND ns='supported'`;
-  a member with `www_status=NULL` does **not**. Assert `GET /campaign` `count`/`v6_ready` and the
-  composite `{campaign}` object.
-- **Membership synthetics (07-api.md — §9 #6):** an entity confirmed `base=supported,
-  www=unsupported` appears in `GET /domain/almost` (with `www_missing` in `class_flags`) and
-  **not** in `GET /domain`; one confirmed `base=unsupported` appears in `GET /domain` and not in
-  `/domain/almost`. Repeat for the `/country/{code}/sinners` vs `/country/{code}/heroes` pair.
-- **Visibility synthetics (07-api.md — §9 #7):** a `disabled=true` domain appears on **no** list,
-  feed, stats, or search response and 404s on `GET /domain/{domain}`; a `disabled=true` campaign
-  404s on every UUID route and vanishes from `GET /campaign` and `GET /changelog/campaign`; a
-  `rank IS NULL` entity never appears on a ranked list but resolves on `GET /domain/{domain}`.
-- **RealIP / CORS / rate-bucket trio (07-api.md — §1.8):**
-  1. `GET /ip` with header `X-Real-IP: 2001:db8::7` → body `{"ip":"2001:db8::7"}` (not `::1`) —
-     guards the frontend IPv4-banner check and the §5.3 per-IP bucket.
-  2. `OPTIONS /check` with `Origin: https://whynoipv6.com` and
-     `Access-Control-Request-Method: POST` → 2xx with `Access-Control-Allow-Origin` set and
-     `POST` in `Access-Control-Allow-Methods`.
-  3. Two `POST /check` with different `X-Real-IP` values consume **different** rate-limit
-     buckets (one exhausting its bucket does not 429 the other).
-- **`GET /metric/overview` (07-api.md — §3.17):** built from the latest `stats_global_daily` row,
-  array-of-one, all eight `data` keys present, `time` = the row's `day` as midnight-UTC RFC3339;
-  a fixture proving the seed day-0 row makes the endpoint non-empty on first boot.
+### 8.5 RealIP / CORS / rate-bucket trio (design report §5.12, §7.3)
 
-### 8.5 Changelog byte-equality import gate (phase-4)
+Kept from the original RealIP/CORS/rate-bucket trio, aligned to the redesigned surface:
 
-The single most important parity gate (08-migration-cutover.md — §6.6 / §11 Gate G1 defines it
-and delegates the fixture mechanics here; the forward render is 07-api.md — §3.11
-`renderChangelog`). Fixture: a set of production `changelog`/`campaign_changelog` rows
-`(message, ipv6_status)` covering every production message string (the 16 forward strings +
-their ambiguous-old collapses + at least one unmappable row). Run the importer's reverse-map +
-cross-check, then for **every** imported row assert:
+1. `GET /ip` with header `X-Real-IP: 2001:db8::7` → body echoes `{ip, family}` with
+   `ip=2001:db8::7` and the IPv6 family marker (not `::1`); an IPv4 `X-Real-IP` echoes the v4
+   family marker. (07-api.md authoritative for the exact `family` encoding.) Guards the frontend
+   IPv4-banner check and the per-IP rate bucket.
+2. `OPTIONS /check` with `Origin: https://whynoipv6.com` and `Access-Control-Request-Method:
+   POST` → 2xx with `Access-Control-Allow-Origin` set and `POST` in `Access-Control-Allow-Methods`.
+3. Two `POST /check` with different `X-Real-IP` values consume **different** rate-limit buckets
+   (one exhausting its bucket does not 429 the other); two IPs **in the same `/64`** share a
+   bucket (the `/64`-prefix keying, design report §7.3). Breach → `429 rate-limited` problem
+   (§7.4) + `Retry-After`.
 
-```
-renderChangelog(field, old_value, new_value, host)  ==  (original message, original ipv6_status)   // byte-equal
-```
+### 8.6 Diff endpoint (OPEN-7, design report §6.6)
 
-or, for rows routed to the escape hatch, the `field='legacy'` passthrough
-`(legacy_message, legacy_status)` byte-equals the original. Specific cases:
+`GET /diff?from=&to=&scope=global|country|campaign` reads the **`changelog`** (authoritative
+confirmed transitions), **not** a difference of two `stats_*` snapshots — so it reports *which*
+domains changed. Seed changelog rows where one domain gains `hero` and another loses it in the
+window; assert the `added_to_hero` / `lost_hero` lists **name the domains** (not just net
+counts). `scope=country`/`campaign` filters to that scope; an empty window → `200` with empty
+lists (not `404`). (Exact shape settles during OpenAPI authoring — 07-api.md authoritative.)
 
-- Each of the 16 forward messages reverse-maps to the pattern's `(field, old, new)` and re-renders
-  identically; the two `IPv6 enabled for …` and the `No … records found` collapses both re-render
-  their single string regardless of which `old` the importer canonically recorded (`old='unsupported'`
-  by rule) — the ambiguous-old render-safety proof.
-- A row whose stored `ipv6_status` disagrees with the derived `new_value`, a row matching no
-  pattern, and a row with `ipv6_status` outside the three legacy strings each route to
-  `field='legacy'` and render verbatim.
-- A PK collision `(domain_id, ts, field)` between the two source tables: value-identical → one kept;
-  differing → `ts` bumped +1µs until unique.
+### 8.7 Mandates & campaign tags (OPEN-12, design report §6.6)
 
-This gate is what makes phase-4's "old entries render identically" verification unconditional.
+The mandate/tag capability on campaigns (`campaign.tags` / `campaign_tag`, 05-schema.md — campaign
+tags) plus a `?tag=` filter and a `/mandates` surface:
+
+- Seed campaigns with tags; `GET /campaigns?tag=<tag>` returns **only** tagged campaigns; an
+  untagged campaign is absent; an unknown tag → `200` empty `items` (not `404`).
+- `GET /mandates` lists the mandate-tagged campaigns with their citation metadata.
+- The campaign resource (§5.7) carries the tag/mandate field on the wire.
+
+### 8.8 `tld` / provider filter + pivot (design report §5.3a, §5.6)
+
+The domain resource exposes **`tld`** and the DNS-provider / hosting-CDN provider fields
+(05-schema.md — domain `tld` + `ns_host → provider` mapping + hosting/CDN tag). Assert:
+
+- `?tld=` and `?provider=` filters on `/domains` obey the **same indexed-scope guardrail** as
+  `flag=`/per-dimension filters (§7.4) — a bare unscoped `?tld=`/`?provider=` over 1M rows →
+  `422 scope-required`; combined with `class`/`country`/`asn` it is accepted.
+- The **DNS-provider league table** `GET /providers` + `GET /providers/{id}/domains` (OPEN-4)
+  exposes binary inclusion + counts only (no scores); the domains sub-list is keyset-paginated
+  with a `count_estimate`.
+- League-table pivots (tld / provider) are read from **precomputed counters**, never a
+  request-time `GROUP BY domain` (design report §4.3 — no live aggregation).
+
+### 8.9 Stats overview & time-series (design report §5.10)
+
+Reframed from the deleted `/metric/overview`: the adoption overview is a **`{points,meta}`**
+time-series (§7.2), built from `stats_global_daily`; a fixture proving the seed day-0 row makes
+the endpoint non-empty on first boot. The country/asn/campaign `/stats` time-series use the same
+`points` envelope. There is **no `/metric` singular** path and no synthetic array-of-one
+`data`-key shape. (07-api.md authoritative for the exact stats endpoint path + point columns.)
 
 ---
 
@@ -835,8 +959,15 @@ wiring for this target is 09-ops.md's concern (this file does not own it).
 3. `SELECT count(*) FROM country` = 251; sentinel rows `asn.number = 0` and `country.code = 'UN'`
    return exactly one each; `SELECT count(*) FROM stats_global_daily` = 1 (seed day-0 row).
 4. `migrate down` to 0 then `up` again is green (down migrations are reversible).
-5. CHECK-constraint negatives (05-schema.md — §13 #6): inserting a native `changelog` row with
-   `old_value NULL`, or a `field='legacy'` row with `legacy_message NULL`, fails.
+5. Constraint negatives (05-schema.md — §13 #6): inserting a `changelog` row with `old_value
+   NULL` (or `new_value NULL`) fails the NOT NULL constraint — the legacy `legacy_message`/
+   `legacy_status` columns and the three `changelog_*_chk` CHECK constraints are dropped and
+   `old_value`/`new_value` are NOT NULL outright (design report §9). Inserting a `domain` with
+   `created_by='import'` fails — `import` is dropped from the `created_by` enum (no history
+   import, OPEN-9). `changelog.field` is documented `TEXT` carrying only
+   `base|www|ns|mx|conn|resources` (05-schema.md — changelog table): `legacy` is absent from the
+   writer's vocabulary, with no legacy columns or CHECK constraints remaining (there is no
+   DB-level `field` enum, so this is a writer invariant, not an insert-time constraint).
 6. `sqlc generate` runs clean against the three up-files and the full `db/query/` set; generated
    code compiles (a `go build ./...` gate, not a runtime test).
 
@@ -931,10 +1062,12 @@ Both need `-race` and two concurrent workers against one live DB.
 Endpoint shapes/bodies are authoritative in 07-api.md — §6; this scenario drives the full
 job lifecycle against a live DB + a fake engine (returns a scripted `ScanResult`):
 
-- **POST validation:** invalid host → 400 `{"error":"invalid_host",...}`; reserved TLD
-  (`.internal`, `.local`, RFC 2606) → 400; IP literal → 400.
-- **Rate limit:** the 11th `POST /check` from one `X-Real-IP` within an hour → 429
-  `{"error":"rate_limited","scope":"ip",...}` + `Retry-After`; the 501st global → `scope:"global"`.
+- **POST validation (RFC 9457 problem+json, §7.4):** invalid host → `400 invalid-parameter`;
+  reserved TLD (`.internal`, `.local`, RFC 2606) → `400 invalid-parameter`; IP literal → `400
+  invalid-parameter`; a non-JSON body → `415 unsupported-media-type`.
+- **Rate limit:** the 11th `POST /check` from one `X-Real-IP` within an hour → `429 rate-limited`
+  (problem+json with `retry_after`) + `Retry-After` header; the 501st global → the same
+  `rate-limited` type (global scope). Assert the problem `status` member equals `429`.
 - **Dedupe domain-side:** an existing `domain` row with `last_checked_at` within `dedupe_window`
   (1h) returns `200` with `cached:true` and `id:null` from the latest `scan_detail`, creating **no**
   `check_job` row.
@@ -957,14 +1090,42 @@ job lifecycle against a live DB + a fake engine (returns a scripted `ScanResult`
 Config keys `live_check.workers`, `job_budget`, `reclaim_after`, `fail_after`, `retention`,
 `rate_ip_per_hour`, `rate_global_per_hour`, `dedupe_window` (registry: 09-ops.md).
 
-### 10.6 Badge handler (07-api.md — §5)
+### 10.6 Badge handler (design report §6.2)
 
-Against a live DB with seeded rows: a hero-gold host → `200` `image/svg+xml` byte-equal to
-`gold.svg`; unknown host → `200` gray `unknown`; disabled host → `200` gray `unknown` (differs
-from `GET /domain/{domain}`'s 404-on-disabled); `xn--`-input and the equivalent Unicode input
-render the **same** badge (Canonicalize folds them); `.svg`-less path (`/badge/dnb.no`) → `404`
-(route miss); invalid host → `400` `{"error":"invalid_host",...}` (JSON, not SVG); response
-carries `Cache-Control: public, max-age=3600`.
+Against a live DB with seeded rows: a hero-gold host → `200` `image/svg+xml` byte-equal to the
+`IPv6: gold` golden (§7.6); unknown host → `200` gray `IPv6: unknown`; disabled host → `200`
+gray `IPv6: unknown` (differs from `GET /domains/{host}`'s 404-on-disabled); `xn--`-input and
+the equivalent Unicode input render the **same** badge (Canonicalize folds them); `.svg`-less
+path (`/badge/dnb.no`) → `404` (route miss); invalid host → `400 invalid-parameter`
+`problem+json` (JSON, not SVG — the declared exception to 404-on-canonicalize-failure); a
+**valid** host is **always `200`** (a 404 renders as a broken image); the `.json` shields
+variant returns the camelCase body (§7.6); response carries `Cache-Control: public,
+max-age=86400` and an `ETag` from the crawl generation.
+
+### 10.7 Keyset pagination + scoped-feed cap (design report §4.1–§4.2, §5.8, §6.4)
+
+The pure cursor codec is §7.3; these properties need a live DB and a large seeded set:
+
+- **Stable order under a mutating set:** page forward through a seeded `/domains` leaderboard;
+  between two page fetches, **re-rank** rows (simulate the daily crawl) and insert/delete some;
+  assert the keyset walk (generation re-anchored, §7.3) neither skips nor duplicates a row that
+  stayed in the set — the property offset pagination fails. Contrast: an offset walk over the
+  same mutation would skip/duplicate (documented rationale, not a test to write).
+- **Deep-page constant cost:** `EXPLAIN` the keyset seek at page 1 and at a deep page
+  (`WHERE (rank, id) > (...)`) and assert both are an **index scan on `idx_domain_rank`** with
+  the **same** plan shape and no row-walking — cost independent of depth. Assert conversely that
+  the query never emits an `OFFSET`.
+- **`after_rank` deep-link:** `GET /domains?after_rank=500000` plans as an indexed range scan
+  (`WHERE rank > 500000 ORDER BY rank`), returns rows whose **global** rank > N then filtered
+  (not "page N of the filter"), and is accepted only on rank-ordered views (a `sort=host` +
+  `after_rank` combination → `400 invalid-parameter`).
+- **Bounded vs estimated counts:** a campaign-members list returns an **exact** `meta.count`; a
+  filtered/large `/domains` or country/asn-scoped list returns a `meta.count_estimate` (never an
+  exact `COUNT(*)` — assert no `count(*)` over the live `domain` table on the hot path).
+- **Scoped-feed window cap (§5.8):** a per-country / per-campaign changelog feed (JSON list and
+  `.atom`/`.feed.json`) returns **at most the latest 50** transitions and is **not** deep-
+  paginated, even with far more matching rows seeded — the cost guardrail until OPEN-15's
+  `(scope_id, ts)` path exists. The global and per-domain feeds paginate normally (index-backed).
 
 ---
 
@@ -974,17 +1135,19 @@ Per the house Make-is-the-interface rule (targets defined in 09-ops.md; this fil
 each must *cover*, not the recipe):
 
 - **`make test`** — `go test -race ./...`: runs every **unit** tier test (all §2–§8 vector tables,
-  golden replay §8, serialization/badge renderers), no Docker, no network. This is the
-  every-push gate and must stay green offline. Coverage report emitted (`-coverprofile`).
+  serializer golden files §7.6/§7.7, and the native contract/behavioral fixtures §8), no Docker,
+  no network. This is the every-push gate and must stay green offline. Coverage report emitted
+  (`-coverprofile`).
 - **`make test-integration`** — `go test -race -tags=integration ./...`: the §9–§10 testcontainers
   suite. Requires Docker; runs pre-merge and in CI.
-- **`make capture-fixtures`** — `go test -tags=capture ./testdata/parity/...`: the §8.1 recorder;
-  manual/one-shot, needs network to `api.whynoipv6.com`. Never runs in the normal test path.
+- **`make generate`** — the OpenAPI drift gate (§8.1): runs oapi-codegen (Go) + openapi-typescript
+  (TS) and Spectral/vacuum spec lint; CI runs it and `git diff --exit-code`s to block staleness.
+  Replaces the deleted `capture-fixtures` recorder (no production reference to record against).
 - **`make lint`** — `golangci-lint run` over the whole module (config in the repo `.golangci.yml`).
   Includes the two grep-style source gates enforced as failing lint/vet checks: (a) no
   `strings.ToLower` on hostnames outside `internal/domain/host.go` (06 acceptance #1); (b) no
-  `not_applicable`/`error`/`inconsistent`/`unknown` string literal emitted from any legacy
-  serializer (§7.1 invariant).
+  `error`/`inconsistent`/`unknown` string literal emitted as a status/informational value from any
+  public API serializer (§7.1 masking invariant).
 
 The default `make test && make lint` after every change (global workflow rule) exercises the
 unit tier + lint; the integration tier is a separate gate so a machine without Docker can still
@@ -1000,12 +1163,12 @@ happy path plus the one or two error branches that matter; no line-coverage targ
 
 | Package | Bar | Rationale |
 |---|---|---|
-| `internal/domain` (Canonicalize, classify, legacyStatus, IPv6Status/Observation types) | **Exhaustive** | The trust core's pure logic; §2, §6, §7.1 tables are total over their input domains. |
+| `internal/domain` (Canonicalize, classify, IPv6Status/Observation types) | **Exhaustive** | The trust core's pure logic; §2, §6 tables are total over their input domains. |
 | `internal/consensus` (quorum, breakers, A lookup) | **Exhaustive** | §3 covers the full 3-symbol permutation + degraded mode + both breakers; classification correctness depends on it. |
 | `internal/crawler` — `observe.go` (mapper) | **Exhaustive** | §4 covers every mapping-table row + the resources branches; the property tests forbid unmapped combinations. |
 | `internal/crawler` — commit unit | **Exhaustive** | §5 covers every anti-flap branch, the counting gate, step R, dead trigger, lease fence; §10.1/§10.4 prove the DB write + fence. |
-| `internal/api` — `renderChangelog`, shortuuid codec, `legacyStatus`, badge renderer | **Exhaustive** | Wire-frozen contract; §7 tables are byte-pinned. |
-| `internal/api` — handlers (routing, parity) | **High** — golden replay per legacy endpoint (§8) + every synthetic-branch fixture (§8.4) + every 404-body row (§8.3) | Parity with a frozen frontend is the whole point; each endpoint has at least one golden and each pinned quirk a fixture. |
+| `internal/api` — serializers (status-object, envelope, keyset cursor, RFC 9457, badge/CSV/feed/manifest, §5.9 reconstruction) | **Exhaustive** | The contract surface; §7 tables + golden files are pinned and the masking invariant is total over the enum. |
+| `internal/api` — handlers (routing, contract, behavior) | **High** — OpenAPI drift gate (§8.1) + tier/`?class=` equivalence (§8.2) + membership/visibility (§8.3) + masking (§8.4) + trio (§8.5) + diff/mandates/pivot/stats (§8.6–§8.9) | The native contract is the whole point; each endpoint is covered by the drift gate plus at least one behavioral fixture. |
 | `internal/postgres` / sqlc queries | **Integration-covered** | Exercised by §9–§10 against real DDL; the claim-plan gate (§9.3) and commit/contention/fence (§10.1/§10.4) are the meaningful assertions, not line coverage of generated code. |
 | `internal/ingest` (Tranco, campaign sync, resource discovery, attribution) | **High** — 06 acceptance #2–#10 each become a fixture/integration case | Correctness of ranks/membership/dedup/attribution is load-bearing but exercised at the behavioral level. |
 | `internal/lock` (advisory locks) | **Integration smoke** — one two-process `TryRun` contention case (one wins, one gets `ErrHeld`) + one `Run` wait-and-run case | Postgres does the hard part; the test proves the key encoding and skip/wait behavior. |
