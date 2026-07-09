@@ -51,6 +51,7 @@ whynoipv6/                     # monorepo root ("whynoipv6-new" is the seed)
     go.sum
     .golangci.yml              # single lint config [09]
     sqlc.yaml                  # sqlc v2 (pgx/v5) config [05]
+    Dockerfile                 # multi-stage build of all three binaries; compose context ./backend [09]
 
     cmd/
       api/main.go              # HTTP server process wiring + slog install [07,09]
@@ -122,7 +123,7 @@ This table is the **only** place independent sizing values are defined. Every ot
 | `RESOURCE_SWEEP_QPS` | **~2–4 qps** (~100–300k lookups/day) | Resource-host registry AAAA sweep — a separate, decoupled path through the bulk resolver; negligible. |
 | `HTTP_FETCH_RATE` | **~35 fetches/s** (~3M/day) | HTTP(S)/TLS/parity/resource-page fetches plus v4+v6 latency TTFB probes: ≈ 11–12 per v6 domain × ~258k v6 domains. ~50–80 concurrent sockets. |
 | `EGRESS_BW` | **~200–400 GB/day** (~25–45 Mbps avg) | Fetch egress (parity capped 2×1 MB, resource page capped 2 MB; typical pages ~200–500 KB). Trivial on operator hardware. |
-| `DB_WRITE_RATE` | **~3.1M rows/day** (~36 rows/s) | 1 `scan` + 1 `scan_detail` + 1 state UPDATE per domain, batched. Nothing for PG18. |
+| `DB_WRITE_RATE` | **~3.1M rows/day** (~36 rows/s) steady + **up to ~1M** guarded Tranco rank UPDATEs/day | 1 `scan` + 1 `scan_detail` + 1 state UPDATE per domain, batched; plus the daily Tranco import's conflict UPDATE, guarded to touch only rows whose rank/lifecycle actually changed (06-ingest.md — import cycle), worst-case ~1M non-HOT updates in the import transaction. Nothing for PG18. |
 
 ### 5.2 Population assumptions (inputs to the derivations above)
 
@@ -142,7 +143,7 @@ The shared vocabulary. Definitions here are canonical; the owning file for each 
 - **eTLD+1 / pay-level domain.** The registrable domain one label below the effective TLD (e.g. `bbc.co.uk`, not `www.bbc.co.uk` and not `co.uk`). The Tranco top-1M unit and the meaning of `kind='apex'`. [06]
 - **TLD.** The effective TLD / public suffix of a host (`com`, `no`, `co.uk`, `gov`), derived at ingest via publicsuffix and stored on `domain.tld`. Backs the TLD/ccTLD league tables and the `?tld=` filter axis. [05, 06]
 - **DNS provider / hosting provider.** Two normalized provider attributions on a domain: the **DNS provider** resolved from the domain's nameserver host through the `ns_host → provider` mapping table (the highest-leverage pivot — one provider's default flips thousands of domains); the **hosting/CDN provider** derived from CNAME-chain CDN detection plus the resolved IP's ASN. Both back the `?provider=` filter and the provider league tables. Registrar attribution is deferred. [05, 06]
-- **Tier collections.** The short canonical plural browse paths `/heroes`, `/sinners`, `/gold`, `/almost`, `/mail` — each a preset filtered view over the `/domains` leaderboard (`class=hero`, `class=sinner`, `gold=true`, the "almost there" partials, the mail/MX track), sharing the same row shape, keyset pagination, and `?country=`/`?asn=` composition as `/domains`. They are aliases over the general `/domains?class=…` collection, not a second vocabulary. [07]
+- **Tier collections.** The short canonical plural browse paths `/heroes`, `/sinners`, `/gold`, `/almost`, `/mail` — each a preset filtered view over the `/domains` leaderboard (`class=hero`, `class=sinner`, `gold=true`, `class=partial` ("almost there" and `partial` are the same set — one class, two names), the mail/MX track), sharing the same row shape, keyset pagination, and `?country=`/`?asn=` composition as `/domains`. They are aliases over the general `/domains?class=…` collection, not a second vocabulary. [07]
 - **Keyset cursor.** The opaque base64url pagination token over a strict total order (`(rank, id)` on rank-sorted views, `host` on curated sets, a null-flag-first key on the nullable-rank dependents list), replacing offset pagination on every large collection. Encodes the synthetic `domain.id` internally; there is no exact `COUNT(*)` on the hot path. [07]
 - **Mandate tags.** Free-form `tags` on a campaign (backing `?tag=` and the `/mandates` surface) that mark government-mandate / compliance-tracking campaigns. A campaign-metadata capability, not a per-domain classification signal. [05, 06]
 - **Dimension.** One measured facet of a domain's IPv6 posture. **Core dimensions** (six): `base`, `www`, `ns`, `mx`, `conn`, `resources` — each carries a 5-column confirm/pending group on `domain` and can gate classification. **Informational dimensions**: `dnssec`, `ptr`, `smtp`, `parity`, `latency_v4_ms`, `latency_v6_ms` — latest observation only, never gate classification. [03, 05]
@@ -203,7 +204,7 @@ The spec is built to be implemented front-to-back with the pure core first. Reco
 - **DDL lives only in 05-schema.md.** No other file contains `CREATE`/`ALTER`/`DROP`. Other files reference tables/columns by name and may quote `SELECT`/`INSERT`/`UPDATE`/`DELETE`, never DDL. (The one sanctioned exception, the session-scoped `tranco_staging` TEMP table, is also defined in 05.)
 - **The config-key registry lives only in 09-ops.md.** Other files introduce a key by name with its purpose and say "registry: 09-ops.md"; the canonical type + default + env-var mapping is defined once, in 09.
 - **The canonical sizing-constants table lives only in 00-overview.md** (§5). Other files cite a constant by its name (`WORKER_SLOTS`, `SCAN_RATE`, …) and never restate an independent number or range.
-- **Test fixtures live only in 10-testing.md.** Other files may state *acceptance criteria* (properties the code must have) but never fixture tables; 10 owns the concrete vectors that prove them.
+- **Test fixtures live only in 10-testing.md**, with two sanctioned exceptions. Other files may state *acceptance criteria* (properties the code must have) but never fixture tables; 10 owns the concrete decision-table vectors that prove them (quorum, mapping, classification, API contract). The exceptions — because their fixtures are captured artifacts, not decision tables: **engine-lift fixtures** (fake-DNS/HTTP/TLS harness inputs and goldens captured from the v6audit reference repo) are owned by 01-engine.md §14, and **ingest fixtures** (Tranco CSV, campaign YAML, GeoIP/provider-mapping samples) by 06-ingest.md §9; 10-testing.md §12 delegates to both by reference.
 - **The glossary lives only in 00-overview.md** (§6). Other files use the terms with the meanings fixed here and do not redefine them.
 
 ### 8.3 `**Decision:**` markers

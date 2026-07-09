@@ -55,7 +55,7 @@ Unit-test vectors (fixture table in 10-testing.md — Canonicalize vectors; thes
 | Tranco import (§2 step 5 below) | per CSV line | count in `tranco_import.rejected_count`, log at debug, continue |
 | Campaign PR validation (§4 below) | per YAML domain entry | CI check fails with the offending file, line, and reason |
 | Campaign sync (§3 step 3 below) | per YAML domain entry, **before** entity lookup/creation and membership diff | entry skipped, counted under `rejected + reasons` in the sync report |
-| POST /check | body domain — Canonicalize() first, then the POST /check-only policy layer (reject RFC 2606 TLDs, `.internal`, `.local`); owned by 07-api.md | 400 `{"error":"invalid_host"}` |
+| POST /check | body domain — Canonicalize() first, then the POST /check-only policy layer (reject RFC 2606 TLDs, `.internal`, `.local`); owned by 07-api.md | `400 invalid-parameter` (RFC 9457 `application/problem+json`, 07-api.md — §2.5) |
 | Resource discovery (§5 below) | the host inserted into `resource_host` is defined as Canonicalize() output | host skipped (not inserted), no error surfaced |
 | `v6ctl` verbs taking a hostname (`resource add`, `shame add`, `domain add`, `disable`) | on argument parse | command errors (exit 1) with the reason |
 | API path params | per request | 404 — **exception:** `GET /badge/{domain}.svg` returns 400 (owned by 07-api.md) |
@@ -139,10 +139,15 @@ One execution, numbered. HTTP client: 60s total timeout per request, no retries 
       disabled_reason = CASE WHEN domain.disabled_reason = 'delisted' THEN NULL ELSE domain.disabled_reason END,
       disabled_at = CASE WHEN domain.disabled_reason = 'delisted' THEN NULL ELSE domain.disabled_at END,
       next_check_at = CASE WHEN domain.disabled_reason IN ('delisted','dead') THEN now() ELSE domain.next_check_at END,
-      updated_at  = now();
+      updated_at  = now()
+    WHERE domain.rank IS DISTINCT FROM excluded.rank
+       OR domain.orphaned_at IS NOT NULL
+       OR domain.disabled_reason IN ('delisted','dead');
     ```
 
-    `imported_count` = the statement's affected-row count. Existing rows keep their `created_by`, confirmed statuses, classification, attribution, and `tld` (the conflict SET list deliberately touches none of them; `tld` is immutable — a pure function of the immutable host, §6.9). The `LEFT JOIN country` implements the §6.5 insert-time country rule set-based: the final DNS label of the host, upper-cased and dot-prefixed, probed against `country.tld` (seed form `.NO`); no match → sentinel. **Decision:** this SQL join is the normative implementation of insert-time attribution for the Tranco path (equivalent to the per-host Go rule in §6.5, because the final label of the ICANN public suffix always equals the host's final DNS label).
+    **Decision — the conflict UPDATE is guarded.** Without the trailing `WHERE`, the upsert rewrites every one of the ~1M ranked rows daily (`rank` is indexed, so each is a non-HOT update) — dead tuples, WAL, and autovacuum pressure on the hottest table for rows whose rank did not move. The guard restricts the rewrite to rows with an actual effect: a changed rank, an orphan flag to clear, or a delisted/dead re-entry. Unchanged rows are untouched (their `updated_at` deliberately does not advance — it records the last *effective* change, not list membership).
+
+    `imported_count` = the statement's affected-row count — with the guard above, that is new rows plus rows whose rank/lifecycle actually changed, not the full list size (`line_count` records the latter). Existing rows keep their `created_by`, confirmed statuses, classification, attribution, and `tld` (the conflict SET list deliberately touches none of them; `tld` is immutable — a pure function of the immutable host, §6.9). The `LEFT JOIN country` implements the §6.5 insert-time country rule set-based: the final DNS label of the host, upper-cased and dot-prefixed, probed against `country.tld` (seed form `.NO`); no match → sentinel. **Decision:** this SQL join is the normative implementation of insert-time attribution for the Tranco path (equivalent to the per-host Go rule in §6.5, because the final label of the ICANN public suffix always equals the host's final DNS label).
 
     **Re-entry semantics** (why each CASE arm exists):
     - `delisted` → re-enabled directly (confirmed state was never reset — it is merely ≤30d stale; the immediate rescan via `next_check_at = now()` refreshes it; no changelog implications beyond real transitions).
@@ -211,7 +216,7 @@ Exactly five top-level keys per file; unknown keys are a validation error:
 | `domains` | non-empty list of hostname strings | yes |
 | `tags` | list of strings (mandate/campaign tags, OPEN-12) | no |
 
-**Decision (tags — OPEN-12):** `tags` are **free-form**, not a fixed enum — a bounded vocabulary would need a maintained registry that rejects legitimate new mandates, and the `/mandates` surface (07-api.md) derives its facet list from the distinct tags actually in use. Each tag is normalized to lowercase and must match `^[a-z0-9][a-z0-9-]{0,31}$` (kebab-case, ≤32 chars); ≤16 tags per file; whitespace-only/empty tags are a validation error; duplicates (post-normalization) are folded. The parsed, normalized list is written verbatim to `campaign.tags` (05-schema.md — campaign) by sync (§3.3); the `?tag=` filter and `/mandates` (07-api.md) read it. Registrar tagging is **not** added (deferred, §6.10).
+**Decision (tags — OPEN-12):** `tags` are **free-form**, not a fixed enum — a bounded vocabulary would need a maintained registry that rejects legitimate new mandates. The one tag with fixed meaning is the literal `mandate`: campaigns carrying it are what the `GET /mandates` surface selects (`'mandate' = ANY(tags)`; 07-api.md — §5.6); descriptive companion tags (`eu-2030`, `sector-banking`) are free-form. Each tag is normalized to lowercase and must match `^[a-z0-9][a-z0-9-]{0,31}$` (kebab-case, ≤32 chars); ≤16 tags per file; whitespace-only/empty tags are a validation error; duplicates (post-normalization) are folded. The parsed, normalized list is written verbatim to `campaign.tags` (05-schema.md — campaign) by sync (§3.3); the `?tag=` filter and `/mandates` (07-api.md) read it. Registrar tagging is **not** added (deferred, §6.10).
 
 **Decision:** the list key is **`domains`** — verified against all 29 files in the live campaign repo and production's Go struct (`yaml:"domains"`); the design doc's phrase "`list` of hostnames" described the type, not the key. The parser (`internal/campaign`) is tolerant of the format variance found in the repo: 0/2/4-space indents, comments, trailing spaces (plain `gopkg.in/yaml.v3` unmarshal into a typed struct with `KnownFields(true)` gives exactly this: YAML-standard tolerance plus unknown-key errors).
 
@@ -621,7 +626,7 @@ This is a pure lookup against the in-memory `dns_provider` snapshot (small; load
 **`hosting_provider` — the hosting/CDN axis.** A **normalized** tag derived from data already in the scan result, in order:
 
 1. **CDN via CNAME chain:** if the base/www AAAA check set `details["cdn_detected"] = true` (01-engine.md — §11.2), map the matched CDN suffix in `details["cname_target"]`/`cname_chain` to a normalized tag using the **same** fixed CDN-suffix list §11.2 already carries: `cloudfront.net`→`cloudfront`; `cloudflare.net`/`cdn.cloudflarenet.com`→`cloudflare`; `akamaiedge.net`/`akamai.net`/`edgekey.net`→`akamai`; `fastly.net`→`fastly`; `azureedge.net`→`azure`; `edgecastcdn.net`→`edgecast`; `stackpathdns.com`→`stackpath`; `googleapis.com`→`google`.
-2. **Else hosting-ASN fallback:** if the resolved input IP's ASN (already looked up for `asn_id`, §6.3 — no new lookup) is in a small curated hosting/cloud-ASN→tag set (e.g. AWS, GCP, Azure, OVH, Hetzner, DigitalOcean), use that tag.
+2. **Else hosting-ASN fallback:** if the resolved input IP's ASN (already looked up for `asn_id`, §6.3 — no new lookup) is in the curated hosting/cloud-ASN→tag set, use that tag. **Decision — the launch seed set** (a Go constant map, extended as collected data shows gaps): AS16509/AS14618→`aws`; AS15169/AS396982→`google`; AS8075→`azure`; AS16276→`ovh`; AS24940→`hetzner`; AS14061→`digitalocean`; AS63949→`linode`; AS13335→`cloudflare`.
 3. **Else** → NULL.
 
 **Decision:** `hosting_provider` is a denormalized normalized-TEXT tag (05-schema.md — domain), **not** an FK — the CDN-suffix map and the hosting-ASN map are code constants, and the ASN fallback already has its own `asn` row, so a second reference table would duplicate `asn`. Both maps are Go constants co-located with the commit-path attribution helpers, single-sourced with §11.2's CDN-suffix list. Only **normalized** tags are written (raw `asn.name` org strings are deliberately not used — that would defeat a clean league facet). Registrar attribution is **deliberately not derived** here (RDAP cost at 1M scale — deferred, §10.3).
@@ -634,7 +639,7 @@ The `dns_provider` table (05-schema.md — dns_provider) has a **single** write 
 - **`v6ctl provider remove <name>`** — delete the provider row. Domains keep their last `dns_provider_id` until the next scan-commit recompute nulls it (§6.10 is self-healing).
 - **`v6ctl provider list`** — print each provider with its suffix set and current mapped-domain count (`SELECT count(*) FROM domain WHERE dns_provider_id = $1`).
 
-**Decision:** the mapping is **primarily** seeded via this verb (a checked-in seed script calling `provider add`) — it is reference **data**, belonging in the DB the same way the `asn`/`country` seeds do (05-schema.md — seeds), not tunable behavior. Two operational knobs are registered in the 09-ops.md config registry (§2.11): `dns_provider.seed_path` (optional path to a curated `ns_host → provider` seed file; default `""` = no file, mapping seeded by the verb and derived from collected NS data only) and `dns_provider.refresh_interval` (default `24h` — the cadence at which the in-memory provider snapshot this section loads is rebuilt from the table + collected NS data, "refreshed like the country map", §6.10). New v6ctl verb group `provider add|remove|list` — flagged for the 09-ops.md verb inventory / systemd surface and registered in the deliverables above.
+**Decision:** the mapping is **primarily** seeded via this verb (a checked-in seed script calling `provider add`) — it is reference **data**, belonging in the DB the same way the `asn`/`country` seeds do (05-schema.md — seeds), not tunable behavior. Two operational knobs are registered in the 09-ops.md config registry (§2.11): `dns_provider.seed_path` (optional path to a curated `ns_host → provider` seed file — **YAML**, a list of `{name, suffixes: [...]}` entries mirroring the `provider add` arguments; default `""` = no file, mapping seeded by the verb and derived from collected NS data only) and `dns_provider.refresh_interval` (default `24h` — the cadence at which the in-memory provider snapshot this section loads is rebuilt from the table + collected NS data, "refreshed like the country map", §6.10). New v6ctl verb group `provider add|remove|list` — flagged for the 09-ops.md verb inventory / systemd surface and registered in the deliverables above.
 
 ---
 
@@ -720,7 +725,7 @@ Population is the ranked set (`WHERE rank IS NOT NULL`); each counter carries it
 INSERT INTO stats_global_daily (
   day, domains, sinners, partial, heroes, gold, inactive, unknown, disabled,
   base_supported, www_supported, ns_supported, mx_supported, conn_supported,
-  resources_supported, top_heroes, top_nameserver)
+  resources_supported, top_heroes, top_nameserver, generated_at)
 SELECT
   CURRENT_DATE,
   count(*) FILTER (WHERE NOT disabled),
@@ -741,7 +746,8 @@ SELECT
                      AND base_status = 'supported'
                      AND www_status IS DISTINCT FROM 'unsupported'),
   count(*) FILTER (WHERE NOT disabled AND rank <= 1000
-                     AND ns_status = 'supported')
+                     AND ns_status = 'supported'),
+  now()
 FROM domain
 WHERE rank IS NOT NULL
 ON CONFLICT (day) DO UPDATE SET
@@ -760,8 +766,11 @@ ON CONFLICT (day) DO UPDATE SET
   conn_supported      = excluded.conn_supported,
   resources_supported = excluded.resources_supported,
   top_heroes          = excluded.top_heroes,
-  top_nameserver      = excluded.top_nameserver;
+  top_nameserver      = excluded.top_nameserver,
+  generated_at        = excluded.generated_at;
 ```
+
+`generated_at = now()` is the crawl-freshness signal 05-schema.md documents on the column and the deterministic source of the envelope `meta.as_of` (07-api.md — §2.4); every rollup (including intraday re-runs via `v6ctl stats recalc`) refreshes it.
 
 While `crawler.resources.enabled = false` (§5), `resources_status` is NULL everywhere, so `resources_supported = 0` and `gold = 0` — correct: no gold badges before the resources feature ships. `domains` is the total publicly-ranked count and thus equals `sinners + partial + heroes + inactive + unknown` (the ladder is total over confirmed `base`; a NULL `base` lands in `unknown`).
 

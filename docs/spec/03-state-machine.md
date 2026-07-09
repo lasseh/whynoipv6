@@ -68,7 +68,7 @@ Per scanned domain the worker builds ONE commit unit, worker-side, after `Runner
 The worker holds the raw engine results, so it computes, per scan, before the per-dimension loop: a scan is **unresolvable** (`U = true`) when either
 
 - **(a)** the apex AAAA consensus quorum symbol is `nxdomain` AND the NS zone walk found no delegated zone for the host, or
-- **(b)** all 3 consensus resolvers returned an explicit SERVFAIL or REFUSED rcode for the apex AAAA after retry. Timeouts do NOT count — three timeouts more likely indicate our own network trouble.
+- **(b)** all 3 consensus resolvers returned an explicit SERVFAIL or REFUSED rcode for the apex AAAA after retry. Timeouts do NOT count — three timeouts more likely indicate our own network trouble. **Decision (auditable side effect, intended):** a domain with broken DNSSEC that still publishes AAAA hits this branch — all three public resolvers validate, so all three SERVFAIL — and after 7 consecutive such scans (`dead_streak`) it is disabled as `dead`, dropping off the public lists. That is semantically honest (to the validating-resolver majority of real clients the domain does not resolve), and a fixed DNSSEC chain re-enables it automatically via the slow-lane rescan + dead-recovery reset (step R).
 
 Operational definitions:
 
@@ -241,7 +241,7 @@ The ladder is deterministic, first match wins, evaluated over **confirmed** valu
 | 4 | `base` = `supported` AND `www` ∈ {`supported`, `not_applicable`, `no_record`} AND `ns` = `supported` AND `conn` = `supported` AND `mx` ∈ {`supported`, `not_applicable`} | `hero` |
 | 5 | `base` = `supported` (hero bar not met) | `partial` |
 
-(`base` = `not_applicable` is unreachable: the apex AAAA check always yields a concrete status or a non-definitive error.)
+(`base` = `not_applicable` is unreachable: the apex AAAA check always yields a concrete status or a non-definitive error. Likewise `www` = `no_record` in rule 4 is defensive-only: the www mapper never emits `no_record` — only `base` can (02-observation-model.md — §4) — so the arm is unreachable in production; it stays in the ladder so `Classify` remains total and non-contradicting over the full enum cross-product the §17 vectors exercise.)
 
 **Flags** (computed for every domain; only ever true when the named dimension is confirmed `unsupported` — NULL, `not_applicable`, and `no_record` set no flag):
 
@@ -482,7 +482,7 @@ Every commit writes exactly one row into each (including non-counting scans and 
 }
 ```
 
-- `results` keys are the engine check names, all 15 registered checks (`dns_aaaa_base, dns_aaaa_www, dns_ns_ipv6, dns_mx_ipv6, dns_dnssec, http_ipv6, https_ipv6, tls_ipv6, http_response_parity, resource_ipv6, smtp_ipv6, spf_ipv6, dns_ptr_ipv6, latency_ipv4, latency_ipv6`); phase-2-skipped checks are present with status `not_applicable` and the runner's skip-reason detail. The raw engine verdict (including `partial`) is always preserved here even where the observation mapping rewrote it.
+- `results` keys are the engine check names, all 15 registered checks (`dns_aaaa_base, dns_aaaa_www, dns_ns_ipv6, dns_mx_ipv6, dns_dnssec, http_ipv6, https_ipv6, tls_ipv6, http_response_parity, resource_discovery, smtp_ipv6, spf_ipv6, dns_ptr_ipv6, latency_ipv4, latency_ipv6`); phase-2-skipped checks are present with status `not_applicable` and the runner's skip-reason detail. The raw engine verdict (including `partial`) is always preserved here even where the observation mapping rewrote it.
 - The per-check `details` for `dns_aaaa_base`/`dns_aaaa_www` include the `quorum` object the adapted checks record (02) — the `consensus` top-level object is the flattened per-resolver tuple mandated for dead-detection auditability (section 4) and the detail page; `symbol` values are the per-resolver reduced symbols (`exists|empty|nxdomain|timeout|error`).
 - The NS/MX per-host AAAA detail inside `results` is capped at 4 NS hosts / 5 MX hosts plus the `total`/`checked`/`ipv6_count` counters (02's `checks.max_ns_lookups`/`max_mx_lookups`).
 - `conn` is the derived composition object; `http_only=true` only in the connection-refused-plus-HTTP-works fallback case. It is payload-only — NOT a class flag.

@@ -159,7 +159,7 @@ independent fan-outs the runner should exploit:
   and gated on P3.1–P3.4.
 - **P4:** OpenAPI-first, so the contract is authored early. P4.1 (baseline) → P4.5 (author
   `openapi.yaml` + codegen + drift gate) → P4.13 (keyset/cursor engine) are the spine; the
-  endpoint tasks (P4.3 core resources + tier collections, P4.14 changelog/timeline/diff, P4.15
+  endpoint tasks (P4.3 core resources + tier collections, P4.14 changelog/timeline, P4.15
   feeds/CSV, P4.16 /mandates + tags, P4.4 /ip) all implement against the generated strict
   interfaces and can fan out once P4.5+P4.13 land. P4.11 (v6ctl shame + top_shame re-seed) is
   independent of the API track. There is **no migration track** — the P4.6–P4.10, P4.12
@@ -241,7 +241,9 @@ design intends.
 - **Governs:** see 09-ops.md — Makefile, `.golangci.yml`, CI (§14.4).
 - **Depends:** P0.3
 - **Deliverables:** `.github/workflows/ci.yml` running, in order, `make tidy` → `make lint` →
-  `make generate` (staleness gate) → `make test` → `make vulncheck` → `make build-linux`, on
+  `make generate` (staleness gate — self-gating: sqlc always, the OpenAPI codegen steps
+  activate once `openapi/openapi.yaml` lands in P4.5; 09-ops §14.1) → `make test` →
+  `make test-integration` → `make vulncheck` → `make build-linux`, on
   every PR and on the default branch.
 - **Acceptance:** the workflow file parses (`actionlint` clean if available, else YAML lint);
   a dry push of the skeleton passes every stage; any stale generated output / untidy go.mod /
@@ -287,7 +289,7 @@ early risk experiments.
   (`old_value`/`new_value` are plain `NOT NULL`); **no** `'legacy'` value in the
   `changelog.field` domain; **no** `created_by = 'import'` enum value. Includes the new
   pivots: `domain.tld`, the DNS-provider reference + `ns_host → provider` mapping table, the
-  hosting/CDN provider tag, `campaign.tags` (or `campaign_tag` table), and the stats-rollup
+  hosting/CDN provider tag, `campaign.tags` (TEXT[] + GIN, 05-schema.md), and the stats-rollup
   `generated_at TIMESTAMPTZ` (see 05-schema.md — drop changelog legacy columns; add pivots +
   tags).
 - **Acceptance:** migration applies on a fresh `timescale/timescaledb:latest-pg18` container;
@@ -383,7 +385,8 @@ early risk experiments.
   `created_by='parent_link'`, `parent_id` set), the membership re-entry rule (06-ingest §9.6),
   **and `tags` from a tagged campaign YAML landing in `campaign.tags` (empty/NULL when
   untagged, updated idempotently on re-sync)**; a full run over the 28 real campaign YAMLs with
-  `--adopt-unknown-uuids` imports ~30k entities with correct parents. Fixtures: 10-testing.md.
+  `--adopt-unknown-uuids` imports ~30k entities with correct parents. Fixtures: 06-ingest.md §9
+  (ingest fixtures; 00 §8.2 exception).
 
 ### P1.9 — GeoIP / ASN attribution
 - **Governs:** see 06-ingest.md — GeoIP / ASN attribution (§6); design OPEN-5 (ccTLD
@@ -394,7 +397,7 @@ early risk experiments.
 - **Acceptance:** `TestAttribution` covers ccTLD-beats-GeoIP, deferred scans leaving
   `asn_id/country_id` untouched, insert-time attribution = ccTLD-or-sentinel country + sentinel
   ASN, and sentinel ids resolved by lookup not literals (06-ingest §9.10). Fixtures:
-  10-testing.md.
+  06-ingest.md §9 (ingest fixtures; 00 §8.2 exception).
 
 ### P1.13 — DNS-provider mapping (`ns_host → provider`) + attribution
 - **Governs:** see 06-ingest.md — DNS-provider mapping; see 05-schema.md — add pivots + tags
@@ -405,11 +408,15 @@ early risk experiments.
   `ProviderForNSHost` lookup, longest-suffix match) and the read-only **attribution writer**
   that stamps `domain.dns_provider_id` from a domain's observed NS hosts. This is an
   attribution step (like GeoIP, P1.9); it reads NS observations read-only and **never** touches
-  the commit/trust machine.
+  the commit/trust machine. Also the operator verb group **`v6ctl provider add|remove|list`**
+  and the optional `dns_provider.seed_path` YAML loader (06-ingest §6.11) — the table's single
+  write path; without it the mapping is empty and every domain attributes to NULL.
 - **Acceptance:** `TestProviderMapping` covers longest-suffix precedence, unknown-NS →
   NULL/sentinel provider, and multi-NS agreement/disagreement handling per 06-ingest; the
   stamping writer sets `domain.dns_provider_id` without writing any `scan`/`changelog`/
-  `*_status` column (grep/read-back assertion). Fixtures: 10-testing.md.
+  `*_status` column (grep/read-back assertion); `provider add` then `provider list` round-trips
+  a suffix set and `provider remove` leaves stamped domains self-healing per 06 §6.10.
+  Fixtures: 06-ingest.md §9 (ingest fixtures; 00 §8.2 exception).
 
 ### P1.14 — Hosting/CDN provider tag
 - **Governs:** see 06-ingest.md — hosting/CDN provider tag; see 05-schema.md — add pivots +
@@ -421,7 +428,8 @@ early risk experiments.
   not touch the commit/trust machine.
 - **Acceptance:** `TestHostingTag` derives the correct normalized provider for a CNAME-CDN
   fixture and for an ASN-only fixture, `NULL`/unknown when neither resolves, and writes no
-  confirmed-status column (read-back assertion). Fixtures: 10-testing.md.
+  confirmed-status column (read-back assertion). Fixtures: 06-ingest.md §9 (ingest fixtures;
+  00 §8.2 exception).
 
 ### P1.10 — Integration harness (testcontainers)
 - **Governs:** see 10-testing.md — Integration harness (testcontainers + TimescaleDB) (§9);
@@ -495,10 +503,13 @@ repo plus the lease-fence chaos test.
   go.mod pin (config keys `checks.max_ns_lookups`, `checks.max_mx_lookups`,
   `resolver.bulk_upstreams`, `preflight.probe_host` — registry: 09-ops.md).
 - **Acceptance:** all nine numbered criteria of 01-engine §14 pass: `codeberg.org/miekg/dns`
-  pinned at an exact v0.6.x with no `github.com/miekg/dns` import anywhere (grep gate); the
+  pinned in go.mod at one exact version — the newest `v0.6.*` patch at implementation time
+  (the gate asserts an exact-version pin exists, not a specific patch number) — with no
+  `github.com/miekg/dns` import anywhere (grep gate); the
   `Score/Grade/…/v6audit` grep gate is clean; `TestRunnerNoAAAA`, `TestRunnerSubdomain`,
   `TestCheckPanicIsolation`, `TestHTTPErrorTypes`, `TestResourceDiscovery`,
-  `TestPreflightFreshness` pass. Fixtures/fake-servers: 10-testing.md.
+  `TestPreflightFreshness` pass. Fixtures/fake-servers: 01-engine.md §14 (engine-lift
+  fixtures — the sanctioned 00 §8.2 exception; 10-testing §12 delegates by reference).
 
 ### P2.2 — Consensus resolver (quorum + breakers)
 - **Governs:** see 02-observation-model.md — The consensus resolver (§2), Adapted
@@ -601,8 +612,10 @@ repo plus the lease-fence chaos test.
 - **Depends:** P2.5, P2.8, P1.7, P1.8
 - **Deliverables:** `internal/crawler/sweep.go` (S1–S5 lifecycle sweep = tick step 1),
   `internal/crawler/tick.go` (daily-tick coordinator: canonical step order, per-step failure
-  containment, invokes Tranco import + campaign sync from P1.7/P1.8). The stats-rollup step
-  stamps the `generated_at TIMESTAMPTZ` freshness signal on the daily stats row (the
+  containment, invokes Tranco import + campaign sync from P1.7/P1.8), and the
+  **service-candidate detection writes** (`db/query/service_candidate.sql`, 05-schema.md —
+  service_candidate; the operator triage verbs over that table are P2.14). The stats-rollup
+  step stamps the `generated_at TIMESTAMPTZ` freshness signal on the daily stats row (the
   deterministic source for the API envelope `meta.as_of` — see 05-schema.md — add pivots +
   tags; 07-api.md — envelope + list-response shape).
 - **Acceptance:** `TestSweep` (integration) verifies S1–S5 in isolation and as a sequence:
@@ -653,6 +666,22 @@ repo plus the lease-fence chaos test.
 - **Acceptance:** `TestNotify` (the notifier posts to a stub webhook and pings a stub
   healthchecks URL; URLs redacted in logs); wired into the crawler heartbeat path (consumed by
   P2.12).
+
+### P2.14 — Operator lifecycle verbs (`v6ctl service-candidates`, `disable`, `stats recalc`)
+- **Governs:** see 04-lifecycle-scheduling.md — service/manual lifecycle (glossary: 00 §6);
+  see 06-ingest.md — the ingest v6ctl verbs (`disable`, §10.7 `stats recalc`); see
+  05-schema.md — service_candidate.
+- **Depends:** P2.9, P1.5
+- **Deliverables:** `cmd/v6ctl/` verb groups: **`service-candidates list|confirm|dismiss`**
+  (triage over the P2.9 detection table; `confirm` disables the domain with
+  `disabled_reason='service'`, `dismiss` clears the candidate), **`disable [--service-list]`**
+  (operator `manual` disable / the service-list batch form), and **`stats recalc`** (re-runs
+  the 06 §10 stats rollups on demand — the cutover runbook invokes it, 08 §3 step 2).
+- **Acceptance:** `confirm` flips the domain out of the frontier (`disabled`,
+  `disabled_reason='service'`, not claimable — claim-query read-back); `dismiss` leaves the
+  domain untouched; `disable` sets `manual` and is reversible per 06's re-enable rules;
+  `stats recalc` upserts today's `stats_*` rows (incl. `generated_at`) idempotently — a
+  second run changes only `generated_at`.
 
 ### P2.G1 — Gate: commit-machine + quorum unit coverage
 - **Governs:** design §8 Phase 2(a)(b); 03/02 acceptance.
@@ -745,7 +774,8 @@ declares the crawler operational.
 - **Acceptance:** `systemd-analyze verify` passes on every file in `deploy/systemd/`; every
   oneshot service sets `OnFailure=whynoipv6-notify@%n.service`; `nginx -t` passes on the vhost;
   the deploy dry-run on a scratch host brings both units to `active` and `curl -6
-  http://[::1]:8080/` returns `{"message":"ok"}` (09-ops §15.5, §15.6, §15.7 proxy half).
+  http://[::1]:8080/livez` + `curl -6 http://[::1]:8080/readyz` both return `200`
+  (07-api.md §2.7; 09-ops §15.5, §15.6, §15.7 proxy half).
 
 ### P3.5 — Public-resolver rate smoothing + Cloudflare courtesy email
 - **Governs:** design §2.7 (throughput math), §8 Phase 3; §2.4 (resolver-load split).
@@ -781,7 +811,7 @@ declares the crawler operational.
 **Goal:** the clean, OpenAPI-first read API at the root of `api.whynoipv6.com` — the **real**
 confirmed model on the wire (per-dimension `{value,since}` status objects, `classification`,
 `gold`, `class_flags[]`), keyset/cursor pagination, RFC 9457 `problem+json` errors, the short
-tier collections, the changelog/timeline/diff surface, change feeds + CSV, the DNS-provider
+tier collections, the changelog/timeline surface, change feeds + CSV, the DNS-provider
 league table, `/mandates`, and the redesigned `/ip` — then a **pure DNS-flip cutover** with
 **no data import** (start-fresh, OPEN-9) plus the `top_shame` re-seed. Produces the shippable
 replacement. There is no legacy/compat surface and no production-parity gate; the drift gate is
@@ -797,7 +827,8 @@ the OpenAPI contract.
   `validation-error`/`scope-required` split; the endpoint-class `Cache-Control` +
   deterministic `ETag`-from-crawl-`generation` helpers); `internal/api/health.go` (`/livez` +
   `/readyz` at the root, outside the OpenAPI + CDN); the `internal/service/` use-case layer
-  skeleton; `cmd/api/main.go` wiring (timeouts, CORS, `{"message":"ok"}` root).
+  skeleton; `cmd/api/main.go` wiring (timeouts, CORS; no root health page — health is
+  `/livez`/`/readyz` only, 07-api.md §2.7).
 - **Acceptance:** `TestBaseline` — every 4xx/5xx is `application/problem+json` with `status`
   equal to the HTTP status line; zero-result reads are `200` with an empty `items` array (never
   a bug-compat 404); `/livez`/`/readyz` return the z-page split and are `no-store`; the
@@ -864,7 +895,8 @@ the OpenAPI contract.
 - **Governs:** see 07-api.md — OpenAPI-first workflow; see 09-ops.md — Makefile (`generate`
   staleness gate + Spectral/vacuum lint); design §8.
 - **Depends:** P4.1
-- **Deliverables:** `openapi.yaml` (hand-authored OpenAPI **3.0.3** at the repo root — the
+- **Deliverables:** `openapi.yaml` (hand-authored OpenAPI **3.0.3** at `openapi/openapi.yaml`,
+  the monorepo `openapi/` directory (00 §4) — the
   single source of truth, `nullable: true` for the `null` status values). It establishes the
   reusable **`components`**: the `{items,page,meta}` / `{points,meta}` envelopes, the keyset
   cursor grammar, the RFC 9457 `problem` shapes (incl. `scope-required`), the `manifest.json`
@@ -952,7 +984,7 @@ the OpenAPI contract.
 - **Governs:** see 07-api.md — changelog event (structured), per-domain timeline/history
   (changelog reconstruction), diff (OPEN-7); design §5.8, §5.9, §6.6.
 - **Depends:** P4.5, P4.13
-- **Deliverables:** `internal/api/{changelog,history,diff}.go` + `db/query/`:
+- **Deliverables:** `internal/api/{changelog,history}.go` + `db/query/`:
   - `GET /changelog` (global, cursor on `ts DESC`, `?field=`/`?from=`/`?to=`) and the per-scope
     feeds `GET /domains/{host}/changelog`, `GET /campaigns/{uuid}/changelog`,
     `GET /campaigns/{uuid}/domains/{host}/changelog`, `GET /countries/{code}/changelog`
@@ -960,14 +992,15 @@ the OpenAPI contract.
   - `GET /domains/{host}/history` — the per-dimension trajectory **reconstructed from the
     `changelog`** (confirmed transitions replayed + the classification ladder applied per point),
     carrying the `scan` **latency overlay only** (never raw `scan` observation values);
-  - `GET /diff?from=&to=&scope=` — added-to-hero / lost-hero lists read from the `changelog`
-    (OPEN-7), reporting *which* domains changed (not stats-snapshot differencing).
+  (`GET /diff` is **cut** — OPEN-7 re-resolved, 07-api.md §5.6: `/changelog` + the change
+  feeds already carry the "who went green" information.)
 - **Acceptance:** `TestChangelog` serves the structured row (`ts,host,field,old_value,new_value`;
   raw 4-value enum; always non-null and distinct; incl. `conn`/`resources`/`not_applicable`
   transitions — no coverage filter, no synthetic epoch id); `TestHistory` reconstructs from the
   changelog (asserts `error`/`inconsistent` never appear; `classification` per point is the
-  ladder over the reconstructed confirmed state); `TestDiff` reads from the changelog; all three
-  return `200` with an empty collection on the fresh (empty-changelog) DB. Fixtures: 10-testing.md
+  ladder over the reconstructed confirmed state); both
+  return `200` with an empty collection on the fresh (empty-changelog) DB; the contract test
+  asserts `GET /diff` is absent from `openapi.yaml` (10-testing §8.6). Fixtures: 10-testing.md
   — confirmed-state reconstruction vectors.
 
 ### P4.15 — Change feeds (Atom + JSON-Feed) + CSV export
@@ -1011,7 +1044,9 @@ the OpenAPI contract.
   1. **Fresh DB → migrations:** a fresh `timescale/timescaledb:latest-pg18` DB is created and
      `v6ctl migrate up` applies 000001→latest green (both `changelog` and `scan` start empty).
   2. **Crawl builds state:** the crawler builds confirmed state from scratch (a bounded sample
-     crawl suffices for this gate; the full 1M pass is Phase 3). The **cold classification
+     crawl suffices for **this build gate**; the full 1M pass is Phase 3, and the *production
+     cutover* precondition is ≥3 full frontier passes — 08-migration-cutover.md §2.4, a
+     different gate). The **cold classification
      start** is expected and flagged (§5 risk register) — day-1 hero/adoption counts read low
      until N crawl cycles confirm each dimension; this is not a bug.
   3. **OpenAPI contract tests green:** the P4.5 drift gate is clean (`make generate` →
@@ -1196,7 +1231,8 @@ remaining runbooks. Closes the whole build.
   `cmd/v6ctl/` verb `campaign validate`.
 - **Acceptance:** `TestCampaignValidate` reproduces every §4.2 blocking check on fixture PRs
   (added-file-with-uuid, modified-uuid, rename-with-preserved-uuid, within-file duplicate,
-  oversize file) and never fails on cross-file duplicates (06 §9.7). Fixtures: 10-testing.md.
+  oversize file) and never fails on cross-file duplicates (06 §9.7). Fixtures: 06-ingest.md §9
+  (ingest fixtures; 00 §8.2 exception).
 
 ### P7.2 — Merge-trigger sync path + bot UUID write-back
 - **Governs:** see 06-ingest.md — Campaign repo sync (§3): the webhook/merge path (repo-dispatch
@@ -1284,12 +1320,15 @@ matrix against the §-headings of files 01–10; any section with no task ID is 
 | 06-ingest — §5 (resource-host registry) | P5.1 |
 | 06-ingest — §6 (GeoIP/ASN attribution) | P1.9 |
 | 06-ingest — DNS-provider mapping (`ns_host→provider`) | P1.13 |
+| 06-ingest — §6.11 (v6ctl provider verbs + seed file) | P1.13 |
 | 06-ingest — hosting/CDN provider tag | P1.14 |
 | 06-ingest — §7 (v6ctl shame + resource verbs) | P4.11, P5.2 |
+| 06-ingest — §10.7 (v6ctl stats recalc) + `disable` verb | P2.14 |
+| 04-lifecycle-scheduling — service/manual lifecycle triage (service-candidates) | P2.9, P2.14 |
 | 07-api — server baseline, cross-cutting (envelope, snake_case, RFC 9457, HTTP, health, caching) | P4.1, P4.5 |
 | 07-api — pagination/filtering/sorting (keyset/cursor, count strategy) | P4.13 |
 | 07-api — resource model (domains + tier collections, country, asn/provider, campaign, resources) | P4.3, P5.4 |
-| 07-api — changelog event / per-domain timeline / diff (OPEN-7) | P4.14 |
+| 07-api — changelog event / per-domain timeline (OPEN-7 `/diff`: cut, 07 §5.6) | P4.14 |
 | 07-api — change feeds (Atom + JSON-Feed) + CSV export | P4.15 |
 | 07-api — /mandates + `?tag=` campaign filter (OPEN-12) | P4.16, P4.3 |
 | 07-api — /ip client-IP echo | P4.4 |

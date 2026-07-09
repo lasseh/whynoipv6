@@ -324,7 +324,7 @@ Numbered algorithm (lifted structure; deltas marked):
    `Result{Status: StatusNotApplicable, Details: map[string]any{"reason": "subdomain entity: www check not applicable"}}` and exclude the check from phase 1. **Decision:** exact reason string as quoted (design mandates the forced `not_applicable`; the string is new).
 3. **Phase 1** — run concurrently (bounded errgroup, `concurrencyLimit`), via `runPhase`:
    `dns_aaaa_base`, `dns_aaaa_www` (unless skipped in step 2), `dns_ns_ipv6`, `dns_mx_ipv6`, `dns_dnssec`, `spf_ipv6`.
-   **Delta (design §2.8 C):** `latency_ipv4` is REMOVED from the v6audit `phase1Names` set — it exists only as a v4-vs-v6 comparison, and running it in phase 1 would fire up to 3 real HTTPS GETs against ~750k v4-only sites daily (~2.5M fetches), contradicting "most domains cost only DNS".
+   **Delta (design §2.8 C):** `latency_ipv4` is REMOVED from the v6audit `phase1Names` set — it exists only as a v4-vs-v6 comparison, and running it in phase 1 would fire up to 3 real HTTPS GETs against ~775k v4-only sites daily (~2.3M fetches; population: 00-overview.md — sizing constants §5.2), contradicting "most domains cost only DNS".
 4. Read `baseResult`, `wwwResult`, `mxResult` from the map (a missing entry reads as `Result{Status: StatusError}` via `getResult`).
 5. Compute the phase-2 gate: `hasAAAA := baseResult.Status == StatusSupported || wwwResult.Status == StatusSupported`. (For subdomains, the stored `not_applicable` www result makes the gate depend on `base` alone — by construction, no special case.)
 6. Partition phase-2 checkers; for each, first match wins:
@@ -546,6 +546,11 @@ func (p *Preflight) Run(ctx context.Context) bool
 
 // PassedWithin reports whether the last successful probe is younger than d.
 func (p *Preflight) PassedWithin(d time.Duration) bool
+
+// LastPass returns the time of the last successful probe (the zero Time if
+// none yet). It is the worker's source for the mapper's preflightPassedAt
+// input (02-observation-model.md — MapObservations).
+func (p *Preflight) LastPass() time.Time
 ```
 
 Contract (consumers wire it, this package defines it):

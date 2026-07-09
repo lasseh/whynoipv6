@@ -161,7 +161,7 @@ needs them.
 | `resolver.bulk_upstreams` | `RESOLVER_BULK_UPSTREAMS` | []string `host:port` | `["127.0.0.1:53","127.0.0.1:5353"]` | 01 | Bulk resolver upstreams = the two local Unbound instances (§8). |
 | `checks.max_ns_lookups` | `CHECKS_MAX_NS_LOOKUPS` | int | `4` | 01 | Per-host AAAA detail cap for `dns_ns_ipv6` (≤0 is a config error). |
 | `checks.max_mx_lookups` | `CHECKS_MAX_MX_LOOKUPS` | int | `5` | 01 | Per-host AAAA detail cap for `dns_mx_ipv6`. |
-| `crawler.resources.enabled` | `CRAWLER_RESOURCES_ENABLED` | bool | `false` | design §4.6 | Resource-dependency feature flag; flipped `true` at phase-5. While `false` the crawler skips discovery and writes `resources=not_applicable`. |
+| `crawler.resources.enabled` | `CRAWLER_RESOURCES_ENABLED` | bool | `false` | 02 | Resource-dependency feature flag; flipped `true` at phase-5. While `false` the crawler skips discovery and writes `resources=not_applicable`. |
 
 ### 2.3 Consensus resolver (crawler binary)
 
@@ -226,7 +226,7 @@ Provider names/addresses (`1.1.1.1`, `8.8.8.8`, `9.9.9.9` + their v6 forms), the
 
 | Key | env var | Type | Default | Owner | From | Meaning |
 |---|---|---|---|---|---|---|
-| `ops.webhook_url` | `OPS_WEBHOOK_URL` | string (URL) | `""` (disabled) | crawler, v6ctl | design §2.6 | Ops-webhook endpoint for all alerts/summaries (§12). Empty = no webhook (dev). |
+| `ops.webhook_url` | `OPS_WEBHOOK_URL` | string (URL) | `""` (disabled) | crawler, v6ctl | 04 | Ops-webhook endpoint for all alerts/summaries (§12). Empty = no webhook (dev). |
 | `ops.healthcheck_url` | `OPS_HEALTHCHECK_URL` | string (URL) | `""` (disabled) | crawler | 04,12 | **This process's** healthchecks.io ping URL (one per crawler instance). Empty = disabled. |
 | `ops.healthcheck_tick_url` | `OPS_HEALTHCHECK_TICK_URL` | string (URL) | `""` (disabled) | crawler | 04,12 | Daily-tick healthchecks.io check (coordinator only). |
 | `ops.healthcheck_min_interval` | `OPS_HEALTHCHECK_MIN_INTERVAL` | duration | `60s` | crawler | 04,12 | Minimum spacing between per-process heartbeat pings. |
@@ -235,7 +235,7 @@ Provider names/addresses (`1.1.1.1`, `8.8.8.8`, `9.9.9.9` + their v6 forms), the
 
 | Key | env var | Type | Default | Owner | From | Meaning |
 |---|---|---|---|---|---|---|
-| `unbound_stats.control` | `UNBOUND_STATS_CONTROL` | string (cmd) | `unbound-control` | v6ctl | design §11.3 | Path/args to `unbound-control` (override for chroot setups); `v6ctl ops unbound-stats` runs the **resetting** `stats` variant. |
+| `unbound_stats.control` | `UNBOUND_STATS_CONTROL` | string (cmd) | `unbound-control` | v6ctl | 09 §8 | Path/args to `unbound-control` (override for chroot setups); `v6ctl ops unbound-stats` runs the **resetting** `stats` variant. |
 
 ### 2.10 API serving — badge, datasets, feeds, CSV export (api binary; export job = v6ctl)
 
@@ -266,7 +266,7 @@ only registers the two tuning knobs.
 
 | Key | env var | Type | Default | Owner | From | Meaning |
 |---|---|---|---|---|---|---|
-| `dns_provider.seed_path` | `DNS_PROVIDER_SEED_PATH` | string (file) | `""` (none) | crawler, v6ctl | 06 | Path to the curated `ns_host → provider` seed mapping (YAML/CSV); empty = mapping derived from collected NS data only. |
+| `dns_provider.seed_path` | `DNS_PROVIDER_SEED_PATH` | string (file) | `""` (none) | crawler, v6ctl | 06 | Path to the curated `ns_host → provider` seed mapping (YAML — a list of `{name, suffixes}` entries, 06 §6.11); empty = mapping derived from collected NS data only. |
 | `dns_provider.refresh_interval` | `DNS_PROVIDER_REFRESH_INTERVAL` | duration | `24h` | crawler | 06 | Rebuild cadence for the mapping from collected NS data (in the daily tick). |
 
 ---
@@ -452,8 +452,10 @@ working.
 4. `systemctl restart whynoipv6-crawler` (drains gracefully, §4).
 5. `systemctl restart whynoipv6-api`.
 6. **Verify:** `systemctl is-active whynoipv6-api whynoipv6-crawler` both `active`;
-   `curl -6 -sf http://[::1]:8080/` returns `{"message":"ok"}` (the 07-api.md §3.1
-   health endpoint); newest `crawler_metrics` row age `< 10 min` in Grafana.
+   `curl -6 -sf -o /dev/null http://[::1]:8080/livez` and
+   `curl -6 -sf -o /dev/null http://[::1]:8080/readyz` both return `200` (the
+   07-api.md §2.7 health endpoints — `readyz` additionally proves DB reachability);
+   newest `crawler_metrics` row age `< 10 min` in Grafana.
 
 **Rollback** = redeploy the previous release's binaries (steps 2, 4, 5 only). The
 expand/contract contract keeps the already-applied migration compatible. **Never migrate
@@ -694,7 +696,7 @@ services:
     ports: ["5302:53/udp", "5302:53/tcp"]
 
   migrate:
-    build: {context: ., dockerfile: Dockerfile}
+    build: {context: ./backend, dockerfile: Dockerfile}
     entrypoint: ["/v6ctl", "migrate", "up"]
     environment:
       DATABASE_URL: postgres://whynoipv6:whynoipv6@db:5432/whynoipv6?sslmode=disable
@@ -702,7 +704,7 @@ services:
       db: {condition: service_healthy}
 
   api:
-    build: {context: ., dockerfile: Dockerfile}
+    build: {context: ./backend, dockerfile: Dockerfile}
     entrypoint: ["/api"]
     ports: ["8080:8080"]
     environment:
@@ -715,7 +717,7 @@ services:
       migrate: {condition: service_completed_successfully}
 
   crawler:
-    build: {context: ., dockerfile: Dockerfile}
+    build: {context: ./backend, dockerfile: Dockerfile}
     entrypoint: ["/crawler"]
     environment:
       DATABASE_URL: postgres://whynoipv6:whynoipv6@db:5432/whynoipv6?sslmode=disable
@@ -869,8 +871,8 @@ webhook alert is the required part.
 ## 11. GeoLite2 lifecycle (`deploy/geoip/`)
 
 Replaces production's repo-bundled Jan-2023 mmdb files. The attribution logic, the
-`GEOIP_PATH` key, and the crawler's hourly mtime check + atomic reader swap are in
-05-schema.md / the crawler internals; this section owns the update lifecycle.
+`GEOIP_PATH` key, and the crawler's hourly mtime check + atomic reader swap are owned by
+06-ingest.md — §6.8 (`internal/geoip`); this section owns the update lifecycle.
 
 1. **Account:** free MaxMind account + license key. Store `AccountID` + `LicenseKey` in
    Ansible vault (`MAXMIND_ACCOUNT_ID`, `MAXMIND_LICENSE_KEY`).
@@ -885,7 +887,8 @@ Replaces production's repo-bundled Jan-2023 mmdb files. The attribution logic, t
    `OnCalendar=Wed,Sat 06:30` + `RandomizedDelaySec=4h` (§5). MaxMind publishes Tue/Fri;
    twice-weekly pickup, weekly is the acceptable minimum. Pickup by the crawler is the
    hourly mtime check + atomic reader swap — no tick step, no restart.
-4. **Monitoring:** the crawler exports the loaded mmdb build epoch into `crawler_metrics`;
+4. **Monitoring:** the crawler exports the loaded mmdb build epoch into
+   `crawler_metrics.geoip_build_epoch` (05-schema.md — crawler_metrics);
    Grafana alerts when it is older than **30 days** (catches expired license keys and
    broken timers — the exact failure mode production was stuck in).
 
@@ -992,7 +995,7 @@ rate limiting (`RateLimitBurst=10000`/30s) irrelevant even at 1M domains/day.
 access-log middleware** (a small custom one — do **not** use chi's default text logger) →
 `Recoverer` → `Timeout(30s)` → CORS → security headers → per-route Cache-Control. One
 `info` line per request with `request_id`, `method`, `path`, `status`, `bytes`,
-`duration_ms`, `remote_ip`. **Exclude the health endpoint** (`GET /`) from the access log.
+`duration_ms`, `remote_ip`. **Exclude the health endpoints** (`GET /livez`, `GET /readyz` — 07-api.md §2.7) from the access log.
 
 ---
 
@@ -1016,7 +1019,7 @@ else
   TEST_CMD := $(GO) test
 endif
 
-.PHONY: build build-linux test lint tidy vulncheck generate coverage compose-up compose-down clean help
+.PHONY: build build-linux test test-integration lint tidy vulncheck generate coverage compose-up compose-down clean help
 
 ##@ General
 help: ## Show this help
@@ -1037,6 +1040,9 @@ test: ## Run tests (race detector always on)
 lint: ## Run golangci-lint (vet, fmt, imports included)
 	golangci-lint run ./...
 
+test-integration: ## Integration tests (dockerized PG18+Timescale; //go:build integration files)
+	$(TEST_CMD) -race -tags=integration ./...
+
 coverage: ## Tests with coverage report
 	$(TEST_CMD) -race -coverprofile=coverage.out ./...
 	$(GO) tool cover -html=coverage.out -o coverage.html
@@ -1045,10 +1051,14 @@ vulncheck: ## Scan for known vulnerabilities
 	govulncheck ./...
 
 ##@ Codegen
-generate: ## Regenerate sqlc + oapi-codegen + openapi-typescript, fail if stale
+generate: ## Regenerate sqlc + OpenAPI codegen (activates once openapi.yaml exists); fail if stale
 	sqlc generate
-	oapi-codegen -config openapi/oapi-codegen.yaml openapi/openapi.yaml
-	openapi-typescript openapi/openapi.yaml -o ../frontend/src/api/schema.ts
+	@if [ -f ../openapi/openapi.yaml ]; then \
+	  oapi-codegen -config ../openapi/oapi-codegen.yaml ../openapi/openapi.yaml; \
+	  openapi-typescript ../openapi/openapi.yaml -o ../openapi/schema.ts; \
+	else \
+	  echo "openapi/openapi.yaml not present yet (pre-P4.5) — sqlc only"; \
+	fi
 	@git diff --exit-code || (echo "generated code is out of date — run codegen and commit" && exit 1)
 
 ##@ Utility
@@ -1067,6 +1077,8 @@ clean: ## Remove build artifacts
 
 .DEFAULT_GOAL := help
 ```
+
+Two decisions the recipes encode: **(a) `generate` is self-gating** — `openapi/openapi.yaml` is authored in P4.5, but `make generate` is an every-commit gate from Phase 0, so the oapi-codegen/openapi-typescript steps run only once the file exists (sqlc runs always); and **(b) the TypeScript schema is emitted at `openapi/schema.ts`**, never into `frontend/` — this build does not touch the frontend subtree (00-overview.md §4); the rebuilt frontend imports the schema from `openapi/`.
 
 ### 14.2 `.golangci.yml`
 
@@ -1096,17 +1108,21 @@ ENTRYPOINT ["/api"]
 
 Rolling `golang:alpine` (newest Go, no pin) and current distroless nonroot; compose
 overrides the entrypoint per service (§9). Migrations are embedded via `go:embed`, so the
-image needs no migrations directory.
+image needs no migrations directory. **The Dockerfile lives at `backend/Dockerfile` and
+builds with `context: ./backend`** (00-overview.md §4) — the `COPY go.mod go.sum ./` and
+`./cmd/*` paths resolve against the Go module root, not the monorepo root.
 
 ### 14.4 CI expectations (monorepo)
 
 CI runs on every PR and on the default branch. The pipeline: `make tidy` → `make lint` →
-`make generate` (**the generated-code staleness gate** — sqlc, oapi-codegen, and
-openapi-typescript output must be committed and current, honouring the brief's
-single-commit backend+frontend sync promise) → `make test` (dockerized
-Postgres+Timescale integration tests for `internal/postgres`, fake-DNS tests for
-`internal/consensus` + the resolver seam, OpenAPI contract + response tests for `internal/api`
-— 10-testing.md) → `make vulncheck` → `make build-linux` (publishes the three release
+`make generate` (**the generated-code staleness gate** — sqlc always; oapi-codegen +
+openapi-typescript once `openapi/openapi.yaml` exists (§14.1), their committed output
+current, honouring the brief's single-commit backend+API-schema sync promise) →
+`make test` (unit suite: fake-DNS tests for `internal/consensus` + the resolver seam,
+mapper/commit/classify vectors, OpenAPI contract + response tests for `internal/api` —
+10-testing.md) → `make test-integration` (the dockerized Postgres+Timescale
+`//go:build integration` suite for `internal/postgres` and the end-to-end scenarios —
+10-testing.md) → `make vulncheck` → `make build-linux` (publishes the three release
 artifacts consumed by the Ansible deploy, §6). Any stale generated output, untidy
 go.mod, lint finding, or test failure fails the build.
 
@@ -1137,13 +1153,14 @@ Fixture tables live in 10-testing.md; an implementation of this file is done whe
    oneshot service sets `OnFailure=whynoipv6-notify@%n.service`.
 6. **Deploy dry-run:** on a scratch host the §6 order (copy → `v6ctl migrate up` →
    restart crawler → restart api → verify) brings both units to `active` and
-   `curl -6 http://[::1]:8080/` returns `{"message":"ok"}`.
+   `curl -6 http://[::1]:8080/livez` + `curl -6 http://[::1]:8080/readyz` both
+   return `200` (07-api.md §2.7).
 7. **nginx:** `nginx -t` passes on the vhost; a request to
    `/datasets/2026-07-06/whynoipv6-top1m.csv.gz` is served from disk with
    `Cache-Control: …immutable`, and `GET /datasets` is proxied to the API.
 8. **compose:** `make compose-up` brings up db + 2 unbound + api + crawler; the crawler's
-   bulk resolver answers through the compose Unbound services; `curl localhost:8080/`
-   returns ok.
+   bulk resolver answers through the compose Unbound services; `curl localhost:8080/readyz`
+   returns `200`.
 9. **Backups:** the phase-3 gate (§10.4) is reproducible in CI/staging — stanza create,
    full backup, `pgbackrest check`, and one scratch restore that starts the API and
    returns `changelog` rows.

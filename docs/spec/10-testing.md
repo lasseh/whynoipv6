@@ -832,7 +832,7 @@ same seeded DB (same keyset cursor, same order):
 | `GET /heroes` | `GET /domains?class=hero` |
 | `GET /sinners` | `GET /domains?class=sinner` |
 | `GET /gold` | `GET /domains?gold=true` |
-| `GET /almost` | the "almost there" preset (partial, one step from hero) |
+| `GET /almost` | `GET /domains?class=partial` ("almost there" ≡ `partial` — one class, two names; 07-api.md §2.2) |
 | `GET /mail` | `GET /domains?class=hero&mx=supported` (scoped so `mx=` is indexed via `class`) |
 
 Assert the filter param is **`class`** (not `classification`), that there is **no `/v1`** URL
@@ -884,24 +884,24 @@ Kept from the original RealIP/CORS/rate-bucket trio, aligned to the redesigned s
    bucket (the `/64`-prefix keying, design report §7.3). Breach → `429 rate-limited` problem
    (§7.4) + `Retry-After`.
 
-### 8.6 Diff endpoint (OPEN-7, design report §6.6)
+### 8.6 Diff endpoint (deleted — OPEN-7 re-resolved: cut)
 
-`GET /diff?from=&to=&scope=global|country|campaign` reads the **`changelog`** (authoritative
-confirmed transitions), **not** a difference of two `stats_*` snapshots — so it reports *which*
-domains changed. Seed changelog rows where one domain gains `hero` and another loses it in the
-window; assert the `added_to_hero` / `lost_hero` lists **name the domains** (not just net
-counts). `scope=country`/`campaign` filters to that scope; an empty window → `200` with empty
-lists (not `404`). (Exact shape settles during OpenAPI authoring — 07-api.md authoritative.)
+The `/diff` endpoint is **cut from this build** (07-api.md — §5.6): "who went green" is fully
+served by the `/changelog` list and the change feeds, whose vectors live in §7/§8.3. No diff
+vectors exist; a contract test asserts `GET /diff` is **not** in the OpenAPI document.
 
 ### 8.7 Mandates & campaign tags (OPEN-12, design report §6.6)
 
-The mandate/tag capability on campaigns (`campaign.tags` / `campaign_tag`, 05-schema.md — campaign
+The mandate/tag capability on campaigns (the `campaign.tags` TEXT[] column, 05-schema.md — campaign
 tags) plus a `?tag=` filter and a `/mandates` surface:
 
 - Seed campaigns with tags; `GET /campaigns?tag=<tag>` returns **only** tagged campaigns; an
   untagged campaign is absent; an unknown tag → `200` empty `items` (not `404`).
-- `GET /mandates` lists the mandate-tagged campaigns with their citation metadata.
-- The campaign resource (§5.7) carries the tag/mandate field on the wire.
+- `GET /mandates` returns exactly the campaigns carrying the literal tag `mandate`
+  (`'mandate' = ANY(tags)`, 07-api.md — §5.6) in the standard campaign list envelope —
+  byte-identical to `GET /campaigns?tag=mandate` on the same seeded DB; a campaign with
+  only descriptive tags (`eu-2030`) and no `mandate` tag is absent.
+- The campaign resource (§5.7) carries the `tags` field on the wire.
 
 ### 8.8 `tld` / provider filter + pivot (design report §5.3a, §5.6)
 
@@ -1107,14 +1107,21 @@ max-age=86400` and an `ETag` from the crawl generation.
 The pure cursor codec is §7.3; these properties need a live DB and a large seeded set:
 
 - **Stable order under a mutating set:** page forward through a seeded `/domains` leaderboard;
-  between two page fetches, **re-rank** rows (simulate the daily crawl) and insert/delete some;
-  assert the keyset walk (generation re-anchored, §7.3) neither skips nor duplicates a row that
-  stayed in the set — the property offset pagination fails. Contrast: an offset walk over the
-  same mutation would skip/duplicate (documented rationale, not a test to write).
+  between two page fetches, insert/delete rows **without touching surviving ranks** (same
+  generation); assert the keyset walk neither skips nor duplicates a surviving row — the
+  property offset pagination fails. Then **re-rank** rows (simulate the daily generation flip);
+  assert the re-anchored cursor (§7.3) resumes at the same `last_rank`, the walk stays strictly
+  rank-monotone and error-free, and any skip/repeat is confined to rows whose rank crossed the
+  cursor boundary (best-effort re-anchor — 07-api.md §3.2). Contrast: an offset walk over the
+  same mutation would skip/duplicate arbitrarily (documented rationale, not a test to write).
 - **Deep-page constant cost:** `EXPLAIN` the keyset seek at page 1 and at a deep page
   (`WHERE (rank, id) > (...)`) and assert both are an **index scan on `idx_domain_rank`** with
   the **same** plan shape and no row-walking — cost independent of depth. Assert conversely that
   the query never emits an `OFFSET`.
+- **Scoped-list plan gate:** `EXPLAIN` the query behind an `/asns/{n}/domains` page and assert
+  an index scan on `idx_domain_asn` (`(asn_id, classification, rank)`, 05-schema.md) seeking
+  within the ASN — no per-page sort of the ASN's population; same assertion for a
+  `/countries/{code}/domains` page on `idx_domain_country`.
 - **`after_rank` deep-link:** `GET /domains?after_rank=500000` plans as an indexed range scan
   (`WHERE rank > 500000 ORDER BY rank`), returns rows whose **global** rank > N then filtered
   (not "page N of the filter"), and is accepted only on rank-ordered views (a `sort=host` +
@@ -1165,10 +1172,11 @@ happy path plus the one or two error branches that matter; no line-coverage targ
 |---|---|---|
 | `internal/domain` (Canonicalize, classify, IPv6Status/Observation types) | **Exhaustive** | The trust core's pure logic; §2, §6 tables are total over their input domains. |
 | `internal/consensus` (quorum, breakers, A lookup) | **Exhaustive** | §3 covers the full 3-symbol permutation + degraded mode + both breakers; classification correctness depends on it. |
+| `internal/checker` (the lifted 15-check engine) | **High** — the 01-engine.md §14 acceptance criteria; engine fixtures (fake DNS/HTTP/TLS harness + per-check cases) are owned by 01 per the 00 §8.2 exception | Lifted nearly verbatim from a working engine; the *adapted* seams (AAAA seam, `resource_discovery`, preflight, timeouts) get dedicated cases, while unchanged lifted internals need behavioral, not exhaustive, coverage. |
 | `internal/crawler` — `observe.go` (mapper) | **Exhaustive** | §4 covers every mapping-table row + the resources branches; the property tests forbid unmapped combinations. |
 | `internal/crawler` — commit unit | **Exhaustive** | §5 covers every anti-flap branch, the counting gate, step R, dead trigger, lease fence; §10.1/§10.4 prove the DB write + fence. |
 | `internal/api` — serializers (status-object, envelope, keyset cursor, RFC 9457, badge/CSV/feed/manifest, §5.9 reconstruction) | **Exhaustive** | The contract surface; §7 tables + golden files are pinned and the masking invariant is total over the enum. |
-| `internal/api` — handlers (routing, contract, behavior) | **High** — OpenAPI drift gate (§8.1) + tier/`?class=` equivalence (§8.2) + membership/visibility (§8.3) + masking (§8.4) + trio (§8.5) + diff/mandates/pivot/stats (§8.6–§8.9) | The native contract is the whole point; each endpoint is covered by the drift gate plus at least one behavioral fixture. |
+| `internal/api` — handlers (routing, contract, behavior) | **High** — OpenAPI drift gate (§8.1) + tier/`?class=` equivalence (§8.2) + membership/visibility (§8.3) + masking (§8.4) + trio (§8.5) + mandates/pivot/stats (§8.7–§8.9; §8.6 deleted — `/diff` cut) | The native contract is the whole point; each endpoint is covered by the drift gate plus at least one behavioral fixture. |
 | `internal/postgres` / sqlc queries | **Integration-covered** | Exercised by §9–§10 against real DDL; the claim-plan gate (§9.3) and commit/contention/fence (§10.1/§10.4) are the meaningful assertions, not line coverage of generated code. |
 | `internal/ingest` (Tranco, campaign sync, resource discovery, attribution) | **High** — 06 acceptance #2–#10 each become a fixture/integration case | Correctness of ranks/membership/dedup/attribution is load-bearing but exercised at the behavioral level. |
 | `internal/lock` (advisory locks) | **Integration smoke** — one two-process `TryRun` contention case (one wins, one gets `ErrHeld`) + one `Run` wait-and-run case | Postgres does the hard part; the test proves the key encoding and skip/wait behavior. |

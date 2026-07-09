@@ -273,7 +273,11 @@ CREATE INDEX idx_domain_partial ON domain (rank)
 CREATE INDEX idx_domain_parent  ON domain (parent_id) WHERE parent_id IS NOT NULL;
 CREATE INDEX idx_domain_country ON domain (country_id, classification, rank)
   WHERE rank IS NOT NULL AND NOT disabled;
-CREATE INDEX idx_domain_asn     ON domain (asn_id);
+CREATE INDEX idx_domain_asn     ON domain (asn_id, classification, rank)
+  WHERE rank IS NOT NULL AND NOT disabled;
+-- Same shape as idx_domain_country: an ASN-scoped rank-keyset page
+-- (GET /asns/{n}/domains, 07) must seek within the ASN, not sort a
+-- hyperscaler's 100k+ rows per page.
 -- Provider/TLD pivots are allowed only under an indexed public scope (OPEN-2: no
 -- GIN, no unscoped provider/tld scan). These mirror idx_domain_country's shape so
 -- the ?tld=/?provider= filters (07) compose with class + rank ordering.
@@ -507,6 +511,8 @@ CREATE TABLE crawler_metrics (
   p50_ms INT, p99_ms INT, active_slots INT, queue_depth INT,
   dim_counters JSONB,                          -- per-dimension tallies; includes the
                                                --   lease_lost counter (03 fence aborts)
+  geoip_build_epoch TIMESTAMPTZ,               -- build date of the loaded mmdb pair (06);
+                                               --   backs the Grafana GeoIP-staleness alert (09)
   is_final BOOLEAN NOT NULL DEFAULT FALSE
 );
 

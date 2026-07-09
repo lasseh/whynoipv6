@@ -53,7 +53,7 @@ Consequences the operator must expect (all intended, none a bug):
   This is honest and self-heals; flag it so the low day-1 hero count reads as expected, not
   a snapshot bug.
 - **Empty changelog history.** The "who went green when" archive — the `/changelog` feeds,
-  the diff endpoint, the Atom/JSON-Feed change feeds, the per-domain history trajectory,
+  the Atom/JSON-Feed change feeds, the per-domain history trajectory,
   and the State-of-IPv6 report — starts empty at launch and fills over the months following
   as the fresh crawl records confirmed transitions. A best-effort structured changelog
   import from the retained production dump remains a **deliberately-deferred future option**
@@ -81,7 +81,9 @@ starting:
    `campaign_domain` rows from the YAML repo (06-ingest.md — §3).
 4. **Crawler soaked:** the new crawler has run ≥3 full passes on the (initially empty)
    frontier (04-lifecycle-scheduling.md), so confirmed state and native changelog rows have
-   begun accumulating and the anti-flap machine is warm.
+   begun accumulating and the anti-flap machine is warm. (This is the **production cutover**
+   precondition; the build-phase gate P4.G uses a bounded sample crawl — the two are
+   different gates, 11-implementation-plan.md.)
 5. **Backups live and restore-tested** (09-ops.md); the daily tick is writing `stats_*`
    rows.
 
@@ -103,7 +105,10 @@ throughout until the flip, so there is no public downtime.
    (twitter.com, twitch.tv, ebay.com, imgur.com, imdb.com, wordpress.com, github.com,
    paypal.com, stackoverflow.com, soundcloud.com, nytimes.com, w3schools.com). Each host
    must already be a ranked apex `domain` row (the `shame add` predicate), so this runs
-   after Tranco ingest. Without this step `/shame` is empty at launch.
+   after Tranco ingest. Without this step `/shame` is empty at launch. Then run
+   `v6ctl stats recalc` (06-ingest.md — §10.7) to seed/refresh today's `stats_*`
+   snapshot so the API's `meta.generation`/`as_of` and the day-0 dashboards serve a
+   current rollup without waiting for the nightly tick.
 3. **Verify the new API against its contract.** Run the OpenAPI contract-test suite and the
    behavioral synthetics (§4) against the new API pointed at the new DB, with the rebuilt
    frontend served from staging. **All §4 gates must be green.** Any red gate halts

@@ -101,7 +101,7 @@ The classification tiers are promoted to their own **short, canonical plural col
 | `/heroes` | `class=hero` |
 | `/sinners` | `class=sinner` |
 | `/gold` | `gold=true` |
-| `/almost` | the "almost there" list (partial domains one step from hero) |
+| `/almost` | `class=partial` (**Decision:** "almost there" and `partial` are the same set — one class, two names; the tier path is a plain alias) |
 | `/mail` | the mail/MX heroes track (`class=hero&mx=supported`) |
 
 Each shares the exact same keyset/cursor pagination, §4.2 row shape, and `?country=`/`?asn=`/`?tld=`/`?provider=` filter composition as `/domains`, under the §3.3 indexed-scope guardrail. `GET /sinners?country=no` ≡ `GET /domains?class=sinner&country=no`. `GET /domains` remains the **general filterable collection** whose `?class=` param spans every tier (`class=partial`, etc.); the tier paths are short aliases over it, not a second vocabulary.
@@ -162,7 +162,7 @@ A **thin, ad-hoc envelope**, not JSON:API. There are exactly **two** collection 
 - **Counts live only in `meta`.** A collection carries *either* `meta.count_estimate` (approximate — the default for anything derived from a large or filtered `domain` scan) *or* `meta.count` (exact — only the genuinely bounded curated sets: campaign members, `/shame`, forward-resources). A client reads count from `meta`, full stop.
 - **`meta` is deliberately thin:** `as_of` (freshness signal), `generation` (integer crawl id, the ETag/cache-key seed), `count`/`count_estimate` where applicable, `license`. Never nest `items`/`points` more than one level. No per-response `stability` marker.
 
-**`generation` and `as_of` sources** (they seed the ETag/cache story, §6.1, so they must be deterministic across backend instances). `generation` is the integer `YYYYMMDD` from **`max(stats_global_daily.day)`** (see 05-schema.md — stats tables) — an O(1) lookup, monotonic, identical on every instance, no schema change. `as_of` is the crawl-rollup completion timestamp: the cleanest source is a single `generated_at TIMESTAMPTZ` on the daily stats rollup (a one-column addition, 05-schema.md — stats tables); until it exists, `as_of` falls back deterministically to `max(stats_global_daily.day)` at `00:00:00Z`. The per-worker `crawler_metrics.run_id` UUID is **not** used.
+**`generation` and `as_of` sources** (they seed the ETag/cache story, §6.1, so they must be deterministic across backend instances). `generation` is the integer `YYYYMMDD` from **`max(stats_global_daily.day)`** (see 05-schema.md — stats tables) — an O(1) lookup, monotonic, identical on every instance, no schema change. `as_of` is the crawl-rollup completion timestamp: `stats_global_daily.generated_at` for the newest day, written by the daily stats rollup (06-ingest.md — daily stats rollup; DDL 05-schema.md — stats tables); when it is NULL (the day-0 seed row, pre-first-rollup), `as_of` falls back deterministically to `max(stats_global_daily.day)` at `00:00:00Z`. The per-worker `crawler_metrics.run_id` UUID is **not** used.
 
 *Rejected — full JSON:API* (ceremony for a shallow graph), *bare top-level arrays* (force metadata into headers; unextendable), and the *legacy `{"data":[…]}` search envelope* (one-off inconsistency, deleted in favor of the single `{items,page,meta}` / `{points,meta}` shapes).
 
@@ -293,9 +293,9 @@ LIMIT $4 + 1;
 
 The seek tuple is then `[is_rank_null, last_rank, last_id]`. The `rank IS NOT NULL` global-list seek is **never** reused verbatim for this nullable ordering.
 
-**Staleness handling.** A cursor whose `g` differs from the current crawl generation is *re-anchored*: because rank is monotonic, the server seeks to the same `last_rank` in the current generation and continues. If the filter fingerprint `f` no longer matches the request's filters, the cursor is rejected with `400 invalid-parameter`. Bidirectional paging (`prev_cursor`) is supported.
+**Staleness handling.** A cursor whose `g` differs from the current crawl generation is *re-anchored*: the server seeks to the same `last_rank` in the current generation and continues. Re-anchoring is **best-effort**, not exact — ranks are reassigned every generation, so rows whose rank crossed the cursor boundary between fetches may be skipped or repeated (a bounded, browse-acceptable anomaly); within a single generation the keyset walk is exact. If the filter fingerprint `f` no longer matches the request's filters, the cursor is rejected with `400 invalid-parameter`. Bidirectional paging (`prev_cursor`) is supported.
 
-**Deep-link escape hatch — rank-ordered views only.** `?after_rank=500000` (and `?around_rank=500000` for a centered window) provide shareable, stateless deep links — `WHERE rank > 500000 ORDER BY rank LIMIT n`, an indexed range scan. **Honest scope:** these mean *"rows whose global rank ≥ N, then filtered"* — **not** "the Nth matching row." On a sparse filter (`class=hero` selects ~41k of 1M), `after_rank=N` returns "heroes whose global rank > N," which is not "page N of heroes." The `sort=host` ordering has **no** random-access param — forward/back cursor only. A true dense per-filter rank is **OPEN-14** (skipped).
+**Deep-link escape hatch — rank-ordered views only.** `?after_rank=500000` (and `?around_rank=500000` for a centered window: the `⌈limit/2⌉` rows ranked ≤ N plus the `⌊limit/2⌋` rows ranked > N, honoring the same `?limit` cap) provide shareable, stateless deep links — `WHERE rank > 500000 ORDER BY rank LIMIT n`, an indexed range scan. **Honest scope:** these mean *"rows whose global rank ≥ N, then filtered"* — **not** "the Nth matching row." On a sparse filter (`class=hero` selects ~41k of 1M), `after_rank=N` returns "heroes whose global rank > N," which is not "page N of heroes." The `sort=host` ordering has **no** random-access param — forward/back cursor only. A true dense per-filter rank is **OPEN-14** (skipped).
 
 `?limit` is client-supplied with a sane cap (`default 50`, `max 200`).
 
@@ -308,21 +308,21 @@ Filters are plain query params, aligned with response field names, and **constra
 | `class` | `hero`\|`partial`\|`sinner`\|`inactive`\|`unknown` | `idx_domain_heroes/sinners/partial` | primary filter; presets the `/heroes`,`/sinners`,`/almost`,`/mail` tier paths; predicate spelled `AND rank IS NOT NULL AND NOT disabled` |
 | `gold` | `true` | layered on `idx_domain_heroes` | gold ⊂ hero, cheap without its own index; the `/gold` tier path |
 | `country` | ISO code | `idx_domain_country` | composes with `class` + rank order |
-| `asn` | AS number | `idx_domain_asn` | equality cheap; sort within pays a sort |
+| `asn` | AS number | `idx_domain_asn` (05-schema.md — `(asn_id, classification, rank)`) | composes with `class` + rank order, same shape as `country` |
 | `tld` | eTLD suffix | `idx_domain_tld` (05-schema.md — domain table) | TLD/ccTLD pivot; scope-required unless combined with an indexed prefilter |
 | `provider` | `dns_provider.id` | `idx_domain_dns_provider` (05-schema.md) | DNS-provider pivot (OPEN-4); scope-required as `tld`/`flag` |
 | `hosting` | hosting tag | `domain.hosting_provider` (05-schema.md) | hosting/CDN text-tag pivot; scope-required |
 | `flag` | one of `class_flags` | **expensive** — scope-required (below) | |
 | `base`/`www`/`ns`/`mx`/`conn`/`resources` | an `ipv6_status` value | **expensive** — scope-required (below) | per-dimension confirmed-status filters (drives the mail track) |
 | `rank_max` / `rank_min` | int | `idx_domain_rank` | cohort ranges (top-1000 etc.) |
-| `q` | substring | `idx_domain_host_trgm` | search; **does not** compose with rank ordering — host/relevance-ordered |
+| `q` | substring | `idx_domain_host_trgm` | search; **does not** compose with rank ordering — ordered and cursor-paged on the `host` seek key (§3.2); trigram similarity is not a strict total order, so relevance never orders pages |
 | `sort` | `rank` (default) \| `-rank` \| `host` | index-dependent | each sort binds a distinct cursor ordering (§3.2) |
 | `fields` | comma list | — | sparse fieldset to trim the leaderboard row |
 | `format` | `json` (default) \| `csv` | — | content negotiation (§5.5) |
 
 **Guardrails against expensive predicates (scope-required, §2.5).**
 
-- **`flag=`, the per-dimension status filters (`mx=supported`, …), and the `tld=`/`provider=`/`hosting=` pivots are the same class of unindexed-or-selective predicate.** They are accepted **only** when combined with an indexed prefilter (`class`, `country`, or `asn`). A bare, unscoped one returns **`422 scope-required`** — *not* `validation-error`; the value is valid, it just needs a scope — with a `detail` naming the scope params that satisfy it. (OPEN-2: no `class_flags` GIN index is added now.)
+- **`flag=`, the per-dimension status filters (`mx=supported`, …), and the `tld=`/`provider=`/`hosting=` pivots are the same class of unindexed-or-selective predicate.** They are accepted **only** when combined with an indexed prefilter (`class`, `country`, or `asn`). A bare, unscoped one returns **`422 scope-required`** — *not* `validation-error`; the value is valid, it just needs a scope — with a `detail` naming the scope params that satisfy it. (OPEN-2: no `class_flags` GIN index is added now.) **Decision — at most ONE such residual per request.** These predicates are heap residuals inside the indexed scope; stacking several selective residuals (`?tld=com&provider=12&mx=unsupported`) makes each keyset page re-scan a large fraction of the scope. A request combining two or more residuals from this class also returns `422 scope-required`, with a `detail` steering to the indexed axes. Accepted worst case (documented, not hidden): one sparse residual inside one large scope may scan up to that scope per page — bounded by the single-residual rule and the `?limit` cap.
 - **The global mail-heroes / mail-sinners lists are served from stats, not a live scan.** A site-wide "all domains missing IPv6 mail" list (`mx=unsupported`) is the unscoped seq-scan case. The **aggregate headline** comes from the daily `mx_supported` stats counter (`domains − mx_supported`); the **list form** is offered only as a `class`/`country`/`asn`-scoped filtered `/domains` view (§4.4).
 - **Arbitrary cross-dimension boolean predicates** (`base=supported AND mx=unsupported` with no scope) are not offered — no composite index covers them.
 - **No request-time aggregation over the live `domain` table.** Country/ASN/classification rollups are read from the precomputed `stats_*` daily tables, never `GROUP BY domain` live.
@@ -449,7 +449,7 @@ Heroes / sinners / gold / almost / mail are **first-class short collection resou
 GET /heroes             # preset: class=hero
 GET /sinners            # preset: class=sinner
 GET /gold               # preset: gold=true
-GET /almost             # the "almost there" list — partial domains one step from hero
+GET /almost             # preset: class=partial (the "almost there" list — same set, §2.2)
 GET /mail               # the mail/MX heroes track (class=hero&mx=supported)
 ```
 
@@ -504,7 +504,7 @@ A small bounded editorial list (the ~12 curated picks), so no cursor — `page` 
 }
 ```
 
-`count_v4` is **synthesized server-side** (`count_total − count_v6`) — not stored. `count_v6`/`count_total` are the **canonical wire names**, used in both this detail representation and the ASN time-series (§4.10); the time-series' underlying `stats_asn_daily.v6_domains` column is mapped onto the same `count_v6` wire name (§2.3). `GET /asns` is the network leaderboard (`?sort=count_v6|count_total`; real columns, no `order=ipv4|ipv6` alias; `?q=` does normal substring match with no AS-prefix bug). `GET /asns/{number}/domains` lists the network's domains — **keyset-paginated with a `count_estimate`** (a hyperscaler ASN can host hundreds of thousands of eTLD+1s, §3.1). The sentinel `0` = Unknown appears as a normal group. This is the **hosting-ASN league table**.
+`count_v4` is **synthesized server-side** (`count_total − count_v6`) — not stored. `count_v6`/`count_total` are the **canonical wire names**, used in both this detail representation and the ASN time-series (§4.10); the time-series' underlying `stats_asn_daily.v6_domains` and `domains` columns are mapped onto the same `count_v6`/`count_total` wire names (§2.3). `GET /asns` is the network leaderboard (`?sort=count_v6|count_total`; real columns, no `order=ipv4|ipv6` alias; `?q=` does normal substring match with no AS-prefix bug). `GET /asns/{number}/domains` lists the network's domains — **keyset-paginated with a `count_estimate`** (a hyperscaler ASN can host hundreds of thousands of eTLD+1s, §3.1). The sentinel `0` = Unknown appears as a normal group. This is the **hosting-ASN league table**.
 
 **The DNS-provider league table** (OPEN-4, resolved YES) is **committed**: the `dns_provider` mapping table (`ns_suffixes[] → provider`, 05-schema.md — dns_provider table; `domain.dns_provider_id` set at scan commit by longest ns-suffix match) backs `GET /providers` + `GET /providers/{id}` + `GET /providers/{id}/domains`, keyed by `dns_provider.id`, exposing binary inclusion + counts only (no scores). It is the highest-leverage pivot — one provider's default flips thousands of domains. Provider detail row:
 
@@ -535,7 +535,7 @@ The companion **hosting/CDN provider** axis is `domain.hosting_provider` — a n
   "name": "Norwegian Banks",
   "description": "Retail banks operating in Norway",
   "source_file": "campaigns/no-banks.yaml",
-  "tags": ["mandate:eu-2030", "sector:banking"],
+  "tags": ["mandate", "eu-2030", "sector-banking"],
   "disabled": false,
   "adoption": { "v6_ready_percent": 41.7, "day": "2026-07-07" },
   "domains": {
@@ -628,7 +628,7 @@ The overview point carries the full `stats_global_daily` payload (see 05-schema.
 
 `meta.source: "confirmed_state"` is deliberate: if the measurement-flavored `scan_daily_adoption` cagg is ever exposed (OPEN-5 — resolved NO), it must be labelled `source: "measurement"` and never reconciled with these numbers.
 
-The country / campaign / asn `/stats` points carry their table's columns (`stats_country_daily`, `stats_campaign_daily` incl. `v6_ready`, `stats_asn_daily` with `v6_domains` mapped to `count_v6`); `day` serializes as `"YYYY-MM-DD"` (UTC date part for TIMESTAMPTZ `day` columns). `GET /campaigns/{uuid}/stats` uses the raw-UUID resolver; unknown/disabled → `404 not-found`. `GET /asns/{number}/stats` accepts a leading `AS`/`as` prefix (stripped); non-numeric after stripping → `400 invalid-parameter`; unknown AS → `404 not-found`.
+The country / campaign / asn `/stats` points carry their table's columns (`stats_country_daily`, `stats_campaign_daily` incl. `v6_ready`, `stats_asn_daily` with `v6_domains` mapped to `count_v6` and `domains` mapped to `count_total`, §4.6); `day` serializes as `"YYYY-MM-DD"` (UTC date part for TIMESTAMPTZ `day` columns). `GET /campaigns/{uuid}/stats` uses the raw-UUID resolver; unknown/disabled → `404 not-found`. `GET /asns/{number}/stats` accepts a leading `AS`/`as` prefix (stripped); non-numeric after stripping → `400 invalid-parameter`; unknown AS → `404 not-found`.
 
 ### 4.11 Resource dependencies
 
@@ -853,7 +853,7 @@ Six precompiled byte-deterministic variants, one per `classification`(+`gold`) i
 
 Bulk data is a **separate static channel**, not the paginated API (keeps scrapers off the pagination path; avoids the BigQuery-only mistake that spawns unofficial mirrors).
 
-- **Served statically by nginx** under `/datasets/` (not the API). Config key `DATASETS_DIR` (string, default `/var/lib/whynoipv6/datasets`; registry: 09-ops.md), shared by the API binary and `v6ctl export`. Nightly `v6ctl export` (owned by 04-lifecycle-scheduling.md, after the stats tick) produces, atomically (tmp-dir `rename(2)`), 3 size tiers (`top100k`, `top1m`, `full`) × formats **CSV.gz + Parquet** (+ optionally JSONL for the append-only changelog history). Columns: `host, rank, kind, parent, classification, class_flags, gold, {6 confirmed statuses}, {6 since-timestamps}, tld, country, asn, dns_provider, hosting_provider, last_checked`. `top100k`/`top1m` use the publicly-ranked predicate; `full` = all non-disabled scannable entities. Dailies retained 90 d, first-of-month forever.
+- **Served statically by nginx** under `/datasets/` (not the API). Config key `DATASETS_DIR` (string, default `/var/lib/whynoipv6/datasets`; registry: 09-ops.md), shared by the API binary and `v6ctl export`. Nightly `v6ctl export` (owned by 04-lifecycle-scheduling.md, after the stats tick) produces, atomically (tmp-dir `rename(2)`), 3 size tiers (`top100k`, `top1m`, `full`) × formats **CSV.gz + Parquet** (exactly the two formats the manifest `formats` array lists; no JSONL artifact in this build). Columns: `host, rank, kind, parent, classification, class_flags, gold, {6 confirmed statuses}, {6 since-timestamps}, tld, country, asn, dns_provider, hosting_provider, last_checked`. `top100k`/`top1m` use the publicly-ranked predicate; `full` = all non-disabled scannable entities. Dailies retained 90 d, first-of-month forever.
 - **Self-describing + verifiable (OPEN-6):** each snapshot ships a Frictionless **`datapackage.json`** — a `resources[]` array with per-file `path`, `bytes`, `hash: "sha256:<digest>"` (always the `sha256:` prefix; a bare hash means MD5 to the spec), and a Table Schema of column names/types — plus a `SHA256SUMS` file and a `DICTIONARY.md`.
 
 On-disk layout:
@@ -905,7 +905,7 @@ On-disk layout:
 `schema_version` (int) versions this index shape and the exported column set, and bumps whenever either changes. Each `snapshots[]` entry points at that snapshot's `datapackage.json` (which lists the actual files, hashes, and Table Schema). `snapshots` is sorted newest-first and lists every snapshot currently retained; `latest` duplicates the newest complete snapshot's entry.
 
 - **Citable:** the **dated (immutable) path** is the citation anchor; a stable `/datasets/latest/whynoipv6-top1m.csv.gz` alias is the convenience URL for scripts. An optional **Zenodo Concept DOI** + per-snapshot **Version DOI** (monthly/quarterly cadence) is a later additive step gated on demand (OPEN-6), outside the daily crawler.
-- **License in-band:** **CC-BY-NC-4.0** stated in the manifest, the OpenAPI `info` block, and `DICTIONARY.md`, with the required attribution string. **Tranco rank redistribution (OPEN-13):** CC-BY-NC-4.0 covers *our* derived measurements; it does not by itself grant the right to redistribute Tranco's ranking, which the datasets re-publish as a `rank` column. **Action item before dataset release:** verify Tranco's redistribution/citation terms, cite the specific list ID/permalink in `DICTIONARY.md` + `datapackage.json` + the manifest `attribution`, and honor its attribution requirement; **if Tranco restricts bulk rank redistribution, omit `rank` from the public bulk export (or gate it)** while keeping per-entity `rank` on the live API.
+- **License in-band:** **CC-BY-NC-4.0** stated in the manifest, the OpenAPI `info` block, and `DICTIONARY.md`, with the required attribution string. **Tranco rank redistribution (OPEN-13):** CC-BY-NC-4.0 covers *our* derived measurements; it does not by itself grant the right to redistribute Tranco's ranking, which the datasets re-publish as a `rank` column. **Decision (OPEN-13): the bulk exports ship WITH the `rank` column.** Cite the specific Tranco list ID/permalink in `DICTIONARY.md` + `datapackage.json` + the manifest `attribution` and honor Tranco's attribution requirement. The redistribution-terms check is a post-launch action item, not a build gate; if it finds bulk rank redistribution restricted, `rank` is dropped from subsequent exports (a `schema_version` bump) while per-entity `rank` stays on the live API.
 
 **Atomic publish** (nightly): write all files + `datapackage.json` + `SHA256SUMS` into `{date}.tmp/`, fsync, `rename({date}.tmp, {date})`; repoint `latest` via `ln -sfn` + `mv -T` (rename(2), no missing window); prune per retention; regenerate `manifest.json` from the directory tree, write `manifest.json.tmp`, rename over `manifest.json`. On any failure before the snapshot rename, delete the `.tmp` dir and fire the ops webhook; the previous manifest/latest stay correct.
 
@@ -960,15 +960,15 @@ Per item: `id`/`guid` = the composite `(host, ts, field)`; `date_published` = `t
 
 ### 5.5 CSV export via content negotiation
 
-**`?format=csv`** on the list endpoints (`/domains*`, `/countries`, `/asns`, `/providers`, `/changelog`, search results) — a query param keeps the CDN cache key clean and the shareable URL stable. `Content-Type: text/csv; charset=utf-8`, `Content-Disposition: attachment`. A defined column set per list (the §4.2 summary-row columns for `/domains`). The stable, cursor- or `after_rank`-anchored URL means a shared link reproduces the same view. Larger "give me everything" pulls are steered to the static datasets (§5.3), not deep CSV pagination.
+**`?format=csv`** on the list endpoints (`/domains*`, `/countries`, `/asns`, `/providers`, `/changelog`, search results) — a query param keeps the CDN cache key clean and the shareable URL stable. `Content-Type: text/csv; charset=utf-8`, `Content-Disposition: attachment`. A defined column set per list (the §4.2 summary-row columns for `/domains`). The stable, cursor- or `after_rank`-anchored URL means a shared link reproduces the same view. **Cap:** a CSV request honors the same filters and cursor as the JSON view but raises the `?limit` cap from 200 to `export.csv_max_rows` (int, default 10000; registry: 09-ops.md); larger "give me everything" pulls are steered to the static datasets (§5.3), not deep CSV pagination.
 
 *Rejected — `Accept: text/csv` negotiation* (needs `Vary: Accept`, invisible in a shared link). `Accept` is reserved for the JSON core (default `application/json`; `406 not-acceptable` when unsatisfiable).
 
-### 5.6 Diff, methodology, mandates
+### 5.6 Methodology, mandates
 
-- **Diff / "who went green"** (OPEN-7, resolved YES): `GET /diff?from=&to=&scope=global|country|campaign` returning added-to-hero / lost-hero lists, read from the **`changelog`** (the authoritative confirmed transitions), not from differencing two `stats_*` snapshots, so it reports *which* domains changed, not just net counts. (Scope granularity + exact shape settle during OpenAPI authoring.)
+- **Diff / "who went green"** (OPEN-7, re-resolved: **cut from this build**). A dedicated `GET /diff` endpoint added no information the confirmed-transition surfaces don't already carry — "who went green between A and B" is the `/changelog` list (§4.8) filtered client-side, and "what changed recently" is the change feeds (§5.4). Its response contract was never pinned; rather than invent one, the endpoint is dropped. It can return later as a purely additive endpoint if a real consumer appears.
 - **Methodology** (trust lever): `GET /methodology` returns the deterministic Hero/Partial/Sinner ladder + Gold rule + flag definitions as structured JSON, plus a `criteria_changelog[]` of every rule change (recalibrate Gold in the open). Mostly static content; the `class_flags` vocabulary it documents is the join key the frontend uses to select fix guides.
-- **Government-mandate compliance tracking** (OPEN-12, resolved YES — explicitly wanted): the campaign `tags`/mandate capability (the `campaign.tags` TEXT[] column with GIN index `idx_campaign_tags`, 05-schema.md — campaign table) backs a **`?tag=`** filter on `GET /campaigns` and a **`GET /mandates`** surface (campaigns tagged as mandates, with citations). The `campaign` resource (§4.7) exposes `tags`.
+- **Government-mandate compliance tracking** (OPEN-12, resolved YES — explicitly wanted): the campaign `tags`/mandate capability (the `campaign.tags` TEXT[] column with GIN index `idx_campaign_tags`, 05-schema.md — campaign table) backs a **`?tag=`** filter on `GET /campaigns` and a **`GET /mandates`** surface. **Decision — the mandate predicate and shape:** a campaign is a mandate iff it carries the literal tag `mandate` (`'mandate' = ANY(tags)`, GIN-served); descriptive companion tags (`eu-2030`, `sector-banking`) are ordinary kebab-case tags per the 06-ingest.md tag grammar (no namespace colons). `GET /mandates` ≡ `GET /campaigns?tag=mandate` — the standard campaign list envelope, nothing bespoke; there is no `citations` field (legal/citation copy is frontend content keyed by campaign `name`/`description`, not API data). The `campaign` resource (§4.7) exposes `tags`.
 - **Contact-discovery / notification toolkit** (OPEN-8, resolved NO) — **not built**; templates remain static.
 - **OG/social cards** — deferred; pairs with the badge renderer (same image pipeline), unverified impact.
 
@@ -982,9 +982,9 @@ Daily-batch, fully-public data behind a CDN is the ideal caching case; caching +
 
 | Class | `Cache-Control` | Validators |
 |---|---|---|
-| List / leaderboard / stats (`/domains*`, `/countries*`, `/asns*`, `/providers*`, `/stats/*`, `/changelog`) | `public, max-age=300, s-maxage=<until-next-crawl>, stale-while-revalidate=600, stale-if-error=86400` | `ETag` from crawl `generation` (+ query fingerprint); `Last-Modified` from crawl ts; honor `If-None-Match` → `304` |
+| List / leaderboard / stats (`/domains*`, `/countries*`, `/asns*`, `/providers*`, `/stats/*`) | `public, max-age=300, s-maxage=<until-next-crawl>, stale-while-revalidate=600, stale-if-error=86400` | `ETag` from crawl `generation` (+ query fingerprint); `Last-Modified` from crawl ts; honor `If-None-Match` → `304` |
 | Domain / country / asn / provider / campaign detail | as above; ETag tied to that entity's last confirmed transition | `304` on `If-None-Match` |
-| Change feeds (`*.atom`, `*.feed.json`) | `public, max-age=300` | `ETag` from generation |
+| Changelog lists (`/changelog` + scoped) and change feeds (`*.atom`, `*.feed.json`) | `public, max-age=300` | `ETag` from the scope window's `max(changelog.ts)` (+ query fingerprint) — **not** the daily `generation`: the crawler commits transitions continuously, and a generation-seeded ETag would 304-freeze the live surface until the next stats tick |
 | Badge SVG/JSON (`/badge/*`) | `public, max-age=86400` | `ETag` from generation |
 | Datasets manifest (`/datasets`) | `public, max-age=300` | — |
 | Static datasets (nginx) | dated dirs `immutable, max-age=31536000`; `latest/` + `DICTIONARY.md` `max-age=3600` | nginx auto ETag |
@@ -992,7 +992,7 @@ Daily-batch, fully-public data behind a CDN is the ideal caching case; caching +
 | Live check (`POST /check`, `GET /check/{id}` while `pending`/`processing`), `/ip` | `no-store` | — |
 | Health (`/livez`,`/readyz`) | `no-store` | — |
 
-Use `public` (never `private`) — there is no per-user data, and `public` is what unlocks CDN edge caching. **ETags must be deterministic across backend instances** — derive from the crawl `generation` (`= YYYYMMDD` of `max(stats_global_daily.day)`, §2.4) + query fingerprint (for lists) or the entity's last confirmed-transition ts (for detail), never from a per-process hash.
+Use `public` (never `private`) — there is no per-user data, and `public` is what unlocks CDN edge caching. **ETags must be deterministic across backend instances** — derive from the crawl `generation` (`= YYYYMMDD` of `max(stats_global_daily.day)`, §2.4) + query fingerprint (for lists), the entity's last confirmed-transition ts (for detail), or the scope window's `max(changelog.ts)` (for changelog lists and feeds), never from a per-process hash. The badge and manifest `max-age` literals above are the defaults of `badge.cache_ttl` (24h) and `datasets.manifest_cache_ttl` (5m) respectively (registry: 09-ops.md) — override the key and the header follows.
 
 ### 6.2 Content negotiation
 
@@ -1010,7 +1010,7 @@ gzip + Brotli at the **nginx/CDN edge** for all JSON / CSV / SVG-text / Atom res
 
 ## 7. OpenAPI-first workflow
 
-A hand-authored **`openapi.yaml` (OpenAPI 3.0.3)** at the repo root is the single source of truth; both sides generate from it, and CI blocks drift.
+A hand-authored **`openapi.yaml` (OpenAPI 3.0.3)** at `openapi/openapi.yaml` (monorepo root `openapi/` directory, 00-overview.md §4) is the single source of truth; both sides generate from it, and CI blocks drift.
 
 - **Version 3.0.3, not 3.1.** oapi-codegen mainline (the chi-server + strict-server generators) does not yet support 3.1. Since chi v5 is locked, oapi-codegen `chi-server` + `strict-server` is the natural spec-first Go path. This API's payloads — the status/classification enums, aggregate percentages, cursor pagination, RFC 9457 errors — are all expressible in 3.0.3 (using `nullable: true` for the `null` status values), so the 3.1 gap costs nothing.
 - **Go side:** `github.com/oapi-codegen/oapi-codegen/v2` (latest release) generates server interface + types + request validation in `internal/api/gen/` (committed); handlers implement the generated strict-server interface; hand-written code never redefines wire types. *Rejected — ogen* (native 3.1 but owns the router/server, displacing the locked chi v5).
