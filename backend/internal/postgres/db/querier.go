@@ -50,6 +50,9 @@ type Querier interface {
 	DetectServiceCandidatesIndegree(ctx context.Context, indegreeThreshold int32) (int64, error)
 	// db/query/domain.sql — sqlc query source (layout: 05-schema.md §10.2).
 	DomainByHost(ctx context.Context, host string) (DomainByHostRow, error)
+	// Operator disable/enable (P2.14; glossary: service/manual lifecycle).
+	DomainDisable(ctx context.Context, arg DomainDisableParams) (int64, error)
+	DomainEnable(ctx context.Context, host string) (int64, error)
 	DomainInsertEntity(ctx context.Context, arg DomainInsertEntityParams) (int64, error)
 	DomainMembershipReEntry(ctx context.Context, id int64) error
 	// The attribution stamp: touches ONLY the pivot column, never the
@@ -83,6 +86,9 @@ type Querier interface {
 	// recompute over the publicly-ranked scope.
 	ResetCountryCounters(ctx context.Context) error
 	ResetProviderCounters(ctx context.Context) error
+	// Operator triage (P2.14; 04 — service/manual lifecycle).
+	ServiceCandidateList(ctx context.Context) ([]ServiceCandidateListRow, error)
+	ServiceCandidateResolve(ctx context.Context, host string) (int64, error)
 	SnapshotASNDaily(ctx context.Context) error
 	SnapshotCampaignDaily(ctx context.Context) error
 	SnapshotCountryDaily(ctx context.Context) error

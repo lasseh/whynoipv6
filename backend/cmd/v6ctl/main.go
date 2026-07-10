@@ -39,6 +39,10 @@ func main() {
 	root.AddCommand(trancoCmd())
 	root.AddCommand(campaignCmd())
 	root.AddCommand(providerCmd())
+	root.AddCommand(serviceCandidatesCmd())
+	root.AddCommand(disableCmd())
+	root.AddCommand(enableCmd())
+	root.AddCommand(statsCmd())
 
 	if err := root.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, "v6ctl: "+err.Error())

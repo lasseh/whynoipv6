@@ -142,3 +142,16 @@ WHERE NOT d.disabled AND d.rank IS NULL AND d.created_by <> 'live_check'
     -- NULL and silently exempts the row from S3–S5.
     OR COALESCE(d.last_requested_at >= now() - @live_check_linkage::interval, false))
   AND d.orphaned_at IS NOT NULL AND d.orphaned_at < now() - @delist_grace::interval;
+
+-- Operator disable/enable (P2.14; glossary: service/manual lifecycle).
+
+-- name: DomainDisable :execrows
+UPDATE domain
+SET disabled = true, disabled_reason = @reason, disabled_at = now(), updated_at = now()
+WHERE host = @host AND NOT disabled;
+
+-- name: DomainEnable :execrows
+UPDATE domain
+SET disabled = false, disabled_reason = NULL, disabled_at = NULL,
+    next_check_at = now(), updated_at = now()
+WHERE host = @host AND disabled AND disabled_reason IN ('manual', 'service');

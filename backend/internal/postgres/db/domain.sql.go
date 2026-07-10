@@ -290,6 +290,42 @@ func (q *Queries) DomainByHost(ctx context.Context, host string) (DomainByHostRo
 	return i, err
 }
 
+const DomainDisable = `-- name: DomainDisable :execrows
+
+UPDATE domain
+SET disabled = true, disabled_reason = $1, disabled_at = now(), updated_at = now()
+WHERE host = $2 AND NOT disabled
+`
+
+type DomainDisableParams struct {
+	Reason *DisabledReason `json:"reason"`
+	Host   string          `json:"host"`
+}
+
+// Operator disable/enable (P2.14; glossary: service/manual lifecycle).
+func (q *Queries) DomainDisable(ctx context.Context, arg DomainDisableParams) (int64, error) {
+	result, err := q.db.Exec(ctx, DomainDisable, arg.Reason, arg.Host)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const DomainEnable = `-- name: DomainEnable :execrows
+UPDATE domain
+SET disabled = false, disabled_reason = NULL, disabled_at = NULL,
+    next_check_at = now(), updated_at = now()
+WHERE host = $1 AND disabled AND disabled_reason IN ('manual', 'service')
+`
+
+func (q *Queries) DomainEnable(ctx context.Context, host string) (int64, error) {
+	result, err := q.db.Exec(ctx, DomainEnable, host)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const DomainInsertEntity = `-- name: DomainInsertEntity :one
 INSERT INTO domain (host, kind, parent_id, rank, created_by, asn_id, country_id, tld, next_check_at)
 VALUES ($1, $2, $3, NULL, $4, $5, $6, $7, now())

@@ -7,6 +7,8 @@ package db
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const DetectServiceCandidatesApex = `-- name: DetectServiceCandidatesApex :execrows
@@ -44,6 +46,61 @@ ON CONFLICT (domain_id) DO NOTHING
 
 func (q *Queries) DetectServiceCandidatesIndegree(ctx context.Context, indegreeThreshold int32) (int64, error) {
 	result, err := q.db.Exec(ctx, DetectServiceCandidatesIndegree, indegreeThreshold)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const ServiceCandidateList = `-- name: ServiceCandidateList :many
+
+SELECT sc.domain_id, d.host, sc.reasons, sc.detected_at
+FROM service_candidate sc
+JOIN domain d ON d.id = sc.domain_id
+WHERE NOT sc.dismissed
+ORDER BY sc.detected_at
+`
+
+type ServiceCandidateListRow struct {
+	DomainID   int64              `json:"domain_id"`
+	Host       string             `json:"host"`
+	Reasons    []string           `json:"reasons"`
+	DetectedAt pgtype.Timestamptz `json:"detected_at"`
+}
+
+// Operator triage (P2.14; 04 — service/manual lifecycle).
+func (q *Queries) ServiceCandidateList(ctx context.Context) ([]ServiceCandidateListRow, error) {
+	rows, err := q.db.Query(ctx, ServiceCandidateList)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ServiceCandidateListRow{}
+	for rows.Next() {
+		var i ServiceCandidateListRow
+		if err := rows.Scan(
+			&i.DomainID,
+			&i.Host,
+			&i.Reasons,
+			&i.DetectedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const ServiceCandidateResolve = `-- name: ServiceCandidateResolve :execrows
+UPDATE service_candidate SET dismissed = true
+WHERE domain_id = (SELECT id FROM domain WHERE host = $1) AND NOT dismissed
+`
+
+func (q *Queries) ServiceCandidateResolve(ctx context.Context, host string) (int64, error) {
+	result, err := q.db.Exec(ctx, ServiceCandidateResolve, host)
 	if err != nil {
 		return 0, err
 	}
