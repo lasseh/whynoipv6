@@ -43,6 +43,7 @@ func main() {
 	root.AddCommand(disableCmd())
 	root.AddCommand(enableCmd())
 	root.AddCommand(statsCmd())
+	root.AddCommand(opsCmd())
 
 	if err := root.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, "v6ctl: "+err.Error())

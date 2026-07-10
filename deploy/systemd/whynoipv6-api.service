@@ -1,0 +1,18 @@
+[Unit]
+Description=WhyNoIPv6 API
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+User=whynoipv6
+EnvironmentFile=/etc/whynoipv6/env
+ExecStart=/opt/whynoipv6/bin/api
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadOnlyPaths=/var/lib/whynoipv6/datasets
+
+[Install]
+WantedBy=multi-user.target

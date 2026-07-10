@@ -15,3 +15,11 @@ SELECT count(*) FROM domain
 WHERE (NOT disabled OR disabled_reason IN ('dead', 'delisted'))
   AND next_check_at <= now()
   AND (claimed_at IS NULL OR claimed_at < now() - interval '30 minutes');
+
+-- name: InsertUnboundStats :exec
+INSERT INTO unbound_stats (host, num_queries, cache_hits, cache_miss,
+                           rcode_servfail, rcode_nxdomain,
+                           recursion_time_avg_ms, requestlist_avg, raw)
+VALUES (@host, @num_queries, @cache_hits, @cache_miss,
+        @rcode_servfail, @rcode_nxdomain,
+        @recursion_time_avg_ms, @requestlist_avg, @raw);

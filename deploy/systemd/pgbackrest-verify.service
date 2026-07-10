@@ -1,0 +1,9 @@
+[Unit]
+Description=pgBackRest nightly backup verification
+OnFailure=whynoipv6-notify@%n.service
+
+[Service]
+Type=oneshot
+User=whynoipv6
+EnvironmentFile=/etc/whynoipv6/env
+ExecStart=/usr/local/bin/whynoipv6-backup-verify.sh

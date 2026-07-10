@@ -1,0 +1,9 @@
+[Unit]
+Description=Timer for pgBackRest daily differential backup
+
+[Timer]
+OnCalendar=Mon..Sat *-*-* 03:30:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

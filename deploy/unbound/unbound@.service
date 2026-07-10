@@ -1,0 +1,15 @@
+[Unit]
+Description=Unbound recursive resolver instance %i
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart=/usr/sbin/unbound -d -p -c /etc/unbound/instances/%i.conf
+Restart=on-failure
+RestartSec=2
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/unbound
+
+[Install]
+WantedBy=multi-user.target

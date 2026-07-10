@@ -1,0 +1,10 @@
+[Unit]
+Description=WhyNoIPv6 ops-webhook failure notice for %i
+
+[Service]
+Type=oneshot
+User=whynoipv6
+EnvironmentFile=/etc/whynoipv6/env
+ExecStart=/usr/bin/curl -fsS --max-time 15 -X POST "${OPS_WEBHOOK_URL}" \
+  -H "Content-Type: application/json" \
+  -d "{\"level\":\"error\",\"source\":\"systemd\",\"unit\":\"%i\",\"host\":\"%H\"}"

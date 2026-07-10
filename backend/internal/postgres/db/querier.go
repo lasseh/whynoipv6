@@ -70,6 +70,7 @@ type Querier interface {
 	InsertCrawlerMetrics(ctx context.Context, arg InsertCrawlerMetricsParams) error
 	InsertScan(ctx context.Context, arg InsertScanParams) error
 	InsertScanDetail(ctx context.Context, arg InsertScanDetailParams) error
+	InsertUnboundStats(ctx context.Context, arg InsertUnboundStatsParams) error
 	ProviderAppendSuffixes(ctx context.Context, arg ProviderAppendSuffixesParams) error
 	ProviderByName(ctx context.Context, name string) (ProviderByNameRow, error)
 	// provider remove clears referencing domains first (FK); they re-stamp on

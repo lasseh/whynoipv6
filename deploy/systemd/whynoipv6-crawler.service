@@ -1,0 +1,20 @@
+[Unit]
+Description=WhyNoIPv6 crawler
+After=network-online.target postgresql.service unbound@1.service unbound@2.service
+Wants=network-online.target
+
+[Service]
+User=whynoipv6
+EnvironmentFile=/etc/whynoipv6/env
+ExecStart=/opt/whynoipv6/bin/crawler
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/whynoipv6/datasets
+ReadOnlyPaths=/var/lib/GeoIP
+TimeoutStopSec=90
+
+[Install]
+WantedBy=multi-user.target

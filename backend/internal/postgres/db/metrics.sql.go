@@ -57,6 +57,42 @@ func (q *Queries) InsertCrawlerMetrics(ctx context.Context, arg InsertCrawlerMet
 	return err
 }
 
+const InsertUnboundStats = `-- name: InsertUnboundStats :exec
+INSERT INTO unbound_stats (host, num_queries, cache_hits, cache_miss,
+                           rcode_servfail, rcode_nxdomain,
+                           recursion_time_avg_ms, requestlist_avg, raw)
+VALUES ($1, $2, $3, $4,
+        $5, $6,
+        $7, $8, $9)
+`
+
+type InsertUnboundStatsParams struct {
+	Host               string   `json:"host"`
+	NumQueries         *int64   `json:"num_queries"`
+	CacheHits          *int64   `json:"cache_hits"`
+	CacheMiss          *int64   `json:"cache_miss"`
+	RcodeServfail      *int64   `json:"rcode_servfail"`
+	RcodeNxdomain      *int64   `json:"rcode_nxdomain"`
+	RecursionTimeAvgMs *float32 `json:"recursion_time_avg_ms"`
+	RequestlistAvg     *float32 `json:"requestlist_avg"`
+	Raw                []byte   `json:"raw"`
+}
+
+func (q *Queries) InsertUnboundStats(ctx context.Context, arg InsertUnboundStatsParams) error {
+	_, err := q.db.Exec(ctx, InsertUnboundStats,
+		arg.Host,
+		arg.NumQueries,
+		arg.CacheHits,
+		arg.CacheMiss,
+		arg.RcodeServfail,
+		arg.RcodeNxdomain,
+		arg.RecursionTimeAvgMs,
+		arg.RequestlistAvg,
+		arg.Raw,
+	)
+	return err
+}
+
 const QueueDepth = `-- name: QueueDepth :one
 SELECT count(*) FROM domain
 WHERE (NOT disabled OR disabled_reason IN ('dead', 'delisted'))

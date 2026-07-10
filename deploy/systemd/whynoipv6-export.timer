@@ -1,0 +1,9 @@
+[Unit]
+Description=Timer for WhyNoIPv6 dataset snapshot export
+
+[Timer]
+OnCalendar=*-*-* 04:30:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

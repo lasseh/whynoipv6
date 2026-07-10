@@ -1,0 +1,9 @@
+[Unit]
+Description=Timer for WhyNoIPv6 Unbound stats scrape
+
+[Timer]
+OnCalendar=*:*:00
+Persistent=false
+
+[Install]
+WantedBy=timers.target

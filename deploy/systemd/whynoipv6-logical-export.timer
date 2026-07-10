@@ -1,0 +1,9 @@
+[Unit]
+Description=Timer for WhyNoIPv6 weekly logical CSV export
+
+[Timer]
+OnCalendar=Sun *-*-* 04:30:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

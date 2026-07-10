@@ -1,0 +1,9 @@
+[Unit]
+Description=Timer for pgBackRest weekly full backup
+
+[Timer]
+OnCalendar=Sun *-*-* 03:30:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

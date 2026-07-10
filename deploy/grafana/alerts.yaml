@@ -1,0 +1,115 @@
+# Provisioned Grafana alert rules A1–A5 (09-ops.md §12), Postgres datasource
+# (uid: whynoipv6-pg), notification policy → the ops webhook. Thresholds are
+# tunable starting points.
+apiVersion: 1
+groups:
+  - orgId: 1
+    name: whynoipv6
+    folder: WhyNoIPv6
+    interval: 1m
+    rules:
+      - uid: wni6-a1-crawler-stalled
+        title: "A1 crawler stalled"
+        condition: C
+        for: 5m
+        labels: {severity: critical}
+        annotations:
+          summary: "No crawler_metrics row in 15 minutes (both processes stalled or dead)"
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: whynoipv6-pg
+            model:
+              rawSql: "SELECT count(*) AS rows FROM crawler_metrics WHERE ts > now() - interval '15 minutes'"
+              format: table
+          - refId: C
+            datasourceUid: "__expr__"
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: lt, params: [1]}
+      - uid: wni6-a2-frontier-lag
+        title: "A2 frontier lag"
+        condition: C
+        for: 15m
+        labels: {severity: warning}
+        annotations:
+          summary: "Active domains overdue by >6h exceed 50k (silent throughput collapse)"
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: whynoipv6-pg
+            model:
+              rawSql: "SELECT count(*) AS lag FROM domain WHERE (NOT disabled OR disabled_reason IN ('dead','delisted')) AND next_check_at < now() - interval '6 hours'"
+              format: table
+          - refId: C
+            datasourceUid: "__expr__"
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [50000]}
+      - uid: wni6-a3-error-ratio
+        title: "A3 error ratio"
+        condition: C
+        for: 10m
+        labels: {severity: warning}
+        annotations:
+          summary: "Crawler failure ratio >20% over the last hour"
+        data:
+          - refId: A
+            relativeTimeRange: {from: 3600, to: 0}
+            datasourceUid: whynoipv6-pg
+            model:
+              rawSql: "SELECT coalesce(sum(failed)::float / nullif(sum(processed),0), 0) AS ratio FROM crawler_metrics WHERE ts > now() - interval '1 hour'"
+              format: table
+          - refId: C
+            datasourceUid: "__expr__"
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [0.20]}
+      - uid: wni6-a4-timescale-jobs
+        title: "A4 TimescaleDB jobs failing"
+        condition: C
+        for: 30m
+        labels: {severity: warning}
+        annotations:
+          summary: "A TimescaleDB background job reports last_run_status = Failed"
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: whynoipv6-pg
+            model:
+              rawSql: "SELECT count(*) AS failed FROM timescaledb_information.job_stats WHERE last_run_status = 'Failed'"
+              format: table
+          - refId: C
+            datasourceUid: "__expr__"
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [0]}
+      - uid: wni6-a5-unbound-down
+        title: "A5 Unbound/scraper down"
+        condition: C
+        for: 5m
+        labels: {severity: critical}
+        annotations:
+          summary: "No unbound_stats row in 5 minutes (resolver or scrape timer down)"
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: whynoipv6-pg
+            model:
+              rawSql: "SELECT count(*) AS rows FROM unbound_stats WHERE ts > now() - interval '5 minutes'"
+              format: table
+          - refId: C
+            datasourceUid: "__expr__"
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: lt, params: [1]}
