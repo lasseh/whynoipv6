@@ -42,7 +42,7 @@ vulncheck: ## Scan for known vulnerabilities
 
 ##@ Codegen
 generate: ## Regenerate sqlc + OpenAPI codegen (activates once openapi.yaml exists); fail if stale
-	sqlc generate
+	@if [ -f sqlc.yaml ]; then sqlc generate; else echo "sqlc.yaml not present yet (pre-P1.5) — skipping sqlc"; fi
 	@if [ -f ../openapi/openapi.yaml ]; then \
 	  oapi-codegen -config ../openapi/oapi-codegen.yaml ../openapi/openapi.yaml; \
 	  openapi-typescript ../openapi/openapi.yaml -o ../openapi/schema.ts; \
