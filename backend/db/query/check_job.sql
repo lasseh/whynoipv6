@@ -1,0 +1,1 @@
+-- db/query/check_job.sql — sqlc query source (layout: 05-schema.md §10.2).

@@ -1,0 +1,1 @@
+-- db/query/scan.sql — sqlc query source (layout: 05-schema.md §10.2).
