@@ -91,19 +91,7 @@ func (s *Server) listASNs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var forwardMore, backwardMore bool
-	overflow := len(items) > limit
-	if backward {
-		backwardMore, forwardMore = overflow, true
-		if overflow {
-			items = items[1:]
-		}
-	} else {
-		forwardMore, backwardMore = overflow, params.WithSeek
-		if overflow {
-			items = items[:limit]
-		}
-	}
+	items, forwardMore, backwardMore := trimWindow(items, limit, backward, params.WithSeek)
 	if wantCSV {
 		writeASNsCSV(w, items)
 		return
@@ -173,9 +161,7 @@ func (s *Server) asnLeaderboardRows(r *http.Request, sortKey string, params db.A
 		}
 	}
 	if backward { // ASC fetch → re-reverse into leaderboard order
-		for i, j := 0, len(items)-1; i < j; i, j = i+1, j-1 {
-			items[i], items[j] = items[j], items[i]
-		}
+		reverseSlice(items)
 	}
 	return items, nil
 }

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -318,6 +319,20 @@ func (s *Server) serveDomainList(w http.ResponseWriter, r *http.Request, preset 
 		InvalidParameter(w, r, err.Error())
 		return
 	}
+	// The positioning params are mutually exclusive: a cursor combined
+	// with a rank deep link would be validated and then silently ignored,
+	// and a stale after_rank under a backward cursor produces a garbage
+	// window. Reject the combinations outright.
+	positioners := 0
+	for _, p := range []bool{q.Get(paramCursor) != "", afterRank != nil, aroundRank != nil} {
+		if p {
+			positioners++
+		}
+	}
+	if positioners > 1 {
+		InvalidParameter(w, r, "cursor, after_rank, and around_rank are mutually exclusive")
+		return
+	}
 
 	filter, err := s.parseDomainFilter(r, q)
 	var ve validationError
@@ -377,20 +392,7 @@ func (s *Server) serveDomainList(w http.ResponseWriter, r *http.Request, preset 
 			InternalError(w, r, err)
 			return
 		}
-		overflow := len(rows) > limit
-		if backward {
-			backwardMore = overflow
-			forwardMore = true // the row the prev cursor came from
-			if overflow {
-				rows = rows[1:] // backward overflow sits at the front
-			}
-		} else {
-			forwardMore = overflow
-			backwardMore = seek != nil || afterRank != nil
-			if overflow {
-				rows = rows[:limit]
-			}
-		}
+		rows, forwardMore, backwardMore = trimWindow(rows, limit, backward, seek != nil || afterRank != nil)
 	}
 
 	items := make([]DomainSummary, len(rows))
@@ -448,19 +450,7 @@ func (s *Server) hostOrderedPage(r *http.Request, filter *postgres.DomainListFil
 	if err != nil {
 		return nil, Page{}, err
 	}
-	var forwardMore, backwardMore bool
-	overflow := len(rows) > limit
-	if backward {
-		backwardMore, forwardMore = overflow, true
-		if overflow {
-			rows = rows[1:]
-		}
-	} else {
-		forwardMore, backwardMore = overflow, seek != nil
-		if overflow {
-			rows = rows[:limit]
-		}
-	}
+	rows, forwardMore, backwardMore := trimWindow(rows, limit, backward, seek != nil)
 	items := make([]DomainSummary, len(rows))
 	for i := range rows {
 		items[i] = summaryFromRow(&rows[i])
@@ -668,7 +658,9 @@ func (s *Server) getDomain(w http.ResponseWriter, r *http.Request) {
 		// engine serialization (07 §4.3).
 		if raw != nil {
 			var sr checker.ScanResult
-			if err := json.Unmarshal(raw, &sr); err == nil {
+			if err := json.Unmarshal(raw, &sr); err != nil {
+				slog.Warn("evidence detail unparseable, omitted", "domain", host, "err", err.Error())
+			} else {
 				scanTS := row.LastCheckedAt.Time.UTC()
 				links := crawler.LiveLinks(r.Context(), s.svc.Pool, sr, s.opts.ResourcesEnabled)
 				mapped := crawler.MapLiveResult(domain.Kind(row.Kind), sr, scanTS, scanTS, links, s.opts.ResourcesEnabled)

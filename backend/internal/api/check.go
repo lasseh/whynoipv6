@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/lasseh/whynoipv6/internal/campaign"
 	"github.com/lasseh/whynoipv6/internal/checker"
 	"github.com/lasseh/whynoipv6/internal/crawler"
 	"github.com/lasseh/whynoipv6/internal/domain"
@@ -69,6 +70,13 @@ func (s *Server) postCheck(w http.ResponseWriter, r *http.Request) {
 		InvalidParameter(w, r, "not a valid public domain name")
 		return
 	}
+	// The consumer's ensure-domain PSL evaluation (ICANN section, no
+	// wildcard rule) would fail an unknown-TLD host anyway — reject it at
+	// the boundary with a real reason instead of a failed job.
+	if _, _, err := campaign.PSLParse(host); err != nil {
+		InvalidParameter(w, r, "the host is not under a known public-suffix TLD")
+		return
+	}
 
 	// 2. Rate limit: per-/64-prefix then global (§6.3).
 	prefix, ok := ratePrefix(clientIP(r))
@@ -116,7 +124,7 @@ func (s *Server) postCheck(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if confErr != nil && !errors.Is(confErr, pgx.ErrNoRows) {
-		InternalError(w, r, err)
+		InternalError(w, r, confErr)
 		return
 	}
 

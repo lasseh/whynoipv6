@@ -300,10 +300,12 @@ func ValidateResiduals(q url.Values, pathScoped bool) error {
 
 // BuildPage assembles the page block from an N+1 window walk (07 §3.2
 // bidirectional): forwardMore = rows exist after lastK (mints next_cursor),
-// backwardMore = rows exist before firstK (mints prev_cursor).
+// backwardMore = rows exist before firstK (mints prev_cursor). has_more is
+// asserted only when the matching cursor is mintable — an empty page (a
+// prev walk past the start) never claims a continuation it cannot encode.
 func BuildPage(g int32, sortKey, fingerprint string, forwardMore, backwardMore bool, firstK, lastK []any) Page {
-	p := Page{HasMore: forwardMore}
-	if forwardMore && lastK != nil {
+	p := Page{HasMore: forwardMore && lastK != nil}
+	if p.HasMore {
 		next := encodeCursorDir(g, sortKey, fingerprint, lastK, "")
 		p.NextCursor = &next
 	}
@@ -312,6 +314,32 @@ func BuildPage(g int32, sortKey, fingerprint string, forwardMore, backwardMore b
 		p.PrevCursor = &prev
 	}
 	return p
+}
+
+// trimWindow applies the N+1 window convention shared by every keyset
+// family: forward overflow trims the tail; a backward fetch — already
+// re-reversed into display order — carries its overflow row at the FRONT.
+// positioned marks a forward page reached via any positioning param, which
+// always has at least the row the cursor came from before it.
+func trimWindow[T any](rows []T, limit int, backward, positioned bool) (trimmed []T, forwardMore, backwardMore bool) {
+	overflow := len(rows) > limit
+	if backward {
+		if overflow {
+			rows = rows[1:]
+		}
+		return rows, true, overflow
+	}
+	if overflow {
+		rows = rows[:limit]
+	}
+	return rows, overflow, positioned
+}
+
+// reverseSlice restores display order after a backward fetch.
+func reverseSlice[T any](rows []T) {
+	for i, j := 0, len(rows)-1; i < j; i, j = i+1, j-1 {
+		rows[i], rows[j] = rows[j], rows[i]
+	}
 }
 
 func jsonInt32(v any) (int32, bool) {

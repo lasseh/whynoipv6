@@ -168,19 +168,7 @@ func (s *Server) serveChangelogFeed(w http.ResponseWriter, r *http.Request, doma
 		return
 	}
 
-	var forwardMore, backwardMore bool
-	overflow := len(rows) > limit
-	if backward {
-		backwardMore, forwardMore = overflow, true
-		if overflow {
-			rows = rows[1:] // backward overflow sits at the front
-		}
-	} else {
-		forwardMore, backwardMore = overflow, params.WithSeek
-		if overflow {
-			rows = rows[:limit]
-		}
-	}
+	rows, forwardMore, backwardMore := trimWindow(rows, limit, backward, params.WithSeek)
 	items := make([]ChangelogItem, len(rows))
 	for i := range rows {
 		items[i] = changelogItem(&rows[i])
@@ -263,9 +251,7 @@ func (s *Server) changelogRows(r *http.Request, domainID *int64, params *db.Chan
 		}
 	}
 	if backward { // ASC fetch → re-reverse into the ts-DESC feed order
-		for i, j := 0, len(rows)-1; i < j; i, j = i+1, j-1 {
-			rows[i], rows[j] = rows[j], rows[i]
-		}
+		reverseSlice(rows)
 	}
 	return rows, nil
 }

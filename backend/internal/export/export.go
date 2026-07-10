@@ -156,10 +156,14 @@ func (e *Exporter) Run(ctx context.Context, generation int32) error {
 		}
 	}
 
+	// The Tranco list ID rides in all three attribution surfaces —
+	// datapackage sources, DICTIONARY.md, and the manifest (07 §5.3).
+	listID := e.trancoListID(ctx)
 	dp := datapackage{
 		Name: "whynoipv6-" + date, Title: "WhyNoIPv6 daily snapshot " + date,
 		Licenses:  []dpLicense{{Name: license, Path: "https://creativecommons.org/licenses/by-nc/4.0/"}},
 		Created:   now.Format(time.RFC3339),
+		Sources:   dpSources(listID),
 		Resources: resources,
 	}
 	if err := writeJSONFile(filepath.Join(tmp, "datapackage.json"), dp); err != nil {
@@ -176,7 +180,7 @@ func (e *Exporter) Run(ctx context.Context, generation int32) error {
 		return fmt.Errorf("publish: %w", err)
 	}
 
-	if err := os.WriteFile(filepath.Join(e.Dir, "DICTIONARY.md"), []byte(dictionaryMD), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(e.Dir, "DICTIONARY.md"), []byte(dictionaryText(listID)), 0o644); err != nil {
 		return err
 	}
 	if err := e.updateLatest(date); err != nil {
@@ -403,7 +407,7 @@ func (e *Exporter) writeManifest(ctx context.Context, now time.Time, generation 
 	// Cite the specific Tranco list ID (07 §5.3); the generic string only
 	// when no import has succeeded yet.
 	attribution := "Data: whynoipv6.com (CC-BY-NC-4.0). Ranks: Tranco list."
-	if listID, err := db.New(e.Pool).TrancoLatestSuccessListID(ctx); err == nil && listID != "" {
+	if listID := e.trancoListID(ctx); listID != "" {
 		attribution = "Data: whynoipv6.com (CC-BY-NC-4.0). Ranks: Tranco list " + listID + "."
 	}
 	m := Manifest{
@@ -431,7 +435,35 @@ type datapackage struct {
 	Title     string                `json:"title"`
 	Licenses  []dpLicense           `json:"licenses"`
 	Created   string                `json:"created"`
+	Sources   []dpSource            `json:"sources"`
 	Resources []datapackageResource `json:"resources"`
+}
+
+type dpSource struct {
+	Title string `json:"title"`
+	Path  string `json:"path,omitempty"`
+}
+
+// dpSources cites the rank provenance (07 §5.3).
+func dpSources(listID string) []dpSource {
+	src := dpSource{Title: "Tranco list", Path: "https://tranco-list.eu/"}
+	if listID != "" {
+		src = dpSource{Title: "Tranco list " + listID, Path: "https://tranco-list.eu/list/" + listID}
+	}
+	return []dpSource{
+		{Title: "whynoipv6.com crawl (CC-BY-NC-4.0)", Path: "https://whynoipv6.com"},
+		src,
+	}
+}
+
+// trancoListID returns the newest successful import's list ID ("" pre-first
+// import).
+func (e *Exporter) trancoListID(ctx context.Context) string {
+	listID, err := db.New(e.Pool).TrancoLatestSuccessListID(ctx)
+	if err != nil {
+		return ""
+	}
+	return listID
 }
 
 type dpLicense struct {
@@ -478,6 +510,16 @@ func writeJSONFile(path string, v any) error {
 }
 
 // dictionaryMD documents columns + status semantics for bulk consumers.
+// dictionaryText renders DICTIONARY.md with the rank provenance line
+// (07 §5.3 — the list ID is cited in every attribution surface).
+func dictionaryText(listID string) string {
+	ranks := "Ranks: Tranco list (https://tranco-list.eu/)."
+	if listID != "" {
+		ranks = "Ranks: Tranco list " + listID + " (https://tranco-list.eu/list/" + listID + ")."
+	}
+	return dictionaryMD + "\n" + ranks + "\n"
+}
+
 const dictionaryMD = `# WhyNoIPv6 dataset dictionary
 
 Snapshots of confirmed IPv6 adoption state for the Tranco-ranked web,

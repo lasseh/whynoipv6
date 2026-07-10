@@ -102,6 +102,15 @@ func (lc *LiveChecker) process(ctx context.Context, id int64, host string) {
 
 	kind, err := lc.ensureDomain(ctx, host)
 	if err != nil {
+		// A PSL miss (unknown TLD / bare public suffix) is an expected
+		// client error, not an internal fault — surface the real reason.
+		var pslErr *pslEvalError
+		if errors.As(err, &pslErr) {
+			_ = lc.Q.CheckJobFail(ctx, db.CheckJobFailParams{
+				ID: id, Error: ptr("the host is not under a known public-suffix TLD"),
+			})
+			return
+		}
 		slog.Error("live check ensure-domain failed", "domain", host, "err", err.Error())
 		_ = lc.Q.CheckJobFail(ctx, db.CheckJobFailParams{ID: id, Error: ptr("internal error")})
 		return
@@ -134,10 +143,17 @@ func (lc *LiveChecker) process(ctx context.Context, id int64, host string) {
 // ensureDomain inserts the initial row for an unknown host (§5.1.5 step 2):
 // created_by='live_check', rank NULL, parent linked only when the
 // registrable parent row ALREADY exists — never auto-ensured.
+// pslEvalError marks a PSL evaluation failure — an invalid host, not an
+// internal fault.
+type pslEvalError struct{ err error }
+
+func (e *pslEvalError) Error() string { return e.err.Error() }
+func (e *pslEvalError) Unwrap() error { return e.err }
+
 func (lc *LiveChecker) ensureDomain(ctx context.Context, host string) (domain.Kind, error) {
 	registrable, tld, err := campaign.PSLParse(host)
 	if err != nil {
-		return "", err
+		return "", &pslEvalError{err: err}
 	}
 	kind := domain.KindApex
 	var parentID *int64

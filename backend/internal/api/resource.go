@@ -155,19 +155,7 @@ func (s *Server) listResourceDependents(w http.ResponseWriter, r *http.Request) 
 		InternalError(w, r, err)
 		return
 	}
-	var forwardMore, backwardMore bool
-	overflow := len(rows) > limit
-	if backward {
-		backwardMore, forwardMore = overflow, true
-		if overflow {
-			rows = rows[1:]
-		}
-	} else {
-		forwardMore, backwardMore = overflow, seek != nil
-		if overflow {
-			rows = rows[:limit]
-		}
-	}
+	rows, forwardMore, backwardMore := trimWindow(rows, limit, backward, seek != nil)
 
 	type dependentItem struct {
 		DomainSummary
