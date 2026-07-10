@@ -41,6 +41,7 @@ linters:
           - goconst
           - gocritic
           - unparam
+          - noctx
     paths:
       - third_party$
       - builtin$

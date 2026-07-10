@@ -106,6 +106,10 @@ type Querier interface {
 	// db/query/stats.sql — sqlc query source (layout: 05-schema.md §10.2).
 	// Tick step 2 — the four confirmed-state snapshot upserts (06-ingest.md §10).
 	SnapshotGlobalDaily(ctx context.Context) error
+	// The envelope meta source (07-api.md §2.4): generation = YYYYMMDD of
+	// max(stats_global_daily.day); as_of = its generated_at, falling back to
+	// day at 00:00:00Z when NULL (the day-0 seed row).
+	StatsGeneration(ctx context.Context) (StatsGenerationRow, error)
 	// The daily lifecycle sweep S1–S5 (04-lifecycle-scheduling.md §8): one
 	// transaction, set-based; the linkage predicate is spelled identically in
 	// every statement. @live_check_linkage / @delist_grace / @slow_lane_every.

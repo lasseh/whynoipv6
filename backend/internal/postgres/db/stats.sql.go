@@ -7,6 +7,8 @@ package db
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const SnapshotASNDaily = `-- name: SnapshotASNDaily :exec
@@ -156,4 +158,23 @@ ON CONFLICT (day) DO UPDATE SET
 func (q *Queries) SnapshotGlobalDaily(ctx context.Context) error {
 	_, err := q.db.Exec(ctx, SnapshotGlobalDaily)
 	return err
+}
+
+const StatsGeneration = `-- name: StatsGeneration :one
+SELECT day, generated_at FROM stats_global_daily ORDER BY day DESC LIMIT 1
+`
+
+type StatsGenerationRow struct {
+	Day         pgtype.Date        `json:"day"`
+	GeneratedAt pgtype.Timestamptz `json:"generated_at"`
+}
+
+// The envelope meta source (07-api.md §2.4): generation = YYYYMMDD of
+// max(stats_global_daily.day); as_of = its generated_at, falling back to
+// day at 00:00:00Z when NULL (the day-0 seed row).
+func (q *Queries) StatsGeneration(ctx context.Context) (StatsGenerationRow, error) {
+	row := q.db.QueryRow(ctx, StatsGeneration)
+	var i StatsGenerationRow
+	err := row.Scan(&i.Day, &i.GeneratedAt)
+	return i, err
 }

@@ -122,3 +122,9 @@ ON CONFLICT (asn_id, day) DO UPDATE SET
   v6_domains = excluded.v6_domains,
   sinners    = excluded.sinners,
   heroes     = excluded.heroes;
+
+-- The envelope meta source (07-api.md §2.4): generation = YYYYMMDD of
+-- max(stats_global_daily.day); as_of = its generated_at, falling back to
+-- day at 00:00:00Z when NULL (the day-0 seed row).
+-- name: StatsGeneration :one
+SELECT day, generated_at FROM stats_global_daily ORDER BY day DESC LIMIT 1;
