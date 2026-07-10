@@ -201,6 +201,19 @@ func run() error {
 	go metrics.RunIdleLoop(claimCtx)
 	go geoipReloadLoop(claimCtx, geoReader)
 
+	// The §5.1.5 check-job consumer pool + reaper (04 — placement).
+	liveChecker := &crawler.LiveChecker{
+		Pool: pool, Q: q, Runner: runner, Preflight: preflight,
+		Cfg: crawler.LiveCheckConfig{
+			Workers:          cfg.Int("live_check.workers"),
+			JobBudget:        cfg.Duration("live_check.job_budget"),
+			ReclaimAfter:     cfg.Duration("live_check.reclaim_after"),
+			FailAfter:        cfg.Duration("live_check.fail_after"),
+			ResourcesEnabled: cfg.Bool("crawler.resources.enabled"),
+		},
+	}
+	go liveChecker.Run(claimCtx)
+
 	slog.Info("crawler started", "worker_slots", cfg.Int("worker_slots"))
 	frontier.Run(claimCtx) // returns once claiming stopped and slots drained
 

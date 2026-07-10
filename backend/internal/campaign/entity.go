@@ -17,9 +17,9 @@ import (
 // detection, parent derivation, and PR validation (06-ingest.md §3.4).
 var pslOptions = &publicsuffix.FindOptions{IgnorePrivate: true, DefaultRule: publicsuffix.DefaultRule}
 
-// pslParse returns (registrable eTLD+1, eTLD) for a canonical host; an error
+// PSLParse returns (registrable eTLD+1, eTLD) for a canonical host; an error
 // means the host is a public suffix or the TLD is unknown → invalid entry.
-func pslParse(host string) (registrable, tld string, err error) {
+func PSLParse(host string) (registrable, tld string, err error) {
 	dn, err := publicsuffix.ParseFromListWithOptions(publicsuffix.DefaultList, host, pslOptions)
 	if err != nil {
 		return "", "", err
@@ -65,7 +65,7 @@ func (e *entityEnsurer) countryID(ctx context.Context, host string) int32 {
 // (and, for subdomains, the auto-created parent apex) when absent.
 // existed reports whether the host row pre-existed.
 func (e *entityEnsurer) ensure(ctx context.Context, host string) (id int64, existed bool, err error) {
-	registrable, tld, err := pslParse(host)
+	registrable, tld, err := PSLParse(host)
 	if err != nil {
 		return 0, false, err
 	}

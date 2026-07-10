@@ -18,6 +18,12 @@ type Options struct {
 	PublicBaseURL string // feed ids/links; default https://api.whynoipv6.com
 	CSVMaxRows    int    // export.csv_max_rows; default 10000
 	DatasetsDir   string // DATASETS_DIR; the manifest.json location (§5.3)
+
+	// The §5.1/§6.3 live-check knobs.
+	RateIPPerHour     int           // live_check.rate_ip_per_hour; default 10
+	RateGlobalPerHour int           // live_check.rate_global_per_hour; default 500
+	DedupeWindow      time.Duration // live_check.dedupe_window; default 1h
+	ResourcesEnabled  bool          // crawler.resources.enabled
 }
 
 // Server carries the handler dependencies.
@@ -42,6 +48,15 @@ func NewRouter(svc *service.Service, opts ...Options) http.Handler {
 	}
 	if s.opts.DatasetsDir == "" {
 		s.opts.DatasetsDir = "/var/lib/whynoipv6/datasets"
+	}
+	if s.opts.RateIPPerHour == 0 {
+		s.opts.RateIPPerHour = 10
+	}
+	if s.opts.RateGlobalPerHour == 0 {
+		s.opts.RateGlobalPerHour = 500
+	}
+	if s.opts.DedupeWindow == 0 {
+		s.opts.DedupeWindow = time.Hour
 	}
 	r := chi.NewRouter()
 
@@ -116,6 +131,10 @@ func NewRouter(svc *service.Service, opts ...Options) http.Handler {
 
 	// The datasets index (§5.3); the files themselves are nginx-served.
 	r.Get("/datasets", s.getDatasets)
+
+	// The live check (§5.1) — the only write path: async enqueue + poll.
+	r.Post("/check", s.postCheck)
+	r.Get("/check/{id}", s.getCheck)
 
 	// Stats / adoption-over-time (§4.10) — confirmed-state snapshots only.
 	r.Get("/stats/overview", s.getStatsOverview)

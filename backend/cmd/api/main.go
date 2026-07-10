@@ -48,9 +48,13 @@ func run() error {
 	srv := &http.Server{
 		Addr: cfg.APIListen,
 		Handler: api.NewRouter(svc, api.Options{
-			PublicBaseURL: cfg.PublicBaseURL,
-			CSVMaxRows:    cfg.Int("export.csv_max_rows"),
-			DatasetsDir:   cfg.DatasetsDir,
+			PublicBaseURL:     cfg.PublicBaseURL,
+			CSVMaxRows:        cfg.Int("export.csv_max_rows"),
+			DatasetsDir:       cfg.DatasetsDir,
+			RateIPPerHour:     cfg.Int("live_check.rate_ip_per_hour"),
+			RateGlobalPerHour: cfg.Int("live_check.rate_global_per_hour"),
+			DedupeWindow:      cfg.Duration("live_check.dedupe_window"),
+			ResourcesEnabled:  cfg.Bool("crawler.resources.enabled"),
 		}),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,

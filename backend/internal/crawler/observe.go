@@ -306,3 +306,56 @@ func QuorumHoist(sr checker.ScanResult) map[string]any {
 	}
 	return out
 }
+
+// MapLiveResult renders one engine scan as the §5.1.3 public result object —
+// the ONE mapping with four consumers: the live-check consumer, the
+// domain-side dedupe path, the §4.3 evidence block, and (via
+// MapObservations) the frontier commit. Statuses are raw observations
+// (incl. inconsistent on base/www quorum splits), explicitly NOT confirmed
+// state.
+func MapLiveResult(
+	kind domain.Kind,
+	sr checker.ScanResult,
+	preflightPassedAt time.Time,
+	now time.Time,
+	links []LinkedResource,
+	resourcesEnabled bool,
+) map[string]any {
+	o := MapObservations(kind, sr, preflightPassedAt, now, links, resourcesEnabled)
+
+	status := func(v domain.Observation) map[string]any {
+		return map[string]any{"status": string(v)}
+	}
+	// tls/parity/dnssec/ptr/spf ride the raw engine status; smtp maps
+	// partial → unsupported (07 §5.1.4).
+	raw := func(name string) map[string]any {
+		return map[string]any{"status": string(result(sr, name).Status)}
+	}
+	checks := map[string]any{
+		string(domain.DimBase):      status(o.Base),
+		string(domain.DimWWW):       status(o.WWW),
+		string(domain.DimNS):        status(o.NS),
+		string(domain.DimMX):        status(o.MX),
+		connKey:                     status(o.Conn),
+		string(domain.DimResources): status(o.Resources),
+		"tls":                       raw("tls_ipv6"),
+		"smtp":                      status(infoSMTP(result(sr, "smtp_ipv6"))),
+		"parity":                    raw("http_response_parity"),
+		"dnssec":                    raw("dns_dnssec"),
+		"ptr":                       raw("dns_ptr_ipv6"),
+		"spf":                       raw("spf_ipv6"),
+	}
+	var v4, v6 any
+	if o.LatencyV4Ms != nil {
+		v4 = *o.LatencyV4Ms
+	}
+	if o.LatencyV6Ms != nil {
+		v6 = *o.LatencyV6Ms
+	}
+	return map[string]any{
+		"checked_at":  sr.ScannedAt.UTC().Format(time.RFC3339),
+		"duration_ms": sr.Duration.Milliseconds(),
+		"checks":      checks,
+		"latency":     map[string]any{"v4_ms": v4, "v6_ms": v6},
+	}
+}

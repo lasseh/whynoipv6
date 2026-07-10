@@ -6,6 +6,7 @@ package db
 
 import (
 	"context"
+	"net/netip"
 
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -53,6 +54,20 @@ type Querier interface {
 	// The §4.9 confirmed-trajectory replay: the full transition history of one
 	// domain, ascending, reconstructed API-side (never raw scan observations).
 	ChangelogReplay(ctx context.Context, domainID int64) ([]ChangelogReplayRow, error)
+	CheckJobByID(ctx context.Context, id int64) (CheckJobByIDRow, error)
+	// The consumer claim (07 §5.1.5): oldest pending or stale-processing row.
+	CheckJobClaim(ctx context.Context, reclaim pgtype.Interval) (CheckJobClaimRow, error)
+	CheckJobComplete(ctx context.Context, arg CheckJobCompleteParams) error
+	CheckJobDedupe(ctx context.Context, arg CheckJobDedupeParams) (CheckJobDedupeRow, error)
+	CheckJobFail(ctx context.Context, arg CheckJobFailParams) error
+	// The §5.1 live-check job lifecycle.
+	CheckJobInsert(ctx context.Context, arg CheckJobInsertParams) (CheckJobInsertRow, error)
+	CheckJobRateGlobal(ctx context.Context) (CheckJobRateGlobalRow, error)
+	// Rate limiting (07 §6.3): /64-prefix and global hourly windows; min_created
+	// feeds retry_after = ceil(3600 − (now − min(created_at))).
+	CheckJobRatePrefix(ctx context.Context, prefix netip.Prefix) (CheckJobRatePrefixRow, error)
+	// The reaper: every poller terminates ≤ fail_after.
+	CheckJobReap(ctx context.Context, failAfter pgtype.Interval) (int64, error)
 	// The claim.order=age variant: aging pressure valve, no sort at all beyond
 	// the index order (04 §3).
 	ClaimBatchByAge(ctx context.Context, limit int32) ([]ClaimBatchByAgeRow, error)
@@ -83,11 +98,18 @@ type Querier interface {
 	DetectServiceCandidatesIndegree(ctx context.Context, indegreeThreshold int32) (int64, error)
 	// db/query/domain.sql — sqlc query source (layout: 05-schema.md §10.2).
 	DomainByHost(ctx context.Context, host string) (DomainByHostRow, error)
+	// The §5.1 live-check domain reads/writes.
+	DomainConfirmed(ctx context.Context, host string) (DomainConfirmedRow, error)
 	DomainDetailByHost(ctx context.Context, host string) (DomainDetailByHostRow, error)
 	// Operator disable/enable (P2.14; glossary: service/manual lifecycle).
 	DomainDisable(ctx context.Context, arg DomainDisableParams) (int64, error)
 	DomainEnable(ctx context.Context, host string) (int64, error)
 	DomainInsertEntity(ctx context.Context, arg DomainInsertEntityParams) (int64, error)
+	// The consumer's entity insert (07 §5.1.5 step 2): parent only if it
+	// ALREADY exists — live checks never auto-ensure parents.
+	DomainInsertLiveCheck(ctx context.Context, arg DomainInsertLiveCheckParams) (int64, error)
+	// Lifecycle re-entry (07 §5.1.6): every POST /check on an existing host.
+	DomainLiveCheckReentry(ctx context.Context, host string) error
 	DomainMembershipReEntry(ctx context.Context, id int64) error
 	// Resource-dependency reads (07 §4.11). Forward list is bounded small
 	// (exact count, no cursor); the reverse dependents list is served by the

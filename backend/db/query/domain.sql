@@ -183,3 +183,32 @@ SELECT count(*) FROM domain WHERE parent_id = @parent_id AND NOT disabled;
 -- The badge read (07 §5.2): read-only, zero side effects, any kind/origin.
 -- name: BadgeDomain :one
 SELECT classification, gold, disabled FROM domain WHERE host = @host;
+
+-- The §5.1 live-check domain reads/writes.
+
+-- name: DomainConfirmed :one
+SELECT id, kind, classification, class_flags, gold,
+       base_status, base_since, www_status, www_since, ns_status, ns_since,
+       mx_status, mx_since, conn_status, conn_since, resources_status, resources_since,
+       last_checked_at, disabled, disabled_reason
+FROM domain WHERE host = @host;
+
+-- Lifecycle re-entry (07 §5.1.6): every POST /check on an existing host.
+-- name: DomainLiveCheckReentry :exec
+UPDATE domain SET
+  last_requested_at = now(),
+  disabled        = CASE WHEN disabled_reason = 'delisted' THEN false ELSE disabled END,
+  disabled_at     = CASE WHEN disabled_reason = 'delisted' THEN NULL ELSE disabled_at END,
+  orphaned_at     = CASE WHEN disabled_reason = 'delisted' THEN NULL ELSE orphaned_at END,
+  next_check_at   = CASE WHEN disabled_reason IN ('delisted', 'dead') THEN now() ELSE next_check_at END,
+  disabled_reason = CASE WHEN disabled_reason = 'delisted' THEN NULL ELSE disabled_reason END,
+  updated_at      = now()
+WHERE host = @host;
+
+-- The consumer's entity insert (07 §5.1.5 step 2): parent only if it
+-- ALREADY exists — live checks never auto-ensure parents.
+-- name: DomainInsertLiveCheck :one
+INSERT INTO domain (host, kind, parent_id, rank, created_by, asn_id, country_id, tld, last_requested_at, next_check_at)
+VALUES (@host, @kind, @parent_id, NULL, 'live_check', @asn_id, @country_id, @tld, now(), now())
+ON CONFLICT (host) DO NOTHING
+RETURNING id;

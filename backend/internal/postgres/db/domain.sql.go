@@ -308,6 +308,67 @@ func (q *Queries) DomainByHost(ctx context.Context, host string) (DomainByHostRo
 	return i, err
 }
 
+const DomainConfirmed = `-- name: DomainConfirmed :one
+
+SELECT id, kind, classification, class_flags, gold,
+       base_status, base_since, www_status, www_since, ns_status, ns_since,
+       mx_status, mx_since, conn_status, conn_since, resources_status, resources_since,
+       last_checked_at, disabled, disabled_reason
+FROM domain WHERE host = $1
+`
+
+type DomainConfirmedRow struct {
+	ID              int64              `json:"id"`
+	Kind            DomainKind         `json:"kind"`
+	Classification  Classification     `json:"classification"`
+	ClassFlags      []string           `json:"class_flags"`
+	Gold            bool               `json:"gold"`
+	BaseStatus      *Ipv6Status        `json:"base_status"`
+	BaseSince       pgtype.Timestamptz `json:"base_since"`
+	WwwStatus       *Ipv6Status        `json:"www_status"`
+	WwwSince        pgtype.Timestamptz `json:"www_since"`
+	NsStatus        *Ipv6Status        `json:"ns_status"`
+	NsSince         pgtype.Timestamptz `json:"ns_since"`
+	MxStatus        *Ipv6Status        `json:"mx_status"`
+	MxSince         pgtype.Timestamptz `json:"mx_since"`
+	ConnStatus      *Ipv6Status        `json:"conn_status"`
+	ConnSince       pgtype.Timestamptz `json:"conn_since"`
+	ResourcesStatus *Ipv6Status        `json:"resources_status"`
+	ResourcesSince  pgtype.Timestamptz `json:"resources_since"`
+	LastCheckedAt   pgtype.Timestamptz `json:"last_checked_at"`
+	Disabled        bool               `json:"disabled"`
+	DisabledReason  *DisabledReason    `json:"disabled_reason"`
+}
+
+// The §5.1 live-check domain reads/writes.
+func (q *Queries) DomainConfirmed(ctx context.Context, host string) (DomainConfirmedRow, error) {
+	row := q.db.QueryRow(ctx, DomainConfirmed, host)
+	var i DomainConfirmedRow
+	err := row.Scan(
+		&i.ID,
+		&i.Kind,
+		&i.Classification,
+		&i.ClassFlags,
+		&i.Gold,
+		&i.BaseStatus,
+		&i.BaseSince,
+		&i.WwwStatus,
+		&i.WwwSince,
+		&i.NsStatus,
+		&i.NsSince,
+		&i.MxStatus,
+		&i.MxSince,
+		&i.ConnStatus,
+		&i.ConnSince,
+		&i.ResourcesStatus,
+		&i.ResourcesSince,
+		&i.LastCheckedAt,
+		&i.Disabled,
+		&i.DisabledReason,
+	)
+	return i, err
+}
+
 const DomainDetailByHost = `-- name: DomainDetailByHost :one
 SELECT d.id, d.host, d.rank, d.kind, p.host AS parent,
   d.classification, d.class_flags, d.gold,
@@ -485,6 +546,56 @@ func (q *Queries) DomainInsertEntity(ctx context.Context, arg DomainInsertEntity
 	var id int64
 	err := row.Scan(&id)
 	return id, err
+}
+
+const DomainInsertLiveCheck = `-- name: DomainInsertLiveCheck :one
+INSERT INTO domain (host, kind, parent_id, rank, created_by, asn_id, country_id, tld, last_requested_at, next_check_at)
+VALUES ($1, $2, $3, NULL, 'live_check', $4, $5, $6, now(), now())
+ON CONFLICT (host) DO NOTHING
+RETURNING id
+`
+
+type DomainInsertLiveCheckParams struct {
+	Host      string     `json:"host"`
+	Kind      DomainKind `json:"kind"`
+	ParentID  *int64     `json:"parent_id"`
+	AsnID     int32      `json:"asn_id"`
+	CountryID int32      `json:"country_id"`
+	Tld       *string    `json:"tld"`
+}
+
+// The consumer's entity insert (07 §5.1.5 step 2): parent only if it
+// ALREADY exists — live checks never auto-ensure parents.
+func (q *Queries) DomainInsertLiveCheck(ctx context.Context, arg DomainInsertLiveCheckParams) (int64, error) {
+	row := q.db.QueryRow(ctx, DomainInsertLiveCheck,
+		arg.Host,
+		arg.Kind,
+		arg.ParentID,
+		arg.AsnID,
+		arg.CountryID,
+		arg.Tld,
+	)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
+const DomainLiveCheckReentry = `-- name: DomainLiveCheckReentry :exec
+UPDATE domain SET
+  last_requested_at = now(),
+  disabled        = CASE WHEN disabled_reason = 'delisted' THEN false ELSE disabled END,
+  disabled_at     = CASE WHEN disabled_reason = 'delisted' THEN NULL ELSE disabled_at END,
+  orphaned_at     = CASE WHEN disabled_reason = 'delisted' THEN NULL ELSE orphaned_at END,
+  next_check_at   = CASE WHEN disabled_reason IN ('delisted', 'dead') THEN now() ELSE next_check_at END,
+  disabled_reason = CASE WHEN disabled_reason = 'delisted' THEN NULL ELSE disabled_reason END,
+  updated_at      = now()
+WHERE host = $1
+`
+
+// Lifecycle re-entry (07 §5.1.6): every POST /check on an existing host.
+func (q *Queries) DomainLiveCheckReentry(ctx context.Context, host string) error {
+	_, err := q.db.Exec(ctx, DomainLiveCheckReentry, host)
+	return err
 }
 
 const DomainMembershipReEntry = `-- name: DomainMembershipReEntry :exec

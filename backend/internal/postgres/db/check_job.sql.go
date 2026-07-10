@@ -7,9 +7,208 @@ package db
 
 import (
 	"context"
+	"net/netip"
 
 	"github.com/jackc/pgx/v5/pgtype"
 )
+
+const CheckJobByID = `-- name: CheckJobByID :one
+SELECT id, host, status, result, error, created_at, completed_at
+FROM check_job WHERE id = $1
+`
+
+type CheckJobByIDRow struct {
+	ID          int64              `json:"id"`
+	Host        string             `json:"host"`
+	Status      CheckJobStatus     `json:"status"`
+	Result      []byte             `json:"result"`
+	Error       *string            `json:"error"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	CompletedAt pgtype.Timestamptz `json:"completed_at"`
+}
+
+func (q *Queries) CheckJobByID(ctx context.Context, id int64) (CheckJobByIDRow, error) {
+	row := q.db.QueryRow(ctx, CheckJobByID, id)
+	var i CheckJobByIDRow
+	err := row.Scan(
+		&i.ID,
+		&i.Host,
+		&i.Status,
+		&i.Result,
+		&i.Error,
+		&i.CreatedAt,
+		&i.CompletedAt,
+	)
+	return i, err
+}
+
+const CheckJobClaim = `-- name: CheckJobClaim :one
+UPDATE check_job SET status = 'processing', claimed_at = now()
+WHERE id = (
+  SELECT id FROM check_job
+  WHERE status = 'pending'
+     OR (status = 'processing' AND claimed_at < now() - $1::interval)
+  ORDER BY created_at
+  LIMIT 1 FOR UPDATE SKIP LOCKED
+) RETURNING id, host
+`
+
+type CheckJobClaimRow struct {
+	ID   int64  `json:"id"`
+	Host string `json:"host"`
+}
+
+// The consumer claim (07 §5.1.5): oldest pending or stale-processing row.
+func (q *Queries) CheckJobClaim(ctx context.Context, reclaim pgtype.Interval) (CheckJobClaimRow, error) {
+	row := q.db.QueryRow(ctx, CheckJobClaim, reclaim)
+	var i CheckJobClaimRow
+	err := row.Scan(&i.ID, &i.Host)
+	return i, err
+}
+
+const CheckJobComplete = `-- name: CheckJobComplete :exec
+UPDATE check_job SET status = 'done', result = $1, completed_at = now()
+WHERE id = $2
+`
+
+type CheckJobCompleteParams struct {
+	Result []byte `json:"result"`
+	ID     int64  `json:"id"`
+}
+
+func (q *Queries) CheckJobComplete(ctx context.Context, arg CheckJobCompleteParams) error {
+	_, err := q.db.Exec(ctx, CheckJobComplete, arg.Result, arg.ID)
+	return err
+}
+
+const CheckJobDedupe = `-- name: CheckJobDedupe :one
+SELECT id, host, status, result, error, created_at, completed_at
+FROM check_job
+WHERE host = $1 AND status = 'done' AND completed_at >= now() - $2::interval
+ORDER BY completed_at DESC
+LIMIT 1
+`
+
+type CheckJobDedupeParams struct {
+	Host         string          `json:"host"`
+	DedupeWindow pgtype.Interval `json:"dedupe_window"`
+}
+
+type CheckJobDedupeRow struct {
+	ID          int64              `json:"id"`
+	Host        string             `json:"host"`
+	Status      CheckJobStatus     `json:"status"`
+	Result      []byte             `json:"result"`
+	Error       *string            `json:"error"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	CompletedAt pgtype.Timestamptz `json:"completed_at"`
+}
+
+func (q *Queries) CheckJobDedupe(ctx context.Context, arg CheckJobDedupeParams) (CheckJobDedupeRow, error) {
+	row := q.db.QueryRow(ctx, CheckJobDedupe, arg.Host, arg.DedupeWindow)
+	var i CheckJobDedupeRow
+	err := row.Scan(
+		&i.ID,
+		&i.Host,
+		&i.Status,
+		&i.Result,
+		&i.Error,
+		&i.CreatedAt,
+		&i.CompletedAt,
+	)
+	return i, err
+}
+
+const CheckJobFail = `-- name: CheckJobFail :exec
+UPDATE check_job SET status = 'failed', error = $1, completed_at = now()
+WHERE id = $2
+`
+
+type CheckJobFailParams struct {
+	Error *string `json:"error"`
+	ID    int64   `json:"id"`
+}
+
+func (q *Queries) CheckJobFail(ctx context.Context, arg CheckJobFailParams) error {
+	_, err := q.db.Exec(ctx, CheckJobFail, arg.Error, arg.ID)
+	return err
+}
+
+const CheckJobInsert = `-- name: CheckJobInsert :one
+
+INSERT INTO check_job (host, requester_ip) VALUES ($1, $2)
+RETURNING id, created_at
+`
+
+type CheckJobInsertParams struct {
+	Host        string     `json:"host"`
+	RequesterIp netip.Addr `json:"requester_ip"`
+}
+
+type CheckJobInsertRow struct {
+	ID        int64              `json:"id"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
+// The §5.1 live-check job lifecycle.
+func (q *Queries) CheckJobInsert(ctx context.Context, arg CheckJobInsertParams) (CheckJobInsertRow, error) {
+	row := q.db.QueryRow(ctx, CheckJobInsert, arg.Host, arg.RequesterIp)
+	var i CheckJobInsertRow
+	err := row.Scan(&i.ID, &i.CreatedAt)
+	return i, err
+}
+
+const CheckJobRateGlobal = `-- name: CheckJobRateGlobal :one
+SELECT count(*)::int AS n, min(created_at) AS min_created
+FROM check_job
+WHERE created_at > now() - interval '1 hour'
+`
+
+type CheckJobRateGlobalRow struct {
+	N          int32       `json:"n"`
+	MinCreated interface{} `json:"min_created"`
+}
+
+func (q *Queries) CheckJobRateGlobal(ctx context.Context) (CheckJobRateGlobalRow, error) {
+	row := q.db.QueryRow(ctx, CheckJobRateGlobal)
+	var i CheckJobRateGlobalRow
+	err := row.Scan(&i.N, &i.MinCreated)
+	return i, err
+}
+
+const CheckJobRatePrefix = `-- name: CheckJobRatePrefix :one
+SELECT count(*)::int AS n, min(created_at) AS min_created
+FROM check_job
+WHERE requester_ip <<= $1::cidr AND created_at > now() - interval '1 hour'
+`
+
+type CheckJobRatePrefixRow struct {
+	N          int32       `json:"n"`
+	MinCreated interface{} `json:"min_created"`
+}
+
+// Rate limiting (07 §6.3): /64-prefix and global hourly windows; min_created
+// feeds retry_after = ceil(3600 − (now − min(created_at))).
+func (q *Queries) CheckJobRatePrefix(ctx context.Context, prefix netip.Prefix) (CheckJobRatePrefixRow, error) {
+	row := q.db.QueryRow(ctx, CheckJobRatePrefix, prefix)
+	var i CheckJobRatePrefixRow
+	err := row.Scan(&i.N, &i.MinCreated)
+	return i, err
+}
+
+const CheckJobReap = `-- name: CheckJobReap :execrows
+UPDATE check_job SET status = 'failed', error = 'timed out', completed_at = now()
+WHERE status IN ('pending', 'processing') AND created_at < now() - $1::interval
+`
+
+// The reaper: every poller terminates ≤ fail_after.
+func (q *Queries) CheckJobReap(ctx context.Context, failAfter pgtype.Interval) (int64, error) {
+	result, err := q.db.Exec(ctx, CheckJobReap, failAfter)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
 
 const PurgeCheckJobs = `-- name: PurgeCheckJobs :execrows
 
