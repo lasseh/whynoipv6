@@ -90,7 +90,8 @@ func (f *Frontier) ClaimBatch(ctx context.Context) ([]ClaimedDomain, error) {
 		}
 		out := make([]ClaimedDomain, len(rows))
 		for i := range rows {
-			out[i] = claimedFromRow(claimRow(rows[i]))
+			r := claimRow(rows[i])
+			out[i] = claimedFromRow(&r)
 		}
 		return out, nil
 	}
@@ -100,7 +101,8 @@ func (f *Frontier) ClaimBatch(ctx context.Context) ([]ClaimedDomain, error) {
 	}
 	out := make([]ClaimedDomain, len(rows))
 	for i := range rows {
-		out[i] = claimedFromRow(claimRow(rows[i]))
+		r := claimRow(rows[i])
+		out[i] = claimedFromRow(&r)
 	}
 	return out, nil
 }
@@ -156,9 +158,9 @@ func (f *Frontier) Run(ctx context.Context) {
 			}
 			continue
 		}
-		for _, d := range batch {
+		for i := range batch {
 			select {
-			case slots <- d: // blocks until a slot is free
+			case slots <- batch[i]: // blocks until a slot is free
 			case <-ctx.Done():
 				return // undispatched claims expire via the 30-min lease
 			}
@@ -181,7 +183,7 @@ func sleepCtx(ctx context.Context, d time.Duration) bool {
 // generated row structs are identical field-for-field).
 type claimRow db.ClaimBatchByRankRow
 
-func claimedFromRow(r claimRow) ClaimedDomain {
+func claimedFromRow(r *claimRow) ClaimedDomain {
 	cd := ClaimedDomain{
 		ID:          r.ID,
 		Host:        r.Host,
