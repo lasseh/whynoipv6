@@ -9,6 +9,35 @@ import (
 	"context"
 )
 
+const CountryCodeMap = `-- name: CountryCodeMap :many
+SELECT id, code FROM country
+`
+
+type CountryCodeMapRow struct {
+	ID   int32  `json:"id"`
+	Code string `json:"code"`
+}
+
+func (q *Queries) CountryCodeMap(ctx context.Context) ([]CountryCodeMapRow, error) {
+	rows, err := q.db.Query(ctx, CountryCodeMap)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CountryCodeMapRow{}
+	for rows.Next() {
+		var i CountryCodeMapRow
+		if err := rows.Scan(&i.ID, &i.Code); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const CountryIDByTLD = `-- name: CountryIDByTLD :one
 SELECT id FROM country WHERE tld = $1
 `
@@ -34,4 +63,35 @@ func (q *Queries) CountrySentinelID(ctx context.Context) (int32, error) {
 	var id int32
 	err := row.Scan(&id)
 	return id, err
+}
+
+const CountryTLDMap = `-- name: CountryTLDMap :many
+SELECT id, tld FROM country WHERE tld IS NOT NULL
+`
+
+type CountryTLDMapRow struct {
+	ID  int32   `json:"id"`
+	Tld *string `json:"tld"`
+}
+
+// The in-memory country.tld -> id map for insert-time/commit attribution
+// (06-ingest.md §6.5); loaded once per run.
+func (q *Queries) CountryTLDMap(ctx context.Context) ([]CountryTLDMapRow, error) {
+	rows, err := q.db.Query(ctx, CountryTLDMap)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CountryTLDMapRow{}
+	for rows.Next() {
+		var i CountryTLDMapRow
+		if err := rows.Scan(&i.ID, &i.Tld); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }

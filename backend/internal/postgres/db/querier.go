@@ -24,12 +24,16 @@ type Querier interface {
 	CampaignRemoveMembersNotIn(ctx context.Context, arg CampaignRemoveMembersNotInParams) (int64, error)
 	CampaignUUIDBySourceFile(ctx context.Context, sourceFile *string) (pgtype.UUID, error)
 	CampaignUpdateFromFile(ctx context.Context, arg CampaignUpdateFromFileParams) (int32, error)
+	CountryCodeMap(ctx context.Context) ([]CountryCodeMapRow, error)
 	// Insert-time ccTLD attribution probe (06-ingest.md §6.5): '.NO'-form input.
 	CountryIDByTLD(ctx context.Context, tld *string) (int32, error)
 	// db/query/country.sql — sqlc query source (layout: 05-schema.md §10.2).
 	// Sentinel lookup: binaries resolve the sentinel country once at startup by
 	// lookup, never by literal id (05-schema.md §5).
 	CountrySentinelID(ctx context.Context) (int32, error)
+	// The in-memory country.tld -> id map for insert-time/commit attribution
+	// (06-ingest.md §6.5); loaded once per run.
+	CountryTLDMap(ctx context.Context) ([]CountryTLDMapRow, error)
 	// db/query/domain.sql — sqlc query source (layout: 05-schema.md §10.2).
 	DomainByHost(ctx context.Context, host string) (DomainByHostRow, error)
 	DomainInsertEntity(ctx context.Context, arg DomainInsertEntityParams) (int64, error)
