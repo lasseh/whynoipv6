@@ -392,6 +392,7 @@ func (e *Exporter) writeManifest(now time.Time, generation int32) error {
 	for i, d := range dates {
 		snaps[i] = ManifestEntry{
 			Date: d, Path: "datasets/" + d + "/",
+			Tiers:          []string{"top100k", "top1m", "full"},
 			Formats:        []string{formatCSVGz, formatParquet},
 			DatapackageURL: "/datasets/" + d + "/datapackage.json",
 			SHA256SumsURL:  "/datasets/" + d + "/SHA256SUMS",
