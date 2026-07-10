@@ -114,7 +114,7 @@ error wrapping `ErrInvalidHost`; `errors.Is(err, ErrInvalidHost)` must hold). Gr
 |---|---|---|
 | trailing_dot | `dnb.no.` | `dnb.no` |
 | upper_and_dot | `DNB.no.` | `dnb.no` |
-| idn_unicode | `møre.no` | `xn--mre-qla.no` |
+| idn_unicode | `møre.no` | `xn--mre-0na.no` (corrected 2026-07-10; `xn--mre-qla` decodes to `märe`) |
 | idn_already_punycode | `XN--MRE-QLA.no` | `xn--mre-qla.no` |
 | leading_trailing_space | `  dnb.no  ` | `dnb.no` |
 | mixed_case | `Example.COM` | `example.com` |

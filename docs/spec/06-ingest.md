@@ -46,7 +46,7 @@ Algorithm (in order):
 5. Explicit post-checks (do not rely on profile internals): total length ≤253 octets; ≥2 labels; each label 1–63 octets; `net.ParseIP(ascii) == nil` (rejects IPv4 literals; bracketed IPv6 already died in step 2).
 6. Return `ascii`.
 
-Unit-test vectors (fixture table in 10-testing.md — Canonicalize vectors; these must pass): `DNB.no.`→`dnb.no`; `møre.no`→`xn--mre-qla.no`; `XN--MRE-QLA.no`→`xn--mre-qla.no`; reject: `_wildcard_.ph`, `a..b`, `1.2.3.4`, `[::1]`, `localhost` (1 label), 254-octet input, `http://x.no`.
+Unit-test vectors (fixture table in 10-testing.md — Canonicalize vectors; these must pass): `DNB.no.`→`dnb.no`; `møre.no`→`xn--mre-0na.no` (corrected 2026-07-10: the design listed `xn--mre-qla.no`, which decodes to `märe`); `XN--MRE-QLA.no`→`xn--mre-qla.no`; reject: `_wildcard_.ph`, `a..b`, `1.2.3.4`, `[::1]`, `localhost` (1 label), 254-octet input, `http://x.no`.
 
 **Mandated call sites and failure policy** (every ingress in the system; no other normalization code may exist):
 
