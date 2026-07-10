@@ -38,11 +38,11 @@ func TestBadgeGoldens(t *testing.T) {
 // TestBadgeVariantTable pins the normative copy/color mapping (07 §5.2).
 func TestBadgeVariantTable(t *testing.T) {
 	cases := []struct {
-		found                  bool
-		class                  string
-		gold, disabled         bool
-		variant, msg, color    string
-		isError                bool
+		found               bool
+		class               string
+		gold, disabled      bool
+		variant, msg, color string
+		isError             bool
 	}{
 		{true, "hero", false, false, "supported", "supported", "brightgreen", false},
 		{true, "hero", true, false, "gold", "gold", "brightgreen", false},
