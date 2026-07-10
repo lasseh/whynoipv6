@@ -100,6 +100,12 @@ type Querier interface {
 	// Operator triage (P2.14; 04 — service/manual lifecycle).
 	ServiceCandidateList(ctx context.Context) ([]ServiceCandidateListRow, error)
 	ServiceCandidateResolve(ctx context.Context, host string) (int64, error)
+	// db/query/shame.sql — sqlc query source (layout: 05-schema.md §10.2).
+	// v6ctl shame — the single top_shame write path (06-ingest.md §7).
+	ShameEligibleDomain(ctx context.Context, host string) (ShameEligibleDomainRow, error)
+	ShameList(ctx context.Context) ([]ShameListRow, error)
+	ShameRemove(ctx context.Context, host string) (int64, error)
+	ShameUpsert(ctx context.Context, arg ShameUpsertParams) error
 	SnapshotASNDaily(ctx context.Context) error
 	SnapshotCampaignDaily(ctx context.Context) error
 	SnapshotCountryDaily(ctx context.Context) error
