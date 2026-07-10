@@ -4,6 +4,7 @@ package postgres
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net/url"
@@ -56,7 +57,8 @@ func TestMain(m *testing.M) {
 
 	tmplDSN, err := ctr.ConnectionString(ctx, "sslmode=disable")
 	if err != nil {
-		log.Fatalf("container dsn: %v", err)
+		_ = testcontainers.TerminateContainer(ctr)
+		log.Fatalf("container dsn: %v", err) //nolint:gocritic // fatal during setup, container already terminated
 	}
 	if err := migrateUp(tmplDSN); err != nil {
 		log.Fatalf("migrate template: %v", err)
@@ -73,7 +75,7 @@ func migrateUp(dsn string) error {
 		return err
 	}
 	defer func() { _, _ = mig.Close() }()
-	if err := mig.Up(); err != nil && err != migrate.ErrNoChange {
+	if err := mig.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
 		return fmt.Errorf("migrate up: %w", err)
 	}
 	return nil
