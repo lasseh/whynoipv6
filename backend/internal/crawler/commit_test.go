@@ -34,11 +34,11 @@ type machine struct {
 	s   ClaimedDomain
 }
 
-func newMachine(t *testing.T, resources bool) *machine {
+func newMachine(t *testing.T) *machine {
 	rank := int32(100)
 	return &machine{
 		t:   t,
-		cfg: testCommitCfg(resources),
+		cfg: testCommitCfg(false),
 		s: ClaimedDomain{
 			ID: 1, Host: "seq.example", Kind: domain.KindApex, Rank: &rank,
 			ClaimedAt: seqT0, AsnID: 1, CountryID: 1,
@@ -169,7 +169,7 @@ func ptrStatus(s domain.IPv6Status) *domain.IPv6Status { return &s }
 func TestCommitBootstrap(t *testing.T) {
 	for _, dim := range []domain.Dimension{domain.DimBase, domain.DimWWW, domain.DimNS, domain.DimMX, domain.DimConn} {
 		t.Run(string(dim), func(t *testing.T) {
-			m := newMachine(t, false)
+			m := newMachine(t)
 			u := m.step(0, stableObs(dim, domain.ObsSupported), false)
 			if len(u.changelog) != 0 {
 				t.Errorf("bootstrap wrote %d changelog rows, want 0", len(u.changelog))
@@ -188,7 +188,7 @@ func TestCommitBootstrap(t *testing.T) {
 // TestCommitN2Flip (10-testing §5.2): base flips on the 2nd spaced counted
 // observation with exactly one changelog row.
 func TestCommitN2Flip(t *testing.T) {
-	m := newMachine(t, false)
+	m := newMachine(t)
 	m.step(0, stableObs(domain.DimBase, domain.ObsSupported), false)
 
 	u := m.step(24*time.Hour, stableObs(domain.DimBase, domain.ObsUnsupported), false)
@@ -211,7 +211,7 @@ func TestCommitN2Flip(t *testing.T) {
 // TestCommitCountingGate (10-testing §5.3): close rechecks never advance the
 // confirmation; the flip cannot happen faster than (N-1)×12h.
 func TestCommitCountingGate(t *testing.T) {
-	m := newMachine(t, false)
+	m := newMachine(t)
 	m.step(0, stableObs(domain.DimBase, domain.ObsSupported), false)
 
 	m.step(24*time.Hour, stableObs(domain.DimBase, domain.ObsUnsupported), false) // counts
@@ -230,7 +230,7 @@ func TestCommitCountingGate(t *testing.T) {
 // TestCommitN3Flip (10-testing §5.4): conn (and resources) need three spaced
 // counted observations.
 func TestCommitN3Flip(t *testing.T) {
-	m := newMachine(t, false)
+	m := newMachine(t)
 	m.step(0, stableObs(domain.DimConn, domain.ObsSupported), false)
 
 	m.step(24*time.Hour, stableObs(domain.DimConn, domain.ObsUnsupported), false)
@@ -247,7 +247,7 @@ func TestCommitN3Flip(t *testing.T) {
 // TestCommitNonDefinitive (10-testing §5.5): error/inconsistent touch
 // nothing; the pending candidate survives and the flip lands afterwards.
 func TestCommitNonDefinitive(t *testing.T) {
-	m := newMachine(t, false)
+	m := newMachine(t)
 	m.step(0, stableObs(domain.DimBase, domain.ObsSupported), false)
 	m.step(24*time.Hour, stableObs(domain.DimBase, domain.ObsUnsupported), false)
 
@@ -273,7 +273,7 @@ func TestCommitNonDefinitive(t *testing.T) {
 // TestCommitPendingReset (10-testing §5.6): a value differing from both
 // status and pending replaces the candidate with count 1.
 func TestCommitPendingReset(t *testing.T) {
-	m := newMachine(t, false)
+	m := newMachine(t)
 	m.step(0, stableObs(domain.DimBase, domain.ObsSupported), false)
 	m.step(24*time.Hour, stableObs(domain.DimBase, domain.ObsUnsupported), false)
 	m.step(48*time.Hour, stableObs(domain.DimBase, domain.ObsNoRecord), false)
@@ -288,7 +288,7 @@ func TestCommitPendingReset(t *testing.T) {
 // TestCommitStepR (10-testing §5.7): a definitive base observation on a dead
 // row fires step R — full reset, immediate bootstrap, zero changelog rows.
 func TestCommitStepR(t *testing.T) {
-	m := newMachine(t, false)
+	m := newMachine(t)
 	m.step(0, stableObs(domain.DimBase, domain.ObsSupported), false)
 
 	// Kill it: 7 unresolvable scans, daily.
@@ -322,7 +322,7 @@ func TestCommitStepR(t *testing.T) {
 // TestCommitDeadStreak (10-testing §5.8): seven and never fewer; a
 // resolvable scan resets the streak.
 func TestCommitDeadStreak(t *testing.T) {
-	m := newMachine(t, false)
+	m := newMachine(t)
 	for i := 1; i <= 6; i++ {
 		m.step(time.Duration(i)*24*time.Hour, stableObs(domain.DimBase, domain.ObsNoRecord), true)
 		if m.s.Disabled {
@@ -348,7 +348,7 @@ func TestCommitDeadStreak(t *testing.T) {
 // TestCommitResourcesExcluded (03 §17.9): while the flag is false the
 // resources columns stay NULL and scan.resources is not_applicable.
 func TestCommitResourcesExcluded(t *testing.T) {
-	m := newMachine(t, false)
+	m := newMachine(t)
 	obs := stableObs(domain.DimBase, domain.ObsSupported)
 	obs.Resources = domain.ObsNotApplicable
 	obs.ResourcesExcluded = true
@@ -369,7 +369,7 @@ func TestCommitResourcesExcluded(t *testing.T) {
 // TestCommitPartialDefect (03 §1): a partial core observation aborts the
 // commit with an error.
 func TestCommitPartialDefect(t *testing.T) {
-	m := newMachine(t, false)
+	m := newMachine(t)
 	if err := m.stepErr(0, stableObs(domain.DimBase, domain.ObsPartial)); err == nil {
 		t.Fatal("partial core observation must abort the commit")
 	}
@@ -378,7 +378,7 @@ func TestCommitPartialDefect(t *testing.T) {
 // TestCommitAttributionDeferred (03 §5 step 7): non-definitive base keeps
 // the snapshot attribution.
 func TestCommitAttributionDeferred(t *testing.T) {
-	m := newMachine(t, false)
+	m := newMachine(t)
 	m.step(0, stableObs(domain.DimBase, domain.ObsSupported), false)
 
 	u, err := ComputeCommit(&CommitInput{
@@ -515,7 +515,7 @@ func TestSchedule(t *testing.T) {
 // TestCommitErrorStreakBreakerOpen (04 §5.1 Decision): the streak still
 // increments while the breaker is open; only scheduling is suspended.
 func TestCommitErrorStreakBreakerOpen(t *testing.T) {
-	m := newMachine(t, false)
+	m := newMachine(t)
 	m.step(0, stableObs(domain.DimBase, domain.ObsSupported), false)
 
 	u, err := ComputeCommit(&CommitInput{
