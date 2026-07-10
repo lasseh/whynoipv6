@@ -179,3 +179,7 @@ WHERE d.host = @host;
 
 -- name: SubdomainExactCount :one
 SELECT count(*) FROM domain WHERE parent_id = @parent_id AND NOT disabled;
+
+-- The badge read (07 §5.2): read-only, zero side effects, any kind/origin.
+-- name: BadgeDomain :one
+SELECT classification, gold, disabled FROM domain WHERE host = @host;

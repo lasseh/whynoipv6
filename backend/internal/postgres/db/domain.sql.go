@@ -11,6 +11,24 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const BadgeDomain = `-- name: BadgeDomain :one
+SELECT classification, gold, disabled FROM domain WHERE host = $1
+`
+
+type BadgeDomainRow struct {
+	Classification Classification `json:"classification"`
+	Gold           bool           `json:"gold"`
+	Disabled       bool           `json:"disabled"`
+}
+
+// The badge read (07 §5.2): read-only, zero side effects, any kind/origin.
+func (q *Queries) BadgeDomain(ctx context.Context, host string) (BadgeDomainRow, error) {
+	row := q.db.QueryRow(ctx, BadgeDomain, host)
+	var i BadgeDomainRow
+	err := row.Scan(&i.Classification, &i.Gold, &i.Disabled)
+	return i, err
+}
+
 const ClaimBatchByAge = `-- name: ClaimBatchByAge :many
 UPDATE domain SET claimed_at = now()
 WHERE id IN (

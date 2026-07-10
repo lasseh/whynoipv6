@@ -105,6 +105,11 @@ func NewRouter(svc *service.Service, opts ...Options) http.Handler {
 	r.Get("/campaigns/{uuid}/changelog.atom", s.campaignAtom)
 	r.Get("/campaigns/{uuid}/changelog.feed.json", s.campaignJSONFeed)
 
+	// The embeddable badge (§5.2): .svg/.json are route suffixes; a
+	// suffix-less path is a route-miss 404. Hosts contain dots, so the
+	// suffix is split in the dispatcher, not the chi pattern.
+	r.Get("/badge/{file}", s.getBadge)
+
 	// Stats / adoption-over-time (§4.10) — confirmed-state snapshots only.
 	r.Get("/stats/overview", s.getStatsOverview)
 	r.Get("/countries/{code}/stats", s.getCountryStats)

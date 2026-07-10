@@ -25,6 +25,8 @@ type Querier interface {
 	// Sentinel lookup: binaries resolve the sentinel ASN once at startup by
 	// lookup, never by literal id (05-schema.md §5).
 	ASNSentinelID(ctx context.Context) (int32, error)
+	// The badge read (07 §5.2): read-only, zero side effects, any kind/origin.
+	BadgeDomain(ctx context.Context, host string) (BadgeDomainRow, error)
 	CampaignAddMember(ctx context.Context, arg CampaignAddMemberParams) (int64, error)
 	CampaignAdoption(ctx context.Context, campaignID int32) (CampaignAdoptionRow, error)
 	// db/query/campaign.sql — sqlc query source (layout: 05-schema.md §10.2).
