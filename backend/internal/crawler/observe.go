@@ -12,6 +12,13 @@ import (
 	"github.com/lasseh/whynoipv6/internal/domain"
 )
 
+// Conditional-A outcome tokens (02 §2.7 — mirrored from internal/consensus).
+const (
+	aPresent = "a_present"
+	aAbsent  = "a_absent"
+	aError   = "a_error"
+)
+
 // preflightFreshness is the §5 constant: conn=unsupported is definitive only
 // with a preflight pass younger than this (mirrors checker.PreflightFreshness).
 const preflightFreshness = 5 * time.Minute
@@ -112,14 +119,14 @@ func mapAAAA(r checker.Result, www bool) domain.Observation {
 		return domain.ObsNoRecord
 	case checker.StatusUnsupported: // quorum empty → by a_outcome
 		switch outcome, _ := r.Details["a_outcome"].(string); outcome {
-		case "a_present":
+		case aPresent:
 			return domain.ObsUnsupported
-		case "a_absent":
+		case aAbsent:
 			if www {
 				return domain.ObsNotApplicable
 			}
 			return domain.ObsNoRecord
-		case "a_error":
+		case aError:
 			return domain.ObsError
 		default:
 			slog.Warn("a_outcome missing", "check_status", r.Status)
