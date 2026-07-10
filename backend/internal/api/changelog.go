@@ -107,7 +107,16 @@ func (s *Server) serveChangelogFeed(w http.ResponseWriter, r *http.Request, doma
 		ValidationError(w, r, []FieldError{{Field: ve.field, Reason: ve.msg}})
 		return
 	}
-	limit, err := ParseLimit(q)
+	wantCSV, err := parseFormat(q)
+	if err != nil {
+		InvalidParameter(w, r, err.Error())
+		return
+	}
+	limitCap := MaxLimit
+	if wantCSV {
+		limitCap = s.opts.CSVMaxRows
+	}
+	limit, err := ParseLimitCap(q, limitCap)
 	if err != nil {
 		InvalidParameter(w, r, err.Error())
 		return
@@ -186,6 +195,10 @@ func (s *Server) serveChangelogFeed(w http.ResponseWriter, r *http.Request, doma
 	items := make([]ChangelogItem, len(rows))
 	for i := range rows {
 		items[i] = changelogItem(&rows[i])
+	}
+	if wantCSV {
+		writeChangelogCSV(w, items)
+		return
 	}
 	var lastK []any
 	if hasMore {

@@ -292,7 +292,16 @@ func (s *Server) serveDomainList(w http.ResponseWriter, r *http.Request, preset 
 		sortKey = SortHost
 	}
 
-	limit, err := ParseLimit(q)
+	wantCSV, err := parseFormat(q)
+	if err != nil {
+		InvalidParameter(w, r, err.Error())
+		return
+	}
+	limitCap := MaxLimit
+	if wantCSV {
+		limitCap = s.opts.CSVMaxRows // §5.5: CSV raises the cap, same view
+	}
+	limit, err := ParseLimitCap(q, limitCap)
 	if err != nil {
 		InvalidParameter(w, r, err.Error())
 		return
@@ -352,6 +361,10 @@ func (s *Server) serveDomainList(w http.ResponseWriter, r *http.Request, preset 
 	items := make([]DomainSummary, len(rows))
 	for i := range rows {
 		items[i] = summaryFromRow(&rows[i])
+	}
+	if wantCSV {
+		writeDomainsCSV(w, items)
+		return
 	}
 
 	var lastK []any

@@ -64,6 +64,15 @@ func WriteJSON(w http.ResponseWriter, status int, body any) {
 	}
 }
 
+// WriteJSONBody encodes a 200 JSON body under a caller-set Content-Type
+// (the JSON-Feed media type, §5.4).
+func WriteJSONBody(w http.ResponseWriter, body any) {
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(body); err != nil {
+		slog.Error("response encode failed", "err", err.Error())
+	}
+}
+
 // Problem is the RFC 9457 body (07 §2.5). Extensions ride as extra fields.
 type Problem struct {
 	Type       string       `json:"type"`

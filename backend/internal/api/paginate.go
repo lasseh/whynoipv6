@@ -192,6 +192,12 @@ func FilterFingerprint(q url.Values) string {
 
 // ParseLimit applies the default/cap (07 §3.2).
 func ParseLimit(q url.Values) (int, error) {
+	return ParseLimitCap(q, MaxLimit)
+}
+
+// ParseLimitCap is ParseLimit with a caller-set ceiling — the CSV export
+// raises the cap to export.csv_max_rows (07 §5.5).
+func ParseLimitCap(q url.Values, maxLimit int) (int, error) {
 	raw := q.Get(paramLimit)
 	if raw == "" {
 		return DefaultLimit, nil
@@ -200,8 +206,8 @@ func ParseLimit(q url.Values) (int, error) {
 	if err != nil || n < 1 {
 		return 0, fmt.Errorf("%w: limit must be a positive integer", ErrCursorInvalid)
 	}
-	if n > MaxLimit {
-		n = MaxLimit
+	if n > maxLimit {
+		n = maxLimit
 	}
 	return n, nil
 }

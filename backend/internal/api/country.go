@@ -39,6 +39,11 @@ func (s *Server) listCountries(w http.ResponseWriter, r *http.Request) {
 		InvalidParameter(w, r, "sort must be percent, v6_sites, or sites")
 		return
 	}
+	wantCSV, err := parseFormat(r.URL.Query())
+	if err != nil {
+		InvalidParameter(w, r, err.Error())
+		return
+	}
 
 	generation, asOf, err := s.svc.Generation(r.Context())
 	if err != nil {
@@ -78,6 +83,10 @@ func (s *Server) listCountries(w http.ResponseWriter, r *http.Request) {
 		return items[i].Code < items[j].Code
 	})
 
+	if wantCSV {
+		writeCountriesCSV(w, items)
+		return
+	}
 	count := int64(len(items))
 	meta := NewMeta(asOf, generation)
 	meta.Count = &count

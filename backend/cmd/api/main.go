@@ -46,8 +46,11 @@ func run() error {
 
 	svc := service.New(pool)
 	srv := &http.Server{
-		Addr:              cfg.APIListen,
-		Handler:           api.NewRouter(svc),
+		Addr: cfg.APIListen,
+		Handler: api.NewRouter(svc, api.Options{
+			PublicBaseURL: cfg.PublicBaseURL,
+			CSVMaxRows:    cfg.Int("export.csv_max_rows"),
+		}),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      30 * time.Second,

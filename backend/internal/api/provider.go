@@ -24,6 +24,11 @@ type ProviderBody struct {
 // listProviders is GET /providers — the bounded curated registry, served
 // whole with an exact count (07 §4.6).
 func (s *Server) listProviders(w http.ResponseWriter, r *http.Request) {
+	wantCSV, err := parseFormat(r.URL.Query())
+	if err != nil {
+		InvalidParameter(w, r, err.Error())
+		return
+	}
 	generation, asOf, err := s.svc.Generation(r.Context())
 	if err != nil {
 		InternalError(w, r)
@@ -42,6 +47,10 @@ func (s *Server) listProviders(w http.ResponseWriter, r *http.Request) {
 		items[i] = ProviderBody{ID: rows[i].ID, Name: rows[i].Name,
 			CountTotal: rows[i].CountTotal, CountV6: rows[i].CountV6,
 			CountV4: rows[i].CountTotal - rows[i].CountV6}
+	}
+	if wantCSV {
+		writeProvidersCSV(w, items)
+		return
 	}
 	count := int64(len(items))
 	meta := NewMeta(asOf, generation)

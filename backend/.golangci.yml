@@ -38,6 +38,14 @@ linters:
       - path: cmd/v6ctl/
         linters:
           - goconst
+      # The API package is a serialization surface: the same wire words
+      # ("base", "gold", "tld") repeat across independent vocabularies —
+      # query params, JSON keys, CSV headers, SQL dimension names, feed
+      # copy. A shared constant would couple vocabularies that only
+      # coincidentally spell alike.
+      - path: internal/api/
+        linters:
+          - goconst
       # Fixture/scripting literals in tests are values, not constants, and
       # gocritic's performance hints (hugeParam etc.) are noise in tests.
       - path: _test\.go

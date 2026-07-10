@@ -13,16 +13,32 @@ import (
 	"github.com/lasseh/whynoipv6/internal/service"
 )
 
+// Options are the serving knobs plumbed from the config registry (09-ops).
+type Options struct {
+	PublicBaseURL string // feed ids/links; default https://api.whynoipv6.com
+	CSVMaxRows    int    // export.csv_max_rows; default 10000
+}
+
 // Server carries the handler dependencies.
 type Server struct {
-	svc *service.Service
+	svc  *service.Service
+	opts Options
 }
 
 // NewRouter builds the chi router with the 07 §1.7 middleware order
 // (outermost first): RealIP → RequestID → slog access log → Recoverer →
 // Timeout(30s) → CORS → security headers. No trailing-slash redirection.
-func NewRouter(svc *service.Service) http.Handler {
+func NewRouter(svc *service.Service, opts ...Options) http.Handler {
 	s := &Server{svc: svc}
+	if len(opts) > 0 {
+		s.opts = opts[0]
+	}
+	if s.opts.PublicBaseURL == "" {
+		s.opts.PublicBaseURL = "https://api.whynoipv6.com"
+	}
+	if s.opts.CSVMaxRows == 0 {
+		s.opts.CSVMaxRows = 10000
+	}
 	r := chi.NewRouter()
 
 	r.Use(realIP)
@@ -78,6 +94,16 @@ func NewRouter(svc *service.Service) http.Handler {
 	r.Get("/campaigns/{uuid}/domains", s.listCampaignDomains)
 	r.Get("/resources/{host}", s.getResource)
 	r.Get("/resources/{host}/dependents", s.listResourceDependents)
+
+	// The feed matrix (§5.4): 4 scopes × Atom + JSON Feed suffix URLs.
+	r.Get("/changelog.atom", s.globalAtom)
+	r.Get("/changelog.feed.json", s.globalJSONFeed)
+	r.Get("/domains/{host}/changelog.atom", s.domainAtom)
+	r.Get("/domains/{host}/changelog.feed.json", s.domainJSONFeed)
+	r.Get("/countries/{code}/changelog.atom", s.countryAtom)
+	r.Get("/countries/{code}/changelog.feed.json", s.countryJSONFeed)
+	r.Get("/campaigns/{uuid}/changelog.atom", s.campaignAtom)
+	r.Get("/campaigns/{uuid}/changelog.feed.json", s.campaignJSONFeed)
 
 	// The changelog trust surface (§4.8) + per-domain history (§4.9).
 	r.Get("/changelog", s.listChangelog)

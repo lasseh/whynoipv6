@@ -41,7 +41,16 @@ func (s *Server) listASNs(w http.ResponseWriter, r *http.Request) {
 		InvalidParameter(w, r, "sort must be count_v6 or count_total")
 		return
 	}
-	limit, err := ParseLimit(q)
+	wantCSV, err := parseFormat(q)
+	if err != nil {
+		InvalidParameter(w, r, err.Error())
+		return
+	}
+	limitCap := MaxLimit
+	if wantCSV {
+		limitCap = s.opts.CSVMaxRows
+	}
+	limit, err := ParseLimitCap(q, limitCap)
 	if err != nil {
 		InvalidParameter(w, r, err.Error())
 		return
@@ -100,6 +109,10 @@ func (s *Server) listASNs(w http.ResponseWriter, r *http.Request) {
 	hasMore := len(items) > limit
 	if hasMore {
 		items = items[:limit]
+	}
+	if wantCSV {
+		writeASNsCSV(w, items)
+		return
 	}
 	var lastK []any
 	if hasMore {
