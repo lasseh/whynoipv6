@@ -1,0 +1,20 @@
+# Merge-trigger sync (06-ingest.md §3 / P7.2): repo-dispatch on push to
+# main; the operator CI job on the backend host runs `v6ctl campaign sync`.
+# Staged here; copy into whynoipv6-campaign/.github/workflows/.
+name: sync-dispatch
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: notify the backend to sync
+        env:
+          GH_TOKEN: ${{ secrets.SYNC_DISPATCH_TOKEN }}
+        run: |
+          gh api repos/lasseh/whynoipv6/dispatches \
+            -f event_type=campaign-sync \
+            -F client_payload[ref]="${{ github.sha }}"

@@ -56,5 +56,6 @@ func campaignCmd() *cobra.Command {
 	syncCmd.Flags().BoolVar(&adopt, "adopt-unknown-uuids", false,
 		"insert campaigns whose files carry a uuid unknown to the DB (one-time bootstrap; never cron)")
 	cmd.AddCommand(syncCmd)
+	cmd.AddCommand(campaignValidateCmd())
 	return cmd
 }

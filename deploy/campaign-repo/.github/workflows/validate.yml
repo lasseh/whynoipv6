@@ -1,0 +1,36 @@
+# PR validation for the CAMPAIGN repository (06-ingest.md §4.4).
+# Staged here; copy into whynoipv6-campaign/.github/workflows/validate.yml.
+name: validate
+on: pull_request
+permissions:
+  contents: read
+  pull-requests: write
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/checkout@v4
+        with:
+          repository: lasseh/whynoipv6
+          path: .backend
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+      - name: build v6ctl
+        run: cd .backend/backend && go build -o /tmp/v6ctl ./cmd/v6ctl
+      - name: validate changed campaign files
+        run: |
+          /tmp/v6ctl campaign validate \
+            --repo . \
+            --base "origin/${{ github.base_ref }}" \
+            --comment-file /tmp/comment.md
+      - name: post bot comment
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh pr comment "${{ github.event.pull_request.number }}" \
+            --body-file /tmp/comment.md --edit-last --create-if-none
