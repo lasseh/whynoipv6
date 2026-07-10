@@ -33,6 +33,10 @@ const (
 	paramAfterRank  = "after_rank"
 	paramAroundRank = "around_rank"
 	paramFlag       = "flag"
+	paramTLD        = "tld"
+	paramClass      = "class"
+	paramCountry    = "country"
+	paramASN        = "asn"
 )
 
 // Cursor is the decoded opaque token.
@@ -197,10 +201,10 @@ func ParseAfterRank(q url.Values, sortKey string) (*int32, error) {
 
 // Residual params: the unindexed-or-selective predicate class that requires
 // an indexed scope (07 §3.3 guardrail).
-var residualParams = []string{paramFlag, "base", "www", "ns", "mx", "conn", "resources", "tld", "provider", "hosting"}
+var residualParams = []string{paramFlag, "base", "www", "ns", "mx", "conn", "resources", paramTLD, "provider", "hosting"}
 
 // scopeParams are the indexed prefilters that satisfy the guardrail.
-var scopeParams = []string{"class", "country", "asn"}
+var scopeParams = []string{paramClass, paramCountry, paramASN}
 
 // ErrScopeRequired → 422 scope-required.
 var ErrScopeRequired = errors.New("scope required")
