@@ -13,7 +13,7 @@ import (
 // CORS preflight, and the RealIP derivation.
 func TestBaseline(t *testing.T) {
 	// A nil service is fine for the routes under test except /readyz.
-	router := NewRouter(nil)
+	router := NewRouter(nil, Options{})
 
 	t.Run("livez_no_store", func(t *testing.T) {
 		rec := httptest.NewRecorder()

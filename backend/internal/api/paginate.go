@@ -50,18 +50,24 @@ const (
 	paramProvider   = "provider"
 )
 
-// Cursor is the decoded opaque token.
+// Cursor is the decoded opaque token. D is the direction bit: "" walks
+// forward from K, "p" walks backward (the §3.2 bidirectional support) —
+// opaque to clients either way.
 type Cursor struct {
 	V int    `json:"v"`
 	G int32  `json:"g"`
 	S string `json:"s"`
 	F string `json:"f"`
 	K []any  `json:"k"`
+	D string `json:"d,omitempty"`
 
 	// ReAnchored is set when the cursor's generation differed from the
 	// current one: the seek is best-effort on last_rank (07 §3.2 staleness).
 	ReAnchored bool `json:"-"`
 }
+
+// Backward reports the direction bit.
+func (c *Cursor) Backward() bool { return c.D == "p" }
 
 // Seek is the typed seek tuple for the query builder.
 type Seek struct {
@@ -77,9 +83,13 @@ type Seek struct {
 // or filter-fingerprint mismatch).
 var ErrCursorInvalid = errors.New("invalid cursor")
 
-// EncodeCursor mints the opaque base64url token.
+// EncodeCursor mints the opaque base64url token (forward direction).
 func EncodeCursor(g int32, sortKey, fingerprint string, k []any) string {
-	raw, _ := json.Marshal(Cursor{V: 1, G: g, S: sortKey, F: fingerprint, K: k})
+	return encodeCursorDir(g, sortKey, fingerprint, k, "")
+}
+
+func encodeCursorDir(g int32, sortKey, fingerprint string, k []any, dir string) string {
+	raw, _ := json.Marshal(Cursor{V: 1, G: g, S: sortKey, F: fingerprint, K: k, D: dir})
 	return base64.RawURLEncoding.EncodeToString(raw)
 }
 
@@ -230,6 +240,25 @@ func ParseAfterRank(q url.Values, sortKey string) (*int32, error) {
 	return &rank, nil
 }
 
+// ParseAroundRank handles the centered-window deep link (07 §3.2): the
+// ⌈limit/2⌉ rows ranked ≤ N plus the ⌊limit/2⌋ rows ranked > N. Offered on
+// the default rank ordering only.
+func ParseAroundRank(q url.Values, sortKey string) (*int32, error) {
+	raw := q.Get(paramAroundRank)
+	if raw == "" {
+		return nil, nil
+	}
+	if sortKey != SortRank {
+		return nil, fmt.Errorf("%w: around_rank is only available on the rank ordering", ErrCursorInvalid)
+	}
+	n, err := strconv.ParseInt(raw, 10, 32)
+	if err != nil || n < 0 {
+		return nil, fmt.Errorf("%w: around_rank must be a non-negative integer", ErrCursorInvalid)
+	}
+	rank := int32(n)
+	return &rank, nil
+}
+
 // Residual params: the unindexed-or-selective predicate class that requires
 // an indexed scope (07 §3.3 guardrail).
 var residualParams = []string{paramFlag, "base", "www", "ns", "mx", "conn", "resources", paramTLD, paramProvider, "hosting"}
@@ -269,14 +298,18 @@ func ValidateResiduals(q url.Values, pathScoped bool) error {
 	return fmt.Errorf("%w: %s= requires one of class=, country=, or asn=", ErrScopeRequired, present[0])
 }
 
-// PageOf assembles the page block from an N+1 fetch: rows is the trimmed
-// page, hasMore whether the extra row existed; mint builds the next seek
-// tuple from the last row.
-func PageOf(g int32, sortKey, fingerprint string, hasMore bool, lastK []any, prev *string) Page {
-	p := Page{HasMore: hasMore, PrevCursor: prev}
-	if hasMore && lastK != nil {
-		next := EncodeCursor(g, sortKey, fingerprint, lastK)
+// BuildPage assembles the page block from an N+1 window walk (07 §3.2
+// bidirectional): forwardMore = rows exist after lastK (mints next_cursor),
+// backwardMore = rows exist before firstK (mints prev_cursor).
+func BuildPage(g int32, sortKey, fingerprint string, forwardMore, backwardMore bool, firstK, lastK []any) Page {
+	p := Page{HasMore: forwardMore}
+	if forwardMore && lastK != nil {
+		next := encodeCursorDir(g, sortKey, fingerprint, lastK, "")
 		p.NextCursor = &next
+	}
+	if backwardMore && firstK != nil {
+		prev := encodeCursorDir(g, sortKey, fingerprint, firstK, "p")
+		p.PrevCursor = &prev
 	}
 	return p
 }

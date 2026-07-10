@@ -206,15 +206,10 @@ func LiveLinks(ctx context.Context, pool *pgxpool.Pool, sr checker.ScanResult, e
 	}
 	// One set-based probe, not a per-host loop.
 	byHost := map[string]domain.IPv6Status{}
-	rows, err := pool.Query(ctx,
-		"SELECT host, aaaa_status::text FROM resource_host WHERE host = ANY($1) AND aaaa_status IS NOT NULL",
-		rawHosts)
-	if err == nil {
-		defer rows.Close()
-		for rows.Next() {
-			var h, status string
-			if rows.Scan(&h, &status) == nil {
-				byHost[h] = domain.IPv6Status(status)
+	if rows, err := db.New(pool).ResourceHostStatuses(ctx, rawHosts); err == nil {
+		for _, row := range rows {
+			if row.AaaaStatus != nil {
+				byHost[row.Host] = domain.IPv6Status(*row.AaaaStatus)
 			}
 		}
 	}

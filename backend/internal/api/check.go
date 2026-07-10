@@ -78,7 +78,7 @@ func (s *Server) postCheck(w http.ResponseWriter, r *http.Request) {
 	}
 	ipWin, err := s.svc.Q.CheckJobRatePrefix(r.Context(), prefix)
 	if err != nil {
-		InternalError(w, r)
+		InternalError(w, r, err)
 		return
 	}
 	if int(ipWin.N) >= s.opts.RateIPPerHour {
@@ -88,7 +88,7 @@ func (s *Server) postCheck(w http.ResponseWriter, r *http.Request) {
 	}
 	globalWin, err := s.svc.Q.CheckJobRateGlobal(r.Context())
 	if err != nil {
-		InternalError(w, r)
+		InternalError(w, r, err)
 		return
 	}
 	if int(globalWin.N) >= s.opts.RateGlobalPerHour {
@@ -101,7 +101,7 @@ func (s *Server) postCheck(w http.ResponseWriter, r *http.Request) {
 	// 3. Lifecycle re-entry — every POST whose host already has a row,
 	// including dedupe hits (§5.1.6).
 	if err := s.svc.Q.DomainLiveCheckReentry(r.Context(), host); err != nil {
-		InternalError(w, r)
+		InternalError(w, r, err)
 		return
 	}
 
@@ -116,7 +116,7 @@ func (s *Server) postCheck(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if confErr != nil && !errors.Is(confErr, pgx.ErrNoRows) {
-		InternalError(w, r)
+		InternalError(w, r, err)
 		return
 	}
 
@@ -143,7 +143,7 @@ func (s *Server) postCheck(w http.ResponseWriter, r *http.Request) {
 		Host: host, RequesterIp: requester,
 	})
 	if err != nil {
-		InternalError(w, r)
+		InternalError(w, r, err)
 		return
 	}
 	w.Header().Set("Location", "/check/"+strconv.FormatInt(ins.ID, 10))
@@ -167,7 +167,7 @@ func (s *Server) getCheck(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		InternalError(w, r)
+		InternalError(w, r, err)
 		return
 	}
 	env := s.jobEnvelope(r, &jobFields{

@@ -124,7 +124,7 @@ func (s *Server) getDomainHistory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		InternalError(w, r)
+		InternalError(w, r, err)
 		return
 	}
 	from, to, weekly, err := parseHistoryWindow(r.URL.Query())
@@ -135,7 +135,7 @@ func (s *Server) getDomainHistory(w http.ResponseWriter, r *http.Request) {
 
 	generation, asOf, err := s.svc.Generation(r.Context())
 	if err != nil {
-		InternalError(w, r)
+		InternalError(w, r, err)
 		return
 	}
 	if CacheList(w, r, generation) {
@@ -148,7 +148,7 @@ func (s *Server) getDomainHistory(w http.ResponseWriter, r *http.Request) {
 
 	replay, err := s.svc.Q.ChangelogReplay(r.Context(), row.ID)
 	if err != nil {
-		InternalError(w, r)
+		InternalError(w, r, err)
 		return
 	}
 	// Day-1 rule (OPEN-9): the trajectory is changelog-sourced and starts
@@ -189,7 +189,7 @@ func (s *Server) getDomainHistory(w http.ResponseWriter, r *http.Request) {
 		DomainID: row.ID, FromTs: pgTS(from, true), ToTs: pgTS(to.AddDate(0, 0, 1), true),
 	})
 	if err != nil {
-		InternalError(w, r)
+		InternalError(w, r, err)
 		return
 	}
 	latByDay := make(map[string]db.ScanLatencyDailyRow, len(latency))

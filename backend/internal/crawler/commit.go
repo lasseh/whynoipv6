@@ -61,6 +61,7 @@ type CommitResult struct {
 // commitUnit is the computed write unit: everything the flush queues.
 type commitUnit struct {
 	domainID    int64
+	host        string
 	lease       time.Time
 	params      db.CommitDomainParams
 	changelog   []db.InsertChangelogParams
@@ -270,6 +271,7 @@ func ComputeCommit(in *CommitInput, cfg *CommitConfig) (*commitUnit, error) {
 
 	u := &commitUnit{
 		domainID:    s.ID,
+		host:        s.Host,
 		lease:       s.ClaimedAt,
 		params:      params,
 		changelog:   changelog,
@@ -455,7 +457,7 @@ func (c *Committer) flush(ctx context.Context, u *commitUnit) (leaseLost bool, e
 	}
 	if leaseLost {
 		c.LeaseLost.Add(1)
-		c.log.Warn("lease lost, commit discarded", "domain_id", u.domainID)
+		c.log.Warn("lease lost, commit discarded", "domain", u.host)
 		return true, nil // deferred Rollback discards EVERYTHING
 	}
 	if firstErr != nil {

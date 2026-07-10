@@ -15,12 +15,12 @@ import (
 func (s *Server) getOpenAPIJSON(w http.ResponseWriter, r *http.Request) {
 	swagger, err := gen.GetSpec()
 	if err != nil {
-		InternalError(w, r)
+		InternalError(w, r, err)
 		return
 	}
 	raw, err := json.Marshal(swagger)
 	if err != nil {
-		InternalError(w, r)
+		InternalError(w, r, err)
 		return
 	}
 	w.Header().Set("Cache-Control", "public, max-age=3600")

@@ -59,3 +59,25 @@ SELECT DISTINCT ON (ts::date) ts::date AS day, latency_v4_ms, latency_v6_ms
 FROM scan
 WHERE domain_id = @domain_id AND ts >= @from_ts::TIMESTAMPTZ AND ts < @to_ts::TIMESTAMPTZ
 ORDER BY ts::date, ts DESC;
+
+-- The §3.2 prev_cursor (backward) variants.
+-- name: ChangelogGlobalPrev :many
+SELECT cl.ts, d.host, cl.field, cl.old_value, cl.new_value, cl.domain_id
+FROM changelog cl JOIN domain d ON d.id = cl.domain_id
+WHERE (@field::TEXT = '' OR cl.field = @field)
+  AND (NOT @with_from::BOOL OR cl.ts >= @from_ts::TIMESTAMPTZ)
+  AND (NOT @with_to::BOOL OR cl.ts <= @to_ts::TIMESTAMPTZ)
+  AND (cl.ts, cl.domain_id, cl.field) > (@seek_ts::TIMESTAMPTZ, @seek_domain::BIGINT, @seek_field::TEXT)
+ORDER BY cl.ts ASC, cl.domain_id ASC, cl.field ASC
+LIMIT @lim;
+
+-- name: ChangelogByDomainPrev :many
+SELECT cl.ts, d.host, cl.field, cl.old_value, cl.new_value, cl.domain_id
+FROM changelog cl JOIN domain d ON d.id = cl.domain_id
+WHERE cl.domain_id = @domain_id
+  AND (@field::TEXT = '' OR cl.field = @field)
+  AND (NOT @with_from::BOOL OR cl.ts >= @from_ts::TIMESTAMPTZ)
+  AND (NOT @with_to::BOOL OR cl.ts <= @to_ts::TIMESTAMPTZ)
+  AND (cl.ts, cl.domain_id, cl.field) > (@seek_ts::TIMESTAMPTZ, @seek_domain::BIGINT, @seek_field::TEXT)
+ORDER BY cl.ts ASC, cl.domain_id ASC, cl.field ASC
+LIMIT @lim;

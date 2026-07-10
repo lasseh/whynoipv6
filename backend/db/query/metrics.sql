@@ -23,3 +23,11 @@ INSERT INTO unbound_stats (host, num_queries, cache_hits, cache_miss,
 VALUES (@host, @num_queries, @cache_hits, @cache_miss,
         @rcode_servfail, @rcode_nxdomain,
         @recursion_time_avg_ms, @requestlist_avg, @raw);
+
+-- The tick step-7 ops digest (04 §9).
+-- name: TickSummaryCounts :one
+SELECT
+  (SELECT count(*) FROM scan WHERE ts >= now() - interval '24 hours') AS scanned,
+  (SELECT count(*) FROM changelog WHERE ts >= now() - interval '24 hours') AS transitions,
+  (SELECT count(*) FROM domain WHERE (NOT disabled OR disabled_reason IN ('dead', 'delisted'))
+     AND next_check_at <= now()) AS queue_depth;

@@ -108,16 +108,28 @@ const (
 	ListSortHost     ListSort = "host"
 )
 
-// buildDomainList assembles the leaderboard query. The publicly-ranked
-// predicate is spelled verbatim as a literal (05-schema §1.7).
-func buildDomainList(f *DomainListFilter, sortKey ListSort, seek *DomainSeek, afterRank *int32, limit int) (sqlText string, args []any, err error) {
-	q := sq.Select(strings.Split(domainRowColumns, ",\n")...).
+// ORDER BY fragments shared by the forward/backward walks.
+const (
+	orderIDDesc = "d.id DESC"
+	orderIDAsc  = "d.id ASC"
+)
+
+// baseDomainSelect is the shared §4.2-row select over the five-way join —
+// the one base both the leaderboard and the dependents list build on.
+func baseDomainSelect(extraColumns ...string) sq.SelectBuilder {
+	return sq.Select(append(strings.Split(domainRowColumns, ",\n"), extraColumns...)...).
 		From("domain d").
 		Join("country c ON c.id = d.country_id").
 		Join("asn a ON a.id = d.asn_id").
 		LeftJoin("dns_provider dp ON dp.id = d.dns_provider_id").
 		LeftJoin("domain p ON p.id = d.parent_id").
 		PlaceholderFormat(sq.Dollar)
+}
+
+// buildDomainList assembles the leaderboard query. The publicly-ranked
+// predicate is spelled verbatim as a literal (05-schema §1.7).
+func buildDomainList(f *DomainListFilter, sortKey ListSort, seek *DomainSeek, afterRank *int32, limit int, backward bool) (sqlText string, args []any, err error) {
+	q := baseDomainSelect()
 
 	// The literal public scope — verbatim for partial-index implication.
 	// Sub-collection scopes keep rank-NULL members visible (07 §2.2).
@@ -168,26 +180,44 @@ func buildDomainList(f *DomainListFilter, sortKey ListSort, seek *DomainSeek, af
 		q = q.Where(sq.Expr("d.host LIKE '%' || ? || '%'", f.Query)) // trigram-backed
 	}
 
+	// backward flips the seek comparison and the ORDER BY (the §3.2
+	// prev_cursor walk); the caller re-reverses the rows for display.
 	switch sortKey {
 	case ListSortHost:
 		if seek != nil && seek.Host != "" {
-			q = q.Where(sq.Expr("d.host > ?", seek.Host))
+			if backward {
+				q = q.Where(sq.Expr("d.host < ?", seek.Host))
+			} else {
+				q = q.Where(sq.Expr("d.host > ?", seek.Host))
+			}
 		}
-		q = q.OrderBy("d.host ASC")
+		if backward {
+			q = q.OrderBy("d.host DESC")
+		} else {
+			q = q.OrderBy("d.host ASC")
+		}
 	case ListSortRankDesc:
+		cmp, order := "<", []string{"d.rank DESC", orderIDDesc}
+		if backward {
+			cmp, order = ">", []string{"d.rank ASC", orderIDAsc}
+		}
 		if afterRank != nil {
 			q = q.Where(sq.Expr(fmt.Sprintf("d.rank < %d", *afterRank)))
 		} else if seek != nil && seek.Rank != nil {
-			q = q.Where(sq.Expr(fmt.Sprintf("(d.rank, d.id) < (%d, %d)", *seek.Rank, seek.ID)))
+			q = q.Where(sq.Expr(fmt.Sprintf("(d.rank, d.id) %s (%d, %d)", cmp, *seek.Rank, seek.ID)))
 		}
-		q = q.OrderBy("d.rank DESC", "d.id DESC")
+		q = q.OrderBy(order...)
 	default: // rank
+		cmp, order := ">", []string{"d.rank ASC", orderIDAsc}
+		if backward {
+			cmp, order = "<", []string{"d.rank DESC", orderIDDesc}
+		}
 		if afterRank != nil {
 			q = q.Where(sq.Expr(fmt.Sprintf("d.rank > %d", *afterRank)))
 		} else if seek != nil && seek.Rank != nil {
-			q = q.Where(sq.Expr(fmt.Sprintf("(d.rank, d.id) > (%d, %d)", *seek.Rank, seek.ID)))
+			q = q.Where(sq.Expr(fmt.Sprintf("(d.rank, d.id) %s (%d, %d)", cmp, *seek.Rank, seek.ID)))
 		}
-		q = q.OrderBy("d.rank ASC", "d.id ASC")
+		q = q.OrderBy(order...)
 	}
 
 	return q.Limit(uint64(limit + 1)).ToSql() // N+1 fetch
@@ -195,9 +225,9 @@ func buildDomainList(f *DomainListFilter, sortKey ListSort, seek *DomainSeek, af
 
 // ListDomains runs the built query and returns limit+1 rows at most.
 func ListDomains(ctx context.Context, pool *pgxpool.Pool, f *DomainListFilter,
-	sortKey ListSort, seek *DomainSeek, afterRank *int32, limit int,
+	sortKey ListSort, seek *DomainSeek, afterRank *int32, limit int, backward bool,
 ) ([]DomainRow, error) {
-	sqlText, args, err := buildDomainList(f, sortKey, seek, afterRank, limit)
+	sqlText, args, err := buildDomainList(f, sortKey, seek, afterRank, limit, backward)
 	if err != nil {
 		return nil, fmt.Errorf("domain list build: %w", err)
 	}
@@ -209,13 +239,66 @@ func ListDomains(ctx context.Context, pool *pgxpool.Pool, f *DomainListFilter,
 	if err != nil {
 		return nil, fmt.Errorf("domain list scan: %w", err)
 	}
+	if backward {
+		reverseRows(out)
+	}
 	return out, nil
+}
+
+// reverseRows restores display order after a backward (prev_cursor) fetch;
+// the N+1 overflow row sits at index 0 afterwards, so callers trim the
+// FRONT on backward pages.
+func reverseRows[T any](rows []T) {
+	for i, j := 0, len(rows)-1; i < j; i, j = i+1, j-1 {
+		rows[i], rows[j] = rows[j], rows[i]
+	}
+}
+
+// ListDomainsAround is the §3.2 centered-window deep link: the ⌈limit/2⌉
+// rows ranked ≤ N plus the ⌊limit/2⌋ rows ranked > N, both under the same
+// filters. moreAbove/moreBelow report window truncation for cursor minting.
+func ListDomainsAround(ctx context.Context, pool *pgxpool.Pool, f *DomainListFilter,
+	around int32, limit int,
+) (rows []DomainRow, moreAbove, moreBelow bool, err error) {
+	ceilHalf := (limit + 1) / 2
+	floorHalf := limit / 2
+
+	// Upper half: rank ≤ N, fetched descending (backward) so the window
+	// hugs N, then re-reversed by ListDomains.
+	upper := *f
+	if upper.RankMax == nil || *upper.RankMax > around {
+		upper.RankMax = &around
+	}
+	top, err := ListDomains(ctx, pool, &upper, ListSortRank, nil, nil, ceilHalf, true)
+	if err != nil {
+		return nil, false, false, err
+	}
+	if len(top) > ceilHalf {
+		moreAbove = true
+		top = top[1:] // backward N+1 overflow sits at the front
+	}
+
+	// Lower half: rank > N ascending.
+	lower := *f
+	next := around + 1
+	if lower.RankMin == nil || *lower.RankMin < next {
+		lower.RankMin = &next
+	}
+	bottom, err := ListDomains(ctx, pool, &lower, ListSortRank, nil, nil, floorHalf, false)
+	if err != nil {
+		return nil, false, false, err
+	}
+	if len(bottom) > floorHalf {
+		moreBelow = true
+		bottom = bottom[:floorHalf]
+	}
+	return append(top, bottom...), moreAbove, moreBelow, nil
 }
 
 // EstimateDomainListCount returns the plan-row estimate for the filtered
 // list (07 §3.4 — never an exact count on the hot path).
 func EstimateDomainListCount(ctx context.Context, pool *pgxpool.Pool, f *DomainListFilter) (int64, error) {
-	sqlText, args, err := buildDomainList(f, ListSortRank, nil, nil, 0)
+	sqlText, args, err := buildDomainList(f, ListSortRank, nil, nil, 0, false)
 	if err != nil {
 		return 0, err
 	}
@@ -258,28 +341,28 @@ type DependentSeek struct {
 // component rides COALESCE(rank, 0) on both sides — equal within the null
 // partition, where the id tiebreaker takes over.
 func ListDependents(ctx context.Context, pool *pgxpool.Pool, resourceHostID int64,
-	seek *DependentSeek, limit int,
+	seek *DependentSeek, limit int, backward bool,
 ) ([]DependentRow, error) {
-	q := sq.Select(append(strings.Split(domainRowColumns, ",\n"), "dr.source::text AS source", "dr.required")...).
-		From("domain d").
-		Join("country c ON c.id = d.country_id").
-		Join("asn a ON a.id = d.asn_id").
-		LeftJoin("dns_provider dp ON dp.id = d.dns_provider_id").
-		LeftJoin("domain p ON p.id = d.parent_id").
+	q := baseDomainSelect("dr.source::text AS source", "dr.required").
 		Join(fmt.Sprintf("domain_resource dr ON dr.domain_id = d.id AND dr.resource_host_id = %d", resourceHostID)).
-		Where(sq.Expr("NOT d.disabled")).
-		PlaceholderFormat(sq.Dollar)
+		Where(sq.Expr("NOT d.disabled"))
+	cmp := ">"
+	order := []string{"(d.rank IS NULL)", "COALESCE(d.rank, 0)", "d.id"}
+	if backward {
+		cmp = "<"
+		order = []string{"(d.rank IS NULL) DESC", "COALESCE(d.rank, 0) DESC", orderIDDesc}
+	}
 	if seek != nil {
 		rank := int32(0)
 		if seek.Rank != nil {
 			rank = *seek.Rank
 		}
 		q = q.Where(sq.Expr(fmt.Sprintf(
-			"((d.rank IS NULL), COALESCE(d.rank, 0), d.id) > (%t, %d, %d)",
-			seek.RankNull, rank, seek.ID)))
+			"((d.rank IS NULL), COALESCE(d.rank, 0), d.id) %s (%t, %d, %d)",
+			cmp, seek.RankNull, rank, seek.ID)))
 	}
 	sqlText, args, err := q.
-		OrderBy("(d.rank IS NULL)", "COALESCE(d.rank, 0)", "d.id").
+		OrderBy(order...).
 		Limit(uint64(limit + 1)).
 		ToSql()
 	if err != nil {
@@ -293,6 +376,9 @@ func ListDependents(ctx context.Context, pool *pgxpool.Pool, resourceHostID int6
 	if err != nil {
 		return nil, fmt.Errorf("dependents scan: %w", err)
 	}
+	if backward {
+		reverseRows(out)
+	}
 	return out, nil
 }
 
@@ -300,7 +386,7 @@ func ListDependents(ctx context.Context, pool *pgxpool.Pool, resourceHostID int6
 func MaxRank(ctx context.Context, pool *pgxpool.Pool) (int64, error) {
 	var n *int64
 	if err := pool.QueryRow(ctx, "SELECT max(rank)::bigint FROM domain").Scan(&n); err != nil {
-		return 0, err
+		return 0, fmt.Errorf("max rank: %w", err)
 	}
 	if n == nil {
 		return 0, nil

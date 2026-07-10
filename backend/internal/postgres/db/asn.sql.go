@@ -120,6 +120,58 @@ func (q *Queries) ASNLeaderboardByTotal(ctx context.Context, arg ASNLeaderboardB
 	return items, nil
 }
 
+const ASNLeaderboardByTotalPrev = `-- name: ASNLeaderboardByTotalPrev :many
+SELECT number, name, count_total, count_v6 FROM asn
+WHERE ($1::TEXT = '' OR name ILIKE '%' || $1 || '%')
+  AND (count_total, number) > ($2::INT, $3::BIGINT)
+ORDER BY count_total ASC, number ASC
+LIMIT $4
+`
+
+type ASNLeaderboardByTotalPrevParams struct {
+	Q          string `json:"q"`
+	SeekCount  int32  `json:"seek_count"`
+	SeekNumber int64  `json:"seek_number"`
+	Lim        int32  `json:"lim"`
+}
+
+type ASNLeaderboardByTotalPrevRow struct {
+	Number     int64  `json:"number"`
+	Name       string `json:"name"`
+	CountTotal int32  `json:"count_total"`
+	CountV6    int32  `json:"count_v6"`
+}
+
+func (q *Queries) ASNLeaderboardByTotalPrev(ctx context.Context, arg ASNLeaderboardByTotalPrevParams) ([]ASNLeaderboardByTotalPrevRow, error) {
+	rows, err := q.db.Query(ctx, ASNLeaderboardByTotalPrev,
+		arg.Q,
+		arg.SeekCount,
+		arg.SeekNumber,
+		arg.Lim,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ASNLeaderboardByTotalPrevRow{}
+	for rows.Next() {
+		var i ASNLeaderboardByTotalPrevRow
+		if err := rows.Scan(
+			&i.Number,
+			&i.Name,
+			&i.CountTotal,
+			&i.CountV6,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const ASNLeaderboardByV6 = `-- name: ASNLeaderboardByV6 :many
 SELECT number, name, count_total, count_v6 FROM asn
 WHERE ($1::TEXT = '' OR name ILIKE '%' || $1 || '%')
@@ -158,6 +210,60 @@ func (q *Queries) ASNLeaderboardByV6(ctx context.Context, arg ASNLeaderboardByV6
 	items := []ASNLeaderboardByV6Row{}
 	for rows.Next() {
 		var i ASNLeaderboardByV6Row
+		if err := rows.Scan(
+			&i.Number,
+			&i.Name,
+			&i.CountTotal,
+			&i.CountV6,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const ASNLeaderboardByV6Prev = `-- name: ASNLeaderboardByV6Prev :many
+SELECT number, name, count_total, count_v6 FROM asn
+WHERE ($1::TEXT = '' OR name ILIKE '%' || $1 || '%')
+  AND (count_v6, number) > ($2::INT, $3::BIGINT)
+ORDER BY count_v6 ASC, number ASC
+LIMIT $4
+`
+
+type ASNLeaderboardByV6PrevParams struct {
+	Q          string `json:"q"`
+	SeekCount  int32  `json:"seek_count"`
+	SeekNumber int64  `json:"seek_number"`
+	Lim        int32  `json:"lim"`
+}
+
+type ASNLeaderboardByV6PrevRow struct {
+	Number     int64  `json:"number"`
+	Name       string `json:"name"`
+	CountTotal int32  `json:"count_total"`
+	CountV6    int32  `json:"count_v6"`
+}
+
+// The §3.2 prev_cursor (backward) variants: flipped comparison + order;
+// the handler re-reverses rows for display.
+func (q *Queries) ASNLeaderboardByV6Prev(ctx context.Context, arg ASNLeaderboardByV6PrevParams) ([]ASNLeaderboardByV6PrevRow, error) {
+	rows, err := q.db.Query(ctx, ASNLeaderboardByV6Prev,
+		arg.Q,
+		arg.SeekCount,
+		arg.SeekNumber,
+		arg.Lim,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ASNLeaderboardByV6PrevRow{}
+	for rows.Next() {
+		var i ASNLeaderboardByV6PrevRow
 		if err := rows.Scan(
 			&i.Number,
 			&i.Name,

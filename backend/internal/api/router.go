@@ -35,11 +35,8 @@ type Server struct {
 // NewRouter builds the chi router with the 07 §1.7 middleware order
 // (outermost first): RealIP → RequestID → slog access log → Recoverer →
 // Timeout(30s) → CORS → security headers. No trailing-slash redirection.
-func NewRouter(svc *service.Service, opts ...Options) http.Handler {
-	s := &Server{svc: svc}
-	if len(opts) > 0 {
-		s.opts = opts[0]
-	}
+func NewRouter(svc *service.Service, opts Options) http.Handler {
+	s := &Server{svc: svc, opts: opts}
 	if s.opts.PublicBaseURL == "" {
 		s.opts.PublicBaseURL = "https://api.whynoipv6.com"
 	}
@@ -223,7 +220,7 @@ func recoverer(next http.Handler) http.Handler {
 		defer func() {
 			if rec := recover(); rec != nil && rec != http.ErrAbortHandler { //nolint:errorlint // sentinel per net/http docs
 				slog.Error("handler panic", "panic", rec, "path", r.URL.Path)
-				InternalError(w, r)
+				InternalError(w, r, nil) // the panic is already logged above
 			}
 		}()
 		next.ServeHTTP(w, r)

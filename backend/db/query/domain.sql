@@ -212,3 +212,6 @@ INSERT INTO domain (host, kind, parent_id, rank, created_by, asn_id, country_id,
 VALUES (@host, @kind, @parent_id, NULL, 'live_check', @asn_id, @country_id, @tld, now(), now())
 ON CONFLICT (host) DO NOTHING
 RETURNING id;
+
+-- name: RankedDomainCount :one
+SELECT count(*) FROM domain WHERE rank IS NOT NULL;

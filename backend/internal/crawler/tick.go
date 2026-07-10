@@ -142,13 +142,9 @@ func (t *Tick) summary(ctx context.Context, failed []string) {
 	if t.Notify == nil {
 		return
 	}
-	var scanned, transitions, due int64
-	_ = t.Pool.QueryRow(ctx, `SELECT
-		(SELECT count(*) FROM scan WHERE ts >= now() - interval '24 hours'),
-		(SELECT count(*) FROM changelog WHERE ts >= now() - interval '24 hours'),
-		(SELECT count(*) FROM domain WHERE (NOT disabled OR disabled_reason IN ('dead','delisted'))
-		   AND next_check_at <= now())`).Scan(&scanned, &transitions, &due)
-	msg := fmt.Sprintf("daily tick: scanned=%d transitions=%d queue_depth=%d", scanned, transitions, due)
+	counts, _ := db.New(t.Pool).TickSummaryCounts(ctx)
+	msg := fmt.Sprintf("daily tick: scanned=%d transitions=%d queue_depth=%d",
+		counts.Scanned, counts.Transitions, counts.QueueDepth)
 	if len(failed) > 0 {
 		msg += " FAILED_STEPS=" + strings.Join(failed, ",")
 	}

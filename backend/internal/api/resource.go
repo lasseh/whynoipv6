@@ -56,12 +56,12 @@ func (s *Server) listDomainResources(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		InternalError(w, r)
+		InternalError(w, r, err)
 		return
 	}
 	generation, asOf, err := s.svc.Generation(r.Context())
 	if err != nil {
-		InternalError(w, r)
+		InternalError(w, r, err)
 		return
 	}
 	if CacheList(w, r, generation) {
@@ -69,7 +69,7 @@ func (s *Server) listDomainResources(w http.ResponseWriter, r *http.Request) {
 	}
 	rows, err := s.svc.Q.DomainResourceList(r.Context(), d.ID)
 	if err != nil {
-		InternalError(w, r)
+		InternalError(w, r, err)
 		return
 	}
 	items := make([]ResourceLink, len(rows))
@@ -98,7 +98,7 @@ func (s *Server) getResource(w http.ResponseWriter, r *http.Request) {
 	}
 	generation, asOf, err := s.svc.Generation(r.Context())
 	if err != nil {
-		InternalError(w, r)
+		InternalError(w, r, err)
 		return
 	}
 	if CacheList(w, r, generation) {
@@ -125,7 +125,7 @@ func (s *Server) listResourceDependents(w http.ResponseWriter, r *http.Request) 
 	}
 	generation, asOf, err := s.svc.Generation(r.Context())
 	if err != nil {
-		InternalError(w, r)
+		InternalError(w, r, err)
 		return
 	}
 	if CacheList(w, r, generation) {
@@ -134,6 +134,7 @@ func (s *Server) listResourceDependents(w http.ResponseWriter, r *http.Request) 
 
 	fingerprint := FilterFingerprint(q)
 	var seek *postgres.DependentSeek
+	backward := false
 	if token := q.Get(paramCursor); token != "" {
 		c, err := DecodeCursor(token, SortDependents, fingerprint, generation)
 		if err != nil {
@@ -146,16 +147,26 @@ func (s *Server) listResourceDependents(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 		seek = &postgres.DependentSeek{RankNull: st.RankNull, Rank: st.Rank, ID: st.ID}
+		backward = c.Backward()
 	}
 
-	rows, err := postgres.ListDependents(r.Context(), s.svc.Pool, row.ID, seek, limit)
+	rows, err := postgres.ListDependents(r.Context(), s.svc.Pool, row.ID, seek, limit, backward)
 	if err != nil {
-		InternalError(w, r)
+		InternalError(w, r, err)
 		return
 	}
-	hasMore := len(rows) > limit
-	if hasMore {
-		rows = rows[:limit]
+	var forwardMore, backwardMore bool
+	overflow := len(rows) > limit
+	if backward {
+		backwardMore, forwardMore = overflow, true
+		if overflow {
+			rows = rows[1:]
+		}
+	} else {
+		forwardMore, backwardMore = overflow, seek != nil
+		if overflow {
+			rows = rows[:limit]
+		}
 	}
 
 	type dependentItem struct {
@@ -168,15 +179,17 @@ func (s *Server) listResourceDependents(w http.ResponseWriter, r *http.Request) 
 		items[i] = dependentItem{summaryFromRow(&rows[i].DomainRow), rows[i].Source, rows[i].Required}
 	}
 
-	var lastK []any
-	if hasMore {
-		last := &rows[len(rows)-1]
-		isNull := last.Rank == nil
+	depKey := func(d *postgres.DependentRow) []any {
+		isNull := d.Rank == nil
 		var rank int32
-		if last.Rank != nil {
-			rank = *last.Rank
+		if d.Rank != nil {
+			rank = *d.Rank
 		}
-		lastK = []any{isNull, rank, last.ID}
+		return []any{isNull, rank, d.ID}
+	}
+	var firstK, lastK []any
+	if len(rows) > 0 {
+		firstK, lastK = depKey(&rows[0]), depKey(&rows[len(rows)-1])
 	}
 
 	est := int64(row.DependentCount)
@@ -187,7 +200,8 @@ func (s *Server) listResourceDependents(w http.ResponseWriter, r *http.Request) 
 		Items    any              `json:"items"`
 		Page     Page             `json:"page"`
 		Meta     Meta             `json:"meta"`
-	}{resourceHostBody(&row), items, PageOf(generation, SortDependents, fingerprint, hasMore, lastK, nil), meta})
+	}{resourceHostBody(&row), items,
+		BuildPage(generation, SortDependents, fingerprint, forwardMore, backwardMore, firstK, lastK), meta})
 }
 
 func (s *Server) resourceByPathHost(w http.ResponseWriter, r *http.Request) (db.ResourceHostByHostRow, bool) {
@@ -202,7 +216,7 @@ func (s *Server) resourceByPathHost(w http.ResponseWriter, r *http.Request) (db.
 		return row, false
 	}
 	if err != nil {
-		InternalError(w, r)
+		InternalError(w, r, err)
 		return row, false
 	}
 	return row, true
@@ -223,7 +237,7 @@ func (s *Server) listSubdomains(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		InternalError(w, r)
+		InternalError(w, r, err)
 		return
 	}
 	q := r.URL.Query()
@@ -234,56 +248,29 @@ func (s *Server) listSubdomains(w http.ResponseWriter, r *http.Request) {
 	}
 	generation, asOf, err := s.svc.Generation(r.Context())
 	if err != nil {
-		InternalError(w, r)
+		InternalError(w, r, err)
 		return
 	}
 	if CacheList(w, r, generation) {
 		return
 	}
 
-	fingerprint := FilterFingerprint(q)
-	var seek *postgres.DomainSeek
-	if token := q.Get(paramCursor); token != "" {
-		c, err := DecodeCursor(token, SortHost, fingerprint, generation)
-		if err != nil {
-			InvalidParameter(w, r, err.Error())
-			return
-		}
-		st, err := c.SeekTuple()
-		if err != nil {
-			InvalidParameter(w, r, err.Error())
-			return
-		}
-		seek = &postgres.DomainSeek{Host: st.Host}
-	}
 	filter := postgres.DomainListFilter{ParentID: &d.ID}
-	rows, err := postgres.ListDomains(r.Context(), s.svc.Pool, &filter, postgres.ListSortHost, seek, nil, limit)
+	items, page, err := s.hostOrderedPage(r, &filter, generation, limit)
 	if err != nil {
-		InternalError(w, r)
+		if errors.Is(err, ErrCursorInvalid) {
+			InvalidParameter(w, r, err.Error())
+			return
+		}
+		InternalError(w, r, err)
 		return
-	}
-	hasMore := len(rows) > limit
-	if hasMore {
-		rows = rows[:limit]
-	}
-	items := make([]DomainSummary, len(rows))
-	for i := range rows {
-		items[i] = summaryFromRow(&rows[i])
-	}
-	var lastK []any
-	if hasMore {
-		lastK = []any{rows[len(rows)-1].Host}
 	}
 	count, err := s.svc.Q.SubdomainExactCount(r.Context(), &d.ID)
 	if err != nil {
-		InternalError(w, r)
+		InternalError(w, r, err)
 		return
 	}
 	meta := NewMeta(asOf, generation)
 	meta.Count = &count
-	WriteJSON(w, http.StatusOK, ListEnvelope{
-		Items: items,
-		Page:  PageOf(generation, SortHost, fingerprint, hasMore, lastK, nil),
-		Meta:  meta,
-	})
+	WriteJSON(w, http.StatusOK, ListEnvelope{Items: items, Page: page, Meta: meta})
 }

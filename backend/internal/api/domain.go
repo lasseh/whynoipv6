@@ -313,6 +313,11 @@ func (s *Server) serveDomainList(w http.ResponseWriter, r *http.Request, preset 
 		InvalidParameter(w, r, err.Error())
 		return
 	}
+	aroundRank, err := ParseAroundRank(q, sortKey)
+	if err != nil {
+		InvalidParameter(w, r, err.Error())
+		return
+	}
 
 	filter, err := s.parseDomainFilter(r, q)
 	var ve validationError
@@ -321,13 +326,13 @@ func (s *Server) serveDomainList(w http.ResponseWriter, r *http.Request, preset 
 		return
 	}
 	if err != nil {
-		InternalError(w, r)
+		InternalError(w, r, err)
 		return
 	}
 
 	generation, asOf, err := s.svc.Generation(r.Context())
 	if err != nil {
-		InternalError(w, r)
+		InternalError(w, r, err)
 		return
 	}
 	if CacheList(w, r, generation) {
@@ -336,6 +341,7 @@ func (s *Server) serveDomainList(w http.ResponseWriter, r *http.Request, preset 
 
 	fingerprint := FilterFingerprint(q)
 	var seek *postgres.DomainSeek
+	backward := false
 	if token := q.Get(paramCursor); token != "" {
 		c, err := DecodeCursor(token, sortKey, fingerprint, generation)
 		if err != nil {
@@ -348,16 +354,43 @@ func (s *Server) serveDomainList(w http.ResponseWriter, r *http.Request, preset 
 			return
 		}
 		seek = &postgres.DomainSeek{Rank: st.Rank, ID: st.ID, Host: st.Host}
+		backward = c.Backward()
 	}
 
-	rows, err := postgres.ListDomains(r.Context(), s.svc.Pool, &filter, postgres.ListSort(sortKey), seek, afterRank, limit)
-	if err != nil {
-		InternalError(w, r)
-		return
-	}
-	hasMore := len(rows) > limit
-	if hasMore {
-		rows = rows[:limit]
+	// The N+1 window walk: forwardMore/backwardMore drive next/prev cursor
+	// minting (§3.2 bidirectional). A positioned forward page always has
+	// rows before it (at least the one the cursor came from).
+	var rows []postgres.DomainRow
+	var forwardMore, backwardMore bool
+	switch {
+	case aroundRank != nil:
+		rows, backwardMore, forwardMore, err = postgres.ListDomainsAround(
+			r.Context(), s.svc.Pool, &filter, *aroundRank, limit)
+		if err != nil {
+			InternalError(w, r, err)
+			return
+		}
+	default:
+		rows, err = postgres.ListDomains(r.Context(), s.svc.Pool, &filter,
+			postgres.ListSort(sortKey), seek, afterRank, limit, backward)
+		if err != nil {
+			InternalError(w, r, err)
+			return
+		}
+		overflow := len(rows) > limit
+		if backward {
+			backwardMore = overflow
+			forwardMore = true // the row the prev cursor came from
+			if overflow {
+				rows = rows[1:] // backward overflow sits at the front
+			}
+		} else {
+			forwardMore = overflow
+			backwardMore = seek != nil || afterRank != nil
+			if overflow {
+				rows = rows[:limit]
+			}
+		}
 	}
 
 	items := make([]DomainSummary, len(rows))
@@ -369,15 +402,7 @@ func (s *Server) serveDomainList(w http.ResponseWriter, r *http.Request, preset 
 		return
 	}
 
-	var lastK []any
-	if hasMore {
-		last := &rows[len(rows)-1]
-		if sortKey == SortHost {
-			lastK = []any{last.Host}
-		} else if last.Rank != nil {
-			lastK = []any{*last.Rank, last.ID}
-		}
-	}
+	firstK, lastK := domainSeekKeys(rows, sortKey)
 
 	meta := NewMeta(asOf, generation)
 	var est int64
@@ -387,16 +412,79 @@ func (s *Server) serveDomainList(w http.ResponseWriter, r *http.Request, preset 
 		est, err = postgres.EstimateDomainListCount(r.Context(), s.svc.Pool, &filter)
 	}
 	if err != nil {
-		InternalError(w, r)
+		InternalError(w, r, err)
 		return
 	}
 	meta.CountEstimate = &est
 
 	WriteJSON(w, http.StatusOK, ListEnvelope{
 		Items: trimFields(items, q.Get("fields")),
-		Page:  PageOf(generation, sortKey, fingerprint, hasMore, lastK, nil),
+		Page:  BuildPage(generation, sortKey, fingerprint, forwardMore, backwardMore, firstK, lastK),
 		Meta:  meta,
 	})
+}
+
+// hostOrderedPage runs one host-ordered keyset page over the given filter —
+// the shared engine for campaign members and subdomains (§3.2: host is a
+// unique key, total even when rank is NULL).
+func (s *Server) hostOrderedPage(r *http.Request, filter *postgres.DomainListFilter, generation int32, limit int) ([]DomainSummary, Page, error) {
+	q := r.URL.Query()
+	fingerprint := FilterFingerprint(q)
+	var seek *postgres.DomainSeek
+	backward := false
+	if token := q.Get(paramCursor); token != "" {
+		c, err := DecodeCursor(token, SortHost, fingerprint, generation)
+		if err != nil {
+			return nil, Page{}, err
+		}
+		st, err := c.SeekTuple()
+		if err != nil {
+			return nil, Page{}, err
+		}
+		seek = &postgres.DomainSeek{Host: st.Host}
+		backward = c.Backward()
+	}
+	rows, err := postgres.ListDomains(r.Context(), s.svc.Pool, filter, postgres.ListSortHost, seek, nil, limit, backward)
+	if err != nil {
+		return nil, Page{}, err
+	}
+	var forwardMore, backwardMore bool
+	overflow := len(rows) > limit
+	if backward {
+		backwardMore, forwardMore = overflow, true
+		if overflow {
+			rows = rows[1:]
+		}
+	} else {
+		forwardMore, backwardMore = overflow, seek != nil
+		if overflow {
+			rows = rows[:limit]
+		}
+	}
+	items := make([]DomainSummary, len(rows))
+	for i := range rows {
+		items[i] = summaryFromRow(&rows[i])
+	}
+	firstK, lastK := domainSeekKeys(rows, SortHost)
+	return items, BuildPage(generation, SortHost, fingerprint, forwardMore, backwardMore, firstK, lastK), nil
+}
+
+// domainSeekKeys mints the first/last seek tuples of a page for cursor
+// encoding.
+func domainSeekKeys(rows []postgres.DomainRow, sortKey string) (firstK, lastK []any) {
+	key := func(row *postgres.DomainRow) []any {
+		if sortKey == SortHost {
+			return []any{row.Host}
+		}
+		if row.Rank == nil {
+			return nil
+		}
+		return []any{*row.Rank, row.ID}
+	}
+	if len(rows) == 0 {
+		return nil, nil
+	}
+	return key(&rows[0]), key(&rows[len(rows)-1])
 }
 
 // trimFields applies the ?fields= sparse fieldset (07 §3.3) by re-projecting
@@ -514,13 +602,13 @@ func (s *Server) getDomain(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		InternalError(w, r)
+		InternalError(w, r, err)
 		return
 	}
 
 	generation, asOf, err := s.svc.Generation(r.Context())
 	if err != nil {
-		InternalError(w, r)
+		InternalError(w, r, err)
 		return
 	}
 	if CacheList(w, r, generation) {
@@ -572,7 +660,7 @@ func (s *Server) getDomain(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Query().Get("include") == "evidence" {
 		raw, err := s.svc.Q.LatestScanDetail(r.Context(), row.ID)
 		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-			InternalError(w, r)
+			InternalError(w, r, err)
 			return
 		}
 		// Evidence is the §5.1.3 result shape via the shared mapper — the
@@ -607,7 +695,7 @@ type ShameItem struct {
 func (s *Server) listShame(w http.ResponseWriter, r *http.Request) {
 	generation, asOf, err := s.svc.Generation(r.Context())
 	if err != nil {
-		InternalError(w, r)
+		InternalError(w, r, err)
 		return
 	}
 	if CacheList(w, r, generation) {
@@ -615,7 +703,7 @@ func (s *Server) listShame(w http.ResponseWriter, r *http.Request) {
 	}
 	rows, err := s.svc.Q.ShameList(r.Context())
 	if err != nil {
-		InternalError(w, r)
+		InternalError(w, r, err)
 		return
 	}
 	items := []ShameItem{}

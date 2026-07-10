@@ -11,6 +11,34 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const DomainRequiredLinks = `-- name: DomainRequiredLinks :many
+SELECT rh.aaaa_status
+FROM domain_resource dr
+JOIN resource_host rh ON rh.id = dr.resource_host_id
+WHERE dr.domain_id = $1 AND dr.required
+`
+
+// The worker's pre-commit roll-up input (02 §6): required links only.
+func (q *Queries) DomainRequiredLinks(ctx context.Context, domainID int64) ([]*Ipv6Status, error) {
+	rows, err := q.db.Query(ctx, DomainRequiredLinks, domainID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []*Ipv6Status{}
+	for rows.Next() {
+		var aaaa_status *Ipv6Status
+		if err := rows.Scan(&aaaa_status); err != nil {
+			return nil, err
+		}
+		items = append(items, aaaa_status)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const DomainResourceList = `-- name: DomainResourceList :many
 
 SELECT rh.host, rh.aaaa_status, dr.source, dr.required, dr.first_seen, dr.last_seen, rh.last_checked_at
@@ -85,4 +113,171 @@ func (q *Queries) ResourceHostByHost(ctx context.Context, host string) (Resource
 		&i.LastCheckedAt,
 	)
 	return i, err
+}
+
+const ResourceHostIDByHost = `-- name: ResourceHostIDByHost :one
+SELECT id FROM resource_host WHERE host = $1
+`
+
+func (q *Queries) ResourceHostIDByHost(ctx context.Context, host string) (int64, error) {
+	row := q.db.QueryRow(ctx, ResourceHostIDByHost, host)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
+const ResourceHostStatuses = `-- name: ResourceHostStatuses :many
+SELECT host, aaaa_status
+FROM resource_host
+WHERE host = ANY($1::text[]) AND aaaa_status IS NOT NULL
+`
+
+type ResourceHostStatusesRow struct {
+	Host       string      `json:"host"`
+	AaaaStatus *Ipv6Status `json:"aaaa_status"`
+}
+
+// The live-check registry probe (07 §5.1.4): one set-based read.
+func (q *Queries) ResourceHostStatuses(ctx context.Context, hosts []string) ([]ResourceHostStatusesRow, error) {
+	rows, err := q.db.Query(ctx, ResourceHostStatuses, hosts)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ResourceHostStatusesRow{}
+	for rows.Next() {
+		var i ResourceHostStatusesRow
+		if err := rows.Scan(&i.Host, &i.AaaaStatus); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const ResourceManualRemove = `-- name: ResourceManualRemove :execrows
+WITH del AS (
+  DELETE FROM domain_resource
+  WHERE domain_id = $1 AND resource_host_id = $2
+  RETURNING resource_host_id
+)
+UPDATE resource_host SET dependent_count = dependent_count - 1
+WHERE id IN (SELECT resource_host_id FROM del)
+`
+
+type ResourceManualRemoveParams struct {
+	DomainID       int64 `json:"domain_id"`
+	ResourceHostID int64 `json:"resource_host_id"`
+}
+
+func (q *Queries) ResourceManualRemove(ctx context.Context, arg ResourceManualRemoveParams) (int64, error) {
+	result, err := q.db.Exec(ctx, ResourceManualRemove, arg.DomainID, arg.ResourceHostID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const ResourceManualUpsert = `-- name: ResourceManualUpsert :exec
+WITH up AS (
+  INSERT INTO domain_resource (domain_id, resource_host_id, source, required)
+  VALUES ($2, $1, 'manual', $3)
+  ON CONFLICT (domain_id, resource_host_id)
+  DO UPDATE SET source = 'manual', required = EXCLUDED.required
+  RETURNING (xmax = 0) AS inserted
+)
+UPDATE resource_host SET dependent_count = dependent_count + 1
+WHERE id = $1 AND (SELECT inserted FROM up)
+`
+
+type ResourceManualUpsertParams struct {
+	ResourceHostID int64 `json:"resource_host_id"`
+	DomainID       int64 `json:"domain_id"`
+	Required       bool  `json:"required"`
+}
+
+// The §5.5 manual verbs. The (xmax = 0) probe distinguishes a genuine
+// insert (bump dependent_count) from a conflict update (don't).
+func (q *Queries) ResourceManualUpsert(ctx context.Context, arg ResourceManualUpsertParams) error {
+	_, err := q.db.Exec(ctx, ResourceManualUpsert, arg.ResourceHostID, arg.DomainID, arg.Required)
+	return err
+}
+
+const ResourceSweepClaim = `-- name: ResourceSweepClaim :many
+UPDATE resource_host
+SET next_check_at = now() + interval '2 hours'
+WHERE id IN (
+  SELECT id FROM resource_host
+  WHERE next_check_at <= now()
+    AND dependent_count > 0
+  ORDER BY next_check_at ASC
+  LIMIT $1
+  FOR UPDATE SKIP LOCKED
+)
+RETURNING id, host, aaaa_status, aaaa_pending, aaaa_pending_count
+`
+
+type ResourceSweepClaimRow struct {
+	ID               int64       `json:"id"`
+	Host             string      `json:"host"`
+	AaaaStatus       *Ipv6Status `json:"aaaa_status"`
+	AaaaPending      *Ipv6Status `json:"aaaa_pending"`
+	AaaaPendingCount int16       `json:"aaaa_pending_count"`
+}
+
+// The sweep claim (06 §5.2): the schedule bump IS the crash lease.
+func (q *Queries) ResourceSweepClaim(ctx context.Context, batch int32) ([]ResourceSweepClaimRow, error) {
+	rows, err := q.db.Query(ctx, ResourceSweepClaim, batch)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ResourceSweepClaimRow{}
+	for rows.Next() {
+		var i ResourceSweepClaimRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Host,
+			&i.AaaaStatus,
+			&i.AaaaPending,
+			&i.AaaaPendingCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const ResourceSweepCommit = `-- name: ResourceSweepCommit :exec
+UPDATE resource_host
+SET aaaa_status = $1, aaaa_pending = $2,
+    aaaa_pending_count = $3,
+    last_checked_at = now(), next_check_at = now() + interval '24 hours'
+WHERE id = $4
+`
+
+type ResourceSweepCommitParams struct {
+	AaaaStatus       *Ipv6Status `json:"aaaa_status"`
+	AaaaPending      *Ipv6Status `json:"aaaa_pending"`
+	AaaaPendingCount int16       `json:"aaaa_pending_count"`
+	ID               int64       `json:"id"`
+}
+
+// The sweep host commit (06 §5.4): one single-row write per definitive
+// outcome.
+func (q *Queries) ResourceSweepCommit(ctx context.Context, arg ResourceSweepCommitParams) error {
+	_, err := q.db.Exec(ctx, ResourceSweepCommit,
+		arg.AaaaStatus,
+		arg.AaaaPending,
+		arg.AaaaPendingCount,
+		arg.ID,
+	)
+	return err
 }

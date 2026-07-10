@@ -93,8 +93,6 @@ const (
 
 	sqlStagingCounters = `SELECT count(*), count(*) - count(DISTINCT host) FROM tranco_staging`
 
-	sqlRankedCount = `SELECT count(*) FROM domain WHERE rank IS NOT NULL`
-
 	sqlWouldDelist = `SELECT count(*) FROM domain d
 WHERE d.rank IS NOT NULL
   AND NOT EXISTS (SELECT 1 FROM tranco_staging s WHERE s.host = d.host)`
@@ -217,10 +215,12 @@ func (ti *TrancoImporter) applyList(ctx context.Context, rep *TrancoReport, rows
 	}
 	rep.DuplicateCount = duplicates
 
-	var rankedCount, wouldDelist int
-	if err := tx.QueryRow(ctx, sqlRankedCount).Scan(&rankedCount); err != nil {
+	rankedCount64, err := q.RankedDomainCount(ctx)
+	if err != nil {
 		return fmt.Errorf("tranco: ranked count: %w", err)
 	}
+	rankedCount := int(rankedCount64)
+	var wouldDelist int
 	if err := tx.QueryRow(ctx, sqlWouldDelist).Scan(&wouldDelist); err != nil {
 		return fmt.Errorf("tranco: would-delist: %w", err)
 	}

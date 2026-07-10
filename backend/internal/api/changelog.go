@@ -92,7 +92,7 @@ func (s *Server) listDomainChangelog(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		InternalError(w, r)
+		InternalError(w, r, err)
 		return
 	}
 	s.serveChangelogFeed(w, r, &d.ID)
@@ -124,12 +124,12 @@ func (s *Server) serveChangelogFeed(w http.ResponseWriter, r *http.Request, doma
 
 	generation, asOf, err := s.svc.Generation(r.Context())
 	if err != nil {
-		InternalError(w, r)
+		InternalError(w, r, err)
 		return
 	}
 	maxTS, err := s.svc.Q.ChangelogMaxTS(r.Context())
 	if err != nil {
-		InternalError(w, r)
+		InternalError(w, r, err)
 		return
 	}
 	if CacheChangelog(w, r, maxTS.Time) {
@@ -143,6 +143,7 @@ func (s *Server) serveChangelogFeed(w http.ResponseWriter, r *http.Request, doma
 		WithTo: win.HasTo, ToTs: pgTS(win.To, win.HasTo),
 		Lim: int32(limit + 1),
 	}
+	backward := false
 	if token := q.Get(paramCursor); token != "" {
 		c, err := DecodeCursor(token, SortChangelog, fingerprint, generation)
 		if err != nil {
@@ -158,39 +159,27 @@ func (s *Server) serveChangelogFeed(w http.ResponseWriter, r *http.Request, doma
 		params.SeekTs = pgTS(time.Unix(0, st.TS).UTC(), true)
 		params.SeekDomain = st.ID
 		params.SeekField = st.Field
+		backward = c.Backward()
 	}
 
-	var rows []db.ChangelogGlobalRow
-	if domainID != nil {
-		p := db.ChangelogByDomainParams{
-			DomainID: *domainID,
-			Field:    params.Field,
-			WithFrom: params.WithFrom, FromTs: params.FromTs,
-			WithTo: params.WithTo, ToTs: params.ToTs,
-			WithSeek: params.WithSeek, SeekTs: params.SeekTs,
-			SeekDomain: params.SeekDomain, SeekField: params.SeekField,
-			Lim: params.Lim,
-		}
-		dr, err := s.svc.Q.ChangelogByDomain(r.Context(), p)
-		if err != nil {
-			InternalError(w, r)
-			return
-		}
-		rows = make([]db.ChangelogGlobalRow, len(dr))
-		for i := range dr {
-			rows[i] = db.ChangelogGlobalRow(dr[i])
+	rows, err := s.changelogRows(r, domainID, &params, backward)
+	if err != nil {
+		InternalError(w, r, err)
+		return
+	}
+
+	var forwardMore, backwardMore bool
+	overflow := len(rows) > limit
+	if backward {
+		backwardMore, forwardMore = overflow, true
+		if overflow {
+			rows = rows[1:] // backward overflow sits at the front
 		}
 	} else {
-		rows, err = s.svc.Q.ChangelogGlobal(r.Context(), params)
-		if err != nil {
-			InternalError(w, r)
-			return
+		forwardMore, backwardMore = overflow, params.WithSeek
+		if overflow {
+			rows = rows[:limit]
 		}
-	}
-
-	hasMore := len(rows) > limit
-	if hasMore {
-		rows = rows[:limit]
 	}
 	items := make([]ChangelogItem, len(rows))
 	for i := range rows {
@@ -200,17 +189,85 @@ func (s *Server) serveChangelogFeed(w http.ResponseWriter, r *http.Request, doma
 		writeChangelogCSV(w, items)
 		return
 	}
-	var lastK []any
-	if hasMore {
-		last := &rows[len(rows)-1]
-		lastK = []any{last.Ts.Time.UnixNano(), last.DomainID, last.Field}
+	clKey := func(row *db.ChangelogGlobalRow) []any {
+		return []any{row.Ts.Time.UnixNano(), row.DomainID, row.Field}
+	}
+	var firstK, lastK []any
+	if len(rows) > 0 {
+		firstK, lastK = clKey(&rows[0]), clKey(&rows[len(rows)-1])
 	}
 
 	WriteJSON(w, http.StatusOK, ListEnvelope{
 		Items: items,
-		Page:  PageOf(generation, SortChangelog, fingerprint, hasMore, lastK, nil),
+		Page:  BuildPage(generation, SortChangelog, fingerprint, forwardMore, backwardMore, firstK, lastK),
 		Meta:  NewMeta(asOf, generation),
 	})
+}
+
+// changelogRows dispatches the scope × direction query matrix; backward
+// rows come back re-reversed into ts-DESC display order.
+func (s *Server) changelogRows(r *http.Request, domainID *int64, params *db.ChangelogGlobalParams, backward bool) ([]db.ChangelogGlobalRow, error) {
+	var rows []db.ChangelogGlobalRow
+	switch {
+	case domainID != nil && backward:
+		dr, err := s.svc.Q.ChangelogByDomainPrev(r.Context(), db.ChangelogByDomainPrevParams{
+			DomainID: *domainID, Field: params.Field,
+			WithFrom: params.WithFrom, FromTs: params.FromTs,
+			WithTo: params.WithTo, ToTs: params.ToTs,
+			SeekTs: params.SeekTs, SeekDomain: params.SeekDomain, SeekField: params.SeekField,
+			Lim: params.Lim,
+		})
+		if err != nil {
+			return nil, err
+		}
+		rows = make([]db.ChangelogGlobalRow, len(dr))
+		for i := range dr {
+			rows[i] = db.ChangelogGlobalRow(dr[i])
+		}
+	case domainID != nil:
+		dr, err := s.svc.Q.ChangelogByDomain(r.Context(), db.ChangelogByDomainParams{
+			DomainID: *domainID, Field: params.Field,
+			WithFrom: params.WithFrom, FromTs: params.FromTs,
+			WithTo: params.WithTo, ToTs: params.ToTs,
+			WithSeek: params.WithSeek, SeekTs: params.SeekTs,
+			SeekDomain: params.SeekDomain, SeekField: params.SeekField,
+			Lim: params.Lim,
+		})
+		if err != nil {
+			return nil, err
+		}
+		rows = make([]db.ChangelogGlobalRow, len(dr))
+		for i := range dr {
+			rows[i] = db.ChangelogGlobalRow(dr[i])
+		}
+	case backward:
+		gr, err := s.svc.Q.ChangelogGlobalPrev(r.Context(), db.ChangelogGlobalPrevParams{
+			Field:    params.Field,
+			WithFrom: params.WithFrom, FromTs: params.FromTs,
+			WithTo: params.WithTo, ToTs: params.ToTs,
+			SeekTs: params.SeekTs, SeekDomain: params.SeekDomain, SeekField: params.SeekField,
+			Lim: params.Lim,
+		})
+		if err != nil {
+			return nil, err
+		}
+		rows = make([]db.ChangelogGlobalRow, len(gr))
+		for i := range gr {
+			rows[i] = db.ChangelogGlobalRow(gr[i])
+		}
+	default:
+		var err error
+		rows, err = s.svc.Q.ChangelogGlobal(r.Context(), *params)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if backward { // ASC fetch → re-reverse into the ts-DESC feed order
+		for i, j := 0, len(rows)-1; i < j; i, j = i+1, j-1 {
+			rows[i], rows[j] = rows[j], rows[i]
+		}
+	}
+	return rows, nil
 }
 
 func changelogItem(r *db.ChangelogGlobalRow) ChangelogItem {
@@ -237,12 +294,12 @@ func (s *Server) listCountryChangelog(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		InternalError(w, r)
+		InternalError(w, r, err)
 		return
 	}
 	rows, err := s.svc.Q.ChangelogByCountry(r.Context(), id)
 	if err != nil {
-		InternalError(w, r)
+		InternalError(w, r, err)
 		return
 	}
 	s.writeRecentWindow(w, r, changelogWindowItems(rows))
@@ -257,7 +314,7 @@ func (s *Server) listCampaignChangelog(w http.ResponseWriter, r *http.Request) {
 	}
 	rows, err := s.svc.Q.ChangelogByCampaign(r.Context(), row.ID)
 	if err != nil {
-		InternalError(w, r)
+		InternalError(w, r, err)
 		return
 	}
 	s.writeRecentWindow(w, r, changelogCampaignItems(rows))
@@ -281,14 +338,14 @@ func (s *Server) listCampaignDomainChangelog(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	if err != nil {
-		InternalError(w, r)
+		InternalError(w, r, err)
 		return
 	}
 	member, err := s.svc.Q.CampaignHasMember(r.Context(), db.CampaignHasMemberParams{
 		CampaignID: c.ID, DomainID: d.ID,
 	})
 	if err != nil {
-		InternalError(w, r)
+		InternalError(w, r, err)
 		return
 	}
 	if !member {
@@ -302,12 +359,12 @@ func (s *Server) listCampaignDomainChangelog(w http.ResponseWriter, r *http.Requ
 func (s *Server) writeRecentWindow(w http.ResponseWriter, r *http.Request, items []ChangelogItem) {
 	generation, asOf, err := s.svc.Generation(r.Context())
 	if err != nil {
-		InternalError(w, r)
+		InternalError(w, r, err)
 		return
 	}
 	maxTS, err := s.svc.Q.ChangelogMaxTS(r.Context())
 	if err != nil {
-		InternalError(w, r)
+		InternalError(w, r, err)
 		return
 	}
 	if CacheChangelog(w, r, maxTS.Time) {

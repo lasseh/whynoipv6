@@ -108,3 +108,25 @@ func (q *Queries) QueueDepth(ctx context.Context) (int64, error) {
 	err := row.Scan(&count)
 	return count, err
 }
+
+const TickSummaryCounts = `-- name: TickSummaryCounts :one
+SELECT
+  (SELECT count(*) FROM scan WHERE ts >= now() - interval '24 hours') AS scanned,
+  (SELECT count(*) FROM changelog WHERE ts >= now() - interval '24 hours') AS transitions,
+  (SELECT count(*) FROM domain WHERE (NOT disabled OR disabled_reason IN ('dead', 'delisted'))
+     AND next_check_at <= now()) AS queue_depth
+`
+
+type TickSummaryCountsRow struct {
+	Scanned     int64 `json:"scanned"`
+	Transitions int64 `json:"transitions"`
+	QueueDepth  int64 `json:"queue_depth"`
+}
+
+// The tick step-7 ops digest (04 §9).
+func (q *Queries) TickSummaryCounts(ctx context.Context) (TickSummaryCountsRow, error) {
+	row := q.db.QueryRow(ctx, TickSummaryCounts)
+	var i TickSummaryCountsRow
+	err := row.Scan(&i.Scanned, &i.Transitions, &i.QueueDepth)
+	return i, err
+}

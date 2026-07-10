@@ -56,7 +56,7 @@ func (s *Server) listCampaigns(w http.ResponseWriter, r *http.Request) {
 func (s *Server) serveCampaignList(w http.ResponseWriter, r *http.Request, tag string) {
 	generation, asOf, err := s.svc.Generation(r.Context())
 	if err != nil {
-		InternalError(w, r)
+		InternalError(w, r, err)
 		return
 	}
 	if CacheList(w, r, generation) {
@@ -64,7 +64,7 @@ func (s *Server) serveCampaignList(w http.ResponseWriter, r *http.Request, tag s
 	}
 	rows, err := s.svc.Q.CampaignPublicList(r.Context(), tag)
 	if err != nil {
-		InternalError(w, r)
+		InternalError(w, r, err)
 		return
 	}
 	items := make([]CampaignListItem, len(rows))
@@ -101,7 +101,7 @@ func (s *Server) campaignByPathUUID(w http.ResponseWriter, r *http.Request) (db.
 		return row, false
 	}
 	if err != nil {
-		InternalError(w, r)
+		InternalError(w, r, err)
 		return row, false
 	}
 	return row, true
@@ -116,7 +116,7 @@ func (s *Server) getCampaign(w http.ResponseWriter, r *http.Request) {
 	}
 	generation, asOf, err := s.svc.Generation(r.Context())
 	if err != nil {
-		InternalError(w, r)
+		InternalError(w, r, err)
 		return
 	}
 	if CacheList(w, r, generation) {
@@ -134,7 +134,7 @@ func (s *Server) getCampaign(w http.ResponseWriter, r *http.Request) {
 			InvalidParameter(w, r, err.Error())
 			return
 		}
-		InternalError(w, r)
+		InternalError(w, r, err)
 		return
 	}
 
@@ -173,7 +173,7 @@ func (s *Server) listCampaignDomains(w http.ResponseWriter, r *http.Request) {
 	}
 	generation, asOf, err := s.svc.Generation(r.Context())
 	if err != nil {
-		InternalError(w, r)
+		InternalError(w, r, err)
 		return
 	}
 	if CacheList(w, r, generation) {
@@ -190,7 +190,7 @@ func (s *Server) listCampaignDomains(w http.ResponseWriter, r *http.Request) {
 			InvalidParameter(w, r, err.Error())
 			return
 		}
-		InternalError(w, r)
+		InternalError(w, r, err)
 		return
 	}
 	meta := NewMeta(asOf, generation)
@@ -201,36 +201,6 @@ func (s *Server) listCampaignDomains(w http.ResponseWriter, r *http.Request) {
 // campaignMembersPage runs one host-ordered keyset page over the members
 // (§3.2 — host is unique, so the seek is total despite rank being NULL).
 func (s *Server) campaignMembersPage(r *http.Request, campaignID, generation int32, limit int) ([]DomainSummary, Page, error) {
-	q := r.URL.Query()
-	fingerprint := FilterFingerprint(q)
-	var seek *postgres.DomainSeek
-	if token := q.Get(paramCursor); token != "" {
-		c, err := DecodeCursor(token, SortHost, fingerprint, generation)
-		if err != nil {
-			return nil, Page{}, err
-		}
-		st, err := c.SeekTuple()
-		if err != nil {
-			return nil, Page{}, err
-		}
-		seek = &postgres.DomainSeek{Host: st.Host}
-	}
 	filter := postgres.DomainListFilter{CampaignID: &campaignID}
-	rows, err := postgres.ListDomains(r.Context(), s.svc.Pool, &filter, postgres.ListSortHost, seek, nil, limit)
-	if err != nil {
-		return nil, Page{}, err
-	}
-	hasMore := len(rows) > limit
-	if hasMore {
-		rows = rows[:limit]
-	}
-	items := make([]DomainSummary, len(rows))
-	for i := range rows {
-		items[i] = summaryFromRow(&rows[i])
-	}
-	var lastK []any
-	if hasMore {
-		lastK = []any{rows[len(rows)-1].Host}
-	}
-	return items, PageOf(generation, SortHost, fingerprint, hasMore, lastK, nil), nil
+	return s.hostOrderedPage(r, &filter, generation, limit)
 }

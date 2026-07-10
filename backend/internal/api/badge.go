@@ -167,7 +167,7 @@ func (s *Server) getBadgeSVG(w http.ResponseWriter, r *http.Request, raw string)
 	}
 	variant, err := s.badgeVariantFor(r, host)
 	if err != nil {
-		InternalError(w, r)
+		InternalError(w, r, err)
 		return
 	}
 	if s.badgeCache(w, r) {
@@ -197,7 +197,7 @@ func (s *Server) getBadgeJSON(w http.ResponseWriter, r *http.Request, raw string
 	}
 	variant, err := s.badgeVariantFor(r, host)
 	if err != nil {
-		InternalError(w, r)
+		InternalError(w, r, err)
 		return
 	}
 	if s.badgeCache(w, r) {

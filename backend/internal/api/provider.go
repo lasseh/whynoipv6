@@ -31,7 +31,7 @@ func (s *Server) listProviders(w http.ResponseWriter, r *http.Request) {
 	}
 	generation, asOf, err := s.svc.Generation(r.Context())
 	if err != nil {
-		InternalError(w, r)
+		InternalError(w, r, err)
 		return
 	}
 	if CacheList(w, r, generation) {
@@ -39,7 +39,7 @@ func (s *Server) listProviders(w http.ResponseWriter, r *http.Request) {
 	}
 	rows, err := s.svc.Q.ProviderLeaderboard(r.Context())
 	if err != nil {
-		InternalError(w, r)
+		InternalError(w, r, err)
 		return
 	}
 	items := make([]ProviderBody, len(rows))
@@ -80,12 +80,12 @@ func (s *Server) getProvider(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		InternalError(w, r)
+		InternalError(w, r, err)
 		return
 	}
 	generation, asOf, err := s.svc.Generation(r.Context())
 	if err != nil {
-		InternalError(w, r)
+		InternalError(w, r, err)
 		return
 	}
 	if CacheList(w, r, generation) {
@@ -107,7 +107,7 @@ func (s *Server) listProviderDomains(w http.ResponseWriter, r *http.Request) {
 			NotFound(w, r, "Provider not found", "No such DNS provider: "+strconv.FormatInt(id, 10))
 			return
 		}
-		InternalError(w, r)
+		InternalError(w, r, err)
 		return
 	}
 	s.serveDomainList(w, r, url.Values{paramProvider: {strconv.FormatInt(id, 10)}})

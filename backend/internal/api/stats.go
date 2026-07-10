@@ -46,14 +46,14 @@ func statsWindow(r *http.Request) (from, to time.Time, weekly bool, err error) {
 	return parseHistoryWindow(r.URL.Query())
 }
 
-func (s *Server) statsMeta(r *http.Request) (Meta, int32, bool) {
+func (s *Server) statsMeta(r *http.Request) (Meta, int32, error) {
 	generation, asOf, err := s.svc.Generation(r.Context())
 	if err != nil {
-		return Meta{}, 0, false
+		return Meta{}, 0, err
 	}
 	m := NewMeta(asOf, generation)
 	m.Source = sourceConfirmedState
-	return m, generation, true
+	return m, generation, nil
 }
 
 // GlobalStatsPoint carries the full stats_global_daily payload (07 §4.10).
@@ -84,9 +84,9 @@ func (s *Server) getStatsOverview(w http.ResponseWriter, r *http.Request) {
 		InvalidParameter(w, r, err.Error())
 		return
 	}
-	meta, generation, ok := s.statsMeta(r)
-	if !ok {
-		InternalError(w, r)
+	meta, generation, err := s.statsMeta(r)
+	if err != nil {
+		InternalError(w, r, err)
 		return
 	}
 	if CacheList(w, r, generation) {
@@ -96,7 +96,7 @@ func (s *Server) getStatsOverview(w http.ResponseWriter, r *http.Request) {
 		FromDay: pgDate(from), ToDay: pgDate(to),
 	})
 	if err != nil {
-		InternalError(w, r)
+		InternalError(w, r, err)
 		return
 	}
 	points := make([]GlobalStatsPoint, len(rows))
@@ -148,7 +148,7 @@ func (s *Server) getCountryStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		InternalError(w, r)
+		InternalError(w, r, err)
 		return
 	}
 	from, to, weekly, err := statsWindow(r)
@@ -156,9 +156,9 @@ func (s *Server) getCountryStats(w http.ResponseWriter, r *http.Request) {
 		InvalidParameter(w, r, err.Error())
 		return
 	}
-	meta, generation, ok := s.statsMeta(r)
-	if !ok {
-		InternalError(w, r)
+	meta, generation, err := s.statsMeta(r)
+	if err != nil {
+		InternalError(w, r, err)
 		return
 	}
 	if CacheList(w, r, generation) {
@@ -168,7 +168,7 @@ func (s *Server) getCountryStats(w http.ResponseWriter, r *http.Request) {
 		CountryID: id, FromDay: pgDate(from), ToDay: pgDate(to),
 	})
 	if err != nil {
-		InternalError(w, r)
+		InternalError(w, r, err)
 		return
 	}
 	points := make([]CountryStatsPoint, len(rows))
@@ -222,9 +222,9 @@ func (s *Server) getCampaignStats(w http.ResponseWriter, r *http.Request) {
 		InvalidParameter(w, r, err.Error())
 		return
 	}
-	meta, generation, ok := s.statsMeta(r)
-	if !ok {
-		InternalError(w, r)
+	meta, generation, err := s.statsMeta(r)
+	if err != nil {
+		InternalError(w, r, err)
 		return
 	}
 	if CacheList(w, r, generation) {
@@ -234,7 +234,7 @@ func (s *Server) getCampaignStats(w http.ResponseWriter, r *http.Request) {
 		CampaignID: row.ID, FromDay: pgDate(from), ToDay: pgDate(to),
 	})
 	if err != nil {
-		InternalError(w, r)
+		InternalError(w, r, err)
 		return
 	}
 	points := make([]CampaignStatsPoint, len(rows))
@@ -286,7 +286,7 @@ func (s *Server) getASNStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		InternalError(w, r)
+		InternalError(w, r, err)
 		return
 	}
 	from, to, weekly, err := statsWindow(r)
@@ -294,9 +294,9 @@ func (s *Server) getASNStats(w http.ResponseWriter, r *http.Request) {
 		InvalidParameter(w, r, err.Error())
 		return
 	}
-	meta, generation, ok := s.statsMeta(r)
-	if !ok {
-		InternalError(w, r)
+	meta, generation, err := s.statsMeta(r)
+	if err != nil {
+		InternalError(w, r, err)
 		return
 	}
 	if CacheList(w, r, generation) {
@@ -306,7 +306,7 @@ func (s *Server) getASNStats(w http.ResponseWriter, r *http.Request) {
 		AsnID: id, FromDay: pgTS(from, true), ToDay: pgTS(to, true),
 	})
 	if err != nil {
-		InternalError(w, r)
+		InternalError(w, r, err)
 		return
 	}
 	points := make([]ASNStatsPoint, len(rows))

@@ -58,7 +58,7 @@ func (s *Server) listASNs(w http.ResponseWriter, r *http.Request) {
 
 	generation, asOf, err := s.svc.Generation(r.Context())
 	if err != nil {
-		InternalError(w, r)
+		InternalError(w, r, err)
 		return
 	}
 	if CacheList(w, r, generation) {
@@ -67,6 +67,7 @@ func (s *Server) listASNs(w http.ResponseWriter, r *http.Request) {
 
 	fingerprint := FilterFingerprint(q)
 	params := db.ASNLeaderboardByV6Params{Q: q.Get("q"), Lim: int32(limit + 1)}
+	backward := false
 	if token := q.Get(paramCursor); token != "" {
 		c, err := DecodeCursor(token, sortKey, fingerprint, generation)
 		if err != nil {
@@ -80,55 +81,103 @@ func (s *Server) listASNs(w http.ResponseWriter, r *http.Request) {
 		}
 		if st.Rank != nil {
 			params.WithSeek, params.SeekCount, params.SeekNumber = true, *st.Rank, st.ID
+			backward = c.Backward()
 		}
 	}
 
-	var items []ASNBody
-	if sortKey == SortCountTotal {
-		rows, err := s.svc.Q.ASNLeaderboardByTotal(r.Context(), db.ASNLeaderboardByTotalParams(params))
-		if err != nil {
-			InternalError(w, r)
-			return
-		}
-		items = make([]ASNBody, len(rows))
-		for i := range rows {
-			items[i] = asnBody(rows[i].Number, rows[i].Name, rows[i].CountTotal, rows[i].CountV6)
+	items, err := s.asnLeaderboardRows(r, sortKey, params, backward)
+	if err != nil {
+		InternalError(w, r, err)
+		return
+	}
+
+	var forwardMore, backwardMore bool
+	overflow := len(items) > limit
+	if backward {
+		backwardMore, forwardMore = overflow, true
+		if overflow {
+			items = items[1:]
 		}
 	} else {
-		rows, err := s.svc.Q.ASNLeaderboardByV6(r.Context(), params)
-		if err != nil {
-			InternalError(w, r)
-			return
+		forwardMore, backwardMore = overflow, params.WithSeek
+		if overflow {
+			items = items[:limit]
 		}
-		items = make([]ASNBody, len(rows))
-		for i := range rows {
-			items[i] = asnBody(rows[i].Number, rows[i].Name, rows[i].CountTotal, rows[i].CountV6)
-		}
-	}
-
-	hasMore := len(items) > limit
-	if hasMore {
-		items = items[:limit]
 	}
 	if wantCSV {
 		writeASNsCSV(w, items)
 		return
 	}
-	var lastK []any
-	if hasMore {
-		last := items[len(items)-1]
-		count := last.CountV6
+	asnKey := func(a ASNBody) []any {
+		count := a.CountV6
 		if sortKey == SortCountTotal {
-			count = last.CountTotal
+			count = a.CountTotal
 		}
-		lastK = []any{count, last.Number}
+		return []any{count, a.Number}
+	}
+	var firstK, lastK []any
+	if len(items) > 0 {
+		firstK, lastK = asnKey(items[0]), asnKey(items[len(items)-1])
 	}
 
 	WriteJSON(w, http.StatusOK, ListEnvelope{
 		Items: items,
-		Page:  PageOf(generation, sortKey, fingerprint, hasMore, lastK, nil),
+		Page:  BuildPage(generation, sortKey, fingerprint, forwardMore, backwardMore, firstK, lastK),
 		Meta:  NewMeta(asOf, generation),
 	})
+}
+
+// asnLeaderboardRows dispatches the sort × direction query matrix; backward
+// rows come back re-reversed into display order.
+func (s *Server) asnLeaderboardRows(r *http.Request, sortKey string, params db.ASNLeaderboardByV6Params, backward bool) ([]ASNBody, error) {
+	var items []ASNBody
+	add := func(number int64, name string, total, v6 int32) {
+		items = append(items, asnBody(number, name, total, v6))
+	}
+	switch {
+	case sortKey == SortCountTotal && backward:
+		rows, err := s.svc.Q.ASNLeaderboardByTotalPrev(r.Context(), db.ASNLeaderboardByTotalPrevParams{
+			Q: params.Q, SeekCount: params.SeekCount, SeekNumber: params.SeekNumber, Lim: params.Lim,
+		})
+		if err != nil {
+			return nil, err
+		}
+		for i := range rows {
+			add(rows[i].Number, rows[i].Name, rows[i].CountTotal, rows[i].CountV6)
+		}
+	case sortKey == SortCountTotal:
+		rows, err := s.svc.Q.ASNLeaderboardByTotal(r.Context(), db.ASNLeaderboardByTotalParams(params))
+		if err != nil {
+			return nil, err
+		}
+		for i := range rows {
+			add(rows[i].Number, rows[i].Name, rows[i].CountTotal, rows[i].CountV6)
+		}
+	case backward:
+		rows, err := s.svc.Q.ASNLeaderboardByV6Prev(r.Context(), db.ASNLeaderboardByV6PrevParams{
+			Q: params.Q, SeekCount: params.SeekCount, SeekNumber: params.SeekNumber, Lim: params.Lim,
+		})
+		if err != nil {
+			return nil, err
+		}
+		for i := range rows {
+			add(rows[i].Number, rows[i].Name, rows[i].CountTotal, rows[i].CountV6)
+		}
+	default:
+		rows, err := s.svc.Q.ASNLeaderboardByV6(r.Context(), params)
+		if err != nil {
+			return nil, err
+		}
+		for i := range rows {
+			add(rows[i].Number, rows[i].Name, rows[i].CountTotal, rows[i].CountV6)
+		}
+	}
+	if backward { // ASC fetch → re-reverse into leaderboard order
+		for i, j := 0, len(items)-1; i < j; i, j = i+1, j-1 {
+			items[i], items[j] = items[j], items[i]
+		}
+	}
+	return items, nil
 }
 
 // parseASNNumber resolves the {number} path param; malformed → 404
@@ -154,12 +203,12 @@ func (s *Server) getASN(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		InternalError(w, r)
+		InternalError(w, r, err)
 		return
 	}
 	generation, asOf, err := s.svc.Generation(r.Context())
 	if err != nil {
-		InternalError(w, r)
+		InternalError(w, r, err)
 		return
 	}
 	if CacheList(w, r, generation) {
@@ -181,7 +230,7 @@ func (s *Server) listASNDomains(w http.ResponseWriter, r *http.Request) {
 			NotFound(w, r, "Network not found", "No such ASN: "+strconv.FormatInt(n, 10))
 			return
 		}
-		InternalError(w, r)
+		InternalError(w, r, err)
 		return
 	}
 	s.serveDomainList(w, r, url.Values{paramASN: {strconv.FormatInt(n, 10)}})

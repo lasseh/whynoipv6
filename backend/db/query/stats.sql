@@ -158,3 +158,23 @@ SELECT day, domains, v6_domains, sinners, heroes
 FROM stats_asn_daily
 WHERE asn_id = @asn_id AND day >= @from_day::timestamptz AND day <= @to_day::timestamptz
 ORDER BY day ASC;
+
+-- The nightly dataset export (07 §5.3): one parameterized read covers the
+-- three tiers — ranked_only for top100k/top1m, max_rank 0 = unbounded.
+-- name: ExportRows :many
+SELECT d.host, d.rank, d.kind, p.host AS parent,
+       d.classification, d.class_flags, d.gold,
+       d.base_status, d.www_status, d.ns_status,
+       d.mx_status, d.conn_status, d.resources_status,
+       d.base_since, d.www_since, d.ns_since, d.mx_since, d.conn_since, d.resources_since,
+       d.tld, c.code, a.number AS asn,
+       dp.name AS dns_provider, d.hosting_provider, d.last_checked_at
+FROM domain d
+JOIN country c ON c.id = d.country_id
+JOIN asn a ON a.id = d.asn_id
+LEFT JOIN dns_provider dp ON dp.id = d.dns_provider_id
+LEFT JOIN domain p ON p.id = d.parent_id
+WHERE NOT d.disabled
+  AND (NOT @ranked_only::bool OR d.rank IS NOT NULL)
+  AND (@max_rank::int = 0 OR d.rank <= @max_rank)
+ORDER BY d.rank ASC NULLS LAST, d.id ASC;

@@ -11,6 +11,106 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const ExportRows = `-- name: ExportRows :many
+SELECT d.host, d.rank, d.kind, p.host AS parent,
+       d.classification, d.class_flags, d.gold,
+       d.base_status, d.www_status, d.ns_status,
+       d.mx_status, d.conn_status, d.resources_status,
+       d.base_since, d.www_since, d.ns_since, d.mx_since, d.conn_since, d.resources_since,
+       d.tld, c.code, a.number AS asn,
+       dp.name AS dns_provider, d.hosting_provider, d.last_checked_at
+FROM domain d
+JOIN country c ON c.id = d.country_id
+JOIN asn a ON a.id = d.asn_id
+LEFT JOIN dns_provider dp ON dp.id = d.dns_provider_id
+LEFT JOIN domain p ON p.id = d.parent_id
+WHERE NOT d.disabled
+  AND (NOT $1::bool OR d.rank IS NOT NULL)
+  AND ($2::int = 0 OR d.rank <= $2)
+ORDER BY d.rank ASC NULLS LAST, d.id ASC
+`
+
+type ExportRowsParams struct {
+	RankedOnly bool  `json:"ranked_only"`
+	MaxRank    int32 `json:"max_rank"`
+}
+
+type ExportRowsRow struct {
+	Host            string             `json:"host"`
+	Rank            *int32             `json:"rank"`
+	Kind            DomainKind         `json:"kind"`
+	Parent          *string            `json:"parent"`
+	Classification  Classification     `json:"classification"`
+	ClassFlags      []string           `json:"class_flags"`
+	Gold            bool               `json:"gold"`
+	BaseStatus      *Ipv6Status        `json:"base_status"`
+	WwwStatus       *Ipv6Status        `json:"www_status"`
+	NsStatus        *Ipv6Status        `json:"ns_status"`
+	MxStatus        *Ipv6Status        `json:"mx_status"`
+	ConnStatus      *Ipv6Status        `json:"conn_status"`
+	ResourcesStatus *Ipv6Status        `json:"resources_status"`
+	BaseSince       pgtype.Timestamptz `json:"base_since"`
+	WwwSince        pgtype.Timestamptz `json:"www_since"`
+	NsSince         pgtype.Timestamptz `json:"ns_since"`
+	MxSince         pgtype.Timestamptz `json:"mx_since"`
+	ConnSince       pgtype.Timestamptz `json:"conn_since"`
+	ResourcesSince  pgtype.Timestamptz `json:"resources_since"`
+	Tld             *string            `json:"tld"`
+	Code            string             `json:"code"`
+	Asn             int64              `json:"asn"`
+	DnsProvider     *string            `json:"dns_provider"`
+	HostingProvider *string            `json:"hosting_provider"`
+	LastCheckedAt   pgtype.Timestamptz `json:"last_checked_at"`
+}
+
+// The nightly dataset export (07 §5.3): one parameterized read covers the
+// three tiers — ranked_only for top100k/top1m, max_rank 0 = unbounded.
+func (q *Queries) ExportRows(ctx context.Context, arg ExportRowsParams) ([]ExportRowsRow, error) {
+	rows, err := q.db.Query(ctx, ExportRows, arg.RankedOnly, arg.MaxRank)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ExportRowsRow{}
+	for rows.Next() {
+		var i ExportRowsRow
+		if err := rows.Scan(
+			&i.Host,
+			&i.Rank,
+			&i.Kind,
+			&i.Parent,
+			&i.Classification,
+			&i.ClassFlags,
+			&i.Gold,
+			&i.BaseStatus,
+			&i.WwwStatus,
+			&i.NsStatus,
+			&i.MxStatus,
+			&i.ConnStatus,
+			&i.ResourcesStatus,
+			&i.BaseSince,
+			&i.WwwSince,
+			&i.NsSince,
+			&i.MxSince,
+			&i.ConnSince,
+			&i.ResourcesSince,
+			&i.Tld,
+			&i.Code,
+			&i.Asn,
+			&i.DnsProvider,
+			&i.HostingProvider,
+			&i.LastCheckedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const SnapshotASNDaily = `-- name: SnapshotASNDaily :exec
 INSERT INTO stats_asn_daily (day, asn_id, domains, v6_domains, sinners, heroes)
 SELECT

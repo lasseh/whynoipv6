@@ -47,7 +47,7 @@ func (s *Server) listCountries(w http.ResponseWriter, r *http.Request) {
 
 	generation, asOf, err := s.svc.Generation(r.Context())
 	if err != nil {
-		InternalError(w, r)
+		InternalError(w, r, err)
 		return
 	}
 	if CacheList(w, r, generation) {
@@ -56,7 +56,7 @@ func (s *Server) listCountries(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := s.svc.Q.CountryLeaderboard(r.Context())
 	if err != nil {
-		InternalError(w, r)
+		InternalError(w, r, err)
 		return
 	}
 	items := make([]CountryBody, len(rows))
@@ -106,12 +106,12 @@ func (s *Server) getCountry(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		InternalError(w, r)
+		InternalError(w, r, err)
 		return
 	}
 	generation, asOf, err := s.svc.Generation(r.Context())
 	if err != nil {
-		InternalError(w, r)
+		InternalError(w, r, err)
 		return
 	}
 	if CacheList(w, r, generation) {
@@ -136,7 +136,7 @@ func (s *Server) listCountryDomains(w http.ResponseWriter, r *http.Request) {
 			NotFound(w, r, "Country not found", "No such country: "+strings.ToUpper(code))
 			return
 		}
-		InternalError(w, r)
+		InternalError(w, r, err)
 		return
 	}
 	s.serveDomainList(w, r, url.Values{paramCountry: {strings.ToUpper(code)}})

@@ -97,21 +97,13 @@ func (w *Worker) readLinks(ctx context.Context, domainID int64) []LinkedResource
 	if !w.ResourcesEnabled {
 		return nil
 	}
-	rows, err := w.Pool.Query(ctx, `SELECT rh.aaaa_status
-		FROM domain_resource dr
-		JOIN resource_host rh ON rh.id = dr.resource_host_id
-		WHERE dr.domain_id = $1 AND dr.required`, domainID)
+	statuses, err := db.New(w.Pool).DomainRequiredLinks(ctx, domainID)
 	if err != nil {
 		slog.Warn("resource link read failed", "err", err.Error())
 		return nil
 	}
-	defer rows.Close()
 	var links []LinkedResource
-	for rows.Next() {
-		var status *string
-		if err := rows.Scan(&status); err != nil {
-			continue
-		}
+	for _, status := range statuses {
 		var l LinkedResource
 		if status != nil {
 			s := domain.IPv6Status(*status)

@@ -21,7 +21,11 @@ type Querier interface {
 	ASNEnsure(ctx context.Context, arg ASNEnsureParams) (int32, error)
 	ASNIDByNumber(ctx context.Context, number int64) (int32, error)
 	ASNLeaderboardByTotal(ctx context.Context, arg ASNLeaderboardByTotalParams) ([]ASNLeaderboardByTotalRow, error)
+	ASNLeaderboardByTotalPrev(ctx context.Context, arg ASNLeaderboardByTotalPrevParams) ([]ASNLeaderboardByTotalPrevRow, error)
 	ASNLeaderboardByV6(ctx context.Context, arg ASNLeaderboardByV6Params) ([]ASNLeaderboardByV6Row, error)
+	// The §3.2 prev_cursor (backward) variants: flipped comparison + order;
+	// the handler re-reverses rows for display.
+	ASNLeaderboardByV6Prev(ctx context.Context, arg ASNLeaderboardByV6PrevParams) ([]ASNLeaderboardByV6PrevRow, error)
 	// db/query/asn.sql — sqlc query source (layout: 05-schema.md §10.2).
 	// Sentinel lookup: binaries resolve the sentinel ASN once at startup by
 	// lookup, never by literal id (05-schema.md §5).
@@ -46,10 +50,13 @@ type Querier interface {
 	ChangelogByCampaign(ctx context.Context, campaignID int32) ([]ChangelogByCampaignRow, error)
 	ChangelogByCountry(ctx context.Context, countryID int32) ([]ChangelogByCountryRow, error)
 	ChangelogByDomain(ctx context.Context, arg ChangelogByDomainParams) ([]ChangelogByDomainRow, error)
+	ChangelogByDomainPrev(ctx context.Context, arg ChangelogByDomainPrevParams) ([]ChangelogByDomainPrevRow, error)
 	// Changelog read surface (07 §4.8). Global + per-domain feeds paginate on
 	// the (ts, domain_id, field) DESC keyset; the scoped country/campaign feeds
 	// are capped to the latest-50 recent window (OPEN-15 guardrail).
 	ChangelogGlobal(ctx context.Context, arg ChangelogGlobalParams) ([]ChangelogGlobalRow, error)
+	// The §3.2 prev_cursor (backward) variants.
+	ChangelogGlobalPrev(ctx context.Context, arg ChangelogGlobalPrevParams) ([]ChangelogGlobalPrevRow, error)
 	ChangelogMaxTS(ctx context.Context) (pgtype.Timestamptz, error)
 	// The §4.9 confirmed-trajectory replay: the full transition history of one
 	// domain, ascending, reconstructed API-side (never raw scan observations).
@@ -111,6 +118,8 @@ type Querier interface {
 	// Lifecycle re-entry (07 §5.1.6): every POST /check on an existing host.
 	DomainLiveCheckReentry(ctx context.Context, host string) error
 	DomainMembershipReEntry(ctx context.Context, id int64) error
+	// The worker's pre-commit roll-up input (02 §6): required links only.
+	DomainRequiredLinks(ctx context.Context, domainID int64) ([]*Ipv6Status, error)
 	// Resource-dependency reads (07 §4.11). Forward list is bounded small
 	// (exact count, no cursor); the reverse dependents list is served by the
 	// domainlist builder.
@@ -120,6 +129,9 @@ type Querier interface {
 	DomainStampDNSProvider(ctx context.Context, arg DomainStampDNSProviderParams) error
 	DomainStampHostingProvider(ctx context.Context, arg DomainStampHostingProviderParams) error
 	EnsureResourceHost(ctx context.Context, rhost string) error
+	// The nightly dataset export (07 §5.3): one parameterized read covers the
+	// three tiers — ranked_only for top100k/top1m, max_rank 0 = unbounded.
+	ExportRows(ctx context.Context, arg ExportRowsParams) ([]ExportRowsRow, error)
 	InsertChangelog(ctx context.Context, arg InsertChangelogParams) error
 	// db/query/metrics.sql — sqlc query source (layout: 05-schema.md §10.2).
 	InsertCrawlerMetrics(ctx context.Context, arg InsertCrawlerMetricsParams) error
@@ -151,6 +163,7 @@ type Querier interface {
 	// The queue-depth probe (04 §15.1): O(due-set) via idx_domain_due, sampled
 	// at most once per checkpoint.
 	QueueDepth(ctx context.Context) (int64, error)
+	RankedDomainCount(ctx context.Context) (int64, error)
 	RecomputeASNCounters(ctx context.Context) error
 	RecomputeCountryCounters(ctx context.Context) error
 	RecomputeProviderCounters(ctx context.Context) error
@@ -161,6 +174,18 @@ type Querier interface {
 	ResetCountryCounters(ctx context.Context) error
 	ResetProviderCounters(ctx context.Context) error
 	ResourceHostByHost(ctx context.Context, host string) (ResourceHostByHostRow, error)
+	ResourceHostIDByHost(ctx context.Context, host string) (int64, error)
+	// The live-check registry probe (07 §5.1.4): one set-based read.
+	ResourceHostStatuses(ctx context.Context, hosts []string) ([]ResourceHostStatusesRow, error)
+	ResourceManualRemove(ctx context.Context, arg ResourceManualRemoveParams) (int64, error)
+	// The §5.5 manual verbs. The (xmax = 0) probe distinguishes a genuine
+	// insert (bump dependent_count) from a conflict update (don't).
+	ResourceManualUpsert(ctx context.Context, arg ResourceManualUpsertParams) error
+	// The sweep claim (06 §5.2): the schedule bump IS the crash lease.
+	ResourceSweepClaim(ctx context.Context, batch int32) ([]ResourceSweepClaimRow, error)
+	// The sweep host commit (06 §5.4): one single-row write per definitive
+	// outcome.
+	ResourceSweepCommit(ctx context.Context, arg ResourceSweepCommitParams) error
 	// The §4.9 latency overlay: last scan measurement per day — the only value
 	// history takes from the scan hypertable.
 	ScanLatencyDaily(ctx context.Context, arg ScanLatencyDailyParams) ([]ScanLatencyDailyRow, error)
@@ -198,6 +223,8 @@ type Querier interface {
 	SweepDelistLiveCheck(ctx context.Context, arg SweepDelistLiveCheckParams) (int64, error)
 	SweepReenableDelisted(ctx context.Context, liveCheckLinkage pgtype.Interval) (int64, error)
 	SweepStampOrphans(ctx context.Context, liveCheckLinkage pgtype.Interval) (int64, error)
+	// The tick step-7 ops digest (04 §9).
+	TickSummaryCounts(ctx context.Context) (TickSummaryCountsRow, error)
 	TrancoInsertAborted(ctx context.Context, arg TrancoInsertAbortedParams) error
 	TrancoInsertProvenance(ctx context.Context, arg TrancoInsertProvenanceParams) (int64, error)
 	TrancoLastSuccessAt(ctx context.Context) (pgtype.Timestamptz, error)

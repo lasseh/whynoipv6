@@ -145,7 +145,13 @@ func ManifestUnavailable(w http.ResponseWriter, r *http.Request) {
 		Status: http.StatusServiceUnavailable})
 }
 
-func InternalError(w http.ResponseWriter, r *http.Request) {
+// InternalError logs the underlying fault (09-ops §13 reserves the error
+// level for exactly these) and emits the generic problem — the detail never
+// leaks the error text.
+func InternalError(w http.ResponseWriter, r *http.Request, err error) {
+	if err != nil {
+		slog.Error("internal error", "path", r.URL.Path, "err", err.Error())
+	}
 	WriteProblem(w, r, Problem{Type: problemBase + "internal-error", Title: "Internal error",
 		Status: http.StatusInternalServerError, Detail: "An unexpected error occurred."})
 }

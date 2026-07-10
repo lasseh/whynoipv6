@@ -77,7 +77,7 @@ func newAPI(t *testing.T) (*httptest.Server, *pgxpool.Pool) {
 	t.Helper()
 	pool := pgtest.NewDB(t)
 	seedLeaderboard(t, pool)
-	srv := httptest.NewServer(api.NewRouter(service.New(pool)))
+	srv := httptest.NewServer(api.NewRouter(service.New(pool), api.Options{}))
 	t.Cleanup(srv.Close)
 	return srv, pool
 }

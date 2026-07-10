@@ -9,6 +9,7 @@ import (
 
 	"github.com/lasseh/whynoipv6/internal/checker"
 	"github.com/lasseh/whynoipv6/internal/domain"
+	db "github.com/lasseh/whynoipv6/internal/postgres/db"
 )
 
 // Sweep constants — deliberately NOT config (06 §5.2): the volume (2–4 qps)
@@ -17,21 +18,6 @@ const (
 	sweepBatchSize = 100
 	sweepEmptyPoll = 60 * time.Second
 )
-
-// sqlSweepClaim is the §5.2 claim: the schedule bump IS the crash lease —
-// resource_host has no claimed_at column by decision.
-const sqlSweepClaim = `
-UPDATE resource_host
-SET next_check_at = now() + interval '2 hours'
-WHERE id IN (
-  SELECT id FROM resource_host
-  WHERE next_check_at <= now()
-    AND dependent_count > 0
-  ORDER BY next_check_at ASC
-  LIMIT $1
-  FOR UPDATE SKIP LOCKED
-)
-RETURNING id, host, aaaa_status, aaaa_pending, aaaa_pending_count`
 
 // sweepOutcome is one host's mapped lookup result; empty = non-definitive.
 type sweepOutcome string
@@ -80,20 +66,28 @@ func (s *ResourceSweeper) Run(ctx context.Context) {
 }
 
 func (s *ResourceSweeper) claim(ctx context.Context) ([]sweptHost, error) {
-	rows, err := s.Pool.Query(ctx, sqlSweepClaim, sweepBatchSize)
+	rows, err := db.New(s.Pool).ResourceSweepClaim(ctx, sweepBatchSize)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	var out []sweptHost
-	for rows.Next() {
-		var h sweptHost
-		if err := rows.Scan(&h.ID, &h.Host, &h.Status, &h.Pending, &h.PendingCount); err != nil {
-			return nil, err
+	out := make([]sweptHost, len(rows))
+	for i, r := range rows {
+		out[i] = sweptHost{
+			ID: r.ID, Host: r.Host,
+			Status:       statusStr(r.AaaaStatus),
+			Pending:      statusStr(r.AaaaPending),
+			PendingCount: r.AaaaPendingCount,
 		}
-		out = append(out, h)
 	}
-	return out, rows.Err()
+	return out, nil
+}
+
+func statusStr(v *db.Ipv6Status) *string {
+	if v == nil {
+		return nil
+	}
+	s := string(*v)
+	return &s
 }
 
 // lookup maps one bulk-resolver AAAA answer to a sweep outcome (06 §5.3).
@@ -143,13 +137,21 @@ func (s *ResourceSweeper) sweepHost(ctx context.Context, h *sweptHost) {
 		pending, pendingCount = &o, 1
 	}
 
-	_, err := s.Pool.Exec(ctx, `
-		UPDATE resource_host
-		SET aaaa_status = $2::ipv6_status, aaaa_pending = $3::ipv6_status,
-		    aaaa_pending_count = $4,
-		    last_checked_at = now(), next_check_at = now() + interval '24 hours'
-		WHERE id = $1`, h.ID, status, pending, pendingCount)
+	err := db.New(s.Pool).ResourceSweepCommit(ctx, db.ResourceSweepCommitParams{
+		ID:               h.ID,
+		AaaaStatus:       statusEnum(status),
+		AaaaPending:      statusEnum(pending),
+		AaaaPendingCount: pendingCount,
+	})
 	if err != nil && ctx.Err() == nil {
-		slog.Error("resource sweep commit failed", "host", h.Host, "err", err.Error())
+		slog.Error("resource sweep commit failed", "domain", h.Host, "err", err.Error())
 	}
+}
+
+func statusEnum(v *string) *db.Ipv6Status {
+	if v == nil {
+		return nil
+	}
+	s := db.Ipv6Status(*v)
+	return &s
 }

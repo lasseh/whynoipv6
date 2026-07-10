@@ -56,23 +56,13 @@ func resourceCmd() *cobra.Command {
 			if err := q.EnsureResourceHost(cmd.Context(), rHost); err != nil {
 				return err
 			}
-			var rhID int64
-			if err := pool.QueryRow(cmd.Context(),
-				"SELECT id FROM resource_host WHERE host = $1", rHost).Scan(&rhID); err != nil {
+			rhID, err := q.ResourceHostIDByHost(cmd.Context(), rHost)
+			if err != nil {
 				return err
 			}
-			_, err = pool.Exec(cmd.Context(), `
-				WITH up AS (
-				  INSERT INTO domain_resource (domain_id, resource_host_id, source, required)
-				  VALUES ($1, $2, 'manual', $3)
-				  ON CONFLICT (domain_id, resource_host_id)
-				  DO UPDATE SET source = 'manual', required = EXCLUDED.required
-				  RETURNING (xmax = 0) AS inserted
-				)
-				UPDATE resource_host SET dependent_count = dependent_count + 1
-				WHERE id = $2 AND (SELECT inserted FROM up)`,
-				d.ID, rhID, !advisory)
-			if err != nil {
+			if err := q.ResourceManualUpsert(cmd.Context(), db.ResourceManualUpsertParams{
+				DomainID: d.ID, ResourceHostID: rhID, Required: !advisory,
+			}); err != nil {
 				return err
 			}
 			fmt.Println("linked")
@@ -110,9 +100,7 @@ func resourceCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			var rhID int64
-			err = pool.QueryRow(cmd.Context(),
-				"SELECT id FROM resource_host WHERE host = $1", rHost).Scan(&rhID)
+			rhID, err := q.ResourceHostIDByHost(cmd.Context(), rHost)
 			if errors.Is(err, pgx.ErrNoRows) {
 				return fmt.Errorf("unknown resource host %s", rHost)
 			}
@@ -120,18 +108,13 @@ func resourceCmd() *cobra.Command {
 				return err
 			}
 
-			tag, err := pool.Exec(cmd.Context(), `
-				WITH del AS (
-				  DELETE FROM domain_resource
-				  WHERE domain_id = $1 AND resource_host_id = $2
-				  RETURNING resource_host_id
-				)
-				UPDATE resource_host SET dependent_count = dependent_count - 1
-				WHERE id IN (SELECT resource_host_id FROM del)`, d.ID, rhID)
+			n, err := q.ResourceManualRemove(cmd.Context(), db.ResourceManualRemoveParams{
+				DomainID: d.ID, ResourceHostID: rhID,
+			})
 			if err != nil {
 				return err
 			}
-			if tag.RowsAffected() == 0 {
+			if n == 0 {
 				fmt.Println("no such link")
 				return nil
 			}

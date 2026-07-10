@@ -19,8 +19,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/parquet-go/parquet-go"
+
+	db "github.com/lasseh/whynoipv6/internal/postgres/db"
 )
 
 // SchemaVersion versions the manifest index shape AND the exported column
@@ -81,32 +84,18 @@ var columnTypes = map[string]string{
 	"last_checked": typeDatetime,
 }
 
-// tiers: predicate per size tier. top100k/top1m use the publicly-ranked
-// predicate; full = every non-disabled scannable entity.
+// tiers: parameters per size tier for the one sqlc ExportRows query.
+// top100k/top1m use the publicly-ranked predicate; full = every
+// non-disabled scannable entity.
 var tiers = []struct {
-	Name  string
-	Where string
+	Name       string
+	RankedOnly bool
+	MaxRank    int32 // 0 = unbounded
 }{
-	{"top100k", "d.rank IS NOT NULL AND d.rank <= 100000 AND NOT d.disabled"},
-	{"top1m", "d.rank IS NOT NULL AND NOT d.disabled"},
-	{"full", "NOT d.disabled"},
+	{"top100k", true, 100000},
+	{"top1m", true, 0},
+	{"full", false, 0},
 }
-
-const exportSelect = `
-SELECT d.host, d.rank::bigint, d.kind::text, p.host AS parent,
-       d.classification::text, d.class_flags, d.gold,
-       d.base_status::text, d.www_status::text, d.ns_status::text,
-       d.mx_status::text, d.conn_status::text, d.resources_status::text,
-       d.base_since, d.www_since, d.ns_since, d.mx_since, d.conn_since, d.resources_since,
-       d.tld, c.code::text AS country, a.number AS asn,
-       dp.name AS dns_provider, d.hosting_provider, d.last_checked_at
-FROM domain d
-JOIN country c ON c.id = d.country_id
-JOIN asn a ON a.id = d.asn_id
-LEFT JOIN dns_provider dp ON dp.id = d.dns_provider_id
-LEFT JOIN domain p ON p.id = d.parent_id
-WHERE %s
-ORDER BY d.rank ASC NULLS LAST, d.id ASC`
 
 // Exporter runs one snapshot export.
 type Exporter struct {
@@ -139,7 +128,7 @@ func (e *Exporter) Run(ctx context.Context, generation int32) error {
 	var resources []datapackageResource
 	var sums []string
 	for _, tier := range tiers {
-		rows, err := e.fetch(ctx, tier.Where)
+		rows, err := e.fetch(ctx, tier.RankedOnly, tier.MaxRank)
 		if err != nil {
 			return fmt.Errorf("tier %s: %w", tier.Name, err)
 		}
@@ -199,40 +188,50 @@ func (e *Exporter) Run(ctx context.Context, generation int32) error {
 	return e.writeManifest(ctx, now, generation)
 }
 
-func (e *Exporter) fetch(ctx context.Context, where string) ([]Row, error) {
-	q := fmt.Sprintf(exportSelect, where)
-	pgRows, err := e.Pool.Query(ctx, q)
+func (e *Exporter) fetch(ctx context.Context, rankedOnly bool, maxRank int32) ([]Row, error) {
+	dbRows, err := db.New(e.Pool).ExportRows(ctx, db.ExportRowsParams{
+		RankedOnly: rankedOnly, MaxRank: maxRank,
+	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("export rows: %w", err)
 	}
-	defer pgRows.Close()
-	var out []Row
-	for pgRows.Next() {
-		var r Row
-		var flags []string
-		var since [6]*time.Time
-		var lastChecked *time.Time
-		if err := pgRows.Scan(&r.Host, &r.Rank, &r.Kind, &r.Parent, &r.Classification, &flags, &r.Gold,
-			&r.Base, &r.WWW, &r.NS, &r.MX, &r.Conn, &r.Resources,
-			&since[0], &since[1], &since[2], &since[3], &since[4], &since[5],
-			&r.TLD, &r.Country, &r.ASN, &r.DNSProvider, &r.HostingProvider, &lastChecked); err != nil {
-			return nil, err
+	status := func(v *db.Ipv6Status) *string {
+		if v == nil {
+			return nil
 		}
-		r.ClassFlags = strings.Join(flags, ";")
-		r.Country = strings.TrimSpace(r.Country)
-		ts := func(t *time.Time) *string {
-			if t == nil {
-				return nil
-			}
-			s := t.UTC().Format(time.RFC3339)
-			return &s
-		}
-		r.BaseSince, r.WWWSince, r.NSSince = ts(since[0]), ts(since[1]), ts(since[2])
-		r.MXSince, r.ConnSince, r.ResourcesSince = ts(since[3]), ts(since[4]), ts(since[5])
-		r.LastChecked = ts(lastChecked)
-		out = append(out, r)
+		s := string(*v)
+		return &s
 	}
-	return out, pgRows.Err()
+	ts := func(t pgtype.Timestamptz) *string {
+		if !t.Valid {
+			return nil
+		}
+		s := t.Time.UTC().Format(time.RFC3339)
+		return &s
+	}
+	out := make([]Row, len(dbRows))
+	for i := range dbRows {
+		d := &dbRows[i]
+		var rank *int64
+		if d.Rank != nil {
+			r64 := int64(*d.Rank)
+			rank = &r64
+		}
+		out[i] = Row{
+			Host: d.Host, Rank: rank, Kind: string(d.Kind), Parent: d.Parent,
+			Classification: string(d.Classification),
+			ClassFlags:     strings.Join(d.ClassFlags, ";"),
+			Gold:           d.Gold,
+			Base:           status(d.BaseStatus), WWW: status(d.WwwStatus), NS: status(d.NsStatus),
+			MX: status(d.MxStatus), Conn: status(d.ConnStatus), Resources: status(d.ResourcesStatus),
+			BaseSince: ts(d.BaseSince), WWWSince: ts(d.WwwSince), NSSince: ts(d.NsSince),
+			MXSince: ts(d.MxSince), ConnSince: ts(d.ConnSince), ResourcesSince: ts(d.ResourcesSince),
+			TLD: d.Tld, Country: strings.TrimSpace(d.Code), ASN: d.Asn,
+			DNSProvider: d.DnsProvider, HostingProvider: d.HostingProvider,
+			LastChecked: ts(d.LastCheckedAt),
+		}
+	}
+	return out, nil
 }
 
 func (r *Row) csv() []string {
@@ -303,7 +302,7 @@ func writeParquet(path string, rows []Row) error {
 func fileDigest(path string) (size int64, digest string, err error) {
 	b, err := os.ReadFile(path)
 	if err != nil {
-		return 0, "", err
+		return 0, "", fmt.Errorf("digest %s: %w", filepath.Base(path), err)
 	}
 	return int64(len(b)), fmt.Sprintf("%x", sha256.Sum256(b)), nil
 }
@@ -314,16 +313,19 @@ func (e *Exporter) updateLatest(date string) error {
 	tmp := link + ".tmp"
 	_ = os.Remove(tmp)
 	if err := os.Symlink(date, tmp); err != nil {
-		return err
+		return fmt.Errorf("latest symlink: %w", err)
 	}
-	return os.Rename(tmp, link)
+	if err := os.Rename(tmp, link); err != nil {
+		return fmt.Errorf("latest symlink swap: %w", err)
+	}
+	return nil
 }
 
 // prune enforces retention: dailies 90 d, first-of-month forever.
 func (e *Exporter) prune(now time.Time) error {
 	entries, err := os.ReadDir(e.Dir)
 	if err != nil {
-		return err
+		return fmt.Errorf("prune readdir: %w", err)
 	}
 	cutoff := now.AddDate(0, 0, -90)
 	for _, ent := range entries {
@@ -336,7 +338,7 @@ func (e *Exporter) prune(now time.Time) error {
 		}
 		if d.Day() != 1 && d.Before(cutoff) {
 			if err := os.RemoveAll(filepath.Join(e.Dir, ent.Name())); err != nil {
-				return err
+				return fmt.Errorf("prune %s: %w", ent.Name(), err)
 			}
 		}
 	}
@@ -401,10 +403,7 @@ func (e *Exporter) writeManifest(ctx context.Context, now time.Time, generation 
 	// Cite the specific Tranco list ID (07 §5.3); the generic string only
 	// when no import has succeeded yet.
 	attribution := "Data: whynoipv6.com (CC-BY-NC-4.0). Ranks: Tranco list."
-	var listID string
-	if err := e.Pool.QueryRow(ctx,
-		"SELECT list_id FROM tranco_import WHERE NOT aborted ORDER BY imported_at DESC LIMIT 1").
-		Scan(&listID); err == nil && listID != "" {
+	if listID, err := db.New(e.Pool).TrancoLatestSuccessListID(ctx); err == nil && listID != "" {
 		attribution = "Data: whynoipv6.com (CC-BY-NC-4.0). Ranks: Tranco list " + listID + "."
 	}
 	m := Manifest{

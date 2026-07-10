@@ -200,12 +200,12 @@ func (s *Server) domainFeedScope(w http.ResponseWriter, r *http.Request) (*feedS
 		return nil, false
 	}
 	if err != nil {
-		InternalError(w, r)
+		InternalError(w, r, err)
 		return nil, false
 	}
 	rows, err := s.svc.Q.ChangelogByDomain(r.Context(), db.ChangelogByDomainParams{DomainID: d.ID, Lim: feedWindow})
 	if err != nil {
-		InternalError(w, r)
+		InternalError(w, r, err)
 		return nil, false
 	}
 	items := make([]ChangelogItem, len(rows))
@@ -231,17 +231,17 @@ func (s *Server) countryFeedScope(w http.ResponseWriter, r *http.Request) (*feed
 		return nil, false
 	}
 	if err != nil {
-		InternalError(w, r)
+		InternalError(w, r, err)
 		return nil, false
 	}
 	id, err := s.svc.Q.CountryIDByCode(r.Context(), code)
 	if err != nil {
-		InternalError(w, r)
+		InternalError(w, r, err)
 		return nil, false
 	}
 	rows, err := s.svc.Q.ChangelogByCountry(r.Context(), id)
 	if err != nil {
-		InternalError(w, r)
+		InternalError(w, r, err)
 		return nil, false
 	}
 	return &feedScope{
@@ -258,7 +258,7 @@ func (s *Server) campaignFeedScope(w http.ResponseWriter, r *http.Request) (*fee
 	}
 	rows, err := s.svc.Q.ChangelogByCampaign(r.Context(), row.ID)
 	if err != nil {
-		InternalError(w, r)
+		InternalError(w, r, err)
 		return nil, false
 	}
 	return &feedScope{
@@ -273,7 +273,7 @@ func (s *Server) campaignFeedScope(w http.ResponseWriter, r *http.Request) (*fee
 func (s *Server) globalAtom(w http.ResponseWriter, r *http.Request) {
 	scope, err := s.globalFeedScope(r)
 	if err != nil {
-		InternalError(w, r)
+		InternalError(w, r, err)
 		return
 	}
 	s.writeAtom(w, r, scope)
@@ -282,7 +282,7 @@ func (s *Server) globalAtom(w http.ResponseWriter, r *http.Request) {
 func (s *Server) globalJSONFeed(w http.ResponseWriter, r *http.Request) {
 	scope, err := s.globalFeedScope(r)
 	if err != nil {
-		InternalError(w, r)
+		InternalError(w, r, err)
 		return
 	}
 	s.writeJSONFeed(w, r, scope)

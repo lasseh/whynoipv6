@@ -46,7 +46,7 @@ func specPaths(t *testing.T) map[string]bool {
 func chiPaths(t *testing.T) map[string]bool {
 	t.Helper()
 	out := map[string]bool{}
-	router, ok := NewRouter(nil).(chi.Router)
+	router, ok := NewRouter(nil, Options{}).(chi.Router)
 	if !ok {
 		t.Fatal("router is not chi.Router")
 	}
@@ -116,7 +116,7 @@ func TestOpenAPIRouteCoverage(t *testing.T) {
 // TestDiscoverability (07 §7): the embedded contract, Redoc reader, and
 // llms.txt are served DB-free.
 func TestDiscoverability(t *testing.T) {
-	srv := httptest.NewServer(NewRouter(nil))
+	srv := httptest.NewServer(NewRouter(nil, Options{}))
 	defer srv.Close()
 
 	resp, err := http.Get(srv.URL + "/openapi.json")
