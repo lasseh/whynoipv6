@@ -155,11 +155,9 @@ func Validate(ctx context.Context, repo, base string, maxDomains int) (*Validate
 
 		// UUID trust (CI mode only).
 		if base != "" {
-			headUUID := ""
+			headUUID := rawFileUUID(path)
 			if parsed != nil {
 				headUUID = parsed.UUID
-			} else {
-				headUUID = rawFileUUID(path)
 			}
 			baseUUID := gitFileUUID(ctx, repo, base, ch.name)
 			switch ch.status {
