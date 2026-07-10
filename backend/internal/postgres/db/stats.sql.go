@@ -160,6 +160,164 @@ func (q *Queries) SnapshotGlobalDaily(ctx context.Context) error {
 	return err
 }
 
+const StatsASNRange = `-- name: StatsASNRange :many
+SELECT day, domains, v6_domains, sinners, heroes
+FROM stats_asn_daily
+WHERE asn_id = $1 AND day >= $2::timestamptz AND day <= $3::timestamptz
+ORDER BY day ASC
+`
+
+type StatsASNRangeParams struct {
+	AsnID   int32              `json:"asn_id"`
+	FromDay pgtype.Timestamptz `json:"from_day"`
+	ToDay   pgtype.Timestamptz `json:"to_day"`
+}
+
+type StatsASNRangeRow struct {
+	Day       pgtype.Timestamptz `json:"day"`
+	Domains   *int32             `json:"domains"`
+	V6Domains *int32             `json:"v6_domains"`
+	Sinners   *int32             `json:"sinners"`
+	Heroes    *int32             `json:"heroes"`
+}
+
+func (q *Queries) StatsASNRange(ctx context.Context, arg StatsASNRangeParams) ([]StatsASNRangeRow, error) {
+	rows, err := q.db.Query(ctx, StatsASNRange, arg.AsnID, arg.FromDay, arg.ToDay)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []StatsASNRangeRow{}
+	for rows.Next() {
+		var i StatsASNRangeRow
+		if err := rows.Scan(
+			&i.Day,
+			&i.Domains,
+			&i.V6Domains,
+			&i.Sinners,
+			&i.Heroes,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const StatsCampaignRange = `-- name: StatsCampaignRange :many
+SELECT day, domains, v6_ready, sinners, partial, heroes, base_supported,
+       www_supported, ns_supported, mx_supported, conn_supported
+FROM stats_campaign_daily
+WHERE campaign_id = $1 AND day >= $2 AND day <= $3
+ORDER BY day ASC
+`
+
+type StatsCampaignRangeParams struct {
+	CampaignID int32       `json:"campaign_id"`
+	FromDay    pgtype.Date `json:"from_day"`
+	ToDay      pgtype.Date `json:"to_day"`
+}
+
+type StatsCampaignRangeRow struct {
+	Day           pgtype.Date `json:"day"`
+	Domains       *int32      `json:"domains"`
+	V6Ready       *int32      `json:"v6_ready"`
+	Sinners       *int32      `json:"sinners"`
+	Partial       *int32      `json:"partial"`
+	Heroes        *int32      `json:"heroes"`
+	BaseSupported *int32      `json:"base_supported"`
+	WwwSupported  *int32      `json:"www_supported"`
+	NsSupported   *int32      `json:"ns_supported"`
+	MxSupported   *int32      `json:"mx_supported"`
+	ConnSupported *int32      `json:"conn_supported"`
+}
+
+func (q *Queries) StatsCampaignRange(ctx context.Context, arg StatsCampaignRangeParams) ([]StatsCampaignRangeRow, error) {
+	rows, err := q.db.Query(ctx, StatsCampaignRange, arg.CampaignID, arg.FromDay, arg.ToDay)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []StatsCampaignRangeRow{}
+	for rows.Next() {
+		var i StatsCampaignRangeRow
+		if err := rows.Scan(
+			&i.Day,
+			&i.Domains,
+			&i.V6Ready,
+			&i.Sinners,
+			&i.Partial,
+			&i.Heroes,
+			&i.BaseSupported,
+			&i.WwwSupported,
+			&i.NsSupported,
+			&i.MxSupported,
+			&i.ConnSupported,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const StatsCountryRange = `-- name: StatsCountryRange :many
+SELECT day, domains, sinners, partial, heroes, base_supported, conn_supported
+FROM stats_country_daily
+WHERE country_id = $1 AND day >= $2 AND day <= $3
+ORDER BY day ASC
+`
+
+type StatsCountryRangeParams struct {
+	CountryID int32       `json:"country_id"`
+	FromDay   pgtype.Date `json:"from_day"`
+	ToDay     pgtype.Date `json:"to_day"`
+}
+
+type StatsCountryRangeRow struct {
+	Day           pgtype.Date `json:"day"`
+	Domains       *int32      `json:"domains"`
+	Sinners       *int32      `json:"sinners"`
+	Partial       *int32      `json:"partial"`
+	Heroes        *int32      `json:"heroes"`
+	BaseSupported *int32      `json:"base_supported"`
+	ConnSupported *int32      `json:"conn_supported"`
+}
+
+func (q *Queries) StatsCountryRange(ctx context.Context, arg StatsCountryRangeParams) ([]StatsCountryRangeRow, error) {
+	rows, err := q.db.Query(ctx, StatsCountryRange, arg.CountryID, arg.FromDay, arg.ToDay)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []StatsCountryRangeRow{}
+	for rows.Next() {
+		var i StatsCountryRangeRow
+		if err := rows.Scan(
+			&i.Day,
+			&i.Domains,
+			&i.Sinners,
+			&i.Partial,
+			&i.Heroes,
+			&i.BaseSupported,
+			&i.ConnSupported,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const StatsGeneration = `-- name: StatsGeneration :one
 SELECT day, generated_at FROM stats_global_daily ORDER BY day DESC LIMIT 1
 `
@@ -177,4 +335,79 @@ func (q *Queries) StatsGeneration(ctx context.Context) (StatsGenerationRow, erro
 	var i StatsGenerationRow
 	err := row.Scan(&i.Day, &i.GeneratedAt)
 	return i, err
+}
+
+const StatsGlobalRange = `-- name: StatsGlobalRange :many
+
+SELECT day, domains, sinners, partial, heroes, gold, inactive, unknown, disabled,
+       base_supported, www_supported, ns_supported, mx_supported, conn_supported,
+       resources_supported, top_heroes, top_nameserver
+FROM stats_global_daily
+WHERE day >= $1 AND day <= $2
+ORDER BY day ASC
+`
+
+type StatsGlobalRangeParams struct {
+	FromDay pgtype.Date `json:"from_day"`
+	ToDay   pgtype.Date `json:"to_day"`
+}
+
+type StatsGlobalRangeRow struct {
+	Day                pgtype.Date `json:"day"`
+	Domains            *int32      `json:"domains"`
+	Sinners            *int32      `json:"sinners"`
+	Partial            *int32      `json:"partial"`
+	Heroes             *int32      `json:"heroes"`
+	Gold               *int32      `json:"gold"`
+	Inactive           *int32      `json:"inactive"`
+	Unknown            *int32      `json:"unknown"`
+	Disabled           *int32      `json:"disabled"`
+	BaseSupported      *int32      `json:"base_supported"`
+	WwwSupported       *int32      `json:"www_supported"`
+	NsSupported        *int32      `json:"ns_supported"`
+	MxSupported        *int32      `json:"mx_supported"`
+	ConnSupported      *int32      `json:"conn_supported"`
+	ResourcesSupported *int32      `json:"resources_supported"`
+	TopHeroes          *int32      `json:"top_heroes"`
+	TopNameserver      *int32      `json:"top_nameserver"`
+}
+
+// The §4.10 time-series reads: bounded windows (≤366 rows/yr), ascending;
+// weekly sampling happens API-side over the fetched window.
+func (q *Queries) StatsGlobalRange(ctx context.Context, arg StatsGlobalRangeParams) ([]StatsGlobalRangeRow, error) {
+	rows, err := q.db.Query(ctx, StatsGlobalRange, arg.FromDay, arg.ToDay)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []StatsGlobalRangeRow{}
+	for rows.Next() {
+		var i StatsGlobalRangeRow
+		if err := rows.Scan(
+			&i.Day,
+			&i.Domains,
+			&i.Sinners,
+			&i.Partial,
+			&i.Heroes,
+			&i.Gold,
+			&i.Inactive,
+			&i.Unknown,
+			&i.Disabled,
+			&i.BaseSupported,
+			&i.WwwSupported,
+			&i.NsSupported,
+			&i.MxSupported,
+			&i.ConnSupported,
+			&i.ResourcesSupported,
+			&i.TopHeroes,
+			&i.TopNameserver,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }

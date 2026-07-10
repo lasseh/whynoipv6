@@ -105,6 +105,12 @@ func NewRouter(svc *service.Service, opts ...Options) http.Handler {
 	r.Get("/campaigns/{uuid}/changelog.atom", s.campaignAtom)
 	r.Get("/campaigns/{uuid}/changelog.feed.json", s.campaignJSONFeed)
 
+	// Stats / adoption-over-time (§4.10) — confirmed-state snapshots only.
+	r.Get("/stats/overview", s.getStatsOverview)
+	r.Get("/countries/{code}/stats", s.getCountryStats)
+	r.Get("/campaigns/{uuid}/stats", s.getCampaignStats)
+	r.Get("/asns/{number}/stats", s.getASNStats)
+
 	// The changelog trust surface (§4.8) + per-domain history (§4.9).
 	r.Get("/changelog", s.listChangelog)
 	r.Get("/domains/{host}/changelog", s.listDomainChangelog)

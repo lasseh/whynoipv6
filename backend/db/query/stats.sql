@@ -128,3 +128,33 @@ ON CONFLICT (asn_id, day) DO UPDATE SET
 -- day at 00:00:00Z when NULL (the day-0 seed row).
 -- name: StatsGeneration :one
 SELECT day, generated_at FROM stats_global_daily ORDER BY day DESC LIMIT 1;
+
+-- The §4.10 time-series reads: bounded windows (≤366 rows/yr), ascending;
+-- weekly sampling happens API-side over the fetched window.
+
+-- name: StatsGlobalRange :many
+SELECT day, domains, sinners, partial, heroes, gold, inactive, unknown, disabled,
+       base_supported, www_supported, ns_supported, mx_supported, conn_supported,
+       resources_supported, top_heroes, top_nameserver
+FROM stats_global_daily
+WHERE day >= @from_day AND day <= @to_day
+ORDER BY day ASC;
+
+-- name: StatsCountryRange :many
+SELECT day, domains, sinners, partial, heroes, base_supported, conn_supported
+FROM stats_country_daily
+WHERE country_id = @country_id AND day >= @from_day AND day <= @to_day
+ORDER BY day ASC;
+
+-- name: StatsCampaignRange :many
+SELECT day, domains, v6_ready, sinners, partial, heroes, base_supported,
+       www_supported, ns_supported, mx_supported, conn_supported
+FROM stats_campaign_daily
+WHERE campaign_id = @campaign_id AND day >= @from_day AND day <= @to_day
+ORDER BY day ASC;
+
+-- name: StatsASNRange :many
+SELECT day, domains, v6_domains, sinners, heroes
+FROM stats_asn_daily
+WHERE asn_id = @asn_id AND day >= @from_day::timestamptz AND day <= @to_day::timestamptz
+ORDER BY day ASC;
