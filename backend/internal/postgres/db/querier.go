@@ -38,6 +38,21 @@ type Querier interface {
 	DomainByHost(ctx context.Context, host string) (DomainByHostRow, error)
 	DomainInsertEntity(ctx context.Context, arg DomainInsertEntityParams) (int64, error)
 	DomainMembershipReEntry(ctx context.Context, id int64) error
+	// The attribution stamp: touches ONLY the pivot column, never the
+	// commit/trust machine's columns (06-ingest.md §6.10).
+	DomainStampDNSProvider(ctx context.Context, arg DomainStampDNSProviderParams) error
+	DomainStampHostingProvider(ctx context.Context, arg DomainStampHostingProviderParams) error
+	ProviderAppendSuffixes(ctx context.Context, arg ProviderAppendSuffixesParams) error
+	ProviderByName(ctx context.Context, name string) (ProviderByNameRow, error)
+	// provider remove clears referencing domains first (FK); they re-stamp on
+	// their next scan commit (06-ingest.md §6.11 self-healing).
+	ProviderClearDomains(ctx context.Context, name string) (int64, error)
+	ProviderDelete(ctx context.Context, name string) (int64, error)
+	ProviderDomainCount(ctx context.Context, dnsProviderID *int64) (int64, error)
+	ProviderInsert(ctx context.Context, arg ProviderInsertParams) (int64, error)
+	// db/query/provider.sql — dns_provider reference data + attribution stamp
+	// (05-schema.md — dns_provider; 06-ingest.md §6.10/§6.11).
+	ProviderList(ctx context.Context) ([]DnsProvider, error)
 	TrancoInsertAborted(ctx context.Context, arg TrancoInsertAbortedParams) error
 	TrancoInsertProvenance(ctx context.Context, arg TrancoInsertProvenanceParams) (int64, error)
 	TrancoLastSuccessAt(ctx context.Context) (pgtype.Timestamptz, error)

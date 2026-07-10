@@ -38,6 +38,7 @@ func main() {
 	root.AddCommand(migrateCmd())
 	root.AddCommand(trancoCmd())
 	root.AddCommand(campaignCmd())
+	root.AddCommand(providerCmd())
 
 	if err := root.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, "v6ctl: "+err.Error())
