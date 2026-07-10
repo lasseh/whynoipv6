@@ -1121,7 +1121,11 @@ The pure cursor codec is §7.3; these properties need a live DB and a large seed
 - **Scoped-list plan gate:** `EXPLAIN` the query behind an `/asns/{n}/domains` page and assert
   an index scan on `idx_domain_asn` (`(asn_id, classification, rank)`, 05-schema.md) seeking
   within the ASN — no per-page sort of the ASN's population; same assertion for a
-  `/countries/{code}/domains` page on `idx_domain_country`.
+  `/countries/{code}/domains` page on `idx_domain_country`. Also assert the squirrel-built
+  list SQL (05-schema §10.2 carve-out) contains `rank IS NOT NULL AND NOT disabled` and the
+  class value as **literals** (string assertion on the built query) — bind-parameter
+  predicates cannot satisfy the partial-index implication check and would silently regress
+  to a full scan under pgx's generic plans.
 - **`after_rank` deep-link:** `GET /domains?after_rank=500000` plans as an indexed range scan
   (`WHERE rank > 500000 ORDER BY rank`), returns rows whose **global** rank > N then filtered
   (not "page N of the filter"), and is accepted only on rank-ordered views (a `sort=host` +
@@ -1177,7 +1181,7 @@ happy path plus the one or two error branches that matter; no line-coverage targ
 | `internal/crawler` — commit unit | **Exhaustive** | §5 covers every anti-flap branch, the counting gate, step R, dead trigger, lease fence; §10.1/§10.4 prove the DB write + fence. |
 | `internal/api` — serializers (status-object, envelope, keyset cursor, RFC 9457, badge/CSV/feed/manifest, §5.9 reconstruction) | **Exhaustive** | The contract surface; §7 tables + golden files are pinned and the masking invariant is total over the enum. |
 | `internal/api` — handlers (routing, contract, behavior) | **High** — OpenAPI drift gate (§8.1) + tier/`?class=` equivalence (§8.2) + membership/visibility (§8.3) + masking (§8.4) + trio (§8.5) + mandates/pivot/stats (§8.7–§8.9; §8.6 deleted — `/diff` cut) | The native contract is the whole point; each endpoint is covered by the drift gate plus at least one behavioral fixture. |
-| `internal/postgres` / sqlc queries | **Integration-covered** | Exercised by §9–§10 against real DDL; the claim-plan gate (§9.3) and commit/contention/fence (§10.1/§10.4) are the meaningful assertions, not line coverage of generated code. |
+| `internal/postgres` — sqlc queries + the squirrel list builder (`domainlist.go`, 05-schema §10.2 carve-out) | **Integration-covered** | Exercised by §9–§10 against real DDL; the claim-plan gate (§9.3), the scoped-list plan gate + literal-predicate assertion (§10.7), and commit/contention/fence (§10.1/§10.4) are the meaningful assertions, not line coverage of generated code. |
 | `internal/ingest` (Tranco, campaign sync, resource discovery, attribution) | **High** — 06 acceptance #2–#10 each become a fixture/integration case | Correctness of ranks/membership/dedup/attribution is load-bearing but exercised at the behavioral level. |
 | `internal/lock` (advisory locks) | **Integration smoke** — one two-process `TryRun` contention case (one wins, one gets `ErrHeld`) + one `Run` wait-and-run case | Postgres does the hard part; the test proves the key encoding and skip/wait behavior. |
 | `cmd/api`, `cmd/crawler`, `cmd/v6ctl` wiring; config load; graceful shutdown; dataset export; `crawler_metrics` streaming | **Smoke** | Orchestration/glue; a start-serve-shutdown test and a config-defaults test suffice — the logic they wire is covered in the packages above. |

@@ -327,6 +327,8 @@ Filters are plain query params, aligned with response field names, and **constra
 - **Arbitrary cross-dimension boolean predicates** (`base=supported AND mx=unsupported` with no scope) are not offered — no composite index covers them.
 - **No request-time aggregation over the live `domain` table.** Country/ASN/classification rollups are read from the precomputed `stats_*` daily tables, never `GROUP BY domain` live.
 
+**Construction (Decision).** The list-family queries this grammar describes are the one slice **not** served by static sqlc: they are built at request time with squirrel in the hand-written adapter, emitting the scope predicate, the single residual, the seek tuple, and `AND rank IS NOT NULL AND NOT disabled` as **verbatim literals** — required for the planner's partial-index predicate-implication check (05-schema.md — §10.2 builder carve-out; §2 rule 7). Every non-list query stays sqlc.
+
 *Note.* No `-last_change` sort — no `last_change` column or index exists, and the keyset design requires every sort to bind an indexable strict total order. "What changed recently" is served by the changelog feed (§4.8, indexed on `ts`). A materialized `last_change` is **OPEN-14** (skipped).
 
 ### 3.4 Count strategy

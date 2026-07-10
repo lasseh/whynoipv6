@@ -853,9 +853,13 @@ the OpenAPI contract.
   filter/sort grammar; design §5, §3.2.
 - **Depends:** P4.5, P4.13, P2.4, P1.13
 - **Deliverables:** `internal/api/{domain,country,asn,campaign,resource,provider}.go` and their
-  `db/query/` reads for the one clean resource set (implemented against the P4.5 generated
-  strict interfaces; each endpoint's schema is added to `openapi.yaml` and the drift gate stays
-  green):
+  data access (implemented against the P4.5 generated strict interfaces; each endpoint's schema
+  is added to `openapi.yaml` and the drift gate stays green). Data access is split per the
+  05-schema §10.2 carve-out: detail/curated reads are sqlc `db/query/` queries; the
+  **`/domains` list family** (leaderboards, tier presets, scoped sub-collections, `?q=`) is
+  the **squirrel builder** `internal/postgres/domainlist.go` — literal scope/residual/seek
+  predicates per request (partial-index verbatim rule), rows scanned via
+  `pgx.CollectRows`/`RowToStructByName`:
   - `GET /domains` — the general filterable leaderboard
     (`?class=`/`?country=`/`?asn=`/`?tld=`/`?provider=`/`?gold=`/`?rank_min=`/`?rank_max=`/`?q=`/
     `?sort=`/`?fields=`/`?format=`, with the **`scope-required` guardrail** on bare `flag=`/
@@ -973,7 +977,9 @@ the OpenAPI contract.
   `after_rank`/`around_rank` deep-link range scans (rank-ordered views only); filter-fingerprint
   validation + stale-generation re-anchoring; and the count strategy (`max(rank)` headline
   estimate, `reltuples`/plan-row estimate for filtered/scoped, exact `count` only for the
-  bounded curated sets).
+  bounded curated sets). The decoded seek tuple feeds the P4.3 squirrel list builder
+  (05-schema §10.2 carve-out), which emits it as literal SQL alongside the scope/residual
+  predicates.
 - **Acceptance:** `TestCursor` round-trips all three orderings; a cursor whose filter fingerprint
   `f` mismatches the request → `400 invalid-parameter`; a stale-`g` cursor re-anchors on
   `last_rank`; the null-flag-first ordering never drops the rank-NULL tail; a bare unscoped
