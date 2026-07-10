@@ -61,6 +61,8 @@ type Querier interface {
 	DomainStampHostingProvider(ctx context.Context, arg DomainStampHostingProviderParams) error
 	EnsureResourceHost(ctx context.Context, rhost string) error
 	InsertChangelog(ctx context.Context, arg InsertChangelogParams) error
+	// db/query/metrics.sql — sqlc query source (layout: 05-schema.md §10.2).
+	InsertCrawlerMetrics(ctx context.Context, arg InsertCrawlerMetricsParams) error
 	InsertScan(ctx context.Context, arg InsertScanParams) error
 	InsertScanDetail(ctx context.Context, arg InsertScanDetailParams) error
 	ProviderAppendSuffixes(ctx context.Context, arg ProviderAppendSuffixesParams) error
@@ -77,6 +79,9 @@ type Querier interface {
 	// db/query/check_job.sql — sqlc query source (layout: 05-schema.md §10.2).
 	// Tick step 6 — the 30d check_job purge (04 §9; key: live_check.retention).
 	PurgeCheckJobs(ctx context.Context, retention pgtype.Interval) (int64, error)
+	// The queue-depth probe (04 §15.1): O(due-set) via idx_domain_due, sampled
+	// at most once per checkpoint.
+	QueueDepth(ctx context.Context) (int64, error)
 	RecomputeASNCounters(ctx context.Context) error
 	RecomputeCountryCounters(ctx context.Context) error
 	RecomputeProviderCounters(ctx context.Context) error
