@@ -50,6 +50,7 @@ func run() error {
 		Handler: api.NewRouter(svc, api.Options{
 			PublicBaseURL: cfg.PublicBaseURL,
 			CSVMaxRows:    cfg.Int("export.csv_max_rows"),
+			DatasetsDir:   cfg.DatasetsDir,
 		}),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,

@@ -17,6 +17,7 @@ import (
 type Options struct {
 	PublicBaseURL string // feed ids/links; default https://api.whynoipv6.com
 	CSVMaxRows    int    // export.csv_max_rows; default 10000
+	DatasetsDir   string // DATASETS_DIR; the manifest.json location (§5.3)
 }
 
 // Server carries the handler dependencies.
@@ -38,6 +39,9 @@ func NewRouter(svc *service.Service, opts ...Options) http.Handler {
 	}
 	if s.opts.CSVMaxRows == 0 {
 		s.opts.CSVMaxRows = 10000
+	}
+	if s.opts.DatasetsDir == "" {
+		s.opts.DatasetsDir = "/var/lib/whynoipv6/datasets"
 	}
 	r := chi.NewRouter()
 
@@ -109,6 +113,9 @@ func NewRouter(svc *service.Service, opts ...Options) http.Handler {
 	// suffix-less path is a route-miss 404. Hosts contain dots, so the
 	// suffix is split in the dispatcher, not the chi pattern.
 	r.Get("/badge/{file}", s.getBadge)
+
+	// The datasets index (§5.3); the files themselves are nginx-served.
+	r.Get("/datasets", s.getDatasets)
 
 	// Stats / adoption-over-time (§4.10) — confirmed-state snapshots only.
 	r.Get("/stats/overview", s.getStatsOverview)

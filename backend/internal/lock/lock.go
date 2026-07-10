@@ -19,9 +19,10 @@ const ClassID int32 = 60660
 
 // The complete job registry (04 §10).
 const (
-	JobDailyTick    int32 = 1 // the daily tick, all steps, one lock for the whole sequence
-	JobTrancoImport int32 = 2 // Tranco import (coordinator cycle + `v6ctl tranco import`)
-	JobCampaignSync int32 = 3 // campaign sync (tick step 5 + webhook + `v6ctl campaign sync`)
+	JobDailyTick     int32 = 1 // the daily tick, all steps, one lock for the whole sequence
+	JobTrancoImport  int32 = 2 // Tranco import (coordinator cycle + `v6ctl tranco import`)
+	JobCampaignSync  int32 = 3 // campaign sync (tick step 5 + webhook + `v6ctl campaign sync`)
+	JobDatasetExport int32 = 4 // nightly dataset snapshot export (`v6ctl export`)
 )
 
 // JobName returns the log name for a job key.
@@ -33,6 +34,8 @@ func JobName(job int32) string {
 		return "tranco_import"
 	case JobCampaignSync:
 		return "campaign_sync"
+	case JobDatasetExport:
+		return "dataset_export"
 	default:
 		return fmt.Sprintf("job_%d", job)
 	}
