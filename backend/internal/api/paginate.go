@@ -26,6 +26,15 @@ const (
 	MaxLimit     = 200
 )
 
+// Query-param names shared across the paging machinery.
+const (
+	paramCursor     = "cursor"
+	paramLimit      = "limit"
+	paramAfterRank  = "after_rank"
+	paramAroundRank = "around_rank"
+	paramFlag       = "flag"
+)
+
 // Cursor is the decoded opaque token.
 type Cursor struct {
 	V int    `json:"v"`
@@ -137,7 +146,7 @@ func FilterFingerprint(q url.Values) string {
 	keys := make([]string, 0, len(q))
 	for k := range q {
 		switch k {
-		case "cursor", "limit", "after_rank", "around_rank":
+		case paramCursor, paramLimit, paramAfterRank, paramAroundRank:
 			continue // paging params are not filters
 		}
 		keys = append(keys, k)
@@ -154,7 +163,7 @@ func FilterFingerprint(q url.Values) string {
 
 // ParseLimit applies the default/cap (07 §3.2).
 func ParseLimit(q url.Values) (int, error) {
-	raw := q.Get("limit")
+	raw := q.Get(paramLimit)
 	if raw == "" {
 		return DefaultLimit, nil
 	}
@@ -171,7 +180,7 @@ func ParseLimit(q url.Values) (int, error) {
 // ParseAfterRank handles the deep-link escape hatch — rank-ordered views
 // only; the host ordering has no random-access param (07 §3.2).
 func ParseAfterRank(q url.Values, sortKey string) (*int32, error) {
-	raw := q.Get("after_rank")
+	raw := q.Get(paramAfterRank)
 	if raw == "" {
 		return nil, nil
 	}
@@ -188,7 +197,7 @@ func ParseAfterRank(q url.Values, sortKey string) (*int32, error) {
 
 // Residual params: the unindexed-or-selective predicate class that requires
 // an indexed scope (07 §3.3 guardrail).
-var residualParams = []string{"flag", "base", "www", "ns", "mx", "conn", "resources", "tld", "provider", "hosting"}
+var residualParams = []string{paramFlag, "base", "www", "ns", "mx", "conn", "resources", "tld", "provider", "hosting"}
 
 // scopeParams are the indexed prefilters that satisfy the guardrail.
 var scopeParams = []string{"class", "country", "asn"}
