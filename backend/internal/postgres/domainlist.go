@@ -175,7 +175,9 @@ func buildDomainList(f *DomainListFilter, sortKey ListSort, seek *DomainSeek, af
 		}
 		q = q.OrderBy("d.host ASC")
 	case ListSortRankDesc:
-		if seek != nil && seek.Rank != nil {
+		if afterRank != nil {
+			q = q.Where(sq.Expr(fmt.Sprintf("d.rank < %d", *afterRank)))
+		} else if seek != nil && seek.Rank != nil {
 			q = q.Where(sq.Expr(fmt.Sprintf("(d.rank, d.id) < (%d, %d)", *seek.Rank, seek.ID)))
 		}
 		q = q.OrderBy("d.rank DESC", "d.id DESC")

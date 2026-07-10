@@ -125,11 +125,10 @@ func TestETLDPlusOne(t *testing.T) {
 // here with a justification.
 func TestNoStrayHostLowercasing(t *testing.T) {
 	allowed := map[string]string{
-		"internal/domain/host.go":       "the sanctioned Canonicalize step 3",
-		"internal/config/config.go":     "LOG_LEVEL parsing, not a hostname",
-		"internal/campaign/parse.go":    "tag/uuid normalization, not a hostname",
-		"internal/campaign/validate.go": "uuid normalization on the diff rule, not a hostname",
-		"internal/ingest/provider.go":   "operator-entered NS suffixes normalized at the single write path",
+		"internal/domain/host.go":     "the sanctioned Canonicalize step 3",
+		"internal/config/config.go":   "LOG_LEVEL parsing, not a hostname",
+		"internal/campaign/parse.go":  "tag/uuid normalization, not a hostname",
+		"internal/ingest/provider.go": "operator-entered NS suffixes normalized at the single write path",
 		// Lifted engine files (01-engine.md): behavior-identical lift; their
 		// lowercasing predates Canonicalize and never reaches a DB write.
 		"internal/checker/resource_discovery.go": "lifted tokenizer hostname folding (01 §11.9)",

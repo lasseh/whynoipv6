@@ -20,11 +20,15 @@ func (s *Server) getDatasets(w http.ResponseWriter, r *http.Request) {
 		ManifestUnavailable(w, r)
 		return
 	}
+	// Parse only to validate; serve the exporter's bytes verbatim so a
+	// schema_version bump never silently drops fields here.
 	var m export.Manifest
 	if err := json.Unmarshal(raw, &m); err != nil || m.SchemaVersion == 0 {
 		ManifestUnavailable(w, r)
 		return
 	}
 	w.Header().Set("Cache-Control", "public, max-age=300")
-	WriteJSON(w, http.StatusOK, m)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(raw)
 }

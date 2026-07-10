@@ -59,18 +59,23 @@ func TestLiveCheckEnsureDomain(t *testing.T) {
 		t.Error("registrable parent row must not be created")
 	}
 
-	// Subdomain whose parent ALREADY exists links to it.
-	seedDue(t, pool, 1) // d1.example
-	kind, err = lc.ensureDomain(ctx, "api.d1.example")
+	// Subdomain whose parent ALREADY exists links to it (nyapex.no was
+	// created above).
+	kind, err = lc.ensureDomain(ctx, "api.nyapex.no")
 	if err != nil || kind != "subdomain" {
 		t.Fatalf("linked subdomain: kind=%s err=%v", kind, err)
 	}
 	var linked *int64
-	if err := pool.QueryRow(ctx, "SELECT parent_id FROM domain WHERE host = 'api.d1.example'").Scan(&linked); err != nil {
+	if err := pool.QueryRow(ctx, "SELECT parent_id FROM domain WHERE host = 'api.nyapex.no'").Scan(&linked); err != nil {
 		t.Fatal(err)
 	}
 	if linked == nil {
 		t.Error("existing parent must be linked")
+	}
+
+	// An unknown TLD is rejected — no wildcard PSL rule (06 §4.2).
+	if _, err := lc.ensureDomain(ctx, "host.unknowntld999"); err == nil {
+		t.Error("unknown TLD must fail PSL evaluation")
 	}
 
 	// Idempotent on an existing host: returns its kind, no duplicate.

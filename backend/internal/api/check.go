@@ -263,14 +263,17 @@ func confirmedBlock(row *db.DomainConfirmedRow) *CheckConfirmed {
 	}
 }
 
-// ratePrefix keys the limiter: /64 for IPv6, exact address for IPv4 (§6.3).
+// ratePrefix keys the limiter: /64 for IPv6, exact address for IPv4
+// (§6.3). IPv4-mapped forms are unmapped first — Prefix(32) on the mapped
+// 128-bit form would collapse every ::ffff:a.b.c.d client into ::/32.
 func ratePrefix(ip string) (netip.Prefix, bool) {
 	addr, err := netip.ParseAddr(ip)
 	if err != nil {
 		return netip.Prefix{}, false
 	}
+	addr = addr.Unmap()
 	bits := 32
-	if addr.Is6() && !addr.Is4In6() {
+	if addr.Is6() {
 		bits = 64
 	}
 	p, err := addr.Prefix(bits)

@@ -196,7 +196,7 @@ func (e *Exporter) Run(ctx context.Context, generation int32) error {
 	if err := e.prune(now); err != nil {
 		return err
 	}
-	return e.writeManifest(now, generation)
+	return e.writeManifest(ctx, now, generation)
 }
 
 func (e *Exporter) fetch(ctx context.Context, where string) ([]Row, error) {
@@ -369,7 +369,7 @@ type ManifestEntry struct {
 	SHA256SumsURL  string   `json:"sha256sums_url"`
 }
 
-func (e *Exporter) writeManifest(now time.Time, generation int32) error {
+func (e *Exporter) writeManifest(ctx context.Context, now time.Time, generation int32) error {
 	entries, err := os.ReadDir(e.Dir)
 	if err != nil {
 		return err
@@ -398,12 +398,21 @@ func (e *Exporter) writeManifest(now time.Time, generation int32) error {
 			SHA256SumsURL:  "/datasets/" + d + "/SHA256SUMS",
 		}
 	}
+	// Cite the specific Tranco list ID (07 §5.3); the generic string only
+	// when no import has succeeded yet.
+	attribution := "Data: whynoipv6.com (CC-BY-NC-4.0). Ranks: Tranco list."
+	var listID string
+	if err := e.Pool.QueryRow(ctx,
+		"SELECT list_id FROM tranco_import WHERE NOT aborted ORDER BY imported_at DESC LIMIT 1").
+		Scan(&listID); err == nil && listID != "" {
+		attribution = "Data: whynoipv6.com (CC-BY-NC-4.0). Ranks: Tranco list " + listID + "."
+	}
 	m := Manifest{
 		SchemaVersion: SchemaVersion,
 		GeneratedAt:   now.Format(time.RFC3339),
 		Generation:    generation,
 		License:       license,
-		Attribution:   "Data: whynoipv6.com (CC-BY-NC-4.0). Ranks: Tranco list.",
+		Attribution:   attribution,
 		Latest: ManifestLatest{
 			Date: snaps[0].Date, Path: snaps[0].Path, DatapackageURL: snaps[0].DatapackageURL,
 		},

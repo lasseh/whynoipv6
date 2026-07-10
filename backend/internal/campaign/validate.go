@@ -155,10 +155,9 @@ func Validate(ctx context.Context, repo, base string, maxDomains int) (*Validate
 
 		// UUID trust (CI mode only).
 		if base != "" {
+			// Byte-identical comparison (06 §4.2): read the raw uuid text on
+			// both sides — never the parser-normalized form.
 			headUUID := rawFileUUID(path)
-			if parsed != nil {
-				headUUID = parsed.UUID
-			}
 			baseUUID := gitFileUUID(ctx, repo, base, ch.name)
 			switch ch.status {
 			case 'A':
@@ -254,7 +253,7 @@ func rawFileUUID(path string) string {
 		return ""
 	}
 	if m := uuidLineRe.FindSubmatch(raw); m != nil {
-		return strings.ToLower(string(m[1]))
+		return string(m[1])
 	}
 	return ""
 }
@@ -267,7 +266,7 @@ func gitFileUUID(ctx context.Context, repo, base, name string) string {
 		return ""
 	}
 	if m := uuidLineRe.FindStringSubmatch(out); m != nil {
-		return strings.ToLower(m[1])
+		return m[1]
 	}
 	return ""
 }

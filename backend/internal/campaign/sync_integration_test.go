@@ -38,8 +38,8 @@ func run(t *testing.T, pool *pgxpool.Pool, dir string, adopt bool) *Report {
 const campA = `title: Campaign A
 description: First fixture campaign.
 domains:
-    - a-one.example
-    - api.a-two.example
+    - a-one.no
+    - api.a-two.no
 `
 
 // TestCampaignSync covers the 06-ingest §9.6 matrix on a fixture repo.
@@ -72,7 +72,7 @@ func TestCampaignSync(t *testing.T) {
 	var createdBy, kind string
 	var parentID *int64
 	if err := pool.QueryRow(ctx,
-		"SELECT created_by::text, kind::text FROM domain WHERE host='a-two.example'").
+		"SELECT created_by::text, kind::text FROM domain WHERE host='a-two.no'").
 		Scan(&createdBy, &kind); err != nil {
 		t.Fatalf("parent row: %v", err)
 	}
@@ -80,7 +80,7 @@ func TestCampaignSync(t *testing.T) {
 		t.Errorf("auto-created parent = %s/%s, want parent_link/apex", createdBy, kind)
 	}
 	if err := pool.QueryRow(ctx,
-		"SELECT kind::text, parent_id FROM domain WHERE host='api.a-two.example'").
+		"SELECT kind::text, parent_id FROM domain WHERE host='api.a-two.no'").
 		Scan(&kind, &parentID); err != nil {
 		t.Fatalf("subdomain row: %v", err)
 	}
@@ -141,7 +141,7 @@ func TestCampaignSync(t *testing.T) {
 description: Unknown uuid fixture.
 uuid: 3b3b3b3b-1111-2222-3333-444444444444
 domains:
-    - b-one.example
+    - b-one.no
 `)
 	rep = run(t, pool, dir, false)
 	if _, ok := rep.RejectedFiles["b.yml"]; !ok {
@@ -157,7 +157,7 @@ domains:
 description: Copied uuid fixture.
 uuid: 3b3b3b3b-1111-2222-3333-444444444444
 domains:
-    - b-two.example
+    - b-two.no
 `)
 	rep = run(t, pool, dir, false)
 	if _, ok := rep.RejectedFiles["b-copy.yml"]; !ok {
@@ -173,7 +173,7 @@ domains:
 	// --- membership re-entry: delisted member re-enables on re-add.
 	if _, err := pool.Exec(ctx, `UPDATE domain SET disabled=true, disabled_reason='delisted',
 		disabled_at=now(), orphaned_at=now(), next_check_at=now()+interval '9 hours'
-		WHERE host='a-one.example'`); err != nil {
+		WHERE host='a-one.no'`); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := pool.Exec(ctx, "DELETE FROM campaign_domain"); err != nil {
@@ -184,7 +184,7 @@ domains:
 		t.Errorf("membership re-add count = %d, want 3", rep.MembershipAdds)
 	}
 	row := pool.QueryRow(ctx,
-		"SELECT disabled, next_check_at <= now() FROM domain WHERE host='a-one.example'")
+		"SELECT disabled, next_check_at <= now() FROM domain WHERE host='a-one.no'")
 	var dueNow bool
 	if err := row.Scan(&disabled, &dueNow); err != nil {
 		t.Fatal(err)

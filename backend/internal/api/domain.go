@@ -14,6 +14,8 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/lasseh/whynoipv6/internal/checker"
+	"github.com/lasseh/whynoipv6/internal/crawler"
 	"github.com/lasseh/whynoipv6/internal/domain"
 	"github.com/lasseh/whynoipv6/internal/postgres"
 	db "github.com/lasseh/whynoipv6/internal/postgres/db"
@@ -573,9 +575,20 @@ func (s *Server) getDomain(w http.ResponseWriter, r *http.Request) {
 			InternalError(w, r)
 			return
 		}
+		// Evidence is the §5.1.3 result shape via the shared mapper — the
+		// same rendering as the live-check dedupe path, never the raw
+		// engine serialization (07 §4.3).
 		if raw != nil {
-			ev := json.RawMessage(raw)
-			d.Evidence = &ev
+			var sr checker.ScanResult
+			if err := json.Unmarshal(raw, &sr); err == nil {
+				scanTS := row.LastCheckedAt.Time.UTC()
+				links := crawler.LiveLinks(r.Context(), s.svc.Pool, sr, s.opts.ResourcesEnabled)
+				mapped := crawler.MapLiveResult(domain.Kind(row.Kind), sr, scanTS, scanTS, links, s.opts.ResourcesEnabled)
+				if evRaw, err := json.Marshal(mapped); err == nil {
+					ev := json.RawMessage(evRaw)
+					d.Evidence = &ev
+				}
+			}
 		}
 	}
 

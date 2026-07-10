@@ -93,7 +93,7 @@ func (lc *LiveChecker) workerLoop(ctx context.Context) {
 func (lc *LiveChecker) process(ctx context.Context, id int64, host string) {
 	defer func() {
 		if rec := recover(); rec != nil {
-			slog.Error("live check panicked", "host", host, "panic", rec)
+			slog.Error("live check panicked", "domain", host, "panic", rec)
 			if err := lc.Q.CheckJobFail(ctx, db.CheckJobFailParams{ID: id, Error: ptr("internal error")}); err != nil {
 				slog.Error("check-job fail write failed", "err", err.Error())
 			}
@@ -102,14 +102,22 @@ func (lc *LiveChecker) process(ctx context.Context, id int64, host string) {
 
 	kind, err := lc.ensureDomain(ctx, host)
 	if err != nil {
-		slog.Error("live check ensure-domain failed", "host", host, "err", err.Error())
+		slog.Error("live check ensure-domain failed", "domain", host, "err", err.Error())
 		_ = lc.Q.CheckJobFail(ctx, db.CheckJobFailParams{ID: id, Error: ptr("internal error")})
 		return
 	}
 
 	runCtx, cancel := context.WithTimeout(ctx, lc.Cfg.JobBudget)
 	sr := lc.Runner.Run(runCtx, host, checker.Kind(kind))
+	budgetBlown := errors.Is(runCtx.Err(), context.DeadlineExceeded)
 	cancel()
+	if budgetBlown {
+		// §5.1.5 step 4: a timed-out run fails — never a partial `done`.
+		if err := lc.Q.CheckJobFail(ctx, db.CheckJobFailParams{ID: id, Error: ptr("timed out")}); err != nil && ctx.Err() == nil {
+			slog.Error("check-job fail write failed", "err", err.Error())
+		}
+		return
+	}
 
 	links := LiveLinks(ctx, lc.Pool, sr, lc.Cfg.ResourcesEnabled)
 	res := MapLiveResult(kind, sr, lc.Preflight.LastPass(), time.Now().UTC(), links, lc.Cfg.ResourcesEnabled)
@@ -193,16 +201,30 @@ func LiveLinks(ctx context.Context, pool *pgxpool.Pool, sr checker.ScanResult, e
 			}
 		}
 	}
+	if len(rawHosts) == 0 {
+		return nil
+	}
+	// One set-based probe, not a per-host loop.
+	byHost := map[string]domain.IPv6Status{}
+	rows, err := pool.Query(ctx,
+		"SELECT host, aaaa_status::text FROM resource_host WHERE host = ANY($1) AND aaaa_status IS NOT NULL",
+		rawHosts)
+	if err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var h, status string
+			if rows.Scan(&h, &status) == nil {
+				byHost[h] = domain.IPv6Status(status)
+			}
+		}
+	}
 	links := make([]LinkedResource, 0, len(rawHosts))
 	for _, h := range rawHosts {
-		var status *string
-		err := pool.QueryRow(ctx, "SELECT aaaa_status::text FROM resource_host WHERE host = $1", h).Scan(&status)
-		if err != nil || status == nil {
-			links = append(links, LinkedResource{})
-			continue
+		if s, ok := byHost[h]; ok {
+			links = append(links, LinkedResource{AAAAStatus: &s})
+		} else {
+			links = append(links, LinkedResource{}) // missing/unswept → error in the roll-up
 		}
-		s := domain.IPv6Status(*status)
-		links = append(links, LinkedResource{AAAAStatus: &s})
 	}
 	return links
 }
