@@ -14,9 +14,10 @@ import (
 	db "github.com/lasseh/whynoipv6/internal/postgres/db"
 )
 
-// tickAt is the daily-tick fire time, UTC — a compile-time constant, not
-// config (04 §9). Tests invoke Tick.Run directly.
-const tickAt = "03:30"
+// TickAt is the daily-tick fire time, UTC — a compile-time constant, not
+// config (04 §9). Consumed by the coordinator goroutine (cmd/crawler);
+// tests invoke Tick.Run directly.
+const TickAt = "03:30"
 
 // v6ctlLockWait is the hardcoded blocking-lock wait for explicitly
 // requested singleton runs (04 §10).
