@@ -1,0 +1,31 @@
+-- 000001_base_schema.down.sql — dev-only full teardown (reverse dependency order).
+DROP TABLE IF EXISTS unbound_stats;
+DROP TABLE IF EXISTS crawler_metrics;
+DROP TABLE IF EXISTS changelog;
+DROP TABLE IF EXISTS scan_detail;
+DROP TABLE IF EXISTS scan;
+DROP TABLE IF EXISTS stats_asn_daily;
+DROP TABLE IF EXISTS stats_campaign_daily;
+DROP TABLE IF EXISTS stats_country_daily;
+DROP TABLE IF EXISTS stats_global_daily;
+DROP TABLE IF EXISTS tranco_import;
+DROP TABLE IF EXISTS top_shame;
+DROP TABLE IF EXISTS check_job;
+DROP TABLE IF EXISTS service_candidate;
+DROP TABLE IF EXISTS domain_resource;
+DROP TABLE IF EXISTS resource_host;
+DROP TABLE IF EXISTS campaign_domain;
+DROP TABLE IF EXISTS campaign;
+DROP TABLE IF EXISTS domain;
+DROP TABLE IF EXISTS dns_provider;
+DROP TABLE IF EXISTS country;
+DROP TABLE IF EXISTS asn;
+DROP TYPE IF EXISTS check_job_status;
+DROP TYPE IF EXISTS resource_source;
+DROP TYPE IF EXISTS disabled_reason;
+DROP TYPE IF EXISTS classification;
+DROP TYPE IF EXISTS created_by;
+DROP TYPE IF EXISTS domain_kind;
+DROP TYPE IF EXISTS observation;
+DROP TYPE IF EXISTS ipv6_status;
+-- Extensions are deliberately NOT dropped (shared server objects).
