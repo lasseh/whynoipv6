@@ -125,9 +125,10 @@ func TestETLDPlusOne(t *testing.T) {
 // here with a justification.
 func TestNoStrayHostLowercasing(t *testing.T) {
 	allowed := map[string]string{
-		"internal/domain/host.go":    "the sanctioned Canonicalize step 3",
-		"internal/config/config.go":  "LOG_LEVEL parsing, not a hostname",
-		"internal/campaign/parse.go": "tag/uuid normalization, not a hostname",
+		"internal/domain/host.go":     "the sanctioned Canonicalize step 3",
+		"internal/config/config.go":   "LOG_LEVEL parsing, not a hostname",
+		"internal/campaign/parse.go":  "tag/uuid normalization, not a hostname",
+		"internal/ingest/provider.go": "operator-entered NS suffixes normalized at the single write path",
 	}
 	root := moduleRoot(t)
 	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {

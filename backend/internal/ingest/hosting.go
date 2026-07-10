@@ -9,6 +9,8 @@ import (
 
 // cdnSuffixTags maps the checker's fixed CDN-suffix list (01-engine.md §11.2,
 // single-sourced here per 06-ingest.md §6.10) to normalized hosting tags.
+//
+//nolint:goconst // a literal data table; repeated tags are values
 var cdnSuffixTags = map[string]string{
 	"cloudfront.net":        "cloudfront",
 	"cloudflare.net":        "cloudflare",

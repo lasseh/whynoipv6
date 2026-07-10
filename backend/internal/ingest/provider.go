@@ -6,8 +6,9 @@ import (
 	"os"
 	"strings"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"gopkg.in/yaml.v3"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	db "github.com/lasseh/whynoipv6/internal/postgres/db"
 )
