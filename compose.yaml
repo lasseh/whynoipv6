@@ -1,0 +1,64 @@
+services:
+  db:
+    image: timescale/timescaledb:latest-pg18
+    environment:
+      POSTGRES_USER: whynoipv6
+      POSTGRES_PASSWORD: whynoipv6
+      POSTGRES_DB: whynoipv6
+    ports: ["5432:5432"]
+    volumes: ["pgdata:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U whynoipv6"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  unbound1:
+    image: mvance/unbound:latest
+    volumes: ["./deploy/unbound/dev/unbound1.conf:/opt/unbound/etc/unbound/unbound.conf:ro"]
+    ports: ["5301:53/udp", "5301:53/tcp"]
+
+  unbound2:
+    image: mvance/unbound:latest
+    volumes: ["./deploy/unbound/dev/unbound2.conf:/opt/unbound/etc/unbound/unbound.conf:ro"]
+    ports: ["5302:53/udp", "5302:53/tcp"]
+
+  migrate:
+    build: {context: ./backend, dockerfile: Dockerfile}
+    entrypoint: ["/v6ctl", "migrate", "up"]
+    environment:
+      DATABASE_URL: postgres://whynoipv6:whynoipv6@db:5432/whynoipv6?sslmode=disable
+    depends_on:
+      db: {condition: service_healthy}
+
+  api:
+    build: {context: ./backend, dockerfile: Dockerfile}
+    entrypoint: ["/api"]
+    ports: ["8080:8080"]
+    environment:
+      DATABASE_URL: postgres://whynoipv6:whynoipv6@db:5432/whynoipv6?sslmode=disable
+      API_LISTEN: ":8080"                      # dev override: non-loopback so host can reach it
+      DATASETS_DIR: /var/lib/whynoipv6/datasets
+      LOG_LEVEL: debug
+    volumes: ["datasets:/var/lib/whynoipv6/datasets"]
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+
+  crawler:
+    build: {context: ./backend, dockerfile: Dockerfile}
+    entrypoint: ["/crawler"]
+    environment:
+      DATABASE_URL: postgres://whynoipv6:whynoipv6@db:5432/whynoipv6?sslmode=disable
+      RESOLVER_BULK_UPSTREAMS: "unbound1:53,unbound2:53"
+      GEOIP_PATH: /var/lib/GeoIP
+      LOG_LEVEL: debug
+    volumes:
+      - "geoip:/var/lib/GeoIP:ro"
+      - "datasets:/var/lib/whynoipv6/datasets"
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+
+volumes:
+  pgdata:
+  datasets:
+  geoip:

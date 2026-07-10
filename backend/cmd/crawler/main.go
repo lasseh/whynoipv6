@@ -1,4 +1,15 @@
-// Command crawler is part of the whynoipv6 backend.
+// Command crawler is the autonomous scanning daemon of the whynoipv6 backend.
 package main
 
-func main() {}
+import (
+	"context"
+	"os"
+	"os/signal"
+	"syscall"
+)
+
+func main() {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	<-ctx.Done()
+}
