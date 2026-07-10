@@ -50,3 +50,22 @@ RETURNING id;
 
 -- name: ASNIDByNumber :one
 SELECT id FROM asn WHERE number = $1;
+
+-- The API network leaderboard (07 §4.6): keyset over (count, number) desc;
+-- the ILIKE arm serves ?q= substring match.
+-- name: ASNByNumber :one
+SELECT number, name, count_total, count_v6 FROM asn WHERE number = @number;
+
+-- name: ASNLeaderboardByV6 :many
+SELECT number, name, count_total, count_v6 FROM asn
+WHERE (@q::TEXT = '' OR name ILIKE '%' || @q || '%')
+  AND (NOT @with_seek::BOOL OR (count_v6, number) < (@seek_count::INT, @seek_number::BIGINT))
+ORDER BY count_v6 DESC, number DESC
+LIMIT @lim;
+
+-- name: ASNLeaderboardByTotal :many
+SELECT number, name, count_total, count_v6 FROM asn
+WHERE (@q::TEXT = '' OR name ILIKE '%' || @q || '%')
+  AND (NOT @with_seek::BOOL OR (count_total, number) < (@seek_count::INT, @seek_number::BIGINT))
+ORDER BY count_total DESC, number DESC
+LIMIT @lim;

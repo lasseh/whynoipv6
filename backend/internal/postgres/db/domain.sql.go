@@ -484,6 +484,17 @@ func (q *Queries) DomainMembershipReEntry(ctx context.Context, id int64) error {
 	return err
 }
 
+const SubdomainExactCount = `-- name: SubdomainExactCount :one
+SELECT count(*) FROM domain WHERE parent_id = $1 AND NOT disabled
+`
+
+func (q *Queries) SubdomainExactCount(ctx context.Context, parentID *int64) (int64, error) {
+	row := q.db.QueryRow(ctx, SubdomainExactCount, parentID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const SweepClearOrphans = `-- name: SweepClearOrphans :execrows
 
 UPDATE domain d

@@ -260,7 +260,20 @@ func (s *Server) serveDomainList(w http.ResponseWriter, r *http.Request, preset 
 		q[k] = vs
 	}
 
-	if err := ValidateResiduals(q); err != nil {
+	// The §3.3 guardrail. A provider preset comes from the
+	// /providers/{id}/domains path, where dns_provider_id is the indexed
+	// scope itself (07 §4.6) — not a residual, and it satisfies the scope
+	// for one user residual, like the country/asn paths.
+	vq := q
+	pathScoped := preset.Get(paramProvider) != ""
+	if pathScoped {
+		vq = url.Values{}
+		for k, vs := range q {
+			vq[k] = vs
+		}
+		vq.Del(paramProvider)
+	}
+	if err := ValidateResiduals(vq, pathScoped); err != nil {
 		ScopeRequired(w, r, strings.TrimPrefix(err.Error(), "scope required: "))
 		return
 	}

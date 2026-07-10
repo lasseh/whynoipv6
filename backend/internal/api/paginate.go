@@ -18,6 +18,11 @@ const (
 	SortRankDesc   = "-rank"      // (rank, id) descending
 	SortHost       = "host"       // host alone (campaign members, ?q= search)
 	SortDependents = "dependents" // (rank IS NULL, rank, id) — null-flag-first
+
+	// The /asns leaderboard orderings (07 §4.6): (count, number) descending;
+	// the count rides the Seek.Rank slot, the number rides Seek.ID.
+	SortCountV6    = "count_v6"
+	SortCountTotal = "count_total"
 )
 
 // Limit caps (07 §3.2).
@@ -99,7 +104,7 @@ func DecodeCursor(token, wantSort, wantFingerprint string, currentG int32) (*Cur
 func (c *Cursor) SeekTuple() (Seek, error) {
 	var s Seek
 	switch c.S {
-	case SortRank, SortRankDesc:
+	case SortRank, SortRankDesc, SortCountV6, SortCountTotal:
 		if len(c.K) != 2 {
 			return s, fmt.Errorf("%w: seek tuple shape", ErrCursorInvalid)
 		}
@@ -211,8 +216,10 @@ var scopeParams = []string{paramClass, paramCountry, paramASN}
 var ErrScopeRequired = errors.New("scope required")
 
 // ValidateResiduals enforces the §3.3 guardrail: a residual filter needs an
-// indexed scope, and at most ONE residual per request.
-func ValidateResiduals(q url.Values) error {
+// indexed scope, and at most ONE residual per request. pathScoped marks
+// requests whose route already binds an indexed scope (the
+// /providers/{id}/domains path — 07 §4.6).
+func ValidateResiduals(q url.Values, pathScoped bool) error {
 	var present []string
 	for _, p := range residualParams {
 		if q.Get(p) != "" {
@@ -225,6 +232,9 @@ func ValidateResiduals(q url.Values) error {
 	if len(present) > 1 {
 		return fmt.Errorf("%w: at most one of %s may be combined; use the indexed axes (class, country, asn) instead",
 			ErrScopeRequired, strings.Join(present, ", "))
+	}
+	if pathScoped {
+		return nil
 	}
 	for _, s := range scopeParams {
 		if q.Get(s) != "" {

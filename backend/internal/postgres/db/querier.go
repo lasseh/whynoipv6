@@ -11,21 +11,31 @@ import (
 )
 
 type Querier interface {
+	// The API network leaderboard (07 §4.6): keyset over (count, number) desc;
+	// the ILIKE arm serves ?q= substring match.
+	ASNByNumber(ctx context.Context, number int64) (ASNByNumberRow, error)
 	// ASN auto-registration (06-ingest.md §6.3): pool-side, before the commit
 	// transaction (03 §3 A). ON CONFLICT DO NOTHING + re-read; names are never
 	// updated on later scans.
 	ASNEnsure(ctx context.Context, arg ASNEnsureParams) (int32, error)
 	ASNIDByNumber(ctx context.Context, number int64) (int32, error)
+	ASNLeaderboardByTotal(ctx context.Context, arg ASNLeaderboardByTotalParams) ([]ASNLeaderboardByTotalRow, error)
+	ASNLeaderboardByV6(ctx context.Context, arg ASNLeaderboardByV6Params) ([]ASNLeaderboardByV6Row, error)
 	// db/query/asn.sql — sqlc query source (layout: 05-schema.md §10.2).
 	// Sentinel lookup: binaries resolve the sentinel ASN once at startup by
 	// lookup, never by literal id (05-schema.md §5).
 	ASNSentinelID(ctx context.Context) (int32, error)
 	CampaignAddMember(ctx context.Context, arg CampaignAddMemberParams) (int64, error)
+	CampaignAdoption(ctx context.Context, campaignID int32) (CampaignAdoptionRow, error)
 	// db/query/campaign.sql — sqlc query source (layout: 05-schema.md §10.2).
 	CampaignByUUID(ctx context.Context, uuid pgtype.UUID) (CampaignByUUIDRow, error)
 	CampaignDisableAbsent(ctx context.Context, dollar_1 []pgtype.UUID) ([]CampaignDisableAbsentRow, error)
 	CampaignInsert(ctx context.Context, arg CampaignInsertParams) (int32, error)
 	CampaignMembers(ctx context.Context, campaignID int32) ([]int64, error)
+	CampaignPublicDetail(ctx context.Context, uuid pgtype.UUID) (CampaignPublicDetailRow, error)
+	// The public campaign surface (07 §4.7): exact member counts (bounded sets),
+	// ?tag= via the GIN-indexed tags array.
+	CampaignPublicList(ctx context.Context, tag string) ([]CampaignPublicListRow, error)
 	CampaignRemoveMembersNotIn(ctx context.Context, arg CampaignRemoveMembersNotInParams) (int64, error)
 	CampaignUUIDBySourceFile(ctx context.Context, sourceFile *string) (pgtype.UUID, error)
 	CampaignUpdateFromFile(ctx context.Context, arg CampaignUpdateFromFileParams) (int32, error)
@@ -39,10 +49,13 @@ type Querier interface {
 	// db/query/commit.sql — the per-domain commit write unit (03-state-machine.md
 	// §12). One pgx.Batch in one pgx.Tx; statement 1 is the lease-fenced UPDATE.
 	CommitDomain(ctx context.Context, arg CommitDomainParams) (int64, error)
+	// The API country representations (07 §4.5).
+	CountryByCode(ctx context.Context, code interface{}) (CountryByCodeRow, error)
 	CountryCodeMap(ctx context.Context) ([]CountryCodeMapRow, error)
 	CountryIDByCode(ctx context.Context, code interface{}) (int32, error)
 	// Insert-time ccTLD attribution probe (06-ingest.md §6.5): '.NO'-form input.
 	CountryIDByTLD(ctx context.Context, tld *string) (int32, error)
+	CountryLeaderboard(ctx context.Context) ([]CountryLeaderboardRow, error)
 	// db/query/country.sql — sqlc query source (layout: 05-schema.md §10.2).
 	// Sentinel lookup: binaries resolve the sentinel country once at startup by
 	// lookup, never by literal id (05-schema.md §5).
@@ -62,6 +75,10 @@ type Querier interface {
 	DomainEnable(ctx context.Context, host string) (int64, error)
 	DomainInsertEntity(ctx context.Context, arg DomainInsertEntityParams) (int64, error)
 	DomainMembershipReEntry(ctx context.Context, id int64) error
+	// Resource-dependency reads (07 §4.11). Forward list is bounded small
+	// (exact count, no cursor); the reverse dependents list is served by the
+	// domainlist builder.
+	DomainResourceList(ctx context.Context, domainID int64) ([]DomainResourceListRow, error)
 	// The attribution stamp: touches ONLY the pivot column, never the
 	// commit/trust machine's columns (06-ingest.md §6.10).
 	DomainStampDNSProvider(ctx context.Context, arg DomainStampDNSProviderParams) error
@@ -83,8 +100,12 @@ type Querier interface {
 	// their next scan commit (06-ingest.md §6.11 self-healing).
 	ProviderClearDomains(ctx context.Context, name string) (int64, error)
 	ProviderDelete(ctx context.Context, name string) (int64, error)
+	// The API DNS-provider league table (07 §4.6): exact stored counters,
+	// count_v4 synthesized server-side.
+	ProviderDetail(ctx context.Context, id int64) (ProviderDetailRow, error)
 	ProviderDomainCount(ctx context.Context, dnsProviderID *int64) (int64, error)
 	ProviderInsert(ctx context.Context, arg ProviderInsertParams) (int64, error)
+	ProviderLeaderboard(ctx context.Context) ([]ProviderLeaderboardRow, error)
 	// db/query/provider.sql — dns_provider reference data + attribution stamp
 	// (05-schema.md — dns_provider; 06-ingest.md §6.10/§6.11).
 	ProviderList(ctx context.Context) ([]DnsProvider, error)
@@ -103,6 +124,7 @@ type Querier interface {
 	// recompute over the publicly-ranked scope.
 	ResetCountryCounters(ctx context.Context) error
 	ResetProviderCounters(ctx context.Context) error
+	ResourceHostByHost(ctx context.Context, host string) (ResourceHostByHostRow, error)
 	// Operator triage (P2.14; 04 — service/manual lifecycle).
 	ServiceCandidateList(ctx context.Context) ([]ServiceCandidateListRow, error)
 	ServiceCandidateResolve(ctx context.Context, host string) (int64, error)
@@ -122,6 +144,7 @@ type Querier interface {
 	// max(stats_global_daily.day); as_of = its generated_at, falling back to
 	// day at 00:00:00Z when NULL (the day-0 seed row).
 	StatsGeneration(ctx context.Context) (StatsGenerationRow, error)
+	SubdomainExactCount(ctx context.Context, parentID *int64) (int64, error)
 	// The daily lifecycle sweep S1–S5 (04-lifecycle-scheduling.md §8): one
 	// transaction, set-based; the linkage predicate is spelled identically in
 	// every statement. @live_check_linkage / @delist_grace / @slow_lane_every.

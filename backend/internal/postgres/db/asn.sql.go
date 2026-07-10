@@ -9,6 +9,31 @@ import (
 	"context"
 )
 
+const ASNByNumber = `-- name: ASNByNumber :one
+SELECT number, name, count_total, count_v6 FROM asn WHERE number = $1
+`
+
+type ASNByNumberRow struct {
+	Number     int64  `json:"number"`
+	Name       string `json:"name"`
+	CountTotal int32  `json:"count_total"`
+	CountV6    int32  `json:"count_v6"`
+}
+
+// The API network leaderboard (07 §4.6): keyset over (count, number) desc;
+// the ILIKE arm serves ?q= substring match.
+func (q *Queries) ASNByNumber(ctx context.Context, number int64) (ASNByNumberRow, error) {
+	row := q.db.QueryRow(ctx, ASNByNumber, number)
+	var i ASNByNumberRow
+	err := row.Scan(
+		&i.Number,
+		&i.Name,
+		&i.CountTotal,
+		&i.CountV6,
+	)
+	return i, err
+}
+
 const ASNEnsure = `-- name: ASNEnsure :one
 INSERT INTO asn (number, name) VALUES ($1, $2)
 ON CONFLICT (number) DO NOTHING
@@ -39,6 +64,114 @@ func (q *Queries) ASNIDByNumber(ctx context.Context, number int64) (int32, error
 	var id int32
 	err := row.Scan(&id)
 	return id, err
+}
+
+const ASNLeaderboardByTotal = `-- name: ASNLeaderboardByTotal :many
+SELECT number, name, count_total, count_v6 FROM asn
+WHERE ($1::TEXT = '' OR name ILIKE '%' || $1 || '%')
+  AND (NOT $2::BOOL OR (count_total, number) < ($3::INT, $4::BIGINT))
+ORDER BY count_total DESC, number DESC
+LIMIT $5
+`
+
+type ASNLeaderboardByTotalParams struct {
+	Q          string `json:"q"`
+	WithSeek   bool   `json:"with_seek"`
+	SeekCount  int32  `json:"seek_count"`
+	SeekNumber int64  `json:"seek_number"`
+	Lim        int32  `json:"lim"`
+}
+
+type ASNLeaderboardByTotalRow struct {
+	Number     int64  `json:"number"`
+	Name       string `json:"name"`
+	CountTotal int32  `json:"count_total"`
+	CountV6    int32  `json:"count_v6"`
+}
+
+func (q *Queries) ASNLeaderboardByTotal(ctx context.Context, arg ASNLeaderboardByTotalParams) ([]ASNLeaderboardByTotalRow, error) {
+	rows, err := q.db.Query(ctx, ASNLeaderboardByTotal,
+		arg.Q,
+		arg.WithSeek,
+		arg.SeekCount,
+		arg.SeekNumber,
+		arg.Lim,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ASNLeaderboardByTotalRow{}
+	for rows.Next() {
+		var i ASNLeaderboardByTotalRow
+		if err := rows.Scan(
+			&i.Number,
+			&i.Name,
+			&i.CountTotal,
+			&i.CountV6,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const ASNLeaderboardByV6 = `-- name: ASNLeaderboardByV6 :many
+SELECT number, name, count_total, count_v6 FROM asn
+WHERE ($1::TEXT = '' OR name ILIKE '%' || $1 || '%')
+  AND (NOT $2::BOOL OR (count_v6, number) < ($3::INT, $4::BIGINT))
+ORDER BY count_v6 DESC, number DESC
+LIMIT $5
+`
+
+type ASNLeaderboardByV6Params struct {
+	Q          string `json:"q"`
+	WithSeek   bool   `json:"with_seek"`
+	SeekCount  int32  `json:"seek_count"`
+	SeekNumber int64  `json:"seek_number"`
+	Lim        int32  `json:"lim"`
+}
+
+type ASNLeaderboardByV6Row struct {
+	Number     int64  `json:"number"`
+	Name       string `json:"name"`
+	CountTotal int32  `json:"count_total"`
+	CountV6    int32  `json:"count_v6"`
+}
+
+func (q *Queries) ASNLeaderboardByV6(ctx context.Context, arg ASNLeaderboardByV6Params) ([]ASNLeaderboardByV6Row, error) {
+	rows, err := q.db.Query(ctx, ASNLeaderboardByV6,
+		arg.Q,
+		arg.WithSeek,
+		arg.SeekCount,
+		arg.SeekNumber,
+		arg.Lim,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ASNLeaderboardByV6Row{}
+	for rows.Next() {
+		var i ASNLeaderboardByV6Row
+		if err := rows.Scan(
+			&i.Number,
+			&i.Name,
+			&i.CountTotal,
+			&i.CountV6,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const ASNSentinelID = `-- name: ASNSentinelID :one

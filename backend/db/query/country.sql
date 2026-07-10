@@ -40,3 +40,10 @@ WHERE c.id = agg.country_id;
 
 -- name: CountryIDByCode :one
 SELECT id FROM country WHERE code = upper(@code)::char(2);
+
+-- The API country representations (07 §4.5).
+-- name: CountryByCode :one
+SELECT code, name, tld, sites, v6sites, percent FROM country WHERE code = upper(@code)::char(2);
+
+-- name: CountryLeaderboard :many
+SELECT code, name, tld, sites, v6sites, percent FROM country;

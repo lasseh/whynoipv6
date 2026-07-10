@@ -100,6 +100,31 @@ func (q *Queries) ProviderDelete(ctx context.Context, name string) (int64, error
 	return result.RowsAffected(), nil
 }
 
+const ProviderDetail = `-- name: ProviderDetail :one
+SELECT id, name, count_total, count_v6 FROM dns_provider WHERE id = $1
+`
+
+type ProviderDetailRow struct {
+	ID         int64  `json:"id"`
+	Name       string `json:"name"`
+	CountTotal int32  `json:"count_total"`
+	CountV6    int32  `json:"count_v6"`
+}
+
+// The API DNS-provider league table (07 §4.6): exact stored counters,
+// count_v4 synthesized server-side.
+func (q *Queries) ProviderDetail(ctx context.Context, id int64) (ProviderDetailRow, error) {
+	row := q.db.QueryRow(ctx, ProviderDetail, id)
+	var i ProviderDetailRow
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.CountTotal,
+		&i.CountV6,
+	)
+	return i, err
+}
+
 const ProviderDomainCount = `-- name: ProviderDomainCount :one
 SELECT count(*) FROM domain WHERE dns_provider_id = $1
 `
@@ -125,6 +150,42 @@ func (q *Queries) ProviderInsert(ctx context.Context, arg ProviderInsertParams) 
 	var id int64
 	err := row.Scan(&id)
 	return id, err
+}
+
+const ProviderLeaderboard = `-- name: ProviderLeaderboard :many
+SELECT id, name, count_total, count_v6 FROM dns_provider ORDER BY count_total DESC, id
+`
+
+type ProviderLeaderboardRow struct {
+	ID         int64  `json:"id"`
+	Name       string `json:"name"`
+	CountTotal int32  `json:"count_total"`
+	CountV6    int32  `json:"count_v6"`
+}
+
+func (q *Queries) ProviderLeaderboard(ctx context.Context) ([]ProviderLeaderboardRow, error) {
+	rows, err := q.db.Query(ctx, ProviderLeaderboard)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ProviderLeaderboardRow{}
+	for rows.Next() {
+		var i ProviderLeaderboardRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.CountTotal,
+			&i.CountV6,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const ProviderList = `-- name: ProviderList :many

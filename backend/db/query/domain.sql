@@ -176,3 +176,6 @@ JOIN asn a ON a.id = d.asn_id
 LEFT JOIN dns_provider dp ON dp.id = d.dns_provider_id
 LEFT JOIN domain p ON p.id = d.parent_id
 WHERE d.host = @host;
+
+-- name: SubdomainExactCount :one
+SELECT count(*) FROM domain WHERE parent_id = @parent_id AND NOT disabled;

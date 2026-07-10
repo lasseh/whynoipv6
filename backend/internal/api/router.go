@@ -51,12 +51,32 @@ func NewRouter(svc *service.Service) http.Handler {
 	// detail (§4.3).
 	r.Get("/domains", s.listDomains)
 	r.Get("/domains/{host}", s.getDomain)
+	r.Get("/domains/{host}/subdomains", s.listSubdomains)
+	r.Get("/domains/{host}/resources", s.listDomainResources)
 	r.Get("/heroes", s.listHeroes)
 	r.Get("/sinners", s.listSinners)
 	r.Get("/gold", s.listGold)
 	r.Get("/almost", s.listAlmost)
 	r.Get("/mail", s.listMail)
 	r.Get("/shame", s.listShame)
+
+	// Country / ASN / DNS-provider pivots (§4.5/§4.6).
+	r.Get("/countries", s.listCountries)
+	r.Get("/countries/{code}", s.getCountry)
+	r.Get("/countries/{code}/domains", s.listCountryDomains)
+	r.Get("/asns", s.listASNs)
+	r.Get("/asns/{number}", s.getASN)
+	r.Get("/asns/{number}/domains", s.listASNDomains)
+	r.Get("/providers", s.listProviders)
+	r.Get("/providers/{id}", s.getProvider)
+	r.Get("/providers/{id}/domains", s.listProviderDomains)
+
+	// Campaigns (§4.7) and resource dependencies (§4.11).
+	r.Get("/campaigns", s.listCampaigns)
+	r.Get("/campaigns/{uuid}", s.getCampaign)
+	r.Get("/campaigns/{uuid}/domains", s.listCampaignDomains)
+	r.Get("/resources/{host}", s.getResource)
+	r.Get("/resources/{host}/dependents", s.listResourceDependents)
 
 	// Route inventory grows with the endpoint tasks (P4.3 onward), each
 	// implementing the generated strict-server interface.

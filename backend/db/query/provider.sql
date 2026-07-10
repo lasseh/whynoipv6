@@ -35,3 +35,11 @@ UPDATE domain SET hosting_provider = $2 WHERE id = $1;
 -- name: ProviderClearDomains :execrows
 UPDATE domain SET dns_provider_id = NULL
 WHERE dns_provider_id = (SELECT id FROM dns_provider WHERE name = $1);
+
+-- The API DNS-provider league table (07 §4.6): exact stored counters,
+-- count_v4 synthesized server-side.
+-- name: ProviderDetail :one
+SELECT id, name, count_total, count_v6 FROM dns_provider WHERE id = @id;
+
+-- name: ProviderLeaderboard :many
+SELECT id, name, count_total, count_v6 FROM dns_provider ORDER BY count_total DESC, id;

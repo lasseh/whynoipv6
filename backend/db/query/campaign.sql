@@ -33,3 +33,21 @@ WHERE campaign_id = $1 AND domain_id <> ALL($2::bigint[]);
 UPDATE campaign SET disabled = true, updated_at = now()
 WHERE NOT disabled AND uuid <> ALL($1::uuid[])
 RETURNING uuid, name;
+
+-- The public campaign surface (07 §4.7): exact member counts (bounded sets),
+-- ?tag= via the GIN-indexed tags array.
+-- name: CampaignPublicList :many
+SELECT c.uuid, c.name, c.description, c.source_file, c.tags,
+       (SELECT count(*) FROM campaign_domain cd WHERE cd.campaign_id = c.id) AS domain_count
+FROM campaign c
+WHERE NOT c.disabled AND (@tag::TEXT = '' OR @tag = ANY(c.tags))
+ORDER BY c.name, c.id;
+
+-- name: CampaignPublicDetail :one
+SELECT c.id, c.uuid, c.name, c.description, c.source_file, c.tags, c.disabled,
+       (SELECT count(*) FROM campaign_domain cd WHERE cd.campaign_id = c.id) AS domain_count
+FROM campaign c WHERE c.uuid = @uuid;
+
+-- name: CampaignAdoption :one
+SELECT day, domains, v6_ready FROM stats_campaign_daily
+WHERE campaign_id = @campaign_id ORDER BY day DESC LIMIT 1;

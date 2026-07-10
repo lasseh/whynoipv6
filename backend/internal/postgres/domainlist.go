@@ -36,9 +36,12 @@ type DomainListFilter struct {
 	RankMax   *int32
 	Query     string // ?q= substring (bound; forces the host ordering)
 
-	// Scope presets for sub-collections (campaign members etc.) are built
-	// by their own methods, not through this filter.
-	IncludeRankNULL bool // dependents ordering only
+	// Sub-collection scopes. Either drops the public rank-IS-NOT-NULL half
+	// of the visibility predicate: campaign members and subdomains are
+	// typically rank-NULL and must resolve on their sub-collections
+	// (07 §2.2/§4.7); NOT disabled always applies.
+	CampaignID *int32 // campaign_domain membership (internal campaign.id)
+	ParentID   *int64 // subdomains of one apex
 }
 
 // DomainSeek is the decoded cursor seek (mirrors api.Seek without the
@@ -117,7 +120,16 @@ func buildDomainList(f *DomainListFilter, sortKey ListSort, seek *DomainSeek, af
 		PlaceholderFormat(sq.Dollar)
 
 	// The literal public scope — verbatim for partial-index implication.
-	q = q.Where(sq.Expr("d.rank IS NOT NULL AND NOT d.disabled"))
+	// Sub-collection scopes keep rank-NULL members visible (07 §2.2).
+	switch {
+	case f.CampaignID != nil:
+		q = q.Join(fmt.Sprintf("campaign_domain cd ON cd.domain_id = d.id AND cd.campaign_id = %d", *f.CampaignID)).
+			Where(sq.Expr("NOT d.disabled"))
+	case f.ParentID != nil:
+		q = q.Where(sq.Expr(fmt.Sprintf("d.parent_id = %d AND NOT d.disabled", *f.ParentID)))
+	default:
+		q = q.Where(sq.Expr("d.rank IS NOT NULL AND NOT d.disabled"))
+	}
 
 	if f.Class != "" {
 		q = q.Where(sq.Expr(fmt.Sprintf("d.classification = '%s'", f.Class))) // validated closed set
@@ -220,6 +232,66 @@ func EstimateDomainListCount(ctx context.Context, pool *pgxpool.Pool, f *DomainL
 		return 0, fmt.Errorf("count estimate parse: %w", err)
 	}
 	return int64(plans[0].Plan.PlanRows), nil
+}
+
+// DependentRow is a §4.2 summary row plus the dependency-link attributes
+// carried on the reverse dependents list (07 §4.11).
+type DependentRow struct {
+	DomainRow
+	Source   string `db:"source"`
+	Required bool   `db:"required"`
+}
+
+// DependentSeek is the decoded null-flag-first seek tuple (07 §3.2).
+type DependentSeek struct {
+	RankNull bool
+	Rank     *int32
+	ID       int64
+}
+
+// ListDependents serves GET /resources/{host}/dependents: domains linked to
+// one resource host, ordered rank NULLS LAST via the null-flag-first key.
+// The spec's literal `(rank IS NULL, rank, id) > ($1,$2,$3)` drops the whole
+// rank-NULL tail (NULL inside a row comparison → UNKNOWN), so the rank
+// component rides COALESCE(rank, 0) on both sides — equal within the null
+// partition, where the id tiebreaker takes over.
+func ListDependents(ctx context.Context, pool *pgxpool.Pool, resourceHostID int64,
+	seek *DependentSeek, limit int,
+) ([]DependentRow, error) {
+	q := sq.Select(append(strings.Split(domainRowColumns, ",\n"), "dr.source::text AS source", "dr.required")...).
+		From("domain d").
+		Join("country c ON c.id = d.country_id").
+		Join("asn a ON a.id = d.asn_id").
+		LeftJoin("dns_provider dp ON dp.id = d.dns_provider_id").
+		LeftJoin("domain p ON p.id = d.parent_id").
+		Join(fmt.Sprintf("domain_resource dr ON dr.domain_id = d.id AND dr.resource_host_id = %d", resourceHostID)).
+		Where(sq.Expr("NOT d.disabled")).
+		PlaceholderFormat(sq.Dollar)
+	if seek != nil {
+		rank := int32(0)
+		if seek.Rank != nil {
+			rank = *seek.Rank
+		}
+		q = q.Where(sq.Expr(fmt.Sprintf(
+			"((d.rank IS NULL), COALESCE(d.rank, 0), d.id) > (%t, %d, %d)",
+			seek.RankNull, rank, seek.ID)))
+	}
+	sqlText, args, err := q.
+		OrderBy("(d.rank IS NULL)", "COALESCE(d.rank, 0)", "d.id").
+		Limit(uint64(limit + 1)).
+		ToSql()
+	if err != nil {
+		return nil, fmt.Errorf("dependents build: %w", err)
+	}
+	rows, err := pool.Query(ctx, sqlText, args...)
+	if err != nil {
+		return nil, fmt.Errorf("dependents: %w", err)
+	}
+	out, err := pgx.CollectRows(rows, pgx.RowToStructByName[DependentRow])
+	if err != nil {
+		return nil, fmt.Errorf("dependents scan: %w", err)
+	}
+	return out, nil
 }
 
 // MaxRank is the O(1) global-list count estimate (07 §3.4).

@@ -29,6 +29,24 @@ func (q *Queries) CampaignAddMember(ctx context.Context, arg CampaignAddMemberPa
 	return result.RowsAffected(), nil
 }
 
+const CampaignAdoption = `-- name: CampaignAdoption :one
+SELECT day, domains, v6_ready FROM stats_campaign_daily
+WHERE campaign_id = $1 ORDER BY day DESC LIMIT 1
+`
+
+type CampaignAdoptionRow struct {
+	Day     pgtype.Date `json:"day"`
+	Domains *int32      `json:"domains"`
+	V6Ready *int32      `json:"v6_ready"`
+}
+
+func (q *Queries) CampaignAdoption(ctx context.Context, campaignID int32) (CampaignAdoptionRow, error) {
+	row := q.db.QueryRow(ctx, CampaignAdoption, campaignID)
+	var i CampaignAdoptionRow
+	err := row.Scan(&i.Day, &i.Domains, &i.V6Ready)
+	return i, err
+}
+
 const CampaignByUUID = `-- name: CampaignByUUID :one
 
 SELECT id, uuid, name, source_file, disabled FROM campaign WHERE uuid = $1
@@ -131,6 +149,85 @@ func (q *Queries) CampaignMembers(ctx context.Context, campaignID int32) ([]int6
 			return nil, err
 		}
 		items = append(items, domain_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const CampaignPublicDetail = `-- name: CampaignPublicDetail :one
+SELECT c.id, c.uuid, c.name, c.description, c.source_file, c.tags, c.disabled,
+       (SELECT count(*) FROM campaign_domain cd WHERE cd.campaign_id = c.id) AS domain_count
+FROM campaign c WHERE c.uuid = $1
+`
+
+type CampaignPublicDetailRow struct {
+	ID          int32       `json:"id"`
+	Uuid        pgtype.UUID `json:"uuid"`
+	Name        string      `json:"name"`
+	Description string      `json:"description"`
+	SourceFile  *string     `json:"source_file"`
+	Tags        []string    `json:"tags"`
+	Disabled    bool        `json:"disabled"`
+	DomainCount int64       `json:"domain_count"`
+}
+
+func (q *Queries) CampaignPublicDetail(ctx context.Context, uuid pgtype.UUID) (CampaignPublicDetailRow, error) {
+	row := q.db.QueryRow(ctx, CampaignPublicDetail, uuid)
+	var i CampaignPublicDetailRow
+	err := row.Scan(
+		&i.ID,
+		&i.Uuid,
+		&i.Name,
+		&i.Description,
+		&i.SourceFile,
+		&i.Tags,
+		&i.Disabled,
+		&i.DomainCount,
+	)
+	return i, err
+}
+
+const CampaignPublicList = `-- name: CampaignPublicList :many
+SELECT c.uuid, c.name, c.description, c.source_file, c.tags,
+       (SELECT count(*) FROM campaign_domain cd WHERE cd.campaign_id = c.id) AS domain_count
+FROM campaign c
+WHERE NOT c.disabled AND ($1::TEXT = '' OR $1 = ANY(c.tags))
+ORDER BY c.name, c.id
+`
+
+type CampaignPublicListRow struct {
+	Uuid        pgtype.UUID `json:"uuid"`
+	Name        string      `json:"name"`
+	Description string      `json:"description"`
+	SourceFile  *string     `json:"source_file"`
+	Tags        []string    `json:"tags"`
+	DomainCount int64       `json:"domain_count"`
+}
+
+// The public campaign surface (07 §4.7): exact member counts (bounded sets),
+// ?tag= via the GIN-indexed tags array.
+func (q *Queries) CampaignPublicList(ctx context.Context, tag string) ([]CampaignPublicListRow, error) {
+	rows, err := q.db.Query(ctx, CampaignPublicList, tag)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CampaignPublicListRow{}
+	for rows.Next() {
+		var i CampaignPublicListRow
+		if err := rows.Scan(
+			&i.Uuid,
+			&i.Name,
+			&i.Description,
+			&i.SourceFile,
+			&i.Tags,
+			&i.DomainCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

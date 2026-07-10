@@ -7,7 +7,37 @@ package db
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
+
+const CountryByCode = `-- name: CountryByCode :one
+SELECT code, name, tld, sites, v6sites, percent FROM country WHERE code = upper($1)::char(2)
+`
+
+type CountryByCodeRow struct {
+	Code    string         `json:"code"`
+	Name    string         `json:"name"`
+	Tld     *string        `json:"tld"`
+	Sites   int32          `json:"sites"`
+	V6sites int32          `json:"v6sites"`
+	Percent pgtype.Numeric `json:"percent"`
+}
+
+// The API country representations (07 §4.5).
+func (q *Queries) CountryByCode(ctx context.Context, code interface{}) (CountryByCodeRow, error) {
+	row := q.db.QueryRow(ctx, CountryByCode, code)
+	var i CountryByCodeRow
+	err := row.Scan(
+		&i.Code,
+		&i.Name,
+		&i.Tld,
+		&i.Sites,
+		&i.V6sites,
+		&i.Percent,
+	)
+	return i, err
+}
 
 const CountryCodeMap = `-- name: CountryCodeMap :many
 SELECT id, code FROM country
@@ -59,6 +89,46 @@ func (q *Queries) CountryIDByTLD(ctx context.Context, tld *string) (int32, error
 	var id int32
 	err := row.Scan(&id)
 	return id, err
+}
+
+const CountryLeaderboard = `-- name: CountryLeaderboard :many
+SELECT code, name, tld, sites, v6sites, percent FROM country
+`
+
+type CountryLeaderboardRow struct {
+	Code    string         `json:"code"`
+	Name    string         `json:"name"`
+	Tld     *string        `json:"tld"`
+	Sites   int32          `json:"sites"`
+	V6sites int32          `json:"v6sites"`
+	Percent pgtype.Numeric `json:"percent"`
+}
+
+func (q *Queries) CountryLeaderboard(ctx context.Context) ([]CountryLeaderboardRow, error) {
+	rows, err := q.db.Query(ctx, CountryLeaderboard)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CountryLeaderboardRow{}
+	for rows.Next() {
+		var i CountryLeaderboardRow
+		if err := rows.Scan(
+			&i.Code,
+			&i.Name,
+			&i.Tld,
+			&i.Sites,
+			&i.V6sites,
+			&i.Percent,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const CountrySentinelID = `-- name: CountrySentinelID :one

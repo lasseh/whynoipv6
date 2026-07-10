@@ -113,7 +113,7 @@ func TestScopeGuardrail(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := ValidateResiduals(tc.q)
+			err := ValidateResiduals(tc.q, false)
 			if tc.ok && err != nil {
 				t.Errorf("unexpected: %v", err)
 			}
