@@ -11,6 +11,11 @@ import (
 )
 
 type Querier interface {
+	// ASN auto-registration (06-ingest.md §6.3): pool-side, before the commit
+	// transaction (03 §3 A). ON CONFLICT DO NOTHING + re-read; names are never
+	// updated on later scans.
+	ASNEnsure(ctx context.Context, arg ASNEnsureParams) (int32, error)
+	ASNIDByNumber(ctx context.Context, number int64) (int32, error)
 	// db/query/asn.sql — sqlc query source (layout: 05-schema.md §10.2).
 	// Sentinel lookup: binaries resolve the sentinel ASN once at startup by
 	// lookup, never by literal id (05-schema.md §5).

@@ -9,6 +9,38 @@ import (
 	"context"
 )
 
+const ASNEnsure = `-- name: ASNEnsure :one
+INSERT INTO asn (number, name) VALUES ($1, $2)
+ON CONFLICT (number) DO NOTHING
+RETURNING id
+`
+
+type ASNEnsureParams struct {
+	Number int64  `json:"number"`
+	Name   string `json:"name"`
+}
+
+// ASN auto-registration (06-ingest.md §6.3): pool-side, before the commit
+// transaction (03 §3 A). ON CONFLICT DO NOTHING + re-read; names are never
+// updated on later scans.
+func (q *Queries) ASNEnsure(ctx context.Context, arg ASNEnsureParams) (int32, error) {
+	row := q.db.QueryRow(ctx, ASNEnsure, arg.Number, arg.Name)
+	var id int32
+	err := row.Scan(&id)
+	return id, err
+}
+
+const ASNIDByNumber = `-- name: ASNIDByNumber :one
+SELECT id FROM asn WHERE number = $1
+`
+
+func (q *Queries) ASNIDByNumber(ctx context.Context, number int64) (int32, error) {
+	row := q.db.QueryRow(ctx, ASNIDByNumber, number)
+	var id int32
+	err := row.Scan(&id)
+	return id, err
+}
+
 const ASNSentinelID = `-- name: ASNSentinelID :one
 
 SELECT id FROM asn WHERE number = 0

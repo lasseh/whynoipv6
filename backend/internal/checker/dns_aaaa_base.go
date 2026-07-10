@@ -39,6 +39,9 @@ func (c *DNSAAAABase) Check(ctx context.Context, host string, _ Kind) (Result, e
 	if ans.AOutcome != "" {
 		details["a_outcome"] = ans.AOutcome
 	}
+	if ans.AIP != nil {
+		details["a_address"] = ans.AIP.String() // v4-only attribution input (06 §6.2)
+	}
 	if ans.CDOutcome != "" {
 		details["cd_outcome"] = ans.CDOutcome
 	}

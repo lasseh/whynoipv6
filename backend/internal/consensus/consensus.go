@@ -242,7 +242,7 @@ func (r *Resolver) LookupAAAA(ctx context.Context, name string) (checker.AAAAAns
 		ans := r.selectAnswer(outcomes, quorum)
 		ans.Quorum = qi
 		if quorum == symEmpty {
-			ans.AOutcome = r.classifyA(ctx, name)
+			ans.AOutcome, ans.AIP = r.classifyA(ctx, name)
 		}
 		return ans, nil
 
@@ -351,7 +351,9 @@ func (r *Resolver) selectAnswer(outcomes []providerOutcome, quorum string) check
 
 // classifyA is the conditional bulk-resolver A lookup (§2.7), fired only on
 // a NOERROR-empty AAAA quorum. Not quorumed; no token bucket (local path).
-func (r *Resolver) classifyA(ctx context.Context, name string) string {
+// The first A address is captured as the v4-only attribution input IP
+// (06-ingest.md §6.2 step 2).
+func (r *Resolver) classifyA(ctx context.Context, name string) (outcome string, aip net.IP) {
 	msg := new(dns.Msg)
 	msg.SetQuestion(dns.Fqdn(name), dns.TypeA)
 	msg.RecursionDesired = true
@@ -359,18 +361,18 @@ func (r *Resolver) classifyA(ctx context.Context, name string) string {
 	resp, err := r.bulk.QueryWithRetry(ctx, msg)
 	switch {
 	case err != nil:
-		return aError
+		return aError, nil
 	case resp.Rcode == dns.RcodeSuccess:
 		for _, rr := range resp.Answer {
-			if _, ok := rr.(*dns.A); ok {
-				return aPresent
+			if a, ok := rr.(*dns.A); ok {
+				return aPresent, a.A
 			}
 		}
-		return aAbsent
+		return aAbsent, nil
 	case resp.Rcode == dns.RcodeNameError:
-		return aAbsent // NXDOMAIN contradicting the AAAA NOERROR → domain's favor
+		return aAbsent, nil // NXDOMAIN contradicting the AAAA NOERROR → domain's favor
 	default:
-		return aError
+		return aError, nil
 	}
 }
 
@@ -416,8 +418,9 @@ func (r *Resolver) rescueCD(ctx context.Context, name string, qi *checker.Quorum
 	if len(routable) > 0 {
 		return checker.AAAAAnswer{IPs: routable, Rcode: rcodeNoError, CDOutcome: "cd_present", Quorum: qi}, nil
 	}
+	outcome, aip := r.classifyA(ctx, name)
 	return checker.AAAAAnswer{
 		Rcode: rcodeNoError, CDOutcome: "cd_empty",
-		AOutcome: r.classifyA(ctx, name), Quorum: qi,
+		AOutcome: outcome, AIP: aip, Quorum: qi,
 	}, nil
 }

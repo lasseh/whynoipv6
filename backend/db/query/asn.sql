@@ -39,3 +39,14 @@ FROM (
   GROUP BY dns_provider_id
 ) agg
 WHERE p.id = agg.dns_provider_id;
+
+-- ASN auto-registration (06-ingest.md §6.3): pool-side, before the commit
+-- transaction (03 §3 A). ON CONFLICT DO NOTHING + re-read; names are never
+-- updated on later scans.
+-- name: ASNEnsure :one
+INSERT INTO asn (number, name) VALUES ($1, $2)
+ON CONFLICT (number) DO NOTHING
+RETURNING id;
+
+-- name: ASNIDByNumber :one
+SELECT id FROM asn WHERE number = $1;

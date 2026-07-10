@@ -16,6 +16,8 @@ type AAAAAnswer struct {
 	AOutcome   string      // "a_present" | "a_absent" | "a_error"; set only when the
 	// AAAA quorum result was NOERROR-empty — the conditional
 	// bulk-resolver A lookup (02-observation-model.md). Empty otherwise.
+	AIP net.IP // first A address when AOutcome == "a_present" — the
+	// attribution input IP for v4-only domains (06-ingest.md §6.2 step 2).
 	CDOutcome string // "cd_present" | "cd_empty" | "cd_fail"; set only when the AAAA quorum
 	// was `error` from all-SERVFAIL/REFUSED and the conditional CD=1
 	// (checking-disabled) re-query ran (02-observation-model.md §2.7b —
