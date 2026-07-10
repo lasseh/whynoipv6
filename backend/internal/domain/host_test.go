@@ -129,6 +129,11 @@ func TestNoStrayHostLowercasing(t *testing.T) {
 		"internal/config/config.go":   "LOG_LEVEL parsing, not a hostname",
 		"internal/campaign/parse.go":  "tag/uuid normalization, not a hostname",
 		"internal/ingest/provider.go": "operator-entered NS suffixes normalized at the single write path",
+		// Lifted engine files (01-engine.md): behavior-identical lift; their
+		// lowercasing predates Canonicalize and never reaches a DB write.
+		"internal/checker/resource_discovery.go": "lifted tokenizer hostname folding (01 §11.9)",
+		"internal/checker/response_parity.go":    "lifted content-type case folding (01 §11.8)",
+		"internal/checker/spf_ipv6.go":           "lifted SPF mechanism folding (01 §11.11)",
 	}
 	root := moduleRoot(t)
 	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {

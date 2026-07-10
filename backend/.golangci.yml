@@ -28,6 +28,12 @@ linters:
           disabled: true
   exclusions:
     generated: lax
+    rules:
+      # Lifted engine code (01-engine.md): detail-map keys repeat by design;
+      # constantizing them would churn the verbatim lift.
+      - path: internal/checker/
+        linters:
+          - goconst
     paths:
       - third_party$
       - builtin$

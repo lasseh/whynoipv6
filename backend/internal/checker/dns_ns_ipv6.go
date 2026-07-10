@@ -1,0 +1,121 @@
+package checker
+
+import (
+	"context"
+	"sort"
+	"strings"
+	"time"
+)
+
+// DNSNSIPv6 checks whether the domain's authoritative nameservers have AAAA records.
+type DNSNSIPv6 struct {
+	dialer     *SafeDialer
+	maxLookups int // config checks.max_ns_lookups (01-engine.md §11.3)
+}
+
+// NewDNSNSIPv6 creates a new dns_ns_ipv6 checker.
+func NewDNSNSIPv6(dialer *SafeDialer, maxLookups int) *DNSNSIPv6 {
+	return &DNSNSIPv6{dialer: dialer, maxLookups: maxLookups}
+}
+
+func (c *DNSNSIPv6) Name() string { return "dns_ns_ipv6" }
+func (c *DNSNSIPv6) Check(ctx context.Context, domain string, kind Kind) (Result, error) {
+	start := time.Now()
+	ctx, cancel := context.WithTimeout(ctx, 25*time.Second)
+	defer cancel()
+
+	details := map[string]any{}
+
+	// Walk up domain labels to find the zone with NS records.
+	// Subdomains (e.g. blog.example.com) typically don't have their own NS
+	// records — those live at the zone apex (example.com).
+	var nameservers []string
+	var nsErr error
+	qname := domain
+	for {
+		nameservers, nsErr = c.dialer.Resolver().LookupNS(ctx, qname)
+		if nsErr == nil && len(nameservers) > 0 {
+			break
+		}
+		// Move up one label: blog.example.com → example.com.
+		idx := strings.Index(qname, ".")
+		if idx < 0 || idx == len(qname)-1 {
+			break // reached TLD or bare name
+		}
+		qname = qname[idx+1:]
+	}
+
+	if nsErr != nil && len(nameservers) == 0 {
+		details["error"] = nsErr.Error()
+		return Result{
+			Status:  StatusError,
+			Details: details,
+			Latency: time.Since(start),
+		}, nil
+	}
+
+	if len(nameservers) == 0 {
+		details["error"] = "no NS records found"
+		return Result{
+			Status:  StatusError,
+			Details: details,
+			Latency: time.Since(start),
+		}, nil
+	}
+
+	if qname != domain {
+		details["zone"] = qname
+	}
+
+	total := len(nameservers)
+
+	// Sort by name and cap AAAA lookups to avoid excessive DNS queries.
+	// The ratio (ipv6_count / checked) is extrapolated to the full set.
+	sort.Strings(nameservers)
+	checked := nameservers
+	if len(checked) > c.maxLookups {
+		checked = checked[:c.maxLookups]
+	}
+
+	nsResults := map[string]any{}
+	ipv6Count := 0
+
+	for _, ns := range checked {
+		ips, _, _, _, lookupErr := c.dialer.Resolver().LookupAAAA(ctx, ns)
+		nsInfo := map[string]any{
+			"has_ipv6":  false,
+			"addresses": []string{},
+		}
+		if lookupErr == nil && len(ips) > 0 {
+			nsInfo["has_ipv6"] = true
+			addrs := make([]string, len(ips))
+			for i, ip := range ips {
+				addrs[i] = ip.String()
+			}
+			nsInfo["addresses"] = addrs
+			ipv6Count++
+		}
+		nsResults[ns] = nsInfo
+	}
+
+	details["nameservers"] = nsResults
+	details["total"] = total
+	details["checked"] = len(checked)
+	details["ipv6_count"] = ipv6Count
+
+	var status CheckStatus
+	switch {
+	case ipv6Count == len(checked):
+		status = StatusSupported
+	case ipv6Count > 0:
+		status = StatusPartial
+	default:
+		status = StatusUnsupported
+	}
+
+	return Result{
+		Status:  status,
+		Details: details,
+		Latency: time.Since(start),
+	}, nil
+}
