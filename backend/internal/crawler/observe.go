@@ -179,12 +179,11 @@ func mapMX(r checker.Result) domain.Observation {
 
 // composeConn is the §5 decision table (first match wins) plus the final
 // preflight guard, and builds the scan_detail.details["conn"] payload.
-func composeConn(h, p checker.Result, preflightPassedAt, now time.Time) (domain.Observation, map[string]any) {
+func composeConn(h, p checker.Result, preflightPassedAt, now time.Time) (obs domain.Observation, detail map[string]any) {
 	preflightFresh := !preflightPassedAt.IsZero() && now.Sub(preflightPassedAt) <= preflightFreshness
 	errType, _ := h.Details["error_type"].(string)
 
-	var obs domain.Observation
-	detail := map[string]any{"http_only": false}
+	detail = map[string]any{"http_only": false}
 
 	switch {
 	case h.Status == checker.StatusSupported: // row 1
