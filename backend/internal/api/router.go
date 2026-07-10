@@ -82,6 +82,12 @@ func NewRouter(svc *service.Service, opts ...Options) http.Handler {
 	// /ip — client-IP echo (§4.12).
 	r.Get("/ip", s.ip)
 
+	// Discoverability (§7): the contract, its reader, and the LLM index —
+	// meta routes outside the OpenAPI document like the health endpoints.
+	r.Get("/openapi.json", s.getOpenAPIJSON)
+	r.Get("/docs", s.getDocs)
+	r.Get("/llms.txt", s.getLLMsTxt)
+
 	// The /domains list family + tier presets (§4.2/§4.4) and the domain
 	// detail (§4.3).
 	r.Get("/domains", s.listDomains)

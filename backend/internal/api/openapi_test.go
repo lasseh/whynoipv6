@@ -1,7 +1,9 @@
 package api
 
 import (
+	"encoding/json"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -59,10 +61,13 @@ func chiPaths(t *testing.T) map[string]bool {
 }
 
 // operationalRoutes exist on the wire but stay outside the public OpenAPI
-// document (07 §2.1).
+// document (07 §2.1 health; §7 discoverability meta routes).
 var operationalRoutes = map[string]bool{
-	"GET /livez":  true,
-	"GET /readyz": true,
+	"GET /livez":        true,
+	"GET /readyz":       true,
+	"GET /openapi.json": true,
+	"GET /docs":         true,
+	"GET /llms.txt":     true,
 }
 
 // specToChi maps documented paths onto their chi registration where the
@@ -105,5 +110,42 @@ func TestOpenAPIRouteCoverage(t *testing.T) {
 
 	if spec["GET /diff"] {
 		t.Error("GET /diff was cut (OPEN-7) and must stay out of openapi.yaml")
+	}
+}
+
+// TestDiscoverability (07 §7): the embedded contract, Redoc reader, and
+// llms.txt are served DB-free.
+func TestDiscoverability(t *testing.T) {
+	srv := httptest.NewServer(NewRouter(nil))
+	defer srv.Close()
+
+	resp, err := http.Get(srv.URL + "/openapi.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	var doc struct {
+		OpenAPI string         `json:"openapi"`
+		Paths   map[string]any `json:"paths"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&doc); err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != 200 || doc.OpenAPI != "3.0.3" || len(doc.Paths) < 30 {
+		t.Errorf("/openapi.json: %d openapi=%q paths=%d", resp.StatusCode, doc.OpenAPI, len(doc.Paths))
+	}
+
+	for path, wantType := range map[string]string{
+		"/docs":     "text/html",
+		"/llms.txt": "text/plain",
+	} {
+		resp, err := http.Get(srv.URL + path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = resp.Body.Close()
+		if resp.StatusCode != 200 || !strings.HasPrefix(resp.Header.Get("Content-Type"), wantType) {
+			t.Errorf("%s: %d %s", path, resp.StatusCode, resp.Header.Get("Content-Type"))
+		}
 	}
 }
