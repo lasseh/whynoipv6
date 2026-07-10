@@ -45,6 +45,22 @@ var perProviderBudget = 4 * time.Second
 
 var _ = perAttemptTimeout
 
+// Reduced per-resolver symbols and lookup-outcome tokens (§2.4, §2.7, §2.7b).
+const (
+	symExists   = "exists"
+	symEmpty    = "empty"
+	symNXDomain = "nxdomain"
+	symTimeout  = "timeout"
+	symError    = "error"
+
+	rcodeNoError  = "NOERROR"
+	rcodeNXDomain = "NXDOMAIN"
+
+	aPresent = "a_present"
+	aAbsent  = "a_absent"
+	aError   = "a_error"
+)
+
 // Config mirrors the consensus.* config keys (registry: 09-ops.md).
 type Config struct {
 	PerProviderQPS int
@@ -162,7 +178,7 @@ type providerOutcome struct {
 	ttl    int
 }
 
-func validSymbol(s string) bool { return s == "exists" || s == "empty" || s == "nxdomain" }
+func validSymbol(s string) bool { return s == symExists || s == symEmpty || s == symNXDomain }
 
 // LookupAAAA implements checker.AAAAResolver (§2.3–§2.7b).
 func (r *Resolver) LookupAAAA(ctx context.Context, name string) (checker.AAAAAnswer, error) {
@@ -221,7 +237,7 @@ func (r *Resolver) LookupAAAA(ctx context.Context, name string) (checker.AAAAAns
 
 		ans := r.selectAnswer(outcomes, quorum)
 		ans.Quorum = qi
-		if quorum == "empty" {
+		if quorum == symEmpty {
 			ans.AOutcome = r.classifyA(ctx, name)
 		}
 		return ans, nil
@@ -260,7 +276,7 @@ func (r *Resolver) activeProviders() []*providerState {
 // queryProvider runs one provider's lookup under its token + budget (§2.3).
 func (r *Resolver) queryProvider(ctx context.Context, p *providerState, name string) providerOutcome {
 	if err := p.limiter.Wait(ctx); err != nil {
-		return providerOutcome{name: p.name, symbol: "error", rcode: ""}
+		return providerOutcome{name: p.name, symbol: symError, rcode: ""}
 	}
 	pctx, cancel := context.WithTimeout(ctx, perProviderBudget)
 	defer cancel()
@@ -276,20 +292,20 @@ func (r *Resolver) queryProvider(ctx context.Context, p *providerState, name str
 func reduce(ips []net.IP, rcode string, err error) string {
 	switch {
 	case err != nil && isTimeoutErr(err):
-		return "timeout"
+		return symTimeout
 	case err != nil:
 		// Transport error, or SERVFAIL (the lifted LookupAAAA converts
 		// SERVFAIL to an error) — non-answer.
-		return "error"
-	case rcode == "NXDOMAIN":
-		return "nxdomain"
-	case rcode == "NOERROR" && len(routableOnly(ips)) > 0:
-		return "exists"
-	case rcode == "NOERROR":
-		return "empty"
+		return symError
+	case rcode == rcodeNXDomain:
+		return symNXDomain
+	case rcode == rcodeNoError && len(routableOnly(ips)) > 0:
+		return symExists
+	case rcode == rcodeNoError:
+		return symEmpty
 	default:
 		// REFUSED, NOTIMP, FORMERR, ... — non-answer, never `empty`.
-		return "error"
+		return symError
 	}
 }
 
@@ -339,18 +355,18 @@ func (r *Resolver) classifyA(ctx context.Context, name string) string {
 	resp, err := r.bulk.QueryWithRetry(ctx, msg)
 	switch {
 	case err != nil:
-		return "a_error"
+		return aError
 	case resp.Rcode == dns.RcodeSuccess:
 		for _, rr := range resp.Answer {
 			if _, ok := rr.(*dns.A); ok {
-				return "a_present"
+				return aPresent
 			}
 		}
-		return "a_absent"
+		return aAbsent
 	case resp.Rcode == dns.RcodeNameError:
-		return "a_absent" // NXDOMAIN contradicting the AAAA NOERROR → domain's favor
+		return aAbsent // NXDOMAIN contradicting the AAAA NOERROR → domain's favor
 	default:
-		return "a_error"
+		return aError
 	}
 }
 
@@ -394,10 +410,10 @@ func (r *Resolver) rescueCD(ctx context.Context, name string, qi *checker.Quorum
 	}
 	routable := routableOnly(ips)
 	if len(routable) > 0 {
-		return checker.AAAAAnswer{IPs: routable, Rcode: "NOERROR", CDOutcome: "cd_present", Quorum: qi}, nil
+		return checker.AAAAAnswer{IPs: routable, Rcode: rcodeNoError, CDOutcome: "cd_present", Quorum: qi}, nil
 	}
 	return checker.AAAAAnswer{
-		Rcode: "NOERROR", CDOutcome: "cd_empty",
+		Rcode: rcodeNoError, CDOutcome: "cd_empty",
 		AOutcome: r.classifyA(ctx, name), Quorum: qi,
 	}, nil
 }
