@@ -5,12 +5,14 @@ package postgres
 import (
 	"context"
 	"testing"
+
+	"github.com/lasseh/whynoipv6/internal/postgres/pgtest"
 )
 
 // TestHarnessBoot is the P1.10 smoke test: the container boots, migrations
 // 000001→000003 are applied, and one SELECT runs against the migrated schema.
 func TestHarnessBoot(t *testing.T) {
-	pool := newTestDB(t)
+	pool := pgtest.NewDB(t)
 	ctx := context.Background()
 
 	var n int
@@ -25,7 +27,7 @@ func TestHarnessBoot(t *testing.T) {
 // TestMigrations covers 10-testing.md §9.2: hypertables, policy jobs, seeds,
 // and the Round-3.0 constraint negatives.
 func TestMigrations(t *testing.T) {
-	pool := newTestDB(t)
+	pool := pgtest.NewDB(t)
 	ctx := context.Background()
 
 	var hypertables int
@@ -82,11 +84,11 @@ func TestMigrations(t *testing.T) {
 
 // TestMigrateDownUp covers §9.2 item 4: down to 0 then up again is green.
 func TestMigrateDownUp(t *testing.T) {
-	pool := newTestDB(t)
+	pool := pgtest.NewDB(t)
 	dsn := pool.Config().ConnString()
 	pool.Close()
 
-	mig, err := newMigrator(dsn)
+	mig, err := pgtest.NewMigrator(dsn)
 	if err != nil {
 		t.Fatalf("migrator: %v", err)
 	}

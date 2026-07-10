@@ -66,8 +66,20 @@ func Canonicalize(raw string) (string, error) {
 // e.g. "com", "no", "co.uk", "gov" — the domain.tld pivot written at ingest
 // (05-schema.md — add pivots + tags; 06-ingest.md §6.9).
 func TLD(canonical string) string {
-	suffix, _ := publicsuffix.PublicSuffix(canonical)
-	return suffix
+	s := canonical
+	for {
+		suffix, icann := publicsuffix.PublicSuffix(s)
+		if icann {
+			return suffix
+		}
+		// Private-registry suffix (e.g. blogspot.com): walk up to the
+		// ICANN suffix; a single unlisted label is returned as-is.
+		if i := strings.IndexByte(suffix, '.'); i >= 0 {
+			s = suffix[i+1:]
+			continue
+		}
+		return suffix
+	}
 }
 
 // ETLDPlusOne returns the registrable domain (eTLD+1, pay-level domain) of a

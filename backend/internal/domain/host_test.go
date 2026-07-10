@@ -90,6 +90,7 @@ func TestTLD(t *testing.T) {
 		{"bbc.co.uk", "co.uk"},   // multi-label registry suffix
 		{"www.gov.uk", "gov.uk"}, // multi-label registry suffix
 		{"usa.gov", "gov"},
+		{"foo.blogspot.com", "com"}, // private-registry suffix walks up to ICANN
 		{"xn--mre-qla.no", "no"},
 	}
 	for _, tc := range cases {

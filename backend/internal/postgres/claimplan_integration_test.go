@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/lasseh/whynoipv6/internal/postgres/pgtest"
 )
 
 // The claim query's inner SELECT, textually matching 04-lifecycle-scheduling.md
@@ -70,7 +72,7 @@ func findNode(n explainNode, pred func(explainNode) bool) *explainNode {
 // next_check_at), executing < 50 ms; the empty-frontier probe < 5 ms; the
 // full-backlog case is exercised and its O(due) cost recorded.
 func TestClaimPlanGate(t *testing.T) {
-	pool := newTestDB(t)
+	pool := pgtest.NewDB(t)
 	ctx := context.Background()
 
 	// Seed 1M ranked apexes, next_check_at spread over the NEXT 24h (not
@@ -135,7 +137,7 @@ func TestClaimPlanGate(t *testing.T) {
 // TestClaimPlanEmptyFrontier: the idle probe on an empty frontier is a
 // sub-5ms range probe.
 func TestClaimPlanEmptyFrontier(t *testing.T) {
-	pool := newTestDB(t)
+	pool := pgtest.NewDB(t)
 	res := explainClaim(t, pool)
 	t.Logf("empty-frontier execution: %.3f ms", res.ExecutionTime)
 	if res.ExecutionTime >= 5 {

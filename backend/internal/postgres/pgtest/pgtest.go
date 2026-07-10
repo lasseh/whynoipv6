@@ -1,6 +1,10 @@
 //go:build integration
 
-package postgres
+// Package pgtest is the shared integration-test harness (10-testing.md §9.1):
+// one TimescaleDB container per test binary; Main migrates a template
+// database once and each test clones it, so tests never share mutable state.
+// All files are integration-tagged — nothing here ships in the binaries.
+package pgtest
 
 import (
 	"context"
@@ -8,7 +12,6 @@ import (
 	"fmt"
 	"log"
 	"net/url"
-	"os"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -25,10 +28,6 @@ import (
 	"github.com/lasseh/whynoipv6/db/migrations"
 )
 
-// The shared integration harness (10-testing.md §9.1): one TimescaleDB
-// container per test binary; TestMain migrates a template database once and
-// each test clones it, so tests never share mutable state.
-
 const templateDB = "whynoipv6_template"
 
 var (
@@ -36,7 +35,11 @@ var (
 	dbSeq    atomic.Int64
 )
 
-func TestMain(m *testing.M) {
+// Main is the TestMain body: it boots the container, migrates the template
+// database, runs the tests, and terminates the container. Callers:
+//
+//	func TestMain(m *testing.M) { os.Exit(pgtest.Main(m)) }
+func Main(m *testing.M) int {
 	ctx := context.Background()
 	ctr, err := tcpostgres.Run(ctx, "timescale/timescaledb:latest-pg18",
 		tcpostgres.WithDatabase(templateDB),
@@ -51,26 +54,28 @@ func TestMain(m *testing.M) {
 				WithOccurrence(2).WithStartupTimeout(3*time.Minute)),
 	)
 	if err != nil {
-		log.Fatalf("start timescaledb container: %v", err)
+		log.Printf("start timescaledb container: %v", err)
+		return 1
 	}
 	defer func() { _ = testcontainers.TerminateContainer(ctr) }()
 
 	tmplDSN, err := ctr.ConnectionString(ctx, "sslmode=disable")
 	if err != nil {
-		_ = testcontainers.TerminateContainer(ctr)
-		log.Fatalf("container dsn: %v", err) //nolint:gocritic // fatal during setup, container already terminated
+		log.Printf("container dsn: %v", err)
+		return 1
 	}
-	if err := migrateUp(tmplDSN); err != nil {
-		log.Fatalf("migrate template: %v", err)
+	if err := MigrateUp(tmplDSN); err != nil {
+		log.Printf("migrate template: %v", err)
+		return 1
 	}
 	adminDSN = replaceDBName(tmplDSN, "postgres")
 
-	os.Exit(m.Run())
+	return m.Run()
 }
 
-// migrateUp applies the embedded migrations 000001→000003 to dsn.
-func migrateUp(dsn string) error {
-	mig, err := newMigrator(dsn)
+// MigrateUp applies the embedded migrations 000001→000003 to dsn.
+func MigrateUp(dsn string) error {
+	mig, err := NewMigrator(dsn)
 	if err != nil {
 		return err
 	}
@@ -81,7 +86,8 @@ func migrateUp(dsn string) error {
 	return nil
 }
 
-func newMigrator(dsn string) (*migrate.Migrate, error) {
+// NewMigrator builds a golang-migrate instance over the embedded SQL files.
+func NewMigrator(dsn string) (*migrate.Migrate, error) {
 	src, err := iofs.New(migrations.Files, ".")
 	if err != nil {
 		return nil, err
@@ -99,9 +105,9 @@ func replaceDBName(dsn, name string) string {
 	return u.String()
 }
 
-// newTestDB clones the migrated template database and returns a pool on the
+// NewDB clones the migrated template database and returns a pool on the
 // clone (10-testing.md §9.1). The clone is dropped on test cleanup.
-func newTestDB(t *testing.T) *pgxpool.Pool {
+func NewDB(t *testing.T) *pgxpool.Pool {
 	t.Helper()
 	ctx := context.Background()
 	name := fmt.Sprintf("t_%d", dbSeq.Add(1))
