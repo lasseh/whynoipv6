@@ -216,3 +216,88 @@ func deref(s *string) string {
 	}
 	return *s
 }
+
+// TestResourceCLI (P5.2 / 06 §5.5): the manual-upsert xmax probe bumps
+// dependent_count only on a genuine insert; a manual link survives prune;
+// remove deletes and decrements.
+func TestResourceCLI(t *testing.T) {
+	pool := pgtest.NewDB(t)
+	ctx := context.Background()
+	seedDue(t, pool, 1)
+	var domainID int64
+	if err := pool.QueryRow(ctx, "SELECT id FROM domain WHERE host='d1.example'").Scan(&domainID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, "INSERT INTO resource_host (host) VALUES ('manual.example.net')"); err != nil {
+		t.Fatal(err)
+	}
+	var rhID int64
+	if err := pool.QueryRow(ctx, "SELECT id FROM resource_host WHERE host='manual.example.net'").Scan(&rhID); err != nil {
+		t.Fatal(err)
+	}
+
+	manualAdd := func(required bool) {
+		if _, err := pool.Exec(ctx, `
+			WITH up AS (
+			  INSERT INTO domain_resource (domain_id, resource_host_id, source, required)
+			  VALUES ($1, $2, 'manual', $3)
+			  ON CONFLICT (domain_id, resource_host_id)
+			  DO UPDATE SET source = 'manual', required = EXCLUDED.required
+			  RETURNING (xmax = 0) AS inserted
+			)
+			UPDATE resource_host SET dependent_count = dependent_count + 1
+			WHERE id = $2 AND (SELECT inserted FROM up)`, domainID, rhID, required); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	manualAdd(true)
+	manualAdd(false) // re-add: updates required, must NOT double-count
+	stored, actual := countDeps(t, pool, "manual.example.net")
+	if stored != 1 || actual != 1 {
+		t.Fatalf("after double add: stored=%d actual=%d, want 1/1", stored, actual)
+	}
+	var required bool
+	if err := pool.QueryRow(ctx,
+		"SELECT required FROM domain_resource WHERE domain_id=$1 AND resource_host_id=$2",
+		domainID, rhID).Scan(&required); err != nil {
+		t.Fatal(err)
+	}
+	if required {
+		t.Error("re-add with --advisory must update required=false")
+	}
+
+	// The manual link survives the prune even when stale.
+	if _, err := pool.Exec(ctx,
+		"UPDATE domain_resource SET last_seen = now() - interval '90 days' WHERE domain_id=$1", domainID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, sqlPruneDomainResources, domainID, tstz(time.Now().UTC())); err != nil {
+		t.Fatal(err)
+	}
+	if stored, actual := countDeps(t, pool, "manual.example.net"); stored != 1 || actual != 1 {
+		t.Errorf("manual link pruned: stored=%d actual=%d", stored, actual)
+	}
+
+	// Remove deletes and decrements; a second remove touches nothing.
+	removeSQL := `
+		WITH del AS (
+		  DELETE FROM domain_resource
+		  WHERE domain_id = $1 AND resource_host_id = $2
+		  RETURNING resource_host_id
+		)
+		UPDATE resource_host SET dependent_count = dependent_count - 1
+		WHERE id IN (SELECT resource_host_id FROM del)`
+	if _, err := pool.Exec(ctx, removeSQL, domainID, rhID); err != nil {
+		t.Fatal(err)
+	}
+	if stored, actual := countDeps(t, pool, "manual.example.net"); stored != 0 || actual != 0 {
+		t.Errorf("after remove: stored=%d actual=%d", stored, actual)
+	}
+	if _, err := pool.Exec(ctx, removeSQL, domainID, rhID); err != nil {
+		t.Fatal(err)
+	}
+	if stored, _ := countDeps(t, pool, "manual.example.net"); stored != 0 {
+		t.Errorf("double remove must not decrement below 0: stored=%d", stored)
+	}
+}
