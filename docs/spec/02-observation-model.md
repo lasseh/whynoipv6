@@ -95,6 +95,11 @@ type AAAAAnswer struct {
     AOutcome   string      // "a_present" | "a_absent" | "a_error"; set only when the
                            // AAAA quorum result was NOERROR-empty — the conditional
                            // bulk-resolver A lookup (§2.7). Empty otherwise.
+    CDOutcome  string      // "cd_present" | "cd_empty" | "cd_fail"; set only when the AAAA quorum
+                           // was `error` from all-SERVFAIL/REFUSED and the conditional CD=1
+                           // (checking-disabled) re-query ran (§2.7b — broken-DNSSEC rescue).
+                           // cd_present ⇒ IPs carry the unvalidated authoritative AAAA and Rcode
+                           // is set NOERROR. Empty otherwise.
 }
 
 // QuorumInfo records the per-resolver breakdown of a consensus lookup.
@@ -306,6 +311,16 @@ func (r *Resolver) classifyA(ctx context.Context, name string) string {
 
 No CNAME chase is needed: the upstreams are recursive (Unbound), so any chain's terminal A records already appear in the answer section. No token bucket applies (bulk path, local Unbound). The A answer is not quorumed: any single wrong answer still has to survive the N=2 confirmation gate (03-state-machine.md) before it can change confirmed state.
 
+### 2.7b Conditional CD=1 (broken-DNSSEC) re-query — `CDOutcome`
+
+**Decision (grilling round, 2026-07-10).** When **and only when** the AAAA quorum is unavailable/`error` *because every provider that answered returned an explicit **SERVFAIL** or **REFUSED** rcode* — the broken-DNSSEC signature (timeouts/transport errors do **not** qualify; derive it from `QuorumInfo.Rcodes`: all non-empty and ∈ {`SERVFAIL`,`REFUSED`}, with no `exists`/`empty`/`nxdomain` valid answer) — `internal/consensus` issues **ONE** AAAA query for the same name through the **bulk resolver** (local Unbound) with the DNS **CD (Checking Disabled) bit set**, so the resolver returns the authoritative answer *without* DNSSEC validation. This is the broken-DNSSEC rescue: a domain whose chain is bogus (all three validating public resolvers SERVFAIL) but which genuinely publishes AAAA is credited for its IPv6 rather than treated as unreachable. Outcomes set `AAAAAnswer.CDOutcome`, and the return is shaped so the adapted `dns_aaaa_base`/`dns_aaaa_www` checks and the mapper (§7.3) need **no** new branch:
+
+- **`cd_present`** — ≥1 globally-routable AAAA (routable filter §2.5 applied). The domain **has IPv6**; only DNSSEC validation is broken. Return `AAAAAnswer{IPs: <routable CD answer>, Rcode: "NOERROR", CDOutcome: "cd_present", Quorum: &qi}, nil` — the check's existing `len(IPs)>0 → supported` branch fires, so `base` observation is **`supported`**.
+- **`cd_empty`** — NOERROR with no routable AAAA (resolves unvalidated, no v6). Run the conditional A lookup (§2.7) and return `AAAAAnswer{IPs: nil, Rcode: "NOERROR", CDOutcome: "cd_empty", AOutcome: <a>, Quorum: &qi}, nil` — the check's NOERROR-empty branch fires and the §4 base table maps by `a_outcome` exactly as the normal `empty` path (`a_present`→`unsupported`, `a_absent`→`no_record`).
+- **`cd_fail`** — still SERVFAIL/REFUSED or no answer: the authoritative servers give nothing even without validation → genuinely lame/dead. Return the plain quorum-unavailable error unchanged (`AAAAAnswer{Quorum: &qi, CDOutcome: "cd_fail"}, fmt.Errorf(...)`) so `base` stays **`error`** (non-definitive). **This is the only SERVFAIL path that can feed dead-detection** (03-state-machine.md §4 branch b / 04-lifecycle-scheduling.md §6.1 branch b).
+
+In every case the `dns_dnssec` check independently records the broken chain as the informational `dnssec` dimension, which **never gates classification** (03-state-machine.md §10) — so a rescued domain is fully hero-eligible while its brokenness stays visible on the detail page. The CD=1 query is **not** quorumed (any single wrong answer still faces the N=2 confirmation gate — 03-state-machine.md), carries **no** token bucket (bulk/local path), and is **not** a fast-lane-breaker sample (§2.9). It fires only on the all-SERVFAIL signature — a rare path — so its query load is negligible (it rides alongside the budgeted conditional A queries; 00-overview.md — sizing constants).
+
 ### 2.8 Rate control: per-provider token buckets
 
 One `golang.org/x/time/rate.Limiter` per provider: rate = `consensus.per_provider_qps` tokens/s sustained, burst = `consensus.per_provider_qps` (one second of burst). Acquisition is **blocking** (`limiter.Wait(ctx)`) — worker slots absorb the wait; this is the "smooth the rate" mechanism.
@@ -393,7 +408,11 @@ Each per-resolver AAAA answer (apex and www, consensus resolver) reduces to one 
 | `empty` | `a_absent` | `no_record` (empty/parked zone → inactive) |
 | `empty` | `a_error` | `error` |
 | `nxdomain` | not run | `no_record` (domain doesn't exist → inactive; raw rcode kept in `scan_detail` so dead-detection can require NXDOMAIN specifically) |
-| `error` | not run | `error` |
+| `error` (timeout/transport — CD=1 not run) | not run | `error` |
+| `error` (all-SERVFAIL/REFUSED) → CD=1 **`cd_present`** | not run | `supported` (broken-DNSSEC rescue: has AAAA, only validation fails; `dnssec` broken, informational — §2.7b) |
+| `error` (all-SERVFAIL/REFUSED) → CD=1 **`cd_empty`** | via CD=1: `a_present` | `unsupported` |
+| `error` (all-SERVFAIL/REFUSED) → CD=1 **`cd_empty`** | via CD=1: `a_absent` | `no_record` |
+| `error` (all-SERVFAIL/REFUSED) → CD=1 **`cd_fail`** | not run | `error` (genuinely lame → the only SERVFAIL path feeding dead-detection, 03-state-machine.md §4 branch b) |
 | no quorum | not run | `inconsistent` |
 
 **`www` observation** (skipped entirely — forced `not_applicable` — for `kind=subdomain`):
@@ -405,7 +424,11 @@ Each per-resolver AAAA answer (apex and www, consensus resolver) reduces to one 
 | `empty` | `a_absent` | `not_applicable` (www node serves nothing → site doesn't use www) |
 | `empty` | `a_error` | `error` |
 | `nxdomain` | not run | `not_applicable` (site doesn't use www) |
-| `error` | not run | `error` |
+| `error` (timeout/transport — CD=1 not run) | not run | `error` |
+| `error` (all-SERVFAIL/REFUSED) → CD=1 **`cd_present`** | not run | `supported` (broken-DNSSEC rescue; §2.7b) |
+| `error` (all-SERVFAIL/REFUSED) → CD=1 **`cd_empty`** | via CD=1: `a_present` | `unsupported` (www v4-only → blocks hero, `www_missing`) |
+| `error` (all-SERVFAIL/REFUSED) → CD=1 **`cd_empty`** | via CD=1: `a_absent` | `not_applicable` (www node serves nothing) |
+| `error` (all-SERVFAIL/REFUSED) → CD=1 **`cd_fail`** | not run | `error` |
 | no quorum | not run | `inconsistent` |
 
 **`www` never produces `no_record`.** `no_record` can only ever be observed (and confirmed) for `base`.
@@ -574,6 +597,8 @@ Check-name keys into `sr.Results`: `dns_aaaa_base`, `dns_aaaa_www`, `dns_ns_ipv6
    3. `r.Status == supported` → `supported`.
    4. `r.Status == not_applicable` (quorum `nxdomain`) → `no_record`.
    5. `r.Status == unsupported` (quorum `empty`) → by `r.Details["a_outcome"]`: `a_present` → `unsupported`; `a_absent` → `no_record`; `a_error` → `error`; key missing → `error` + `level=warn msg="a_outcome missing"` (defensive; the consensus wrapper always sets it on the empty path).
+
+   **(CD=1 broken-DNSSEC rescue is transparent here — §2.7b reshapes a rescued all-SERVFAIL result upstream in `internal/consensus` into a `supported` Result (`cd_present`) or a NOERROR-empty Result carrying `a_outcome` (`cd_empty`), so rules 3/5 apply unchanged; only a `cd_fail` reaches rule 2 as `error`. The mapper needs no CDOutcome branch.)**
 2. **`www`** — if `kind == subdomain` → `not_applicable` unconditionally. Otherwise identical to step 1 over `sr.Results["dns_aaaa_www"]` with the two www-table substitutions: `not_applicable` engine status (nxdomain) → `not_applicable` (not `no_record`), and `a_absent` → `not_applicable` (not `no_record`).
 3. **`ns`** — from `sr.Results["dns_ns_ipv6"].Status`: `supported` → `supported`; `partial` → `supported`; `unsupported` → `unsupported`; `error` → `error`; `not_applicable` → `error` + `level=warn msg="unexpected ns not_applicable"` (**Decision:** defensive mapping — the walk-up always reaches an authoritative zone, so engine `not_applicable` is unreachable by construction; mapping it non-definitive guarantees it can never confirm and never touch state).
 4. **`mx`** — from `sr.Results["dns_mx_ipv6"].Status`: `supported` → `supported`; `partial` → `supported`; `unsupported` → `unsupported`; `not_applicable` → `not_applicable` (null-MX per RFC 7505; and for `kind=subdomain`, no explicit MX — the implicit-MX fallback is disabled for subdomains in the adapted check, 01-engine.md); `error` → `error`.
@@ -607,5 +632,6 @@ Test fixtures and tables live in 10-testing.md (fake-DNS server driving `interna
 2. REFUSED and SERVFAIL both classify as non-answers (never as `empty`); REFUSED is observable in `QuorumInfo.Rcodes`.
 3. The answer returned on quorum is byte-identical to the first in-order agreeing provider's answer (no record-set merging), with non-routable AAAA filtered.
 4. The conditional A lookup runs exactly when the quorum symbol is `empty`, classifies `a_present`/`a_absent`/`a_error` per §2.7 (including A-NXDOMAIN → `a_absent` and A-SERVFAIL → `a_error`), and never runs otherwise.
+4b. The conditional **CD=1** re-query (§2.7b) runs exactly when the quorum is unavailable and every answering provider returned SERVFAIL/REFUSED (not timeouts): `cd_present` → the returned answer is `supported` with routable AAAA; `cd_empty` → falls to the conditional-A path; `cd_fail` → plain error (the only SERVFAIL path feeding dead-detection). It never runs on timeout/transport-driven errors or on any valid-quorum outcome, and never enters the fast-lane breaker.
 5. Breakers: fast-lane opens/closes at the configured thresholds and flips `FastLaneSuppressed()`; provider breaker drops at >50% non-answers over ≥200 samples, degrades quorum to 2-of-2, restores after 3 canary successes, and never drops a second provider.
 6. Mapper: every row of the §4 base/www/ns/mx tables, every row of the §5 conn table (including both preflight guard downgrades), and every branch of the §6 roll-up (conn-error defer, conn-unsupported → not_applicable, dead-reference exclusion, NULL-host defer, empty → not_applicable, any-unsupported, all-supported, and the `resources.enabled=false` gate) is covered by a table-driven case, and `partial` appears in mapper output only for `ptr`/`parity`.

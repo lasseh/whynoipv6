@@ -7,7 +7,7 @@ _Status: Round 3.0 — API redesign folded in (docs/api-design-research.md, deci
 **Deliverables:**
 
 - `internal/checker/` — the whole package: `checker.go`, `constants.go`, `resolver.go`, `ssrf.go`, `runner.go`, `seam.go` (new — the `AAAAResolver` seam types), `preflight.go` (new — lifted from the v6audit agent), and the 15 check implementation files listed in §2 (including `resource_discovery.go`, the adapted `resource_ipv6.go`).
-- The `codeberg.org/miekg/dns` go.mod pin.
+- The `github.com/miekg/dns` v1 go.mod pin (exact version; the codeberg v2 rewrite is deferred — §7).
 - The config keys `checks.max_ns_lookups`, `checks.max_mx_lookups`, `resolver.bulk_upstreams`, `preflight.probe_host` (introduced here by name; registry: 09-ops.md).
 
 **Decision:** There is no separate `internal/resolver` package. Per design §6 the lifted resolver (`resolver.go`) and SSRF dialer (`ssrf.go`) live inside `internal/checker`, exactly as they do in v6audit — the package is lifted as a unit. `internal/consensus` (the quorum implementation of the seam in §9) is specified in 02-observation-model.md.
@@ -40,7 +40,7 @@ Every file below is copied from the v6audit repo and then modified exactly as st
 |---|---|---|---|
 | `internal/checker/checker.go` | `checker.go` | **adapted** | Drop `Category()` from the `Checker` interface; drop `ScanResult.Score`/`Grade`; delete `CheckerToDBColumn` and `DBColumnToChecker` (§5) |
 | `internal/checker/constants.go` | `constants.go` | **adapted** | Delete the four scoring-category constants; keep the error/reason message constants (§5) |
-| `internal/checker/resolver.go` | `resolver.go` | **adapted** | Delete the in-process TTL cache (§6); miekg/dns v2 port is §4 |
+| `internal/checker/resolver.go` | `resolver.go` | **adapted** | Delete the in-process TTL cache (§6); DNS library kept on `github.com/miekg/dns` v1, no port (§4/§7) |
 | `internal/checker/ssrf.go` | `ssrf.go` | **verbatim** | — |
 | `internal/checker/runner.go` | `runner.go` | **adapted** | Remove `ComputeScore`; move `latency_ipv4` to phase 2; kind-aware execution; new constructor wiring (§10) |
 | `internal/checker/dns_aaaa_base.go` | `dns_aaaa_base.go` | **adapted** | Resolves through the `AAAAResolver` seam; quorum details; NXDOMAIN branch kept as raw engine behavior (§11.1) |
@@ -80,7 +80,7 @@ These are the ONLY behavior changes permitted inside files marked "verbatim". Th
 
    This constant is used by every HTTP(S) fetch in the package (`http_ipv6`, `https_ipv6`, `response_parity`, `resource_discovery`, `latency`). The SMTP EHLO name in `smtp_ipv6.go` changes from `EHLO v6audit.com` to `EHLO whynoipv6.com` (design §2.5 pins both identity strings together). The `/bot` page contract (purpose, opt-out contact, crawl behavior) is an API/ops deliverable, not the engine's.
 
-2. **miekg/dns v2 port.** All lifted code imports `codeberg.org/miekg/dns` instead of `github.com/miekg/dns`. See §7 for the pin and porting rule.
+2. **~~miekg/dns v2 port~~ — RETIRED (grilling round, 2026-07-10).** The lift **stays on `github.com/miekg/dns` v1** (the API the v6audit code was written against); there is **no** DNS-library port. The codeberg v2 rewrite is deferred (§7). Two verbatim-file behavior deviations remain active (1 and 3); the numbering is kept so deviation 3 is not renumbered.
 
 3. **`http_ipv6` terminal error classification.** `http_ipv6.go` is extended with the same `error_type` classification `https_ipv6.go` already has, so the `conn` composition table (02-observation-model.md) applies identically on the http-only fallback path. Exact rule in §11.6.
 
@@ -88,7 +88,7 @@ These are the ONLY behavior changes permitted inside files marked "verbatim". Th
 
 Applied uniformly to every copied file; they change signatures and imports, never behavior:
 
-1. **Module path.** `package checker` moves to `<module>/internal/checker`. Every `github.com/miekg/dns` import becomes `codeberg.org/miekg/dns` and the code is ported to the v2 API (§7).
+1. **Module path.** `package checker` moves to `<module>/internal/checker`. The `github.com/miekg/dns` imports are **kept as-is** (v1 — the API the lift targets); there is no DNS-library port (§7).
 2. **`Category()` removal.** The `Category()` method is deleted from the `Checker` interface and from every check implementation. The category constants in `constants.go` go with it.
 3. **Kind parameter.** **Decision:** the `Checker` interface method becomes `Check(ctx context.Context, host string, kind Kind) (Result, error)`. This is the mechanism for design §2.2's kind-aware checks. Every check file gets the one-line signature change; every check EXCEPT `dns_mx_ipv6` ignores `kind` (the `www` skip for subdomains is handled by the runner, §10, not by the check). `Kind` is defined in `checker.go`:
 
@@ -215,7 +215,11 @@ Do NOT replace the cache with an LRU or any other in-process cache. Rationale (r
 
 ## 7. DNS library pin
 
-"miekg/dns v2" means module path **`codeberg.org/miekg/dns`**, pinned in `go.mod` at an exact version — v0.6.83 at design time; use the latest v0.6.x at implementation time. It is pre-1.0: any version bump is a reviewed change, never picked up via `go get -u` in passing. **`github.com/miekg/dnsv2` is a stale dead path — never import it.** The lifted code was written against v1 (`github.com/miekg/dns`); the port is mechanical per the official v1→v2 migration guide in the module's documentation. The ported resolver must preserve every behavior in §6.1 bit-for-bit — the fake-DNS parity tests in 10-testing.md are the gate (they run identical query scenarios against the v6audit v1 behavior spec: EDNS0 advertisement, TCP-on-truncation, retry-on-next-upstream, CNAME chase with loop detection, rcode string mapping, TXT concatenation, the DNSSEC DO/AD flag handling in §11.13).
+**Decision (grilling round, 2026-07-10 — supersedes the design's codeberg/v2 pin).** The DNS library is **`github.com/miekg/dns`**, pinned in `go.mod` at an exact version — the newest **v1.1.x** at implementation time (v1.1.72 at spec time). This is the API the lifted v6audit code was written against, so the lift is a straight copy with **no DNS-library port**. Any version bump is a reviewed change, never picked up via `go get -u` in passing.
+
+The pre-1.0 rewrite **`codeberg.org/miekg/dns`** (v0.6.x) is deliberately **not** used in this build: porting the entire engine — the single most load-bearing spot — to a pre-1.0 API, entangled with the lift, would make a fake-DNS parity failure ambiguous (lift bug vs. port bug) for no benefit while a maintained v1 exists. It is a possible **future** migration once the engine is proven and parity-tested, tracked as deferred work, never a dependency of the initial lift. **`github.com/miekg/dnsv2` is a stale dead path — never import it.**
+
+The lifted resolver must preserve every behavior in §6.1 bit-for-bit — the fake-DNS parity tests in 10-testing.md are the gate (they run identical query scenarios against the v6audit v1 behavior spec: EDNS0 advertisement, TCP-on-truncation, retry-on-next-upstream, CNAME chase with loop detection, rcode string mapping, TXT concatenation, the DNSSEC DO/AD flag handling in §11.13).
 
 ## 8. SafeDialer / SSRF-safe dialing (`ssrf.go`)
 
@@ -251,6 +255,11 @@ type AAAAAnswer struct {
     AOutcome   string      // "a_present" | "a_absent" | "a_error"; set only when the
                            // AAAA quorum result was NOERROR-empty — the conditional
                            // bulk-resolver A lookup (02-observation-model.md). Empty otherwise.
+    CDOutcome  string      // "cd_present" | "cd_empty" | "cd_fail"; set only when the AAAA quorum
+                           // was `error` from all-SERVFAIL/REFUSED and the conditional CD=1
+                           // (checking-disabled) re-query ran (02-observation-model.md §2.7b —
+                           // broken-DNSSEC rescue). cd_present ⇒ IPs carry the unvalidated
+                           // authoritative AAAA and Rcode is set NOERROR. Empty otherwise.
 }
 
 // QuorumInfo records the per-resolver breakdown of a consensus lookup.
@@ -383,6 +392,7 @@ details["rcode"] = ans.Rcode
 if len(ans.CNAMEChain) > 0 { details["cname_chain"] = ans.CNAMEChain }
 if ans.Quorum != nil { details["quorum"] = ans.Quorum }        // the §2.4 "disagreement annotation"
 if ans.AOutcome != "" { details["a_outcome"] = ans.AOutcome }  // conditional A lookup result
+if ans.CDOutcome != "" { details["cd_outcome"] = ans.CDOutcome } // conditional CD=1 (broken-DNSSEC) re-query result
 if errors.Is(err, ErrQuorumInconsistent) {
     details["inconsistent"] = true
     return Result{Status: StatusError, Details: details, Latency: time.Since(start)}, nil
@@ -507,7 +517,7 @@ Source: `v6audit/internal/checker/dns_ptr_ipv6.go`. Timeout 30s. Informational; 
 
 ### 11.13 `dns_dnssec` note on transport
 
-(Behavior in §11.5.) The DS query sets the DO bit; the AD probe explicitly does NOT set DO and relies on the validating upstream — both must survive the v2 port unchanged; the fake-DNS tests in 10-testing.md assert the flag bits on the wire.
+(Behavior in §11.5.) The DS query sets the DO bit; the AD probe explicitly does NOT set DO and relies on the validating upstream — both must be preserved by the lift unchanged; the fake-DNS tests in 10-testing.md assert the flag bits on the wire.
 
 ### 11.14 `latency_ipv4` / `latency_ipv6` — TTFB comparison (verbatim; phase move only)
 
@@ -578,7 +588,7 @@ Everything else in the engine is a compile-time constant, deliberately not confi
 
 Behavioral gates for this file's deliverables (test fixtures and the fake-DNS harness live in 10-testing.md):
 
-1. `go vet`/build passes with `codeberg.org/miekg/dns` pinned at an exact v0.6.x and NO import of `github.com/miekg/dns` or `github.com/miekg/dnsv2` anywhere in the module.
+1. `go vet`/build passes with `github.com/miekg/dns` pinned at an exact v1.1.x and NO import of `codeberg.org/miekg/dns` or `github.com/miekg/dnsv2` anywhere in the module.
 2. Grep gates: no identifier `Score`, `Grade`, `ComputeScore`, `Category`, `CheckerToDBColumn`, `DBColumnToChecker`, `cacheEntry`, or `dnsCacheKey` in `internal/checker`; the string `v6audit` appears nowhere in shipped code.
 3. `Runner.Run` on a host with no AAAA anywhere executes network I/O for phase-1 checks only; all eight phase-2 checks (nine when `crawler.resources.enabled` is true — see §10.1: `resource_discovery` is registered only then) appear in `Results` as `not_applicable` with the exact skip-reason strings of §5, and `latency_ipv4` is among them.
 4. `Runner.Run(ctx, host, KindSubdomain)` yields `dns_aaaa_www` = `not_applicable` without a DNS query, and `dns_mx_ipv6` on a no-MX subdomain yields `not_applicable` without an implicit-MX AAAA lookup.

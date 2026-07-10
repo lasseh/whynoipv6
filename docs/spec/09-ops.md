@@ -201,7 +201,7 @@ Provider names/addresses (`1.1.1.1`, `8.8.8.8`, `9.9.9.9` + their v6 forms), the
 | `tranco.retry_interval` | `TRANCO_RETRY_INTERVAL` | duration | `2h` | 06 | Re-attempt spacing within a cycle. |
 | `tranco.stale_warn_after` | `TRANCO_STALE_WARN_AFTER` | duration | `48h` | 06 | Ops-webhook warning when no successful import for this long (rate-limited 1/24h). |
 
-### 2.6 Campaign sync (crawler tick + Semaphore-invoked v6ctl)
+### 2.6 Campaign sync (crawler tick + CI-invoked v6ctl)
 
 | Key | env var | Type | Default | From | Meaning |
 |---|---|---|---|---|---|
@@ -410,7 +410,7 @@ alerting infrastructure. The **Tranco import has no timer**: it is fired by the 
 coordinator goroutine under the `JobTrancoImport` advisory lock (06-ingest.md,
 04-lifecycle-scheduling.md). The **daily tick has no timer**: the coordinator fires it at
 `03:30 UTC` under `JobDailyTick`. Campaign sync runs from the tick **and** on a
-Semaphore webhook → `v6ctl campaign sync` (06-ingest.md).
+GitHub Actions `repository_dispatch` webhook → operator CI runs `v6ctl campaign sync` (06-ingest.md).
 
 | Timer | Host | OnCalendar (UTC) | ExecStart | Notes |
 |---|---|---|---|---|

@@ -200,7 +200,7 @@ tranco:
 
 ### 3.1 One implementation, serialized
 
-There is exactly ONE sync implementation: `internal/campaign.Sync(ctx, cfg, pool)`. `v6ctl campaign sync` (webhook path: on merge to main, repo dispatch → operator CI (Semaphore) runs it on the backend host) and the crawler daily tick (04-lifecycle-scheduling.md — daily tick, step 5, after the lifecycle sweep) both call it. The webhook is latency sugar; the cron is the guarantee — **both** stay. No other code touches the campaign checkout or the campaign tables' YAML-derived columns.
+There is exactly ONE sync implementation: `internal/campaign.Sync(ctx, cfg, pool)`. `v6ctl campaign sync` (webhook path: on merge to main, GitHub Actions `repository_dispatch` → operator CI runs it on the backend host) and the crawler daily tick (04-lifecycle-scheduling.md — daily tick, step 5, after the lifecycle sweep) both call it. The webhook is latency sugar; the cron is the guarantee — **both** stay. No other code touches the campaign checkout or the campaign tables' YAML-derived columns.
 
 Sync serializes across processes with the `JobCampaignSync` session-level advisory lock (`internal/lock`, ClassID 60660, job 3), acquired **before any git operation** — the lock protects the shared checkout at `campaign.repo_path` as well as the DB. The lock lives on a dedicated pooled connection held for the whole run; the import transaction runs on the pool as usual. **Both sync paths use the blocking `Run(JobCampaignSync, wait=5m, …)` variant** — an explicitly requested sync and the daily tick's nested step each wait out a concurrent run rather than dropping the daily guarantee; deadline exceeded → exit 1 with `"another campaign sync is running"`. A crash mid-sync closes the connection and releases the lock automatically.
 
@@ -216,7 +216,7 @@ Exactly five top-level keys per file; unknown keys are a validation error:
 | `domains` | non-empty list of hostname strings | yes |
 | `tags` | list of strings (mandate/campaign tags, OPEN-12) | no |
 
-**Decision (tags — OPEN-12):** `tags` are **free-form**, not a fixed enum — a bounded vocabulary would need a maintained registry that rejects legitimate new mandates. The one tag with fixed meaning is the literal `mandate`: campaigns carrying it are what the `GET /mandates` surface selects (`'mandate' = ANY(tags)`; 07-api.md — §5.6); descriptive companion tags (`eu-2030`, `sector-banking`) are free-form. Each tag is normalized to lowercase and must match `^[a-z0-9][a-z0-9-]{0,31}$` (kebab-case, ≤32 chars); ≤16 tags per file; whitespace-only/empty tags are a validation error; duplicates (post-normalization) are folded. The parsed, normalized list is written verbatim to `campaign.tags` (05-schema.md — campaign) by sync (§3.3); the `?tag=` filter and `/mandates` (07-api.md) read it. Registrar tagging is **not** added (deferred, §6.10).
+**Decision (tags — OPEN-12):** `tags` are **free-form**, not a fixed enum — a bounded vocabulary would need a maintained registry that rejects legitimate new mandates. The one tag with fixed meaning is the literal `mandate`: campaigns carrying it are what the `GET /mandates` surface selects (`'mandate' = ANY(tags)`; 07-api.md — §5.6); descriptive companion tags (`eu-2030`, `sector-banking`) are free-form. Each tag is normalized to lowercase and must match `^[a-z0-9][a-z0-9-]{0,31}$` (kebab-case, ≤32 chars); ≤16 tags per file; whitespace-only/empty tags are a validation error; duplicates (post-normalization) are folded. The parsed, normalized list is written verbatim to `campaign.tags` (05-schema.md — campaign) by sync (§3.3); the `?tag=` filter and `/mandates` (07-api.md) read it. Registrar tagging is **not** added (deferred, §6.10). **Launch-state note (grilling round, 2026-07-10):** none of the 28 current campaign YAMLs carry a `tags:` key, so the `/mandates` surface and `?tag=` filter ship working but **empty** until tags are added to the campaign repo.
 
 **Decision:** the list key is **`domains`** — verified against all 29 files in the live campaign repo and production's Go struct (`yaml:"domains"`); the design doc's phrase "`list` of hostnames" described the type, not the key. The parser (`internal/campaign`) is tolerant of the format variance found in the repo: 0/2/4-space indents, comments, trailing spaces (plain `gopkg.in/yaml.v3` unmarshal into a typed struct with `KnownFields(true)` gives exactly this: YAML-standard tolerance plus unknown-key errors).
 
@@ -281,7 +281,7 @@ campaign:
   max_domains_per_file: 1000           # int; PR-validation size cap (§4)
 ```
 
-Ops (Ansible; definitions in 09-ops.md): the checkout and the GitHub deploy key (write access, campaign repo only) are provisioned for the single service user that runs both `crawler` and Semaphore-invoked `v6ctl`.
+Ops (Ansible; definitions in 09-ops.md): the checkout and the GitHub deploy key (write access, campaign repo only) are provisioned for the single service user that runs both `crawler` and CI-invoked `v6ctl`.
 
 ### 3.6 Lifecycle-sweep linkage (restated for the sweep's owner)
 

@@ -72,6 +72,8 @@ under `docs/gates/` or a test fixture) so the gate result is auditable, never si
 The driving workflow executes this plan as follows. These rules are normative for the runner,
 not the implementer:
 
+**Decision (grilling round, 2026-07-10):** this build runs **interactive-incremental** — a human-driven agent executes the tasks in dependency order, one task (or a tight logical group) at a time, running `make test && make lint` and committing per task. The autonomous multi-agent workflow-runner contract below is retained as **reference** — it still defines the task order, dependencies, and acceptance gates the interactive build follows — but is not literally executed by a headless runner in this build.
+
 1. **One task per agent invocation.** Spawn a fresh agent per task ID with that task's
    **Governs** spec files and this task block as its brief. Do not batch two task IDs into one
    agent unless Appendix B lists them as a fused pair.
@@ -184,7 +186,7 @@ gate-independent tasks so a design flaw surfaces before the crawler is built.
 | Frontier claim query degrades at 1M rows / on backlog churn | **P1.11** (claim-plan EXPLAIN spike), re-run at **P2.G4** and **P3.G4** with real churn + `pgstattuple` bloat check | **P1.11** — runs the moment P1.4 lands |
 | Public-resolver load / consensus latency infeasible | **P1.12** (resolver-latency spike), verified at scale in **P3.5** | **P1.12** — runs the moment P0.4 (compose Unbound) lands |
 | Confirmed-status machine is novel code | Heaviest unit coverage in the repo: **P2.4/P2.5** + the **P2.G1** commit-machine table gate | — |
-| `miekg/dns` v2 is newer code in a load-bearing spot | **P2.1** pins it; **P2.G1/P2.G2** + the P3 soak are the check; v1-API revert is the mechanical escape hatch (design OPEN-9) | — |
+| ~~`miekg/dns` v2 is newer code in a load-bearing spot~~ — **RETIRED** (grilling round, 2026-07-10): the lift stays on maintained **`github.com/miekg/dns` v1** (the API it was written against), so there is no port risk | **P2.1** pins v1 at an exact version; the fake-DNS parity tests are the check; codeberg v2 is deferred future work (01-engine.md §7) | — |
 | Cold classification start (no import): every domain sits at `unknown` until N crawl cycles confirm each dimension, so day-1 hero/adoption counts read low | Accepted consciously (start-fresh, OPEN-9); flagged so the day-1 dashboard's low hero count is expected, not a bug (08-migration-cutover.md — DNS-flip cutover; verified at **P4.G**) | — |
 
 **P1.11 and P1.12 are risk gates, not optional spikes:** if P1.11 cannot show an index scan on
@@ -499,13 +501,13 @@ repo plus the lease-fence chaos test.
 - **Depends:** P0.1
 - **Deliverables:** `internal/checker/` in full: `checker.go`, `constants.go`, `resolver.go`,
   `ssrf.go`, `runner.go`, `seam.go`, `preflight.go`, and the 15 check implementation files
-  (incl. `resource_discovery.go`, adapted `resource_ipv6.go`); the `codeberg.org/miekg/dns`
+  (incl. `resource_discovery.go`, adapted `resource_ipv6.go`); the `github.com/miekg/dns` v1
   go.mod pin (config keys `checks.max_ns_lookups`, `checks.max_mx_lookups`,
   `resolver.bulk_upstreams`, `preflight.probe_host` — registry: 09-ops.md).
-- **Acceptance:** all nine numbered criteria of 01-engine §14 pass: `codeberg.org/miekg/dns`
-  pinned in go.mod at one exact version — the newest `v0.6.*` patch at implementation time
+- **Acceptance:** all nine numbered criteria of 01-engine §14 pass: `github.com/miekg/dns`
+  pinned in go.mod at one exact version — the newest `v1.1.*` patch at implementation time
   (the gate asserts an exact-version pin exists, not a specific patch number) — with no
-  `github.com/miekg/dns` import anywhere (grep gate); the
+  `codeberg.org/miekg/dns` or `github.com/miekg/dnsv2` import anywhere (grep gate); the
   `Score/Grade/…/v6audit` grep gate is clean; `TestRunnerNoAAAA`, `TestRunnerSubdomain`,
   `TestCheckPanicIsolation`, `TestHTTPErrorTypes`, `TestResourceDiscovery`,
   `TestPreflightFreshness` pass. Fixtures/fake-servers: 01-engine.md §14 (engine-lift
@@ -517,13 +519,13 @@ repo plus the lease-fence chaos test.
   consensus resolver seam (§9).
 - **Depends:** P2.1
 - **Deliverables:** `internal/consensus/` (provider fan-out, symbol reduction, quorum,
-  conditional A lookup, per-provider token buckets, fast-lane breaker, provider breaker +
+  conditional A lookup, conditional CD=1 (broken-DNSSEC) re-query, per-provider token buckets, fast-lane breaker, provider breaker +
   canary); the `checker` seam types (`AAAAAnswer`, `QuorumInfo`, `ErrQuorumInconsistent`,
   `AAAAResolver`) consumed here. Provider addresses are package constants, not config (09-ops).
 - **Acceptance:** `TestQuorumTruthTable` covers every 3-symbol permutation from {exists, empty,
   nxdomain, timeout, error} incl. all 2-1 splits, no-quorum→`ErrQuorumInconsistent`, ≤1-valid→
   plain error, and the 2-provider degraded mode; `TestNonAnswerClassification` (REFUSED/SERVFAIL
-  never `empty`, REFUSED in `Rcodes`); `TestQuorumByteIdentical`; `TestConditionalALookup`;
+  never `empty`, REFUSED in `Rcodes`); `TestQuorumByteIdentical`; `TestConditionalALookup`; `TestConditionalCDLookup` (all-SERVFAIL → `cd_present`/`cd_empty`/`cd_fail`, 02 §2.7b);
   `TestBreakers` (fast-lane + provider breaker + canary, never drops a 2nd provider) — 02
   §8.1–8.5. Fixtures (fake-DNS): 10-testing.md.
 
@@ -601,7 +603,9 @@ repo plus the lease-fence chaos test.
 - **Deliverables:** dead-signal + re-enable behavior wired into `commit.go`/`schedule.go`
   (no new file; extends P2.5/P2.7); the §7 re-entry matrix behavior.
 - **Acceptance:** `TestDeadLifecycle`: an NXDOMAIN-scripted domain dies on the 7th daily scan;
-  an all-SERVFAIL domain dies on the 7th backoff-spaced scan; three timeouts never increment
+  an all-SERVFAIL domain **whose CD=1 re-query also fails (`cd_fail`)** dies on the 7th
+  backoff-spaced scan (one whose CD=1 returns AAAA, `cd_present`, commits `base=supported` and
+  never dies); three timeouts never increment
   `dead_streak`; a NOERROR-empty apex never increments it; recovery runs step R exactly once
   with no changelog rows (04 §17.4); `TestReEntryMatrix` covers every cell of §7 at its owning
   ingress (04 §17.6).

@@ -78,7 +78,7 @@ there is nothing to "implement". The harness (`internal/consensus/dnstest`, reus
 mapper tests):
 
 1. Start scripted authoritative DNS servers on `127.0.0.1:0` (ephemeral port) using
-   `dns.Server` from `codeberg.org/miekg/dns` with a `dns.Handler` that, per query
+   `dns.Server` from `github.com/miekg/dns` with a `dns.Handler` that, per query
    name+type, returns a scripted `(rcode, []dns.RR)` answer or — to simulate a transport
    timeout — never responds (the resolver's per-query deadline then fires). Three servers,
    labelled `cloudflare`, `google`, `quad9`; a fourth backs the bulk resolver used for the
@@ -227,6 +227,29 @@ otherwise (02 §4 / §2.7). Fake the bulk resolver's A answer independently.
 "A query issued?" is asserted by a call-counter on the bulk fake: exactly one A call on the
 `empty` rows, zero on all others.
 
+### 3.2b Conditional CD=1 (broken-DNSSEC) re-query vectors
+
+The bulk-resolver **CD=1** query runs **iff** the AAAA quorum is unavailable and every answering
+provider returned SERVFAIL/REFUSED (not timeouts), and never otherwise (02 §2.7b). Fake the bulk
+resolver's CD=1 answer independently; the returned `AAAAAnswer` is reshaped so the base check/mapper
+see the resulting base observation below.
+
+| name | per-resolver rcodes | CD=1 scripted answer | CDOutcome | base observation | CD=1 issued? |
+|---|---|---|---|---|---|
+| cd_present | SERVFAIL,SERVFAIL,SERVFAIL | NOERROR, ≥1 routable AAAA | `cd_present` | `supported` (rescue) | yes |
+| cd_present_refused | REFUSED,SERVFAIL,REFUSED | NOERROR, ≥1 routable AAAA | `cd_present` | `supported` (rescue) | yes |
+| cd_empty_apresent | SERVFAIL×3 | NOERROR no AAAA; then A `a_present` | `cd_empty` | `unsupported` | yes (+1 A) |
+| cd_empty_aabsent | SERVFAIL×3 | NOERROR no AAAA; then A `a_absent` | `cd_empty` | `no_record` | yes (+1 A) |
+| cd_fail_servfail | SERVFAIL×3 | still SERVFAIL | `cd_fail` | `error` (dead-eligible) | yes |
+| cd_notrun_timeout | timeout,timeout,SERVFAIL | (unused) | `""` | `error` | **no** (a timeout present → not the all-SERVFAIL signature) |
+| cd_notrun_exists | exists,exists,SERVFAIL | (unused) | `""` | `supported` | **no** (valid quorum reached) |
+| cd_notrun_empty | empty,empty,empty | (unused; §3.2 A path applies) | `""` | per §3.2 | **no** |
+
+"CD=1 issued?" is asserted by a call-counter on the bulk fake: exactly one CD=1 call on the
+all-SERVFAIL rows, zero on all others. Assert `cd_present` credits `base=supported` (broken-DNSSEC
+rescue) and only `cd_fail` is dead-eligible (feeds §5.8); the CD=1 sample never enters the fast-lane
+breaker (§3.3).
+
 ### 3.3 Degraded (2-of-2) and breaker sequences
 
 Behavioral, not single-shot — driven by a scripted sequence of lookups with a fake clock.
@@ -272,6 +295,12 @@ row of every mapping table below is one case. The mapper is pure; inputs are a s
 | base_error | error | (not run) | `error` |
 | base_inconsistent | no quorum | (not run) | `inconsistent` |
 | base_subdomain_self | exists (on subdomain host) | (not run) | `supported` (kind=subdomain resolves the host itself) |
+
+The §2.7b CD=1 broken-DNSSEC rescue is applied **upstream** in `internal/consensus`, so the mapper
+receives an already-reshaped `dns_aaaa_base` Result and the CD outcomes collapse onto existing rows
+here: `cd_present`→Status `supported` (→`supported`), `cd_empty`→Status `unsupported`+`a_outcome`
+(→ the `base_empty_*` rows), `cd_fail`→Status `error` (→`error`). The CD outcomes themselves are
+asserted at the consensus layer in §3.2b.
 
 ### 4.2 `www` composite vectors (every row of the §2.3.1 www table)
 
@@ -479,7 +508,8 @@ it disabled.
 
 Start: enabled domain. Feed `dead_streak` unresolvable scans (03 §4 dead-signal: either (a)
 apex A+AAAA both NXDOMAIN and NS walk finds no zone, or (b) all 3 consensus resolvers returned
-explicit SERVFAIL/REFUSED for apex AAAA after retry — timeouts do **not** count).
+explicit SERVFAIL/REFUSED for apex AAAA after retry **and the CD=1 re-query also returned no usable
+answer (`cd_fail`, 02 §2.7b)** — timeouts do **not** count).
 
 | step | scans 1–6 | scan 7 |
 |---|---|---|
@@ -487,7 +517,9 @@ explicit SERVFAIL/REFUSED for apex AAAA after retry — timeouts do **not** coun
 
 Assert **seven and never fewer** (03 §17 acceptance #7); one resolvable scan anywhere in the
 run resets `dead_streak=0`. Add a `timeout_not_dead` case: three apex-AAAA timeouts (not
-SERVFAIL) never increment `dead_streak`.
+SERVFAIL) never increment `dead_streak`. Add a `servfail_cd_present_not_dead` case: an all-SERVFAIL
+domain whose CD=1 returns AAAA (`cd_present`) commits `base=supported`, never increments
+`dead_streak`, and never disables (02 §2.7b; 03 §4 branch b).
 
 ### 5.9 Lease fence (pure-side assertion)
 

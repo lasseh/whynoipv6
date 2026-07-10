@@ -132,6 +132,12 @@ throughout until the flip, so there is no public downtime.
 API stays up until step 5, so there is no public downtime; the shame re-seed (step 2) runs
 after Tranco ingest, since its FK target must exist.
 
+**Decision (grilling round, 2026-07-10) — repo lineage.** The new monorepo's Go module path is
+`github.com/lasseh/whynoipv6`, identical to the production repo it replaces, so at cutover this
+repo becomes the canonical one. Preserving the production repo's git history (via
+`git replace --graft` or a merge commit) is a **cutover-time** decision that changes no code and
+is deferred to then; until cutover, development proceeds in `whynoipv6-new` with its own history.
+
 ---
 
 ## 4. Cutover verification gates

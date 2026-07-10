@@ -227,7 +227,7 @@ The lane is re-chosen per scan from that scan's observations (a domain can alter
 The worker holds the raw engine results and computes, per scan, before the per-dimension commit loop: a scan is **unresolvable** when either
 
 - **(a) NXDOMAIN branch:** the apex AAAA consensus quorum symbol is `nxdomain` (quorum majority of resolver rcodes — NXDOMAIN is name-level, so it covers A as well) **AND** the NS zone walk found no delegated zone for the host; or
-- **(b) all-SERVFAIL branch:** all 3 consensus resolvers returned an explicit SERVFAIL or REFUSED rcode for apex AAAA after retry. **Timeouts do NOT count** — three timeouts more likely indicate our own network trouble.
+- **(b) all-SERVFAIL branch:** all 3 consensus resolvers returned an explicit SERVFAIL or REFUSED rcode for apex AAAA after retry **AND the conditional CD=1 re-query also returned no usable answer (`cd_fail`, 02-observation-model.md §2.7b)** — genuinely lame/dead authoritative servers. **Timeouts do NOT count** — three timeouts more likely indicate our own network trouble. A broken-DNSSEC-but-live domain (CD=1 → `cd_present`, base `supported`) is **not** unresolvable and never accrues `dead_streak` (grilling round, 2026-07-10).
 
 Branch (a) requires the NXDOMAIN **rcode**, not merely a `base = no_record` observation: NOERROR-with-no-records is a live but inactive zone and must NOT count (it feeds the `inactive` classification, never `dead`). The raw rcode is available because `scan_detail.details.consensus` records the per-resolver tuples (02-observation-model.md). The rule applies to all rows regardless of `kind`; for subdomains whose parent zone exists the NS walk finds a zone, so they can become `inactive`, never `dead` — as intended.
 
@@ -249,7 +249,7 @@ if NOT disabled AND dead_streak >= lifecycle.dead_streak:      # default 7
 Scheduling then lands on the slow lane via §5.1 step 3 (`next_check_at = now() + lifecycle.slow_lane_every`). Timelines at defaults:
 
 - **NXDOMAIN domains** produce definitive `base = no_record` observations, so they ride **daily cadence** → dead in 7 days.
-- **All-SERVFAIL domains** produce `base = error` (non-definitive), so they ride the §5 error-lane backoff: the 7th consecutive unresolvable scan lands after 6+12+24+48+96+192 = 378h of accumulated spacing → dead in **~2.3 weeks**.
+- **Genuinely-lame all-SERVFAIL domains** (all-SERVFAIL/REFUSED **and** CD=1 → `cd_fail`) produce `base = error` (non-definitive), so they ride the §5 error-lane backoff: the 7th consecutive unresolvable scan lands after 6+12+24+48+96+192 = 378h of accumulated spacing → dead in **~2.3 weeks**. An all-SERVFAIL domain that is merely DNSSEC-broken (CD=1 → `cd_present`) is credited `base = supported` and is **never** dead (grilling round, 2026-07-10).
 
 Setting `disabled = TRUE` does **NOT** modify `classification`, `class_flags`, `gold`, or any confirmed status/`*_since` column — history and state are preserved; public exclusion is achieved solely by the `NOT disabled` filter in every public query (07-api.md).
 
@@ -419,7 +419,7 @@ const ClassID int32 = 60660 // whynoipv6 advisory-lock namespace, never change
 const (
     JobDailyTick    int32 = 1 // §9 tick, all steps, one lock for the whole sequence
     JobTrancoImport int32 = 2 // Tranco import (coordinator cycle + `v6ctl tranco import`)
-    JobCampaignSync int32 = 3 // campaign sync (tick step 5 + webhook/Semaphore + `v6ctl campaign sync`)
+    JobCampaignSync int32 = 3 // campaign sync (tick step 5 + GitHub Actions webhook + `v6ctl campaign sync`)
 )
 ```
 
@@ -450,7 +450,7 @@ Rules (all normative):
 - The connection holding the lock is dedicated to the lock for the job's duration; job steps may use other pool connections freely. Session lock ⇒ crash of the holding process drops the connection and frees the lock — **no lease/expiry machinery**.
 - Crawler-scheduled invocations use `TryRun`; a skip is **not** an error: log `level=info msg="singleton skipped, held elsewhere" job=<name>` and count it in the metrics checkpoint (§15, `dim_counters.singleton_skipped`). Exactly one skip per scheduled fire is the healthy steady state with 2 processes.
 - All v6ctl invocations (`tranco import`, `campaign sync`, `stats recalc`) use `Run` with a **5-minute wait, hardcoded** — no config key. The tick's nested campaign-sync step uses the same `Run(…, wait=5m, …)`.
-- Trigger resolution (pinned): the 23:15 UTC Tranco import is fired by the **crawler coordinator goroutine** under `JobTrancoImport` — NOT a systemd timer; `v6ctl tranco import` is the manual verb calling the identical import function under the identical lock. Campaign sync fires from **both** the Semaphore webhook (`v6ctl campaign sync`) and tick step 5, serialized by `JobCampaignSync`, which covers the entire sync including the git checkout operations. The daily tick is attempted by both coordinators; one wins.
+- Trigger resolution (pinned): the 23:15 UTC Tranco import is fired by the **crawler coordinator goroutine** under `JobTrancoImport` — NOT a systemd timer; `v6ctl tranco import` is the manual verb calling the identical import function under the identical lock. Campaign sync fires from **both** the GitHub Actions `repository_dispatch` webhook (operator CI runs `v6ctl campaign sync`) and tick step 5, serialized by `JobCampaignSync`, which covers the entire sync including the git checkout operations. The daily tick is attempted by both coordinators; one wins.
 - SKIP LOCKED consumers are **not** singletons and need no gating: the frontier claim loop (§3) and the `check_job` claim loop (07-api.md) run in every process by design.
 
 ## 11. Self-preflight (wiring)
@@ -662,7 +662,7 @@ Fixture tables and harness details live in 10-testing.md; an implementation of t
 1. **Claim-plan gate:** `EXPLAIN (FORMAT JSON)` of the claim query's inner SELECT on a seeded 1M-row table shows an Index Scan on `idx_domain_due` with `next_check_at <= now()` as the index condition and a top-N sort on `(rank NULLS LAST, next_check_at)`; the gate re-runs whenever an index is added to `domain`.
 2. **Claim atomicity:** two concurrent processes claiming from an overlapping due set never return the same row twice within a lease window; a row whose `claimed_at` is >30 min old is re-claimed.
 3. **Scheduling:** table-driven tests reproduce §5.2's two backoff progressions exactly, the inconsistent-beats-error lane choice, the breaker-open behavior (cadence lane, `error_streak` still increments), the slow-lane override for disabled rows, and cadence band matching incl. NULL rank.
-4. **Dead lifecycle:** an NXDOMAIN-scripted domain dies on the 7th daily scan; an all-SERVFAIL domain dies on the 7th backoff-spaced scan; three timeouts never increment `dead_streak`; a NOERROR-empty apex never increments it; recovery runs step R exactly once and produces no changelog rows.
+4. **Dead lifecycle:** an NXDOMAIN-scripted domain dies on the 7th daily scan; an all-SERVFAIL domain **whose CD=1 re-query also fails (`cd_fail`)** dies on the 7th backoff-spaced scan; an all-SERVFAIL domain whose CD=1 returns AAAA (`cd_present`) is credited `base=supported` and never dies; three timeouts never increment `dead_streak`; a NOERROR-empty apex never increments it; recovery runs step R exactly once and produces no changelog rows.
 5. **Sweep:** each of S1–S5 verified in isolation and as a sequence: grace stamping is monotonic, live-check rows skip the grace, disabled campaigns don't pin members, S2 re-enables a delisted member when its campaign is re-enabled, and a second same-day run changes zero rows.
 6. **Re-entry matrix:** every cell of §7's matrix has a test at its owning ingress (06/07 tests reference this section).
 7. **Singleton:** with two pools, exactly one of two simultaneous `TryRun(JobDailyTick)` calls runs `fn`; the other returns `ErrHeld`; killing the winner's connection mid-job frees the lock; `Run` waits and then executes.
