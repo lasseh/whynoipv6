@@ -409,3 +409,31 @@ func TestResources(t *testing.T) {
 		t.Errorf("unknown resource: %d", resp.StatusCode)
 	}
 }
+
+// TestMandates (P4.16 / 07 §5.6): /mandates ≡ /campaigns?tag=mandate; an
+// unknown tag is 200 with an empty collection.
+func TestMandates(t *testing.T) {
+	srv := newEntityAPI(t)
+	var mandates, tagged envelope
+	getJSON(t, srv.URL+"/mandates", &mandates)
+	getJSON(t, srv.URL+"/campaigns?tag=mandate", &tagged)
+	if len(mandates.Items) != 1 || len(tagged.Items) != 1 {
+		t.Fatalf("mandates = %d, tagged = %d, want 1 each", len(mandates.Items), len(tagged.Items))
+	}
+	var m struct {
+		Name string   `json:"name"`
+		Tags []string `json:"tags"`
+	}
+	raw, _ := json.Marshal(mandates.Items[0])
+	_ = json.Unmarshal(raw, &m)
+	if m.Name != "Norwegian Banks" {
+		t.Errorf("mandate = %+v", m)
+	}
+	if mandates.Meta.Count == nil || *mandates.Meta.Count != 1 {
+		t.Errorf("mandates count = %v", mandates.Meta.Count)
+	}
+	var unknown envelope
+	if resp := getJSON(t, srv.URL+"/campaigns?tag=no-such-tag", &unknown); resp.StatusCode != 200 || len(unknown.Items) != 0 {
+		t.Errorf("unknown tag: %d with %d items, want 200 empty", resp.StatusCode, len(unknown.Items))
+	}
+}

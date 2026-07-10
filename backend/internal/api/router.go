@@ -71,8 +71,9 @@ func NewRouter(svc *service.Service) http.Handler {
 	r.Get("/providers/{id}", s.getProvider)
 	r.Get("/providers/{id}/domains", s.listProviderDomains)
 
-	// Campaigns (§4.7) and resource dependencies (§4.11).
+	// Campaigns (§4.7), the mandate view (§5.6), resource deps (§4.11).
 	r.Get("/campaigns", s.listCampaigns)
+	r.Get("/mandates", s.listMandates)
 	r.Get("/campaigns/{uuid}", s.getCampaign)
 	r.Get("/campaigns/{uuid}/domains", s.listCampaignDomains)
 	r.Get("/resources/{host}", s.getResource)

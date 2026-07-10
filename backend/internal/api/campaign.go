@@ -47,8 +47,13 @@ type CampaignDetail struct {
 }
 
 // listCampaigns is GET /campaigns (?tag= filter, OPEN-12): a bounded curated
-// set — whole list, exact count.
+// set — whole list, exact count. An unknown tag is 200 with an empty
+// collection, not 404.
 func (s *Server) listCampaigns(w http.ResponseWriter, r *http.Request) {
+	s.serveCampaignList(w, r, r.URL.Query().Get("tag"))
+}
+
+func (s *Server) serveCampaignList(w http.ResponseWriter, r *http.Request, tag string) {
 	generation, asOf, err := s.svc.Generation(r.Context())
 	if err != nil {
 		InternalError(w, r)
@@ -57,7 +62,7 @@ func (s *Server) listCampaigns(w http.ResponseWriter, r *http.Request) {
 	if CacheList(w, r, generation) {
 		return
 	}
-	rows, err := s.svc.Q.CampaignPublicList(r.Context(), r.URL.Query().Get("tag"))
+	rows, err := s.svc.Q.CampaignPublicList(r.Context(), tag)
 	if err != nil {
 		InternalError(w, r)
 		return
