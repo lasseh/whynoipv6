@@ -30,6 +30,7 @@ type Querier interface {
 	// db/query/campaign.sql — sqlc query source (layout: 05-schema.md §10.2).
 	CampaignByUUID(ctx context.Context, uuid pgtype.UUID) (CampaignByUUIDRow, error)
 	CampaignDisableAbsent(ctx context.Context, dollar_1 []pgtype.UUID) ([]CampaignDisableAbsentRow, error)
+	CampaignHasMember(ctx context.Context, arg CampaignHasMemberParams) (bool, error)
 	CampaignInsert(ctx context.Context, arg CampaignInsertParams) (int32, error)
 	CampaignMembers(ctx context.Context, campaignID int32) ([]int64, error)
 	CampaignPublicDetail(ctx context.Context, uuid pgtype.UUID) (CampaignPublicDetailRow, error)
@@ -39,6 +40,17 @@ type Querier interface {
 	CampaignRemoveMembersNotIn(ctx context.Context, arg CampaignRemoveMembersNotInParams) (int64, error)
 	CampaignUUIDBySourceFile(ctx context.Context, sourceFile *string) (pgtype.UUID, error)
 	CampaignUpdateFromFile(ctx context.Context, arg CampaignUpdateFromFileParams) (int32, error)
+	ChangelogByCampaign(ctx context.Context, campaignID int32) ([]ChangelogByCampaignRow, error)
+	ChangelogByCountry(ctx context.Context, countryID int32) ([]ChangelogByCountryRow, error)
+	ChangelogByDomain(ctx context.Context, arg ChangelogByDomainParams) ([]ChangelogByDomainRow, error)
+	// Changelog read surface (07 §4.8). Global + per-domain feeds paginate on
+	// the (ts, domain_id, field) DESC keyset; the scoped country/campaign feeds
+	// are capped to the latest-50 recent window (OPEN-15 guardrail).
+	ChangelogGlobal(ctx context.Context, arg ChangelogGlobalParams) ([]ChangelogGlobalRow, error)
+	ChangelogMaxTS(ctx context.Context) (pgtype.Timestamptz, error)
+	// The §4.9 confirmed-trajectory replay: the full transition history of one
+	// domain, ascending, reconstructed API-side (never raw scan observations).
+	ChangelogReplay(ctx context.Context, domainID int64) ([]ChangelogReplayRow, error)
 	// The claim.order=age variant: aging pressure valve, no sort at all beyond
 	// the index order (04 §3).
 	ClaimBatchByAge(ctx context.Context, limit int32) ([]ClaimBatchByAgeRow, error)
@@ -125,6 +137,9 @@ type Querier interface {
 	ResetCountryCounters(ctx context.Context) error
 	ResetProviderCounters(ctx context.Context) error
 	ResourceHostByHost(ctx context.Context, host string) (ResourceHostByHostRow, error)
+	// The §4.9 latency overlay: last scan measurement per day — the only value
+	// history takes from the scan hypertable.
+	ScanLatencyDaily(ctx context.Context, arg ScanLatencyDailyParams) ([]ScanLatencyDailyRow, error)
 	// Operator triage (P2.14; 04 — service/manual lifecycle).
 	ServiceCandidateList(ctx context.Context) ([]ServiceCandidateListRow, error)
 	ServiceCandidateResolve(ctx context.Context, host string) (int64, error)

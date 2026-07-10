@@ -78,6 +78,14 @@ func NewRouter(svc *service.Service) http.Handler {
 	r.Get("/resources/{host}", s.getResource)
 	r.Get("/resources/{host}/dependents", s.listResourceDependents)
 
+	// The changelog trust surface (§4.8) + per-domain history (§4.9).
+	r.Get("/changelog", s.listChangelog)
+	r.Get("/domains/{host}/changelog", s.listDomainChangelog)
+	r.Get("/domains/{host}/history", s.getDomainHistory)
+	r.Get("/countries/{code}/changelog", s.listCountryChangelog)
+	r.Get("/campaigns/{uuid}/changelog", s.listCampaignChangelog)
+	r.Get("/campaigns/{uuid}/domains/{host}/changelog", s.listCampaignDomainChangelog)
+
 	// Route inventory grows with the endpoint tasks (P4.3 onward), each
 	// implementing the generated strict-server interface.
 	r.NotFound(func(w http.ResponseWriter, r *http.Request) {

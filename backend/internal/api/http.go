@@ -10,6 +10,8 @@ import (
 	"log/slog"
 	"net/http"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // problemBase is the stable, resolvable type-URI prefix (07 §2.5).
@@ -173,6 +175,11 @@ func applyETag(w http.ResponseWriter, r *http.Request, etag string) bool {
 func queryFingerprint(r *http.Request) string {
 	q := r.URL.Query()
 	return fmt.Sprintf("%x", hashString(q.Encode()))
+}
+
+// pgTS wraps a time as a pgtype.Timestamptz, invalid when absent.
+func pgTS(t time.Time, valid bool) pgtype.Timestamptz {
+	return pgtype.Timestamptz{Time: t, Valid: valid}
 }
 
 // hashString is FNV-1a (deterministic across instances; not security).

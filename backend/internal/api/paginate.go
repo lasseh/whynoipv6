@@ -23,6 +23,11 @@ const (
 	// the count rides the Seek.Rank slot, the number rides Seek.ID.
 	SortCountV6    = "count_v6"
 	SortCountTotal = "count_total"
+
+	// The changelog feeds (07 §4.8): (ts, domain_id, field) descending.
+	// ts is stable across generations, so a stale-generation cursor stays
+	// exact — no re-anchor adjustment.
+	SortChangelog = "-ts"
 )
 
 // Limit caps (07 §3.2).
@@ -64,6 +69,8 @@ type Seek struct {
 	ID       int64  // tiebreaker (0 after re-anchoring)
 	Host     string // host ordering
 	RankNull bool   // dependents ordering: the null-flag component
+	TS       int64  // changelog ordering: UnixNano event time
+	Field    string // changelog ordering: dimension tiebreaker
 }
 
 // ErrCursorInvalid → 400 invalid-parameter (malformed token, wrong sort,
@@ -123,6 +130,18 @@ func (c *Cursor) SeekTuple() (Seek, error) {
 			return s, fmt.Errorf("%w: seek tuple types", ErrCursorInvalid)
 		}
 		s.Host = host
+	case SortChangelog:
+		if len(c.K) != 3 {
+			return s, fmt.Errorf("%w: seek tuple shape", ErrCursorInvalid)
+		}
+		ts, ok1 := jsonInt64(c.K[0])
+		id, ok2 := jsonInt64(c.K[1])
+		field, ok3 := c.K[2].(string)
+		if !ok1 || !ok2 || !ok3 {
+			return s, fmt.Errorf("%w: seek tuple types", ErrCursorInvalid)
+		}
+		s.TS, s.ID, s.Field = ts, id, field
+		return s, nil // ts-ordered: exact across generations, never re-anchored
 	case SortDependents:
 		if len(c.K) != 3 {
 			return s, fmt.Errorf("%w: seek tuple shape", ErrCursorInvalid)
