@@ -24,6 +24,13 @@ type Querier interface {
 	CampaignRemoveMembersNotIn(ctx context.Context, arg CampaignRemoveMembersNotInParams) (int64, error)
 	CampaignUUIDBySourceFile(ctx context.Context, sourceFile *string) (pgtype.UUID, error)
 	CampaignUpdateFromFile(ctx context.Context, arg CampaignUpdateFromFileParams) (int32, error)
+	// The claim.order=age variant: aging pressure valve, no sort at all beyond
+	// the index order (04 §3).
+	ClaimBatchByAge(ctx context.Context, limit int32) ([]ClaimBatchByAgeRow, error)
+	// The frontier claim (04-lifecycle-scheduling.md §3). One statement per claim
+	// cycle; all rows in a batch share one claimed_at (the lease token L). The
+	// eligibility predicate textually matches idx_domain_due (05-schema §1.7).
+	ClaimBatchByRank(ctx context.Context, limit int32) ([]ClaimBatchByRankRow, error)
 	CountryCodeMap(ctx context.Context) ([]CountryCodeMapRow, error)
 	// Insert-time ccTLD attribution probe (06-ingest.md §6.5): '.NO'-form input.
 	CountryIDByTLD(ctx context.Context, tld *string) (int32, error)

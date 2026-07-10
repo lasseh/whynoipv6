@@ -7,7 +7,258 @@ package db
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
+
+const ClaimBatchByAge = `-- name: ClaimBatchByAge :many
+UPDATE domain SET claimed_at = now()
+WHERE id IN (
+  SELECT id FROM domain
+  WHERE (NOT disabled OR disabled_reason IN ('dead', 'delisted'))
+    AND next_check_at <= now()
+    AND (claimed_at IS NULL OR claimed_at < now() - interval '30 minutes')
+  ORDER BY next_check_at ASC
+  LIMIT $1
+  FOR UPDATE SKIP LOCKED
+)
+RETURNING
+  id, host, kind, rank, claimed_at,
+  disabled, disabled_reason, disabled_at,
+  dead_streak, error_streak, last_counted_at,
+  asn_id, country_id,
+  base_status, base_pending, base_pending_count, base_since,
+  www_status, www_pending, www_pending_count, www_since,
+  ns_status, ns_pending, ns_pending_count, ns_since,
+  mx_status, mx_pending, mx_pending_count, mx_since,
+  conn_status, conn_pending, conn_pending_count, conn_since,
+  resources_status, resources_pending, resources_pending_count, resources_since
+`
+
+type ClaimBatchByAgeRow struct {
+	ID                    int64              `json:"id"`
+	Host                  string             `json:"host"`
+	Kind                  DomainKind         `json:"kind"`
+	Rank                  *int32             `json:"rank"`
+	ClaimedAt             pgtype.Timestamptz `json:"claimed_at"`
+	Disabled              bool               `json:"disabled"`
+	DisabledReason        *DisabledReason    `json:"disabled_reason"`
+	DisabledAt            pgtype.Timestamptz `json:"disabled_at"`
+	DeadStreak            int16              `json:"dead_streak"`
+	ErrorStreak           int16              `json:"error_streak"`
+	LastCountedAt         pgtype.Timestamptz `json:"last_counted_at"`
+	AsnID                 int32              `json:"asn_id"`
+	CountryID             int32              `json:"country_id"`
+	BaseStatus            *Ipv6Status        `json:"base_status"`
+	BasePending           *Ipv6Status        `json:"base_pending"`
+	BasePendingCount      int16              `json:"base_pending_count"`
+	BaseSince             pgtype.Timestamptz `json:"base_since"`
+	WwwStatus             *Ipv6Status        `json:"www_status"`
+	WwwPending            *Ipv6Status        `json:"www_pending"`
+	WwwPendingCount       int16              `json:"www_pending_count"`
+	WwwSince              pgtype.Timestamptz `json:"www_since"`
+	NsStatus              *Ipv6Status        `json:"ns_status"`
+	NsPending             *Ipv6Status        `json:"ns_pending"`
+	NsPendingCount        int16              `json:"ns_pending_count"`
+	NsSince               pgtype.Timestamptz `json:"ns_since"`
+	MxStatus              *Ipv6Status        `json:"mx_status"`
+	MxPending             *Ipv6Status        `json:"mx_pending"`
+	MxPendingCount        int16              `json:"mx_pending_count"`
+	MxSince               pgtype.Timestamptz `json:"mx_since"`
+	ConnStatus            *Ipv6Status        `json:"conn_status"`
+	ConnPending           *Ipv6Status        `json:"conn_pending"`
+	ConnPendingCount      int16              `json:"conn_pending_count"`
+	ConnSince             pgtype.Timestamptz `json:"conn_since"`
+	ResourcesStatus       *Ipv6Status        `json:"resources_status"`
+	ResourcesPending      *Ipv6Status        `json:"resources_pending"`
+	ResourcesPendingCount int16              `json:"resources_pending_count"`
+	ResourcesSince        pgtype.Timestamptz `json:"resources_since"`
+}
+
+// The claim.order=age variant: aging pressure valve, no sort at all beyond
+// the index order (04 §3).
+func (q *Queries) ClaimBatchByAge(ctx context.Context, limit int32) ([]ClaimBatchByAgeRow, error) {
+	rows, err := q.db.Query(ctx, ClaimBatchByAge, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ClaimBatchByAgeRow{}
+	for rows.Next() {
+		var i ClaimBatchByAgeRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Host,
+			&i.Kind,
+			&i.Rank,
+			&i.ClaimedAt,
+			&i.Disabled,
+			&i.DisabledReason,
+			&i.DisabledAt,
+			&i.DeadStreak,
+			&i.ErrorStreak,
+			&i.LastCountedAt,
+			&i.AsnID,
+			&i.CountryID,
+			&i.BaseStatus,
+			&i.BasePending,
+			&i.BasePendingCount,
+			&i.BaseSince,
+			&i.WwwStatus,
+			&i.WwwPending,
+			&i.WwwPendingCount,
+			&i.WwwSince,
+			&i.NsStatus,
+			&i.NsPending,
+			&i.NsPendingCount,
+			&i.NsSince,
+			&i.MxStatus,
+			&i.MxPending,
+			&i.MxPendingCount,
+			&i.MxSince,
+			&i.ConnStatus,
+			&i.ConnPending,
+			&i.ConnPendingCount,
+			&i.ConnSince,
+			&i.ResourcesStatus,
+			&i.ResourcesPending,
+			&i.ResourcesPendingCount,
+			&i.ResourcesSince,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const ClaimBatchByRank = `-- name: ClaimBatchByRank :many
+UPDATE domain SET claimed_at = now()
+WHERE id IN (
+  SELECT id FROM domain
+  WHERE (NOT disabled OR disabled_reason IN ('dead', 'delisted'))
+    AND next_check_at <= now()
+    AND (claimed_at IS NULL OR claimed_at < now() - interval '30 minutes')
+  ORDER BY rank ASC NULLS LAST, next_check_at ASC
+  LIMIT $1
+  FOR UPDATE SKIP LOCKED
+)
+RETURNING
+  id, host, kind, rank, claimed_at,
+  disabled, disabled_reason, disabled_at,
+  dead_streak, error_streak, last_counted_at,
+  asn_id, country_id,
+  base_status, base_pending, base_pending_count, base_since,
+  www_status, www_pending, www_pending_count, www_since,
+  ns_status, ns_pending, ns_pending_count, ns_since,
+  mx_status, mx_pending, mx_pending_count, mx_since,
+  conn_status, conn_pending, conn_pending_count, conn_since,
+  resources_status, resources_pending, resources_pending_count, resources_since
+`
+
+type ClaimBatchByRankRow struct {
+	ID                    int64              `json:"id"`
+	Host                  string             `json:"host"`
+	Kind                  DomainKind         `json:"kind"`
+	Rank                  *int32             `json:"rank"`
+	ClaimedAt             pgtype.Timestamptz `json:"claimed_at"`
+	Disabled              bool               `json:"disabled"`
+	DisabledReason        *DisabledReason    `json:"disabled_reason"`
+	DisabledAt            pgtype.Timestamptz `json:"disabled_at"`
+	DeadStreak            int16              `json:"dead_streak"`
+	ErrorStreak           int16              `json:"error_streak"`
+	LastCountedAt         pgtype.Timestamptz `json:"last_counted_at"`
+	AsnID                 int32              `json:"asn_id"`
+	CountryID             int32              `json:"country_id"`
+	BaseStatus            *Ipv6Status        `json:"base_status"`
+	BasePending           *Ipv6Status        `json:"base_pending"`
+	BasePendingCount      int16              `json:"base_pending_count"`
+	BaseSince             pgtype.Timestamptz `json:"base_since"`
+	WwwStatus             *Ipv6Status        `json:"www_status"`
+	WwwPending            *Ipv6Status        `json:"www_pending"`
+	WwwPendingCount       int16              `json:"www_pending_count"`
+	WwwSince              pgtype.Timestamptz `json:"www_since"`
+	NsStatus              *Ipv6Status        `json:"ns_status"`
+	NsPending             *Ipv6Status        `json:"ns_pending"`
+	NsPendingCount        int16              `json:"ns_pending_count"`
+	NsSince               pgtype.Timestamptz `json:"ns_since"`
+	MxStatus              *Ipv6Status        `json:"mx_status"`
+	MxPending             *Ipv6Status        `json:"mx_pending"`
+	MxPendingCount        int16              `json:"mx_pending_count"`
+	MxSince               pgtype.Timestamptz `json:"mx_since"`
+	ConnStatus            *Ipv6Status        `json:"conn_status"`
+	ConnPending           *Ipv6Status        `json:"conn_pending"`
+	ConnPendingCount      int16              `json:"conn_pending_count"`
+	ConnSince             pgtype.Timestamptz `json:"conn_since"`
+	ResourcesStatus       *Ipv6Status        `json:"resources_status"`
+	ResourcesPending      *Ipv6Status        `json:"resources_pending"`
+	ResourcesPendingCount int16              `json:"resources_pending_count"`
+	ResourcesSince        pgtype.Timestamptz `json:"resources_since"`
+}
+
+// The frontier claim (04-lifecycle-scheduling.md §3). One statement per claim
+// cycle; all rows in a batch share one claimed_at (the lease token L). The
+// eligibility predicate textually matches idx_domain_due (05-schema §1.7).
+func (q *Queries) ClaimBatchByRank(ctx context.Context, limit int32) ([]ClaimBatchByRankRow, error) {
+	rows, err := q.db.Query(ctx, ClaimBatchByRank, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ClaimBatchByRankRow{}
+	for rows.Next() {
+		var i ClaimBatchByRankRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Host,
+			&i.Kind,
+			&i.Rank,
+			&i.ClaimedAt,
+			&i.Disabled,
+			&i.DisabledReason,
+			&i.DisabledAt,
+			&i.DeadStreak,
+			&i.ErrorStreak,
+			&i.LastCountedAt,
+			&i.AsnID,
+			&i.CountryID,
+			&i.BaseStatus,
+			&i.BasePending,
+			&i.BasePendingCount,
+			&i.BaseSince,
+			&i.WwwStatus,
+			&i.WwwPending,
+			&i.WwwPendingCount,
+			&i.WwwSince,
+			&i.NsStatus,
+			&i.NsPending,
+			&i.NsPendingCount,
+			&i.NsSince,
+			&i.MxStatus,
+			&i.MxPending,
+			&i.MxPendingCount,
+			&i.MxSince,
+			&i.ConnStatus,
+			&i.ConnPending,
+			&i.ConnPendingCount,
+			&i.ConnSince,
+			&i.ResourcesStatus,
+			&i.ResourcesPending,
+			&i.ResourcesPendingCount,
+			&i.ResourcesSince,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
 
 const DomainByHost = `-- name: DomainByHost :one
 
