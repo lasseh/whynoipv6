@@ -19,6 +19,12 @@ const (
 	aError   = "a_error"
 )
 
+// error_type wire tokens (01-engine.md §11.7 — the conn table keys off them).
+const (
+	errTypeConnRefused = "connection_refused"
+	errTypeTimeout     = "timeout"
+)
+
 // preflightFreshness is the §5 constant: conn=unsupported is definitive only
 // with a preflight pass younger than this (mirrors checker.PreflightFreshness).
 const preflightFreshness = 5 * time.Minute
@@ -184,13 +190,13 @@ func composeConn(h, p checker.Result, preflightPassedAt, now time.Time) (domain.
 	case h.Status == checker.StatusSupported: // row 1
 		obs = domain.ObsSupported
 		detail["source"] = "https"
-	case h.Status == checker.StatusUnsupported && errType == "connection_refused" && p.Status == checker.StatusSupported: // row 2
+	case h.Status == checker.StatusUnsupported && errType == errTypeConnRefused && p.Status == checker.StatusSupported: // row 2
 		obs = domain.ObsSupported
 		detail["source"] = "http"
 		detail["http_only"] = true
 	case h.Status == checker.StatusUnsupported: // rows 3–4 (cert error, refused w/o http, no-AAAA)
 		obs = domain.ObsUnsupported
-	case h.Status == checker.StatusError && errType == "timeout" && preflightFresh: // row 5a
+	case h.Status == checker.StatusError && errType == errTypeTimeout && preflightFresh: // row 5a
 		obs = domain.ObsUnsupported
 	case h.Status == checker.StatusError: // rows 5b–5c
 		obs = domain.ObsError
