@@ -1,8 +1,15 @@
 # WhyNoIPv6 Backend Rewrite — Design Report
 
+> **⚠ SUPERSEDED — historical design rationale.** The authoritative, build-ready spec is
+> **`docs/spec/`** (Round 3.0). This Round 2.0 report is kept as design-rationale provenance —
+> its phase plan, package layout, and engine-adaptation contract are still cited by the spec
+> as "design §N" — **but its API sections (§5 API surface, §5.1, and related) are OBSOLETE:**
+> the legacy/compat API they describe was removed in the Round 3.0 redesign. For the current
+> API see `docs/spec/07-api.md` and `docs/api-design-research.md`.
+
 **Status:** Round 2.0 — spec-ready. All 35 resolutions from
-docs/spec-readiness-review.md (2026-07-07 audit) folded in.
-**Input:** `docs/backend-research-brief.md` (authoritative), study of the production
+docs/history/spec-readiness-review.md (2026-07-07 audit) folded in.
+**Input:** `docs/history/backend-research-brief.md` (authoritative), study of the production
 `whynoipv6` backend, `claude/whynoipv6-team/backend` (v2 rebuild), `v6audit`
 (checker engine), `claude/whynoipv6/prompts` + `REVIEW-REPORT.md`, `whynoipv6-campaign`,
 `whynoipv6-web`, plus web research on Tranco, public-resolver limits, Unbound at scale,
@@ -3193,7 +3200,7 @@ within 24h with UUID committed back.
 ## 9. Risks & decision log
 
 All round-1 open items were resolved in operator review (2026-07-06). A subsequent
-spec-readiness audit (2026-07-07, `docs/spec-readiness-review.md` — 35 confirmed
+spec-readiness audit (2026-07-07, `docs/history/spec-readiness-review.md` — 35 confirmed
 findings, all with forced resolutions) has been folded into this document in full;
 that report is the change record for round 2.0.
 
@@ -3532,4 +3539,4 @@ migrate down.
 ---
 
 *End of report. All decisions are logged in §9; the 2026-07-07 spec-readiness
-audit's 35 resolutions (docs/spec-readiness-review.md) are folded in throughout.*
+audit's 35 resolutions (docs/history/spec-readiness-review.md) are folded in throughout.*
