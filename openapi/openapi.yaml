@@ -1,0 +1,1688 @@
+openapi: 3.0.3
+info:
+  title: WhyNoIPv6 API
+  description: >
+    The public read API of whynoipv6.com (07-api.md). Versionless root,
+    snake_case wire, `{items,page,meta}` / `{points,meta}` envelopes, keyset
+    cursor pagination, RFC 9457 problem+json errors. The only write path is
+    the anonymous async live check (`POST /check`). Data is licensed
+    CC-BY-NC-4.0.
+  version: "1.0.0"
+  contact:
+    url: https://whynoipv6.com
+  license:
+    name: CC-BY-NC-4.0
+    url: https://creativecommons.org/licenses/by-nc/4.0/
+servers:
+  - url: https://api.whynoipv6.com
+# The filter composition every tier/scoped list shares with /domains
+# (07 §4.4). YAML anchor — expanded per path at parse time.
+x-tier-parameters: &tierParams
+  - $ref: "#/components/parameters/country"
+  - $ref: "#/components/parameters/asn"
+  - $ref: "#/components/parameters/tld"
+  - $ref: "#/components/parameters/provider"
+  - $ref: "#/components/parameters/hosting"
+  - $ref: "#/components/parameters/flag"
+  - $ref: "#/components/parameters/dimMX"
+  - $ref: "#/components/parameters/rankMin"
+  - $ref: "#/components/parameters/rankMax"
+  - $ref: "#/components/parameters/q"
+  - $ref: "#/components/parameters/sort"
+  - $ref: "#/components/parameters/fields"
+  - $ref: "#/components/parameters/format"
+  - $ref: "#/components/parameters/cursor"
+  - $ref: "#/components/parameters/limit"
+  - $ref: "#/components/parameters/afterRank"
+
+tags:
+  - name: domains
+  - name: tiers
+  - name: countries
+  - name: networks
+  - name: providers
+  - name: campaigns
+  - name: changelog
+  - name: stats
+  - name: resources
+  - name: check
+  - name: badge
+  - name: datasets
+  - name: misc
+
+paths:
+  /domains:
+    get:
+      operationId: listDomains
+      tags: [domains]
+      summary: The general filterable domain leaderboard
+      parameters:
+        - $ref: "#/components/parameters/class"
+        - $ref: "#/components/parameters/gold"
+        - $ref: "#/components/parameters/country"
+        - $ref: "#/components/parameters/asn"
+        - $ref: "#/components/parameters/tld"
+        - $ref: "#/components/parameters/provider"
+        - $ref: "#/components/parameters/hosting"
+        - $ref: "#/components/parameters/flag"
+        - $ref: "#/components/parameters/dimBase"
+        - $ref: "#/components/parameters/dimWWW"
+        - $ref: "#/components/parameters/dimNS"
+        - $ref: "#/components/parameters/dimMX"
+        - $ref: "#/components/parameters/dimConn"
+        - $ref: "#/components/parameters/dimResources"
+        - $ref: "#/components/parameters/rankMin"
+        - $ref: "#/components/parameters/rankMax"
+        - $ref: "#/components/parameters/q"
+        - $ref: "#/components/parameters/sort"
+        - $ref: "#/components/parameters/fields"
+        - $ref: "#/components/parameters/format"
+        - $ref: "#/components/parameters/cursor"
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/afterRank"
+      responses:
+        "200": { $ref: "#/components/responses/DomainList" }
+        "400": { $ref: "#/components/responses/InvalidParameter" }
+        "422": { $ref: "#/components/responses/ScopeRequired" }
+  /domains/{host}:
+    get:
+      operationId: getDomain
+      tags: [domains]
+      summary: Domain detail with masked informational dimensions
+      parameters:
+        - $ref: "#/components/parameters/host"
+        - name: include
+          in: query
+          description: "`evidence` attaches the latest scan_detail payload"
+          schema: { type: string, enum: [evidence] }
+      responses:
+        "200":
+          description: The §4.3 detail representation.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DomainDetail" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /domains/{host}/subdomains:
+    get:
+      operationId: listSubdomains
+      tags: [domains]
+      summary: An apex's non-disabled children, host-ordered
+      parameters:
+        - $ref: "#/components/parameters/host"
+        - $ref: "#/components/parameters/cursor"
+        - $ref: "#/components/parameters/limit"
+      responses:
+        "200": { $ref: "#/components/responses/DomainList" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /domains/{host}/resources:
+    get:
+      operationId: listDomainResources
+      tags: [resources]
+      summary: "Forward resource dependencies: what this domain depends on"
+      parameters:
+        - $ref: "#/components/parameters/host"
+      responses:
+        "200":
+          description: Bounded small; exact `meta.count`, trivial page.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ResourceLinkList" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /domains/{host}/changelog:
+    get:
+      operationId: listDomainChangelog
+      tags: [changelog]
+      summary: Per-domain confirmed-transition feed
+      parameters:
+        - $ref: "#/components/parameters/host"
+        - $ref: "#/components/parameters/changelogField"
+        - $ref: "#/components/parameters/changelogFrom"
+        - $ref: "#/components/parameters/changelogTo"
+        - $ref: "#/components/parameters/format"
+        - $ref: "#/components/parameters/cursor"
+        - $ref: "#/components/parameters/limit"
+      responses:
+        "200": { $ref: "#/components/responses/ChangelogList" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /domains/{host}/changelog.atom:
+    get:
+      operationId: getDomainChangelogAtom
+      tags: [changelog]
+      summary: Per-domain Atom feed (latest 50)
+      parameters:
+        - $ref: "#/components/parameters/host"
+      responses:
+        "200": { $ref: "#/components/responses/AtomFeed" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /domains/{host}/changelog.feed.json:
+    get:
+      operationId: getDomainChangelogJSONFeed
+      tags: [changelog]
+      summary: Per-domain JSON Feed 1.1 (latest 50)
+      parameters:
+        - $ref: "#/components/parameters/host"
+      responses:
+        "200": { $ref: "#/components/responses/JSONFeed" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /domains/{host}/history:
+    get:
+      operationId: getDomainHistory
+      tags: [stats]
+      summary: Per-domain confirmed trajectory, changelog-reconstructed
+      parameters:
+        - $ref: "#/components/parameters/host"
+        - $ref: "#/components/parameters/statsFrom"
+        - $ref: "#/components/parameters/statsTo"
+        - $ref: "#/components/parameters/interval"
+      responses:
+        "200":
+          description: >
+            Reconstructed confirmed state per day; `error`/`inconsistent`
+            never appear. Empty changelog → `points: []` (day-1 rule).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HistoryResponse" }
+        "400": { $ref: "#/components/responses/InvalidParameter" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /heroes:
+    get:
+      operationId: listHeroes
+      tags: [tiers]
+      summary: "Tier preset: class=hero"
+      parameters: *tierParams
+      responses:
+        "200": { $ref: "#/components/responses/DomainList" }
+        "422": { $ref: "#/components/responses/ScopeRequired" }
+  /sinners:
+    get:
+      operationId: listSinners
+      tags: [tiers]
+      summary: "Tier preset: class=sinner"
+      parameters: *tierParams
+      responses:
+        "200": { $ref: "#/components/responses/DomainList" }
+        "422": { $ref: "#/components/responses/ScopeRequired" }
+  /gold:
+    get:
+      operationId: listGold
+      tags: [tiers]
+      summary: "Tier preset: gold=true"
+      parameters: *tierParams
+      responses:
+        "200": { $ref: "#/components/responses/DomainList" }
+        "422": { $ref: "#/components/responses/ScopeRequired" }
+  /almost:
+    get:
+      operationId: listAlmost
+      tags: [tiers]
+      summary: "Tier preset: class=partial (the almost-there list)"
+      parameters: *tierParams
+      responses:
+        "200": { $ref: "#/components/responses/DomainList" }
+        "422": { $ref: "#/components/responses/ScopeRequired" }
+  /mail:
+    get:
+      operationId: listMail
+      tags: [tiers]
+      summary: "The mail-heroes track: class=hero & mx=supported"
+      parameters: *tierParams
+      responses:
+        "200": { $ref: "#/components/responses/DomainList" }
+        "422": { $ref: "#/components/responses/ScopeRequired" }
+  /shame:
+    get:
+      operationId: listShame
+      tags: [tiers]
+      summary: The curated editorial shame list
+      responses:
+        "200":
+          description: Bounded editorial picks; exact `meta.count`, no cursor.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ShameList" }
+
+  /countries:
+    get:
+      operationId: listCountries
+      tags: [countries]
+      summary: Country adoption leaderboard
+      parameters:
+        - name: sort
+          in: query
+          schema: { type: string, enum: [percent, v6_sites, sites], default: percent }
+        - $ref: "#/components/parameters/format"
+      responses:
+        "200":
+          description: The bounded ISO set, served whole with exact `meta.count`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CountryList" }
+            text/csv:
+              schema: { type: string }
+        "400": { $ref: "#/components/responses/InvalidParameter" }
+  /countries/{code}:
+    get:
+      operationId: getCountry
+      tags: [countries]
+      summary: Country detail
+      parameters: [{ $ref: "#/components/parameters/countryCode" }]
+      responses:
+        "200":
+          description: The §4.5 representation.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Country" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /countries/{code}/domains:
+    get:
+      operationId: listCountryDomains
+      tags: [countries]
+      summary: The country-scoped leaderboard (≡ /domains?country=)
+      parameters:
+        - $ref: "#/components/parameters/countryCode"
+        - $ref: "#/components/parameters/class"
+        - $ref: "#/components/parameters/gold"
+        - $ref: "#/components/parameters/tld"
+        - $ref: "#/components/parameters/provider"
+        - $ref: "#/components/parameters/hosting"
+        - $ref: "#/components/parameters/flag"
+        - $ref: "#/components/parameters/dimMX"
+        - $ref: "#/components/parameters/rankMin"
+        - $ref: "#/components/parameters/rankMax"
+        - $ref: "#/components/parameters/q"
+        - $ref: "#/components/parameters/sort"
+        - $ref: "#/components/parameters/fields"
+        - $ref: "#/components/parameters/format"
+        - $ref: "#/components/parameters/cursor"
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/afterRank"
+      responses:
+        "200": { $ref: "#/components/responses/DomainList" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ScopeRequired" }
+  /countries/{code}/stats:
+    get:
+      operationId: getCountryStats
+      tags: [stats]
+      summary: Country adoption time series
+      parameters:
+        - $ref: "#/components/parameters/countryCode"
+        - $ref: "#/components/parameters/statsFrom"
+        - $ref: "#/components/parameters/statsTo"
+        - $ref: "#/components/parameters/interval"
+      responses:
+        "200":
+          description: Confirmed-state snapshots.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CountryStatsSeries" }
+        "400": { $ref: "#/components/responses/InvalidParameter" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /countries/{code}/changelog:
+    get:
+      operationId: listCountryChangelog
+      tags: [changelog]
+      summary: Per-country feed (latest-50 recent window)
+      parameters: [{ $ref: "#/components/parameters/countryCode" }]
+      responses:
+        "200": { $ref: "#/components/responses/ChangelogList" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /countries/{code}/changelog.atom:
+    get:
+      operationId: getCountryChangelogAtom
+      tags: [changelog]
+      summary: Per-country Atom feed (latest 50)
+      parameters: [{ $ref: "#/components/parameters/countryCode" }]
+      responses:
+        "200": { $ref: "#/components/responses/AtomFeed" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /countries/{code}/changelog.feed.json:
+    get:
+      operationId: getCountryChangelogJSONFeed
+      tags: [changelog]
+      summary: Per-country JSON Feed 1.1 (latest 50)
+      parameters: [{ $ref: "#/components/parameters/countryCode" }]
+      responses:
+        "200": { $ref: "#/components/responses/JSONFeed" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /asns:
+    get:
+      operationId: listASNs
+      tags: [networks]
+      summary: The hosting-ASN league table
+      parameters:
+        - name: sort
+          in: query
+          schema: { type: string, enum: [count_v6, count_total], default: count_v6 }
+        - $ref: "#/components/parameters/q"
+        - $ref: "#/components/parameters/format"
+        - $ref: "#/components/parameters/cursor"
+        - $ref: "#/components/parameters/limit"
+      responses:
+        "200":
+          description: Keyset-paginated on (count, number) descending.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ASNList" }
+            text/csv:
+              schema: { type: string }
+        "400": { $ref: "#/components/responses/InvalidParameter" }
+  /asns/{number}:
+    get:
+      operationId: getASN
+      tags: [networks]
+      summary: Network detail (count_v4 synthesized)
+      parameters: [{ $ref: "#/components/parameters/asnNumber" }]
+      responses:
+        "200":
+          description: The §4.6 representation.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ASN" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /asns/{number}/domains:
+    get:
+      operationId: listASNDomains
+      tags: [networks]
+      summary: The network-scoped leaderboard (≡ /domains?asn=)
+      parameters:
+        - $ref: "#/components/parameters/asnNumber"
+        - $ref: "#/components/parameters/class"
+        - $ref: "#/components/parameters/gold"
+        - $ref: "#/components/parameters/tld"
+        - $ref: "#/components/parameters/provider"
+        - $ref: "#/components/parameters/hosting"
+        - $ref: "#/components/parameters/flag"
+        - $ref: "#/components/parameters/dimMX"
+        - $ref: "#/components/parameters/rankMin"
+        - $ref: "#/components/parameters/rankMax"
+        - $ref: "#/components/parameters/q"
+        - $ref: "#/components/parameters/sort"
+        - $ref: "#/components/parameters/fields"
+        - $ref: "#/components/parameters/format"
+        - $ref: "#/components/parameters/cursor"
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/afterRank"
+      responses:
+        "200": { $ref: "#/components/responses/DomainList" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ScopeRequired" }
+  /asns/{number}/stats:
+    get:
+      operationId: getASNStats
+      tags: [stats]
+      summary: Network adoption time series (canonical count_v6/count_total wire names)
+      parameters:
+        - name: number
+          in: path
+          required: true
+          description: AS number; an optional leading `AS` prefix is accepted.
+          schema: { type: string }
+        - $ref: "#/components/parameters/statsFrom"
+        - $ref: "#/components/parameters/statsTo"
+        - $ref: "#/components/parameters/interval"
+      responses:
+        "200":
+          description: Confirmed-state snapshots.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ASNStatsSeries" }
+        "400": { $ref: "#/components/responses/InvalidParameter" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /providers:
+    get:
+      operationId: listProviders
+      tags: [providers]
+      summary: The DNS-provider league table (exact stored counters)
+      parameters:
+        - $ref: "#/components/parameters/format"
+      responses:
+        "200":
+          description: The bounded curated registry, exact `meta.count`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProviderList" }
+            text/csv:
+              schema: { type: string }
+        "400": { $ref: "#/components/responses/InvalidParameter" }
+  /providers/{id}:
+    get:
+      operationId: getProvider
+      tags: [providers]
+      summary: DNS-provider detail
+      parameters: [{ $ref: "#/components/parameters/providerID" }]
+      responses:
+        "200":
+          description: The §4.6 provider representation.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Provider" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /providers/{id}/domains:
+    get:
+      operationId: listProviderDomains
+      tags: [providers]
+      summary: The provider-scoped leaderboard (the path form is its own indexed scope)
+      parameters:
+        - $ref: "#/components/parameters/providerID"
+        - $ref: "#/components/parameters/class"
+        - $ref: "#/components/parameters/gold"
+        - $ref: "#/components/parameters/tld"
+        - $ref: "#/components/parameters/provider"
+        - $ref: "#/components/parameters/hosting"
+        - $ref: "#/components/parameters/flag"
+        - $ref: "#/components/parameters/dimMX"
+        - $ref: "#/components/parameters/rankMin"
+        - $ref: "#/components/parameters/rankMax"
+        - $ref: "#/components/parameters/q"
+        - $ref: "#/components/parameters/sort"
+        - $ref: "#/components/parameters/fields"
+        - $ref: "#/components/parameters/format"
+        - $ref: "#/components/parameters/cursor"
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/afterRank"
+      responses:
+        "200": { $ref: "#/components/responses/DomainList" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ScopeRequired" }
+
+  /campaigns:
+    get:
+      operationId: listCampaigns
+      tags: [campaigns]
+      summary: Campaign index
+      parameters:
+        - name: tag
+          in: query
+          description: Filter to campaigns carrying this tag; unknown tags return an empty list.
+          schema: { type: string }
+      responses:
+        "200":
+          description: Bounded curated set, exact `meta.count`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CampaignList" }
+  /mandates:
+    get:
+      operationId: listMandates
+      tags: [campaigns]
+      summary: The government-mandate view (≡ /campaigns?tag=mandate)
+      responses:
+        "200":
+          description: The standard campaign list envelope.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CampaignList" }
+  /campaigns/{uuid}:
+    get:
+      operationId: getCampaign
+      tags: [campaigns]
+      summary: "Composite campaign detail: metadata + paged members + adoption"
+      parameters:
+        - $ref: "#/components/parameters/campaignUUID"
+        - $ref: "#/components/parameters/cursor"
+        - $ref: "#/components/parameters/limit"
+      responses:
+        "200":
+          description: The §4.7 composite.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CampaignDetail" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /campaigns/{uuid}/domains:
+    get:
+      operationId: listCampaignDomains
+      tags: [campaigns]
+      summary: Campaign members, host-ordered (rank-NULL rows visible)
+      parameters:
+        - $ref: "#/components/parameters/campaignUUID"
+        - $ref: "#/components/parameters/cursor"
+        - $ref: "#/components/parameters/limit"
+      responses:
+        "200": { $ref: "#/components/responses/DomainList" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /campaigns/{uuid}/stats:
+    get:
+      operationId: getCampaignStats
+      tags: [stats]
+      summary: Campaign adoption time series (incl. v6_ready)
+      parameters:
+        - $ref: "#/components/parameters/campaignUUID"
+        - $ref: "#/components/parameters/statsFrom"
+        - $ref: "#/components/parameters/statsTo"
+        - $ref: "#/components/parameters/interval"
+      responses:
+        "200":
+          description: Confirmed-state snapshots; disabled campaigns are 404.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CampaignStatsSeries" }
+        "400": { $ref: "#/components/responses/InvalidParameter" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /campaigns/{uuid}/changelog:
+    get:
+      operationId: listCampaignChangelog
+      tags: [changelog]
+      summary: Campaign-wide feed (latest-50 recent window)
+      parameters: [{ $ref: "#/components/parameters/campaignUUID" }]
+      responses:
+        "200": { $ref: "#/components/responses/ChangelogList" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /campaigns/{uuid}/domains/{host}/changelog:
+    get:
+      operationId: listCampaignDomainChangelog
+      tags: [changelog]
+      summary: One member's feed (404 for non-members)
+      parameters:
+        - $ref: "#/components/parameters/campaignUUID"
+        - $ref: "#/components/parameters/host"
+        - $ref: "#/components/parameters/cursor"
+        - $ref: "#/components/parameters/limit"
+      responses:
+        "200": { $ref: "#/components/responses/ChangelogList" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /campaigns/{uuid}/changelog.atom:
+    get:
+      operationId: getCampaignChangelogAtom
+      tags: [changelog]
+      summary: Per-campaign Atom feed (latest 50)
+      parameters: [{ $ref: "#/components/parameters/campaignUUID" }]
+      responses:
+        "200": { $ref: "#/components/responses/AtomFeed" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /campaigns/{uuid}/changelog.feed.json:
+    get:
+      operationId: getCampaignChangelogJSONFeed
+      tags: [changelog]
+      summary: Per-campaign JSON Feed 1.1 (latest 50)
+      parameters: [{ $ref: "#/components/parameters/campaignUUID" }]
+      responses:
+        "200": { $ref: "#/components/responses/JSONFeed" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /resources/{host}:
+    get:
+      operationId: getResource
+      tags: [resources]
+      summary: Resource-host headline (dependent_count)
+      parameters: [{ $ref: "#/components/parameters/host" }]
+      responses:
+        "200":
+          description: The §4.11 headline block.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ResourceHostDetail" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /resources/{host}/dependents:
+    get:
+      operationId: listResourceDependents
+      tags: [resources]
+      summary: "Reverse dependents: the advocacy surface"
+      parameters:
+        - $ref: "#/components/parameters/host"
+        - $ref: "#/components/parameters/cursor"
+        - $ref: "#/components/parameters/limit"
+      responses:
+        "200":
+          description: >
+            Null-flag-first ordering (rank NULLS LAST); items are §4.2 rows
+            plus the link attributes.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DependentsResponse" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /changelog:
+    get:
+      operationId: listChangelog
+      tags: [changelog]
+      summary: Global recent-transitions feed
+      parameters:
+        - $ref: "#/components/parameters/changelogField"
+        - $ref: "#/components/parameters/changelogFrom"
+        - $ref: "#/components/parameters/changelogTo"
+        - $ref: "#/components/parameters/format"
+        - $ref: "#/components/parameters/cursor"
+        - $ref: "#/components/parameters/limit"
+      responses:
+        "200": { $ref: "#/components/responses/ChangelogList" }
+        "400": { $ref: "#/components/responses/InvalidParameter" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /changelog.atom:
+    get:
+      operationId: getChangelogAtom
+      tags: [changelog]
+      summary: Global Atom feed (latest 50)
+      responses:
+        "200": { $ref: "#/components/responses/AtomFeed" }
+  /changelog.feed.json:
+    get:
+      operationId: getChangelogJSONFeed
+      tags: [changelog]
+      summary: Global JSON Feed 1.1 (latest 50)
+      responses:
+        "200": { $ref: "#/components/responses/JSONFeed" }
+
+  /stats/overview:
+    get:
+      operationId: getStatsOverview
+      tags: [stats]
+      summary: The headline adoption dashboard series
+      parameters:
+        - $ref: "#/components/parameters/statsFrom"
+        - $ref: "#/components/parameters/statsTo"
+        - $ref: "#/components/parameters/interval"
+      responses:
+        "200":
+          description: "`meta.source` is always `confirmed_state`."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GlobalStatsSeries" }
+        "400": { $ref: "#/components/responses/InvalidParameter" }
+
+  /datasets:
+    get:
+      operationId: getDatasets
+      tags: [datasets]
+      summary: The static-dataset manifest
+      responses:
+        "200":
+          description: Re-read from disk per request; files are nginx-served.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Manifest" }
+        "503": { $ref: "#/components/responses/ManifestUnavailable" }
+
+  /check:
+    post:
+      operationId: createCheck
+      tags: [check]
+      summary: Enqueue an anonymous live check (async job + poll)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [host]
+              properties:
+                host: { type: string, example: example.com }
+      responses:
+        "202":
+          description: Job enqueued; poll the Location header. Recommended poll interval 2 s.
+          headers:
+            Location:
+              schema: { type: string, example: /check/481529 }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CheckAccepted" }
+        "200":
+          description: Dedupe hit (domain- or job-side) — a cached done envelope.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CheckEnvelope" }
+        "400": { $ref: "#/components/responses/InvalidParameter" }
+        "415": { $ref: "#/components/responses/UnsupportedMediaType" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /check/{id}:
+    get:
+      operationId: getCheck
+      tags: [check]
+      summary: Poll a live-check job to a terminal state
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer, format: int64, minimum: 1 }
+      responses:
+        "200":
+          description: >
+            Terminal (`done`/`failed`) responses cache `public, max-age=60`;
+            in-flight polls are `no-store`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CheckEnvelope" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /badge/{host}.svg:
+    get:
+      operationId: getBadgeSVG
+      tags: [badge]
+      summary: Embeddable shields-flat status badge
+      parameters: [{ $ref: "#/components/parameters/host" }]
+      responses:
+        "200":
+          description: >
+            Always 200 for a valid host (disabled/unknown render the gray
+            `IPv6: unknown` variant). `Cache-Control: public, max-age=86400`.
+          content:
+            image/svg+xml:
+              schema: { type: string }
+        "400": { $ref: "#/components/responses/InvalidParameter" }
+  /badge/{host}.json:
+    get:
+      operationId: getBadgeJSON
+      tags: [badge]
+      summary: shields.io endpoint-JSON badge variant
+      parameters: [{ $ref: "#/components/parameters/host" }]
+      responses:
+        "200":
+          description: >
+            The shields.io endpoint schema — the one sanctioned camelCase
+            exception. Embed via
+            `https://img.shields.io/endpoint?url=https://api.whynoipv6.com/badge/example.com.json`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ShieldsBadge" }
+        "400": { $ref: "#/components/responses/InvalidParameter" }
+
+  /ip:
+    get:
+      operationId: getIP
+      tags: [misc]
+      summary: Client-IP echo (the visitor banner source)
+      responses:
+        "200":
+          description: Bracketless address; family derived server-side. `no-store`.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ip, family]
+                properties:
+                  ip: { type: string, example: "2001:db8::7" }
+                  family: { type: string, enum: [ipv4, ipv6] }
+
+components:
+  parameters:
+    host:
+      name: host
+      in: path
+      required: true
+      description: eTLD+1 or subdomain; canonicalized before lookup.
+      schema: { type: string, example: example.com }
+    countryCode:
+      name: code
+      in: path
+      required: true
+      description: ISO 3166-1 alpha-2, case-insensitive; `UN` is the sentinel.
+      schema: { type: string, minLength: 2, maxLength: 2 }
+    asnNumber:
+      name: number
+      in: path
+      required: true
+      schema: { type: integer, format: int64, minimum: 0 }
+    providerID:
+      name: id
+      in: path
+      required: true
+      schema: { type: integer, format: int64, minimum: 1 }
+    campaignUUID:
+      name: uuid
+      in: path
+      required: true
+      description: The raw campaign UUID.
+      schema: { type: string, format: uuid }
+    cursor:
+      name: cursor
+      in: query
+      description: Opaque keyset cursor from `page.next_cursor`.
+      schema: { type: string }
+    limit:
+      name: limit
+      in: query
+      description: Page size; default 50, cap 200 (CSV raises the cap to `export.csv_max_rows`).
+      schema: { type: integer, minimum: 1, default: 50 }
+    afterRank:
+      name: after_rank
+      in: query
+      description: Stateless deep link; rank-ordered views only.
+      schema: { type: integer, minimum: 0 }
+    sort:
+      name: sort
+      in: query
+      schema: { type: string, enum: [rank, "-rank", host], default: rank }
+    class:
+      name: class
+      in: query
+      schema: { $ref: "#/components/schemas/Classification" }
+    gold:
+      name: gold
+      in: query
+      description: The only accepted value is true (gold ⊂ hero).
+      schema: { type: boolean }
+    country:
+      name: country
+      in: query
+      x-go-name: CountryParam
+      description: ISO code scope; composes with class + rank order.
+      schema: { type: string }
+    asn:
+      name: asn
+      in: query
+      description: AS-number scope.
+      schema: { type: integer, format: int64 }
+    tld:
+      name: tld
+      in: query
+      description: eTLD-suffix pivot; scope-required.
+      schema: { type: string }
+    provider:
+      name: provider
+      in: query
+      x-go-name: ProviderParam
+      description: dns_provider id pivot; scope-required as a query filter.
+      schema: { type: integer, format: int64 }
+    hosting:
+      name: hosting
+      in: query
+      description: Hosting/CDN text-tag pivot; scope-required.
+      schema: { type: string }
+    flag:
+      name: flag
+      in: query
+      description: class_flags residual; scope-required.
+      schema: { $ref: "#/components/schemas/ClassFlag" }
+    dimBase:
+      name: base
+      in: query
+      description: Per-dimension confirmed-status residual; scope-required.
+      schema: { $ref: "#/components/schemas/IPv6Status" }
+    dimWWW:
+      name: www
+      in: query
+      schema: { $ref: "#/components/schemas/IPv6Status" }
+    dimNS:
+      name: ns
+      in: query
+      schema: { $ref: "#/components/schemas/IPv6Status" }
+    dimMX:
+      name: mx
+      in: query
+      schema: { $ref: "#/components/schemas/IPv6Status" }
+    dimConn:
+      name: conn
+      in: query
+      schema: { $ref: "#/components/schemas/IPv6Status" }
+    dimResources:
+      name: resources
+      in: query
+      schema: { $ref: "#/components/schemas/IPv6Status" }
+    rankMin:
+      name: rank_min
+      in: query
+      schema: { type: integer, minimum: 0 }
+    rankMax:
+      name: rank_max
+      in: query
+      schema: { type: integer, minimum: 0 }
+    q:
+      name: q
+      in: query
+      description: Substring search; forces the host ordering.
+      schema: { type: string }
+    fields:
+      name: fields
+      in: query
+      description: Sparse fieldset (comma-separated top-level keys).
+      schema: { type: string }
+    format:
+      name: format
+      in: query
+      schema: { type: string, enum: [json, csv], default: json }
+    changelogField:
+      name: field
+      in: query
+      schema: { $ref: "#/components/schemas/Dimension" }
+    changelogFrom:
+      name: from
+      in: query
+      description: Window start (YYYY-MM-DD or RFC 3339).
+      schema: { type: string }
+    changelogTo:
+      name: to
+      in: query
+      description: Window end (YYYY-MM-DD or RFC 3339).
+      schema: { type: string }
+    statsFrom:
+      name: from
+      in: query
+      description: Window start (YYYY-MM-DD); default `to − 90d`.
+      schema: { type: string, format: date }
+    statsTo:
+      name: to
+      in: query
+      description: Window end (YYYY-MM-DD); default today UTC.
+      schema: { type: string, format: date }
+    interval:
+      name: interval
+      in: query
+      description: "`weekly` keeps the latest snapshot per ISO week — a sample, never an average."
+      schema: { type: string, enum: [daily, weekly], default: daily }
+
+  responses:
+    DomainList:
+      description: The `{items,page,meta}` envelope of §4.2 summary rows.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/DomainList" }
+        text/csv:
+          schema: { type: string }
+    ChangelogList:
+      description: The `{items,page,meta}` envelope of §4.8 events.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ChangelogList" }
+        text/csv:
+          schema: { type: string }
+    AtomFeed:
+      description: RFC 4287 Atom, latest-50 window.
+      content:
+        application/atom+xml:
+          schema: { type: string }
+    JSONFeed:
+      description: JSON Feed 1.1, latest-50 window.
+      content:
+        application/feed+json:
+          schema: { $ref: "#/components/schemas/JSONFeed" }
+    NotFound:
+      description: Unknown or uncanonicalizable resource key.
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    InvalidParameter:
+      description: Malformed cursor, bad format, malformed badge host, bad window.
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    ValidationError:
+      description: A filter value outside its enum; carries `errors[]`.
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/ValidationProblem" }
+    ScopeRequired:
+      description: >
+        A valid residual filter that needs an indexed companion scope
+        (class, country, or asn), or more than one residual was stacked.
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    RateLimited:
+      description: Over the per-/64 or global hourly quota; carries `retry_after` + Retry-After.
+      headers:
+        Retry-After:
+          schema: { type: integer }
+        RateLimit:
+          schema: { type: string }
+        RateLimit-Policy:
+          schema: { type: string }
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/RateLimitProblem" }
+    UnsupportedMediaType:
+      description: The POST body is not JSON.
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    ManifestUnavailable:
+      description: The dataset manifest is missing or unparseable — the API's only 503.
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+
+  schemas:
+    Classification:
+      type: string
+      enum: [unknown, inactive, sinner, partial, hero]
+    IPv6Status:
+      type: string
+      enum: [supported, unsupported, no_record, not_applicable]
+    Dimension:
+      type: string
+      enum: [base, www, ns, mx, conn, resources]
+    ClassFlag:
+      type: string
+      enum: [broken_v6, www_missing, ns_missing, mail_missing, resources_v4only]
+
+    Page:
+      type: object
+      description: Uniform pagination block; cursors are null when absent.
+      required: [next_cursor, prev_cursor, has_more]
+      properties:
+        next_cursor: { type: string, nullable: true }
+        prev_cursor: { type: string, nullable: true }
+        has_more: { type: boolean }
+    Meta:
+      type: object
+      required: [as_of, generation, license]
+      properties:
+        as_of: { type: string, format: date-time }
+        generation: { type: integer, description: "YYYYMMDD of the newest stats day", example: 20260707 }
+        count: { type: integer, format: int64, description: Exact — bounded curated sets only. }
+        count_estimate: { type: integer, format: int64, description: Approximate — everything else. }
+        license: { type: string, example: CC-BY-NC-4.0 }
+        source: { type: string, description: "`confirmed_state` on every time series." }
+    DetailMeta:
+      type: object
+      required: [as_of, generation]
+      properties:
+        as_of: { type: string, format: date-time }
+        generation: { type: integer }
+
+    Problem:
+      type: object
+      description: RFC 9457. `status` always equals the HTTP status line.
+      required: [type, title, status]
+      properties:
+        type: { type: string, example: "https://whynoipv6.com/problems/not-found" }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        instance: { type: string }
+    ValidationProblem:
+      allOf:
+        - $ref: "#/components/schemas/Problem"
+        - type: object
+          properties:
+            errors:
+              type: array
+              items:
+                type: object
+                required: [field, reason]
+                properties:
+                  field: { type: string }
+                  reason: { type: string }
+    RateLimitProblem:
+      allOf:
+        - $ref: "#/components/schemas/Problem"
+        - type: object
+          properties:
+            retry_after: { type: integer, description: Seconds until the window frees. }
+
+    StatusObject:
+      type: object
+      description: >
+        Per-dimension confirmed status with provenance. `value` is null when
+        the dimension has never been confirmed.
+      required: [value, since]
+      properties:
+        value:
+          allOf: [{ $ref: "#/components/schemas/IPv6Status" }]
+          nullable: true
+        since: { type: string, format: date-time, nullable: true }
+    StatusBlock:
+      type: object
+      required: [base, www, ns, mx, conn, resources]
+      properties:
+        base: { $ref: "#/components/schemas/StatusObject" }
+        www: { $ref: "#/components/schemas/StatusObject" }
+        ns: { $ref: "#/components/schemas/StatusObject" }
+        mx: { $ref: "#/components/schemas/StatusObject" }
+        conn: { $ref: "#/components/schemas/StatusObject" }
+        resources: { $ref: "#/components/schemas/StatusObject" }
+    CountryRef:
+      type: object
+      required: [code, name]
+      properties:
+        code: { type: string, example: "NO" }
+        name: { type: string, example: Norway }
+        tld: { type: string, nullable: true, description: Detail representation only. }
+    ASNRef:
+      type: object
+      required: [number, name]
+      properties:
+        number: { type: integer, format: int64, example: 2119 }
+        name: { type: string, example: Telenor Norge AS }
+    ProviderRef:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: integer, format: int64 }
+        name: { type: string, example: Cloudflare }
+
+    DomainSummary:
+      type: object
+      description: The §4.2 list row served by every /domains* collection.
+      required: [host, rank, kind, parent, classification, class_flags, gold, status, tld, country, asn, dns_provider, hosting_provider, last_checked_at]
+      properties:
+        host: { type: string, example: example.com }
+        rank: { type: integer, nullable: true, description: Never the legacy 0 — null when unranked. }
+        kind: { type: string, enum: [apex, subdomain] }
+        parent: { type: string, nullable: true }
+        classification: { $ref: "#/components/schemas/Classification" }
+        class_flags:
+          type: array
+          items: { $ref: "#/components/schemas/ClassFlag" }
+        gold: { type: boolean }
+        status: { $ref: "#/components/schemas/StatusBlock" }
+        tld: { type: string, nullable: true }
+        country: { $ref: "#/components/schemas/CountryRef" }
+        asn: { $ref: "#/components/schemas/ASNRef" }
+        dns_provider:
+          allOf: [{ $ref: "#/components/schemas/ProviderRef" }]
+          nullable: true
+        hosting_provider: { type: string, nullable: true }
+        last_checked_at: { type: string, format: date-time, nullable: true }
+    Informational:
+      type: object
+      description: >
+        Advisory dimensions with the public-masking rule applied — `error`
+        and `inconsistent` never reach the wire; `partial` survives only on
+        ptr/parity.
+      required: [dnssec, ptr, smtp, parity, latency_v4_ms, latency_v6_ms]
+      properties:
+        dnssec: { type: string, nullable: true, enum: [supported, unsupported, no_record, not_applicable] }
+        ptr: { type: string, nullable: true, enum: [supported, unsupported, no_record, not_applicable, partial] }
+        smtp: { type: string, nullable: true, enum: [supported, unsupported, no_record, not_applicable] }
+        parity: { type: string, nullable: true, enum: [supported, unsupported, no_record, not_applicable, partial] }
+        latency_v4_ms: { type: integer, nullable: true }
+        latency_v6_ms: { type: integer, nullable: true }
+    DomainDetail:
+      type: object
+      required: [host, rank, kind, parent, classification, class_flags, gold, status, informational, tld, country, asn, dns_provider, hosting_provider, subdomain_count, disabled, last_checked_at, created_at, meta]
+      properties:
+        host: { type: string }
+        rank: { type: integer, nullable: true }
+        kind: { type: string, enum: [apex, subdomain] }
+        parent: { type: string, nullable: true }
+        classification: { $ref: "#/components/schemas/Classification" }
+        class_flags:
+          type: array
+          items: { $ref: "#/components/schemas/ClassFlag" }
+        gold: { type: boolean }
+        status: { $ref: "#/components/schemas/StatusBlock" }
+        informational: { $ref: "#/components/schemas/Informational" }
+        tld: { type: string, nullable: true }
+        country: { $ref: "#/components/schemas/CountryRef" }
+        asn: { $ref: "#/components/schemas/ASNRef" }
+        dns_provider:
+          allOf: [{ $ref: "#/components/schemas/ProviderRef" }]
+          nullable: true
+        hosting_provider: { type: string, nullable: true }
+        subdomain_count: { type: integer, format: int64 }
+        disabled: { type: boolean }
+        last_checked_at: { type: string, format: date-time, nullable: true }
+        created_at: { type: string, format: date-time }
+        evidence:
+          type: object
+          description: Latest scan_detail payload (the §5.1.3 result shape); only with `?include=evidence`.
+          additionalProperties: true
+        meta: { $ref: "#/components/schemas/DetailMeta" }
+    DomainList:
+      type: object
+      required: [items, page, meta]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/DomainSummary" }
+        page: { $ref: "#/components/schemas/Page" }
+        meta: { $ref: "#/components/schemas/Meta" }
+
+    ShameItem:
+      type: object
+      required: [host, reason, added_at]
+      properties:
+        host: { type: string }
+        reason: { type: string, nullable: true }
+        added_at: { type: string, format: date-time }
+    ShameList:
+      type: object
+      required: [items, page, meta]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/ShameItem" }
+        page: { $ref: "#/components/schemas/Page" }
+        meta: { $ref: "#/components/schemas/Meta" }
+
+    Country:
+      type: object
+      required: [code, name, tld, sites, v6_sites, percent]
+      properties:
+        code: { type: string, example: "NO" }
+        name: { type: string }
+        tld: { type: string, nullable: true, example: ".NO" }
+        sites: { type: integer }
+        v6_sites: { type: integer }
+        percent: { type: number, format: double, example: 24.97 }
+        meta: { $ref: "#/components/schemas/DetailMeta" }
+    CountryList:
+      type: object
+      required: [items, page, meta]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Country" }
+        page: { $ref: "#/components/schemas/Page" }
+        meta: { $ref: "#/components/schemas/Meta" }
+
+    ASN:
+      type: object
+      description: "`count_v4` is synthesized server-side (count_total − count_v6)."
+      required: [number, name, count_total, count_v6, count_v4]
+      properties:
+        number: { type: integer, format: int64 }
+        name: { type: string }
+        count_total: { type: integer }
+        count_v6: { type: integer }
+        count_v4: { type: integer }
+        meta: { $ref: "#/components/schemas/DetailMeta" }
+    ASNList:
+      type: object
+      required: [items, page, meta]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/ASN" }
+        page: { $ref: "#/components/schemas/Page" }
+        meta: { $ref: "#/components/schemas/Meta" }
+
+    Provider:
+      type: object
+      required: [id, name, count_total, count_v6, count_v4]
+      properties:
+        id: { type: integer, format: int64 }
+        name: { type: string }
+        count_total: { type: integer }
+        count_v6: { type: integer }
+        count_v4: { type: integer }
+        meta: { $ref: "#/components/schemas/DetailMeta" }
+    ProviderList:
+      type: object
+      required: [items, page, meta]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Provider" }
+        page: { $ref: "#/components/schemas/Page" }
+        meta: { $ref: "#/components/schemas/Meta" }
+
+    CampaignListItem:
+      type: object
+      required: [uuid, name, description, source_file, tags, domain_count]
+      properties:
+        uuid: { type: string, format: uuid }
+        name: { type: string }
+        description: { type: string }
+        source_file: { type: string, nullable: true }
+        tags:
+          type: array
+          items: { type: string }
+        domain_count: { type: integer, format: int64 }
+    CampaignList:
+      type: object
+      required: [items, page, meta]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/CampaignListItem" }
+        page: { $ref: "#/components/schemas/Page" }
+        meta: { $ref: "#/components/schemas/Meta" }
+    CampaignAdoption:
+      type: object
+      required: [v6_ready_percent, day]
+      properties:
+        v6_ready_percent: { type: number, format: double, example: 41.7 }
+        day: { type: string, format: date }
+    CampaignDetail:
+      type: object
+      required: [uuid, name, description, source_file, tags, disabled, adoption, domains, meta]
+      properties:
+        uuid: { type: string, format: uuid }
+        name: { type: string }
+        description: { type: string }
+        source_file: { type: string, nullable: true }
+        tags:
+          type: array
+          items: { type: string }
+        disabled: { type: boolean }
+        adoption:
+          allOf: [{ $ref: "#/components/schemas/CampaignAdoption" }]
+          nullable: true
+        domains:
+          type: object
+          required: [items, page]
+          properties:
+            items:
+              type: array
+              items: { $ref: "#/components/schemas/DomainSummary" }
+            page: { $ref: "#/components/schemas/Page" }
+        meta: { $ref: "#/components/schemas/Meta" }
+
+    ChangelogItem:
+      type: object
+      description: One confirmed dimension transition — old/new are always non-null and distinct.
+      required: [ts, host, field, old_value, new_value]
+      properties:
+        ts: { type: string, format: date-time }
+        host: { type: string }
+        field: { $ref: "#/components/schemas/Dimension" }
+        old_value: { $ref: "#/components/schemas/IPv6Status" }
+        new_value: { $ref: "#/components/schemas/IPv6Status" }
+    ChangelogList:
+      type: object
+      required: [items, page, meta]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/ChangelogItem" }
+        page: { $ref: "#/components/schemas/Page" }
+        meta: { $ref: "#/components/schemas/Meta" }
+
+    HistoryPoint:
+      type: object
+      required: [day, base, www, ns, mx, conn, resources, classification, latency_v4_ms, latency_v6_ms]
+      properties:
+        day: { type: string, format: date }
+        base:
+          allOf: [{ $ref: "#/components/schemas/IPv6Status" }]
+          nullable: true
+        www:
+          allOf: [{ $ref: "#/components/schemas/IPv6Status" }]
+          nullable: true
+        ns:
+          allOf: [{ $ref: "#/components/schemas/IPv6Status" }]
+          nullable: true
+        mx:
+          allOf: [{ $ref: "#/components/schemas/IPv6Status" }]
+          nullable: true
+        conn:
+          allOf: [{ $ref: "#/components/schemas/IPv6Status" }]
+          nullable: true
+        resources:
+          allOf: [{ $ref: "#/components/schemas/IPv6Status" }]
+          nullable: true
+        classification: { $ref: "#/components/schemas/Classification" }
+        latency_v4_ms: { type: integer, nullable: true }
+        latency_v6_ms: { type: integer, nullable: true }
+    HistoryResponse:
+      type: object
+      required: [host, points, meta]
+      properties:
+        host: { type: string }
+        points:
+          type: array
+          items: { $ref: "#/components/schemas/HistoryPoint" }
+        meta:
+          type: object
+          required: [retention_days, as_of]
+          properties:
+            retention_days: { type: integer, example: 730 }
+            as_of: { type: string, format: date-time }
+
+    GlobalStatsPoint:
+      type: object
+      required: [day]
+      properties:
+        day: { type: string, format: date }
+        domains: { type: integer, nullable: true }
+        heroes: { type: integer, nullable: true }
+        partial: { type: integer, nullable: true }
+        sinners: { type: integer, nullable: true }
+        inactive: { type: integer, nullable: true }
+        unknown: { type: integer, nullable: true }
+        gold: { type: integer, nullable: true }
+        disabled: { type: integer, nullable: true }
+        base_supported: { type: integer, nullable: true }
+        www_supported: { type: integer, nullable: true }
+        ns_supported: { type: integer, nullable: true }
+        mx_supported: { type: integer, nullable: true }
+        conn_supported: { type: integer, nullable: true }
+        resources_supported: { type: integer, nullable: true }
+        top_heroes: { type: integer, nullable: true }
+        top_nameserver: { type: integer, nullable: true }
+    GlobalStatsSeries:
+      type: object
+      required: [points, meta]
+      properties:
+        points:
+          type: array
+          items: { $ref: "#/components/schemas/GlobalStatsPoint" }
+        meta: { $ref: "#/components/schemas/Meta" }
+    CountryStatsPoint:
+      type: object
+      required: [day]
+      properties:
+        day: { type: string, format: date }
+        domains: { type: integer, nullable: true }
+        sinners: { type: integer, nullable: true }
+        partial: { type: integer, nullable: true }
+        heroes: { type: integer, nullable: true }
+        base_supported: { type: integer, nullable: true }
+        conn_supported: { type: integer, nullable: true }
+    CountryStatsSeries:
+      type: object
+      required: [points, meta]
+      properties:
+        points:
+          type: array
+          items: { $ref: "#/components/schemas/CountryStatsPoint" }
+        meta: { $ref: "#/components/schemas/Meta" }
+    CampaignStatsPoint:
+      type: object
+      required: [day]
+      properties:
+        day: { type: string, format: date }
+        domains: { type: integer, nullable: true }
+        v6_ready: { type: integer, nullable: true }
+        sinners: { type: integer, nullable: true }
+        partial: { type: integer, nullable: true }
+        heroes: { type: integer, nullable: true }
+        base_supported: { type: integer, nullable: true }
+        www_supported: { type: integer, nullable: true }
+        ns_supported: { type: integer, nullable: true }
+        mx_supported: { type: integer, nullable: true }
+        conn_supported: { type: integer, nullable: true }
+    CampaignStatsSeries:
+      type: object
+      required: [points, meta]
+      properties:
+        points:
+          type: array
+          items: { $ref: "#/components/schemas/CampaignStatsPoint" }
+        meta: { $ref: "#/components/schemas/Meta" }
+    ASNStatsPoint:
+      type: object
+      description: "`v6_domains`/`domains` mapped onto the canonical count_v6/count_total wire names."
+      required: [day]
+      properties:
+        day: { type: string, format: date }
+        count_total: { type: integer, nullable: true }
+        count_v6: { type: integer, nullable: true }
+        sinners: { type: integer, nullable: true }
+        heroes: { type: integer, nullable: true }
+    ASNStatsSeries:
+      type: object
+      required: [points, meta]
+      properties:
+        points:
+          type: array
+          items: { $ref: "#/components/schemas/ASNStatsPoint" }
+        meta: { $ref: "#/components/schemas/Meta" }
+
+    ResourceLink:
+      type: object
+      required: [host, aaaa_status, source, required, first_seen, last_seen, last_checked_at]
+      properties:
+        host: { type: string, example: fonts.googleapis.com }
+        aaaa_status:
+          allOf: [{ $ref: "#/components/schemas/IPv6Status" }]
+          nullable: true
+        source: { type: string, enum: [discovered, manual] }
+        required: { type: boolean }
+        first_seen: { type: string, format: date }
+        last_seen: { type: string, format: date }
+        last_checked_at: { type: string, format: date-time, nullable: true }
+    ResourceLinkList:
+      type: object
+      required: [items, page, meta]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/ResourceLink" }
+        page: { $ref: "#/components/schemas/Page" }
+        meta: { $ref: "#/components/schemas/Meta" }
+    ResourceHost:
+      type: object
+      required: [host, aaaa_status, dependent_count, last_checked_at]
+      properties:
+        host: { type: string }
+        aaaa_status:
+          allOf: [{ $ref: "#/components/schemas/IPv6Status" }]
+          nullable: true
+        dependent_count: { type: integer }
+        last_checked_at: { type: string, format: date-time, nullable: true }
+    ResourceHostDetail:
+      allOf:
+        - $ref: "#/components/schemas/ResourceHost"
+        - type: object
+          required: [meta]
+          properties:
+            meta: { $ref: "#/components/schemas/DetailMeta" }
+    Dependent:
+      allOf:
+        - $ref: "#/components/schemas/DomainSummary"
+        - type: object
+          required: [source, required]
+          properties:
+            source: { type: string, enum: [discovered, manual] }
+            required: { type: boolean }
+    DependentsResponse:
+      type: object
+      required: [resource, items, page, meta]
+      properties:
+        resource: { $ref: "#/components/schemas/ResourceHost" }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Dependent" }
+        page: { $ref: "#/components/schemas/Page" }
+        meta: { $ref: "#/components/schemas/Meta" }
+
+    CheckAccepted:
+      type: object
+      description: Exactly these four keys on a 202.
+      required: [id, host, status, created_at]
+      properties:
+        id: { type: integer, format: int64 }
+        host: { type: string }
+        status: { type: string, enum: [pending] }
+        created_at: { type: string, format: date-time }
+    CheckConfirmed:
+      type: object
+      required: [classification, class_flags, gold, status, as_of]
+      properties:
+        classification: { $ref: "#/components/schemas/Classification" }
+        class_flags:
+          type: array
+          items: { $ref: "#/components/schemas/ClassFlag" }
+        gold: { type: boolean }
+        status: { $ref: "#/components/schemas/StatusBlock" }
+        as_of: { type: string, format: date-time, nullable: true }
+    CheckEnvelope:
+      type: object
+      description: >
+        The §5.1.2 job body. `id` is null only on the domain-side dedupe
+        envelope. `result` statuses are raw observations (incl.
+        `inconsistent` on base/www), explicitly NOT confirmed state.
+      required: [id, host, status, cached, created_at, completed_at, error, result, confirmed]
+      properties:
+        id: { type: integer, format: int64, nullable: true }
+        host: { type: string }
+        status: { type: string, enum: [pending, processing, done, failed] }
+        cached: { type: boolean }
+        created_at: { type: string, format: date-time }
+        completed_at: { type: string, format: date-time, nullable: true }
+        error: { type: string, nullable: true }
+        result:
+          type: object
+          nullable: true
+          additionalProperties: true
+          properties:
+            checked_at: { type: string, format: date-time }
+            duration_ms: { type: integer, format: int64 }
+            checks:
+              type: object
+              additionalProperties:
+                type: object
+                properties:
+                  status: { type: string }
+            latency:
+              type: object
+              properties:
+                v4_ms: { type: integer, nullable: true }
+                v6_ms: { type: integer, nullable: true }
+        confirmed:
+          allOf: [{ $ref: "#/components/schemas/CheckConfirmed" }]
+          nullable: true
+
+    ShieldsBadge:
+      type: object
+      description: shields.io endpoint schema — the one sanctioned camelCase exception.
+      required: [schemaVersion, label, message, color, cacheSeconds, isError]
+      properties:
+        schemaVersion: { type: integer, enum: [1] }
+        label: { type: string, enum: [IPv6] }
+        message: { type: string, enum: [supported, gold, partial, no IPv6, inactive, unknown] }
+        color: { type: string, enum: [brightgreen, yellow, red, lightgrey] }
+        cacheSeconds: { type: integer, example: 86400 }
+        isError: { type: boolean }
+
+    JSONFeed:
+      type: object
+      required: [version, title, home_page_url, feed_url, items]
+      properties:
+        version: { type: string, enum: ["https://jsonfeed.org/version/1.1"] }
+        title: { type: string }
+        home_page_url: { type: string }
+        feed_url: { type: string }
+        items:
+          type: array
+          items:
+            type: object
+            required: [id, title, content_text, date_published]
+            properties:
+              id: { type: string, description: "The composite (host, ts, field) as a stable IRI." }
+              url: { type: string }
+              title: { type: string }
+              content_text: { type: string }
+              date_published: { type: string, format: date-time }
+
+    ManifestLatest:
+      type: object
+      required: [date, path, datapackage_url]
+      properties:
+        date: { type: string, format: date }
+        path: { type: string }
+        datapackage_url: { type: string }
+    ManifestEntry:
+      type: object
+      required: [date, path, tiers, formats, datapackage_url, sha256sums_url]
+      properties:
+        date: { type: string, format: date }
+        path: { type: string }
+        tiers:
+          type: array
+          items: { type: string, enum: [top100k, top1m, full] }
+        formats:
+          type: array
+          items: { type: string, enum: [csv.gz, parquet] }
+        datapackage_url: { type: string }
+        sha256sums_url: { type: string }
+    Manifest:
+      type: object
+      description: The pinned datasets index (schema_version bumps with the column set).
+      required: [schema_version, generated_at, generation, license, attribution, latest, snapshots]
+      properties:
+        schema_version: { type: integer, example: 1 }
+        generated_at: { type: string, format: date-time }
+        generation: { type: integer }
+        license: { type: string }
+        attribution: { type: string }
+        latest: { $ref: "#/components/schemas/ManifestLatest" }
+        snapshots:
+          type: array
+          items: { $ref: "#/components/schemas/ManifestEntry" }

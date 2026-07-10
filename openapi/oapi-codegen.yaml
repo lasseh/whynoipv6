@@ -1,0 +1,9 @@
+# oapi-codegen v2 config (07-api.md §7): chi-server + strict-server + types
+# committed under backend/internal/api/gen/. Output path is relative to the
+# backend/ module root (make generate runs there).
+package: gen
+output: internal/api/gen/api.gen.go
+generate:
+  models: true
+  chi-server: true
+  strict-server: true

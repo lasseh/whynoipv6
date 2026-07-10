@@ -9,7 +9,7 @@ else
   TEST_CMD := $(GO) test
 endif
 
-.PHONY: build build-linux test test-integration lint tidy vulncheck generate coverage compose-up compose-down clean help
+.PHONY: build build-linux test test-integration lint tidy vulncheck generate spec-lint coverage compose-up compose-down clean help
 
 ##@ General
 help: ## Show this help
@@ -41,15 +41,15 @@ vulncheck: ## Scan for known vulnerabilities
 	govulncheck ./...
 
 ##@ Codegen
-generate: ## Regenerate sqlc + OpenAPI codegen (activates once openapi.yaml exists); fail if stale
-	@if [ -f sqlc.yaml ]; then sqlc generate; else echo "sqlc.yaml not present yet (pre-P1.5) — skipping sqlc"; fi
-	@if [ -f ../openapi/openapi.yaml ]; then \
-	  oapi-codegen -config ../openapi/oapi-codegen.yaml ../openapi/openapi.yaml; \
-	  openapi-typescript ../openapi/openapi.yaml -o ../openapi/schema.ts; \
-	else \
-	  echo "openapi/openapi.yaml not present yet (pre-P4.5) — sqlc only"; \
-	fi
+generate: ## Regenerate sqlc + OpenAPI codegen; fail if the tree is stale (the CI drift gate)
+	sqlc generate
+	$(GO) tool oapi-codegen -config ../openapi/oapi-codegen.yaml ../openapi/openapi.yaml
+	npx -y openapi-typescript@7 ../openapi/openapi.yaml -o ../openapi/schema.ts
 	@git diff --exit-code || (echo "generated code is out of date — run codegen and commit" && exit 1)
+
+spec-lint: ## Lint openapi.yaml with Spectral (snake_case, envelopes, problem+json)
+	npx -y @stoplight/spectral-cli@6 lint ../openapi/openapi.yaml \
+	  --ruleset ../openapi/.spectral.yaml --fail-severity=error
 
 ##@ Utility
 tidy: ## Verify go.mod/go.sum are tidy

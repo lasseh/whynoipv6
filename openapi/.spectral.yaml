@@ -1,0 +1,54 @@
+# Spec lint (07-api.md §7): snake_case wire, the two envelopes, problem+json.
+extends: ["spectral:oas"]
+rules:
+  operation-tags: error
+  # Summaries are the documentation convention in this spec.
+  operation-description: off
+  operation-operationId: error
+  oas3-unused-component: error
+
+  # §2.3 — every JSON property is snake_case; the shields.io badge schema is
+  # the one sanctioned camelCase exception.
+  wire-props-snake-case:
+    description: JSON property names must be snake_case (ShieldsBadge exempt).
+    severity: error
+    given: $.components.schemas[?(@property != 'ShieldsBadge')].properties[*]~
+    then:
+      function: casing
+      functionOptions:
+        type: snake
+
+  # §2.4 — list envelopes carry items+page+meta.
+  envelope-list-shape:
+    description: "*List schemas must be the {items,page,meta} envelope."
+    severity: error
+    given: $.components.schemas[?(@property.match(/List$/))]
+    then:
+      - field: properties.items
+        function: truthy
+      - field: properties.page
+        function: truthy
+      - field: properties.meta
+        function: truthy
+
+  # §2.4 — time series carry points+meta.
+  envelope-series-shape:
+    description: "*Series schemas must be the {points,meta} envelope."
+    severity: error
+    given: $.components.schemas[?(@property.match(/Series$/))]
+    then:
+      - field: properties.points
+        function: truthy
+      - field: properties.meta
+        function: truthy
+
+  # §2.5 — the RFC 9457 problem schema keeps its required members.
+  problem-required-members:
+    description: The Problem schema requires type/title/status.
+    severity: error
+    given: $.components.schemas.Problem
+    then:
+      - field: required
+        function: length
+        functionOptions:
+          min: 3
