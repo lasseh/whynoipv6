@@ -15,10 +15,25 @@ type Querier interface {
 	// Sentinel lookup: binaries resolve the sentinel ASN once at startup by
 	// lookup, never by literal id (05-schema.md §5).
 	ASNSentinelID(ctx context.Context) (int32, error)
+	CampaignAddMember(ctx context.Context, arg CampaignAddMemberParams) (int64, error)
+	// db/query/campaign.sql — sqlc query source (layout: 05-schema.md §10.2).
+	CampaignByUUID(ctx context.Context, uuid pgtype.UUID) (CampaignByUUIDRow, error)
+	CampaignDisableAbsent(ctx context.Context, dollar_1 []pgtype.UUID) ([]CampaignDisableAbsentRow, error)
+	CampaignInsert(ctx context.Context, arg CampaignInsertParams) (int32, error)
+	CampaignMembers(ctx context.Context, campaignID int32) ([]int64, error)
+	CampaignRemoveMembersNotIn(ctx context.Context, arg CampaignRemoveMembersNotInParams) (int64, error)
+	CampaignUUIDBySourceFile(ctx context.Context, sourceFile *string) (pgtype.UUID, error)
+	CampaignUpdateFromFile(ctx context.Context, arg CampaignUpdateFromFileParams) (int32, error)
+	// Insert-time ccTLD attribution probe (06-ingest.md §6.5): '.NO'-form input.
+	CountryIDByTLD(ctx context.Context, tld *string) (int32, error)
 	// db/query/country.sql — sqlc query source (layout: 05-schema.md §10.2).
 	// Sentinel lookup: binaries resolve the sentinel country once at startup by
 	// lookup, never by literal id (05-schema.md §5).
 	CountrySentinelID(ctx context.Context) (int32, error)
+	// db/query/domain.sql — sqlc query source (layout: 05-schema.md §10.2).
+	DomainByHost(ctx context.Context, host string) (DomainByHostRow, error)
+	DomainInsertEntity(ctx context.Context, arg DomainInsertEntityParams) (int64, error)
+	DomainMembershipReEntry(ctx context.Context, id int64) error
 	TrancoInsertAborted(ctx context.Context, arg TrancoInsertAbortedParams) error
 	TrancoInsertProvenance(ctx context.Context, arg TrancoInsertProvenanceParams) (int64, error)
 	TrancoLastSuccessAt(ctx context.Context) (pgtype.Timestamptz, error)

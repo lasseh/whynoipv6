@@ -9,6 +9,18 @@ import (
 	"context"
 )
 
+const CountryIDByTLD = `-- name: CountryIDByTLD :one
+SELECT id FROM country WHERE tld = $1
+`
+
+// Insert-time ccTLD attribution probe (06-ingest.md §6.5): '.NO'-form input.
+func (q *Queries) CountryIDByTLD(ctx context.Context, tld *string) (int32, error) {
+	row := q.db.QueryRow(ctx, CountryIDByTLD, tld)
+	var id int32
+	err := row.Scan(&id)
+	return id, err
+}
+
 const CountrySentinelID = `-- name: CountrySentinelID :one
 
 SELECT id FROM country WHERE code = 'UN'
