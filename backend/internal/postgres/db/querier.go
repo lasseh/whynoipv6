@@ -31,6 +31,9 @@ type Querier interface {
 	// cycle; all rows in a batch share one claimed_at (the lease token L). The
 	// eligibility predicate textually matches idx_domain_due (05-schema §1.7).
 	ClaimBatchByRank(ctx context.Context, limit int32) ([]ClaimBatchByRankRow, error)
+	// db/query/commit.sql — the per-domain commit write unit (03-state-machine.md
+	// §12). One pgx.Batch in one pgx.Tx; statement 1 is the lease-fenced UPDATE.
+	CommitDomain(ctx context.Context, arg CommitDomainParams) (int64, error)
 	CountryCodeMap(ctx context.Context) ([]CountryCodeMapRow, error)
 	// Insert-time ccTLD attribution probe (06-ingest.md §6.5): '.NO'-form input.
 	CountryIDByTLD(ctx context.Context, tld *string) (int32, error)
@@ -49,6 +52,10 @@ type Querier interface {
 	// commit/trust machine's columns (06-ingest.md §6.10).
 	DomainStampDNSProvider(ctx context.Context, arg DomainStampDNSProviderParams) error
 	DomainStampHostingProvider(ctx context.Context, arg DomainStampHostingProviderParams) error
+	EnsureResourceHost(ctx context.Context, rhost string) error
+	InsertChangelog(ctx context.Context, arg InsertChangelogParams) error
+	InsertScan(ctx context.Context, arg InsertScanParams) error
+	InsertScanDetail(ctx context.Context, arg InsertScanDetailParams) error
 	ProviderAppendSuffixes(ctx context.Context, arg ProviderAppendSuffixesParams) error
 	ProviderByName(ctx context.Context, name string) (ProviderByNameRow, error)
 	// provider remove clears referencing domains first (FK); they re-stamp on

@@ -37,12 +37,20 @@ func (c *DNSNSIPv6) Check(ctx context.Context, domain string, kind Kind) (Result
 		if nsErr == nil && len(nameservers) > 0 {
 			break
 		}
-		// Move up one label: blog.example.com → example.com.
+		// Move up one label: blog.example.com → example.com. Stop at the
+		// TLD/bare-name boundary (01-engine.md §11.3): never query a bare
+		// single-label name — answering TLD nameservers would fabricate a
+		// "zone" for nonexistent domains and break dead-detection branch (a)
+		// (03-state-machine.md §4).
 		idx := strings.Index(qname, ".")
 		if idx < 0 || idx == len(qname)-1 {
-			break // reached TLD or bare name
+			break // bare name or trailing dot
 		}
 		qname = qname[idx+1:]
+		if !strings.Contains(qname, ".") {
+			nameservers, nsErr = nil, nil
+			break // reached the TLD label
+		}
 	}
 
 	if nsErr != nil && len(nameservers) == 0 {

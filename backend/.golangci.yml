@@ -34,10 +34,12 @@ linters:
       - path: internal/checker/
         linters:
           - goconst
-      # Fixture/scripting literals in tests are values, not constants.
+      # Fixture/scripting literals in tests are values, not constants, and
+      # gocritic's performance hints (hugeParam etc.) are noise in tests.
       - path: _test\.go
         linters:
           - goconst
+          - gocritic
     paths:
       - third_party$
       - builtin$
