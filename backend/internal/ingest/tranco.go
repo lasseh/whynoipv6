@@ -309,7 +309,7 @@ func parseTrancoZip(zipBytes []byte) (rows [][]any, lineCount, rejected int, err
 	if err != nil {
 		return nil, 0, 0, fmt.Errorf("open inner csv: %w", err)
 	}
-	defer rc.Close()
+	defer func() { _ = rc.Close() }()
 
 	sc := bufio.NewScanner(rc)
 	sc.Buffer(make([]byte, 0, 64*1024), 1024*1024)

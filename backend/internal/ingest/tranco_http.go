@@ -25,7 +25,7 @@ func NewHTTPTrancoSource() *HTTPTrancoSource {
 }
 
 func (s *HTTPTrancoSource) ListID(ctx context.Context) (string, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, trancoListIDURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, trancoListIDURL, http.NoBody)
 	if err != nil {
 		return "", err
 	}
@@ -33,7 +33,7 @@ func (s *HTTPTrancoSource) ListID(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("list-id endpoint: %s", resp.Status)
 	}
@@ -49,7 +49,7 @@ func (s *HTTPTrancoSource) ListID(ctx context.Context) (string, error) {
 }
 
 func (s *HTTPTrancoSource) List(ctx context.Context, etag string) (*TrancoArchive, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, trancoListURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, trancoListURL, http.NoBody)
 	if err != nil {
 		return nil, err
 	}
@@ -60,7 +60,7 @@ func (s *HTTPTrancoSource) List(ctx context.Context, etag string) (*TrancoArchiv
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode == http.StatusNotModified {
 		return &TrancoArchive{NotModified: true}, nil
 	}

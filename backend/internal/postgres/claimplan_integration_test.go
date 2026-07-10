@@ -54,12 +54,12 @@ func explainClaim(t *testing.T, pool *pgxpool.Pool) explainResult {
 	return res[0]
 }
 
-func findNode(n explainNode, pred func(explainNode) bool) *explainNode {
+func findNode(n *explainNode, pred func(*explainNode) bool) *explainNode {
 	if pred(n) {
-		return &n
+		return n
 	}
-	for _, c := range n.Plans {
-		if hit := findNode(c, pred); hit != nil {
+	for i := range n.Plans {
+		if hit := findNode(&n.Plans[i], pred); hit != nil {
 			return hit
 		}
 	}
@@ -104,14 +104,14 @@ func TestClaimPlanGate(t *testing.T) {
 	plan, _ := json.MarshalIndent(res, "", "  ")
 	t.Logf("near-empty-backlog plan (execution %.2f ms):\n%s", res.ExecutionTime, plan)
 
-	idx := findNode(res.Plan, func(n explainNode) bool { return n.IndexName == "idx_domain_due" })
+	idx := findNode(&res.Plan, func(n *explainNode) bool { return n.IndexName == "idx_domain_due" })
 	if idx == nil {
 		t.Fatalf("STOP-AND-REPORT: claim plan does not use idx_domain_due:\n%s", plan)
 	}
 	if !strings.Contains(idx.IndexCond, "next_check_at") {
 		t.Errorf("index condition %q does not bound next_check_at", idx.IndexCond)
 	}
-	sort := findNode(res.Plan, func(n explainNode) bool {
+	sort := findNode(&res.Plan, func(n *explainNode) bool {
 		return n.NodeType == "Sort" && len(n.SortKey) >= 1 && strings.Contains(n.SortKey[0], "rank")
 	})
 	if sort == nil {

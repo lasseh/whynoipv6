@@ -44,9 +44,9 @@ func (f *fakeSource) List(context.Context, string) (*TrancoArchive, error) {
 
 func crlf(lines ...string) string { return strings.Join(lines, "\r\n") + "\r\n" }
 
-func importList(t *testing.T, pool *pgxpool.Pool, id, csv string, minRows int, force bool) *TrancoReport {
+func importList(t *testing.T, pool *pgxpool.Pool, id, csv string, force bool) *TrancoReport {
 	t.Helper()
-	imp := NewTrancoImporter(pool, &fakeSource{id: id, csv: csv}, TrancoConfig{MinRows: minRows, MaxDelistPct: 2.0})
+	imp := NewTrancoImporter(pool, &fakeSource{id: id, csv: csv}, TrancoConfig{MinRows: 3, MaxDelistPct: 2.0})
 	rep, err := imp.Import(context.Background(), force)
 	if err != nil {
 		t.Fatalf("import: %v", err)
@@ -70,7 +70,7 @@ func TestTrancoImport(t *testing.T) {
 		"6,bbc.co.uk",
 		"notanumber,junk.example", // rejected: rank parse
 	)
-	rep := importList(t, pool, "L001", csv, 3, false)
+	rep := importList(t, pool, "L001", csv, false)
 
 	if rep.Outcome != TrancoImported {
 		t.Fatalf("outcome = %s (%s), want imported", rep.Outcome, rep.Note)
@@ -128,26 +128,26 @@ func TestTrancoIdempotency(t *testing.T) {
 	pool := pgtest.NewDB(t)
 
 	csv := crlf("1,example.com", "2,dnb.no", "3,bbc.co.uk")
-	rep := importList(t, pool, "L010", csv, 3, false)
+	rep := importList(t, pool, "L010", csv, false)
 	if rep.Outcome != TrancoImported {
 		t.Fatalf("first import: %s", rep.Outcome)
 	}
-	rep = importList(t, pool, "L010", csv, 3, false)
+	rep = importList(t, pool, "L010", csv, false)
 	if rep.Outcome != TrancoNoNewList {
 		t.Errorf("re-import same list = %s, want no_new_list", rep.Outcome)
 	}
 
 	// A list that aborts (min_rows) is never auto-retried; --force imports.
 	tiny := crlf("1,example.org")
-	rep = importList(t, pool, "L011", tiny, 3, false)
+	rep = importList(t, pool, "L011", tiny, false)
 	if rep.Outcome != TrancoAborted {
 		t.Fatalf("undersized list = %s, want aborted", rep.Outcome)
 	}
-	rep = importList(t, pool, "L011", tiny, 3, false)
+	rep = importList(t, pool, "L011", tiny, false)
 	if rep.Outcome != TrancoAbortedPreviously {
 		t.Errorf("aborted list retry = %s, want aborted_previously", rep.Outcome)
 	}
-	rep = importList(t, pool, "L011", tiny, 3, true)
+	rep = importList(t, pool, "L011", tiny, true)
 	if rep.Outcome != TrancoImported {
 		t.Errorf("forced import of aborted list = %s (%s), want imported", rep.Outcome, rep.Note)
 	}
@@ -164,13 +164,13 @@ func TestTrancoSanityGuard(t *testing.T) {
 	for i := 1; i <= 100; i++ {
 		lines = append(lines, fmt.Sprintf("%d,d%d.example", i, i))
 	}
-	rep := importList(t, pool, "L020", crlf(lines...), 3, false)
+	rep := importList(t, pool, "L020", crlf(lines...), false)
 	if rep.Outcome != TrancoImported || rep.ImportedCount != 100 {
 		t.Fatalf("seed import: %s imported=%d", rep.Outcome, rep.ImportedCount)
 	}
 
 	// Next list drops 5 of 100 ranked rows (5% > 2%).
-	rep = importList(t, pool, "L021", crlf(lines[:95]...), 3, false)
+	rep = importList(t, pool, "L021", crlf(lines[:95]...), false)
 	if rep.Outcome != TrancoAborted {
 		t.Fatalf("delist-heavy list = %s, want aborted", rep.Outcome)
 	}
@@ -185,7 +185,7 @@ func TestTrancoSanityGuard(t *testing.T) {
 		t.Errorf("ranks after abort = %d, want 100 unchanged", ranked)
 	}
 
-	rep = importList(t, pool, "L021", crlf(lines[:95]...), 3, true)
+	rep = importList(t, pool, "L021", crlf(lines[:95]...), true)
 	if rep.Outcome != TrancoImported || rep.Delisted != 5 {
 		t.Errorf("forced apply = %s delisted=%d, want imported/5", rep.Outcome, rep.Delisted)
 	}
@@ -199,7 +199,7 @@ func TestTrancoReEntry(t *testing.T) {
 	ctx := context.Background()
 
 	csv := crlf("1,a.example", "2,b.example", "3,c.example", "4,d.example")
-	if rep := importList(t, pool, "L030", csv, 3, false); rep.Outcome != TrancoImported {
+	if rep := importList(t, pool, "L030", csv, false); rep.Outcome != TrancoImported {
 		t.Fatalf("seed: %s", rep.Outcome)
 	}
 	mustExec := func(sql string, args ...any) {
@@ -216,7 +216,7 @@ func TestTrancoReEntry(t *testing.T) {
 
 	// New list: same hosts, shifted ranks (so the guarded upsert touches all).
 	csv2 := crlf("11,a.example", "12,b.example", "13,c.example", "14,d.example")
-	if rep := importList(t, pool, "L031", csv2, 3, false); rep.Outcome != TrancoImported {
+	if rep := importList(t, pool, "L031", csv2, false); rep.Outcome != TrancoImported {
 		t.Fatalf("re-entry import: %s", rep.Outcome)
 	}
 

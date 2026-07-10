@@ -74,7 +74,8 @@ func trancoCmd() *cobra.Command {
 				return err
 			}
 			fmt.Println("list_id\tlist_date\timported_at\taborted\tlines\timported\tdelisted\trejected\tduplicates\tnote")
-			for _, r := range rows {
+			for i := range rows {
+				r := &rows[i]
 				note := ""
 				if r.Note != nil {
 					note = *r.Note
