@@ -33,6 +33,9 @@ jobs:
       - name: Generate (staleness gate)
         run: make generate
 
+      - name: OpenAPI spec lint (Spectral)
+        run: make spec-lint
+
       - name: Unit tests
         run: make test
 
