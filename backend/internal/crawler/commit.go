@@ -356,7 +356,7 @@ WHERE domain_resource.domain_id = $2
   DELETE FROM domain_resource
   WHERE domain_id = $1
     AND source = 'discovered'
-    AND last_seen < $2 - INTERVAL '30 days'
+    AND last_seen < $2::timestamptz - INTERVAL '30 days'
   RETURNING resource_host_id
 )
 UPDATE resource_host SET dependent_count = dependent_count - 1

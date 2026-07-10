@@ -214,6 +214,13 @@ func run() error {
 	}
 	go liveChecker.Run(claimCtx)
 
+	// The resource-host sweep (06 §5.2): only when the dimension is on —
+	// the registry is empty otherwise; flag changes apply on restart.
+	if cfg.Bool("crawler.resources.enabled") {
+		sweeper := &crawler.ResourceSweeper{Pool: pool, Bulk: bulk}
+		go sweeper.Run(claimCtx)
+	}
+
 	slog.Info("crawler started", "worker_slots", cfg.Int("worker_slots"))
 	frontier.Run(claimCtx) // returns once claiming stopped and slots drained
 
