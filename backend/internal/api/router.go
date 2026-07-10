@@ -47,6 +47,17 @@ func NewRouter(svc *service.Service) http.Handler {
 	// /ip — client-IP echo (§4.12).
 	r.Get("/ip", s.ip)
 
+	// The /domains list family + tier presets (§4.2/§4.4) and the domain
+	// detail (§4.3).
+	r.Get("/domains", s.listDomains)
+	r.Get("/domains/{host}", s.getDomain)
+	r.Get("/heroes", s.listHeroes)
+	r.Get("/sinners", s.listSinners)
+	r.Get("/gold", s.listGold)
+	r.Get("/almost", s.listAlmost)
+	r.Get("/mail", s.listMail)
+	r.Get("/shame", s.listShame)
+
 	// Route inventory grows with the endpoint tasks (P4.3 onward), each
 	// implementing the generated strict-server interface.
 	r.NotFound(func(w http.ResponseWriter, r *http.Request) {

@@ -38,6 +38,17 @@ func (q *Queries) CountryCodeMap(ctx context.Context) ([]CountryCodeMapRow, erro
 	return items, nil
 }
 
+const CountryIDByCode = `-- name: CountryIDByCode :one
+SELECT id FROM country WHERE code = upper($1)::char(2)
+`
+
+func (q *Queries) CountryIDByCode(ctx context.Context, code interface{}) (int32, error) {
+	row := q.db.QueryRow(ctx, CountryIDByCode, code)
+	var id int32
+	err := row.Scan(&id)
+	return id, err
+}
+
 const CountryIDByTLD = `-- name: CountryIDByTLD :one
 SELECT id FROM country WHERE tld = $1
 `

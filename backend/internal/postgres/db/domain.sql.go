@@ -290,6 +290,117 @@ func (q *Queries) DomainByHost(ctx context.Context, host string) (DomainByHostRo
 	return i, err
 }
 
+const DomainDetailByHost = `-- name: DomainDetailByHost :one
+SELECT d.id, d.host, d.rank, d.kind, p.host AS parent,
+  d.classification, d.class_flags, d.gold,
+  d.base_status, d.base_since, d.www_status, d.www_since,
+  d.ns_status, d.ns_since, d.mx_status, d.mx_since,
+  d.conn_status, d.conn_since, d.resources_status, d.resources_since,
+  d.dnssec_observed, d.ptr_observed, d.smtp_observed, d.parity_observed,
+  d.latency_v4_ms, d.latency_v6_ms,
+  d.tld, c.code AS country_code, c.name AS country_name, c.tld AS country_tld,
+  a.number AS asn_number, a.name AS asn_name,
+  dp.id AS provider_id, dp.name AS provider_name,
+  d.hosting_provider,
+  (SELECT count(*) FROM domain ch WHERE ch.parent_id = d.id AND NOT ch.disabled) AS subdomain_count,
+  d.disabled, d.last_checked_at, d.created_at
+FROM domain d
+JOIN country c ON c.id = d.country_id
+JOIN asn a ON a.id = d.asn_id
+LEFT JOIN dns_provider dp ON dp.id = d.dns_provider_id
+LEFT JOIN domain p ON p.id = d.parent_id
+WHERE d.host = $1
+`
+
+type DomainDetailByHostRow struct {
+	ID              int64              `json:"id"`
+	Host            string             `json:"host"`
+	Rank            *int32             `json:"rank"`
+	Kind            DomainKind         `json:"kind"`
+	Parent          *string            `json:"parent"`
+	Classification  Classification     `json:"classification"`
+	ClassFlags      []string           `json:"class_flags"`
+	Gold            bool               `json:"gold"`
+	BaseStatus      *Ipv6Status        `json:"base_status"`
+	BaseSince       pgtype.Timestamptz `json:"base_since"`
+	WwwStatus       *Ipv6Status        `json:"www_status"`
+	WwwSince        pgtype.Timestamptz `json:"www_since"`
+	NsStatus        *Ipv6Status        `json:"ns_status"`
+	NsSince         pgtype.Timestamptz `json:"ns_since"`
+	MxStatus        *Ipv6Status        `json:"mx_status"`
+	MxSince         pgtype.Timestamptz `json:"mx_since"`
+	ConnStatus      *Ipv6Status        `json:"conn_status"`
+	ConnSince       pgtype.Timestamptz `json:"conn_since"`
+	ResourcesStatus *Ipv6Status        `json:"resources_status"`
+	ResourcesSince  pgtype.Timestamptz `json:"resources_since"`
+	DnssecObserved  *Observation       `json:"dnssec_observed"`
+	PtrObserved     *Observation       `json:"ptr_observed"`
+	SmtpObserved    *Observation       `json:"smtp_observed"`
+	ParityObserved  *Observation       `json:"parity_observed"`
+	LatencyV4Ms     *int32             `json:"latency_v4_ms"`
+	LatencyV6Ms     *int32             `json:"latency_v6_ms"`
+	Tld             *string            `json:"tld"`
+	CountryCode     string             `json:"country_code"`
+	CountryName     string             `json:"country_name"`
+	CountryTld      *string            `json:"country_tld"`
+	AsnNumber       int64              `json:"asn_number"`
+	AsnName         string             `json:"asn_name"`
+	ProviderID      *int64             `json:"provider_id"`
+	ProviderName    *string            `json:"provider_name"`
+	HostingProvider *string            `json:"hosting_provider"`
+	SubdomainCount  int64              `json:"subdomain_count"`
+	Disabled        bool               `json:"disabled"`
+	LastCheckedAt   pgtype.Timestamptz `json:"last_checked_at"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+}
+
+func (q *Queries) DomainDetailByHost(ctx context.Context, host string) (DomainDetailByHostRow, error) {
+	row := q.db.QueryRow(ctx, DomainDetailByHost, host)
+	var i DomainDetailByHostRow
+	err := row.Scan(
+		&i.ID,
+		&i.Host,
+		&i.Rank,
+		&i.Kind,
+		&i.Parent,
+		&i.Classification,
+		&i.ClassFlags,
+		&i.Gold,
+		&i.BaseStatus,
+		&i.BaseSince,
+		&i.WwwStatus,
+		&i.WwwSince,
+		&i.NsStatus,
+		&i.NsSince,
+		&i.MxStatus,
+		&i.MxSince,
+		&i.ConnStatus,
+		&i.ConnSince,
+		&i.ResourcesStatus,
+		&i.ResourcesSince,
+		&i.DnssecObserved,
+		&i.PtrObserved,
+		&i.SmtpObserved,
+		&i.ParityObserved,
+		&i.LatencyV4Ms,
+		&i.LatencyV6Ms,
+		&i.Tld,
+		&i.CountryCode,
+		&i.CountryName,
+		&i.CountryTld,
+		&i.AsnNumber,
+		&i.AsnName,
+		&i.ProviderID,
+		&i.ProviderName,
+		&i.HostingProvider,
+		&i.SubdomainCount,
+		&i.Disabled,
+		&i.LastCheckedAt,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const DomainDisable = `-- name: DomainDisable :execrows
 
 UPDATE domain

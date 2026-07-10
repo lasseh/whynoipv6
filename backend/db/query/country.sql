@@ -37,3 +37,6 @@ FROM (
   GROUP BY country_id
 ) agg
 WHERE c.id = agg.country_id;
+
+-- name: CountryIDByCode :one
+SELECT id FROM country WHERE code = upper(@code)::char(2);

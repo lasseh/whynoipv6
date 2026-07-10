@@ -40,6 +40,7 @@ type Querier interface {
 	// §12). One pgx.Batch in one pgx.Tx; statement 1 is the lease-fenced UPDATE.
 	CommitDomain(ctx context.Context, arg CommitDomainParams) (int64, error)
 	CountryCodeMap(ctx context.Context) ([]CountryCodeMapRow, error)
+	CountryIDByCode(ctx context.Context, code interface{}) (int32, error)
 	// Insert-time ccTLD attribution probe (06-ingest.md §6.5): '.NO'-form input.
 	CountryIDByTLD(ctx context.Context, tld *string) (int32, error)
 	// db/query/country.sql — sqlc query source (layout: 05-schema.md §10.2).
@@ -55,6 +56,7 @@ type Querier interface {
 	DetectServiceCandidatesIndegree(ctx context.Context, indegreeThreshold int32) (int64, error)
 	// db/query/domain.sql — sqlc query source (layout: 05-schema.md §10.2).
 	DomainByHost(ctx context.Context, host string) (DomainByHostRow, error)
+	DomainDetailByHost(ctx context.Context, host string) (DomainDetailByHostRow, error)
 	// Operator disable/enable (P2.14; glossary: service/manual lifecycle).
 	DomainDisable(ctx context.Context, arg DomainDisableParams) (int64, error)
 	DomainEnable(ctx context.Context, host string) (int64, error)
@@ -71,6 +73,10 @@ type Querier interface {
 	InsertScan(ctx context.Context, arg InsertScanParams) error
 	InsertScanDetail(ctx context.Context, arg InsertScanDetailParams) error
 	InsertUnboundStats(ctx context.Context, arg InsertUnboundStatsParams) error
+	// db/query/scan.sql — sqlc query source (layout: 05-schema.md §10.2).
+	// The detail page's evidence block: the latest scan_detail payload
+	// (07 §4.3 ?include=evidence).
+	LatestScanDetail(ctx context.Context, domainID int64) ([]byte, error)
 	ProviderAppendSuffixes(ctx context.Context, arg ProviderAppendSuffixesParams) error
 	ProviderByName(ctx context.Context, name string) (ProviderByNameRow, error)
 	// provider remove clears referencing domains first (FK); they re-stamp on

@@ -155,3 +155,24 @@ UPDATE domain
 SET disabled = false, disabled_reason = NULL, disabled_at = NULL,
     next_check_at = now(), updated_at = now()
 WHERE host = @host AND disabled AND disabled_reason IN ('manual', 'service');
+
+-- name: DomainDetailByHost :one
+SELECT d.id, d.host, d.rank, d.kind, p.host AS parent,
+  d.classification, d.class_flags, d.gold,
+  d.base_status, d.base_since, d.www_status, d.www_since,
+  d.ns_status, d.ns_since, d.mx_status, d.mx_since,
+  d.conn_status, d.conn_since, d.resources_status, d.resources_since,
+  d.dnssec_observed, d.ptr_observed, d.smtp_observed, d.parity_observed,
+  d.latency_v4_ms, d.latency_v6_ms,
+  d.tld, c.code AS country_code, c.name AS country_name, c.tld AS country_tld,
+  a.number AS asn_number, a.name AS asn_name,
+  dp.id AS provider_id, dp.name AS provider_name,
+  d.hosting_provider,
+  (SELECT count(*) FROM domain ch WHERE ch.parent_id = d.id AND NOT ch.disabled) AS subdomain_count,
+  d.disabled, d.last_checked_at, d.created_at
+FROM domain d
+JOIN country c ON c.id = d.country_id
+JOIN asn a ON a.id = d.asn_id
+LEFT JOIN dns_provider dp ON dp.id = d.dns_provider_id
+LEFT JOIN domain p ON p.id = d.parent_id
+WHERE d.host = @host;
