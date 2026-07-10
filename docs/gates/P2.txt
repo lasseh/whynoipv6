@@ -1,0 +1,31 @@
+# P2 gates — 2026-07-10T12:38:42Z
+
+## P2.G1 — commit-machine + quorum unit coverage: GREEN
+make test green with the exhaustive commit-machine table (TestCommit*: bootstrap, N=2/N=3 flips,
+counting gate, non-definitive no-ops, pending reset, step R, dead streak, resources exclusion,
+partial defect guard, attribution deferral) and the fake-DNS quorum table (TestQuorumTruthTable,
+TestNonAnswerClassification, TestQuorumByteIdentical, TestConditionalALookup/CDLookup, TestBreakers).
+
+## P2.G3 — lease-fence chaos: GREEN
+TestLeaseFenceChaos: worker A stalls with a 10-domain batch; after lease expiry worker B reclaims
+and commits (one changelog flip per domain); worker A's late commits are all fenced (lease_lost = 10),
+no duplicate (domain_id, field) changelog rows, no orphaned fresh leases.
+
+## P2.G4 — claim plan at 1M (steady state): GREEN
+Production claim SQL (the ClaimBatch text): near-empty backlog 0.42 ms via Index Scan on
+idx_domain_due (gate <50 ms); full 1M-due backlog 185 ms O(due), recorded; ranked-list reads
+verified NOT to use idx_domain_due (TestRankedListPlanAvoidsDueIndex).
+
+## P2.G2 (10k parity diff vs production) and P2.G5 (per-process healthchecks liveness):
+operator-run gates — require production DB access / deployed healthchecks; NOT run in this build
+session. Tracked as open items for the operator.
+
+Test transcript:
+--- PASS: TestLeaseFenceChaos (0.08s)
+--- PASS: TestRankedListPlanAvoidsDueIndex (0.15s)
+PASS
+    claimplan_integration_test.go:100: seeded in 14s
+    claimplan_integration_test.go:105: near-empty-backlog plan (execution 0.42 ms):
+    claimplan_integration_test.go:134: full-backlog (1M due) execution: 184.97 ms — O(due) recovery-regime cost, accepted per 04 §3
+--- PASS: TestClaimPlanGate (26.16s)
+PASS
