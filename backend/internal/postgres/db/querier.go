@@ -6,6 +6,8 @@ package db
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type Querier interface {
@@ -17,6 +19,13 @@ type Querier interface {
 	// Sentinel lookup: binaries resolve the sentinel country once at startup by
 	// lookup, never by literal id (05-schema.md §5).
 	CountrySentinelID(ctx context.Context) (int32, error)
+	TrancoInsertAborted(ctx context.Context, arg TrancoInsertAbortedParams) error
+	TrancoInsertProvenance(ctx context.Context, arg TrancoInsertProvenanceParams) (int64, error)
+	TrancoLastSuccessAt(ctx context.Context) (pgtype.Timestamptz, error)
+	// db/query/tranco.sql — sqlc query source (layout: 05-schema.md §10.2).
+	TrancoLatestSuccessListID(ctx context.Context) (string, error)
+	TrancoListWasAborted(ctx context.Context, listID string) (bool, error)
+	TrancoRecentImports(ctx context.Context) ([]TrancoImport, error)
 }
 
 var _ Querier = (*Queries)(nil)
