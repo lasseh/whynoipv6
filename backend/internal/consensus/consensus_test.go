@@ -51,9 +51,10 @@ func (f *fakeProvider) handle(w dns.ResponseWriter, r *dns.Msg) {
 	}
 	switch b {
 	case "exists":
-		if q.Qtype == dns.TypeAAAA {
+		switch q.Qtype {
+		case dns.TypeAAAA:
 			m.Answer = append(m.Answer, aaaa("2001:db8::1"), aaaa("2001:db8::2"))
-		} else if q.Qtype == dns.TypeA {
+		case dns.TypeA:
 			m.Answer = append(m.Answer, a("192.0.2.1"))
 		}
 	case "exists2":
@@ -274,7 +275,7 @@ func TestQuorumByteIdentical(t *testing.T) {
 func TestConditionalALookup(t *testing.T) {
 	h := newHarness(t)
 
-	// a_present: bulk answers an A record.
+	// The a_present case: bulk answers an A record.
 	h.bulk.set("a_present")
 	h.script("empty", "empty", "empty")
 	ans, err := h.r.LookupAAAA(context.Background(), "probe.example")
@@ -372,7 +373,7 @@ func TestBreakers(t *testing.T) {
 	for range 36 {
 		_, _ = h.r.LookupAAAA(context.Background(), "ok.example")
 	}
-	h.script("exists", "empty", "nxdomain") // inconsistent = non-definitive
+	h.script("exists", "empty", "nxdomain") // a non-definitive outcome: no quorum
 	for range 4 {
 		_, _ = h.r.LookupAAAA(context.Background(), "flappy.example")
 	}

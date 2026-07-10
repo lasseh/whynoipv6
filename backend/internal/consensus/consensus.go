@@ -14,13 +14,17 @@ import (
 	"sync"
 	"time"
 
-	"github.com/miekg/dns"
 	"golang.org/x/time/rate"
+
+	"github.com/miekg/dns"
 
 	"github.com/lasseh/whynoipv6/internal/checker"
 )
 
-// provider is one pinned public resolver network (§2.2 — not config).
+// providerQuad9 names the third pinned provider (referenced in tests/metrics).
+const providerQuad9 = "quad9"
+
+// providerDef is one pinned public resolver network (§2.2 — not config).
 type providerDef struct {
 	name      string
 	upstreams []string
@@ -29,7 +33,7 @@ type providerDef struct {
 var providerDefs = []providerDef{
 	{name: "cloudflare", upstreams: []string{"1.1.1.1:53", "[2606:4700:4700::1111]:53"}},
 	{name: "google", upstreams: []string{"8.8.8.8:53", "[2001:4860:4860::8888]:53"}},
-	{name: "quad9", upstreams: []string{"9.9.9.9:53", "[2620:fe::fe]:53"}},
+	{name: providerQuad9, upstreams: []string{"9.9.9.9:53", "[2620:fe::fe]:53"}},
 }
 
 // Package constants (§2.3, §2.10 — deliberately not config).

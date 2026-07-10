@@ -24,11 +24,11 @@ func newWindow(span time.Duration) *window {
 func (w *window) add(bad bool) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	min := time.Now().Unix() / 60
-	b := w.buckets[min]
+	minute := time.Now().Unix() / 60
+	b := w.buckets[minute]
 	if b == nil {
 		b = &bucket{}
-		w.buckets[min] = b
+		w.buckets[minute] = b
 	}
 	b.total++
 	if bad {
@@ -42,9 +42,9 @@ func (w *window) counts() (total, bad int) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	cutoff := time.Now().Add(-w.span).Unix() / 60
-	for min, b := range w.buckets {
-		if min < cutoff {
-			delete(w.buckets, min)
+	for minute, b := range w.buckets {
+		if minute < cutoff {
+			delete(w.buckets, minute)
 			continue
 		}
 		total += b.total
