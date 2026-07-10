@@ -69,3 +69,76 @@ RETURNING
   mx_status, mx_pending, mx_pending_count, mx_since,
   conn_status, conn_pending, conn_pending_count, conn_since,
   resources_status, resources_pending, resources_pending_count, resources_since;
+
+-- The daily lifecycle sweep S1–S5 (04-lifecycle-scheduling.md §8): one
+-- transaction, set-based; the linkage predicate is spelled identically in
+-- every statement. @live_check_linkage / @delist_grace / @slow_lane_every.
+
+-- name: SweepClearOrphans :execrows
+UPDATE domain d
+SET orphaned_at = NULL, updated_at = now()
+WHERE d.orphaned_at IS NOT NULL
+  AND (d.rank IS NOT NULL
+    OR EXISTS (SELECT 1 FROM campaign_domain cd
+               JOIN campaign c ON c.id = cd.campaign_id AND NOT c.disabled
+               WHERE cd.domain_id = d.id)
+    OR EXISTS (SELECT 1 FROM domain ch WHERE ch.parent_id = d.id)
+    OR d.last_requested_at >= now() - @live_check_linkage::interval);
+
+-- name: SweepReenableDelisted :execrows
+UPDATE domain d
+SET disabled = false, disabled_reason = NULL, disabled_at = NULL,
+    orphaned_at = NULL, next_check_at = now(), updated_at = now()
+WHERE d.disabled AND d.disabled_reason = 'delisted'
+  AND (d.rank IS NOT NULL
+    OR EXISTS (SELECT 1 FROM campaign_domain cd
+               JOIN campaign c ON c.id = cd.campaign_id AND NOT c.disabled
+               WHERE cd.domain_id = d.id)
+    OR EXISTS (SELECT 1 FROM domain ch WHERE ch.parent_id = d.id)
+    OR d.last_requested_at >= now() - @live_check_linkage::interval);
+
+-- name: SweepDelistLiveCheck :execrows
+UPDATE domain d
+SET disabled = true, disabled_reason = 'delisted', disabled_at = now(),
+    next_check_at = now() + @slow_lane_every::interval, updated_at = now()
+WHERE NOT d.disabled AND d.rank IS NULL AND d.created_by = 'live_check'
+  AND NOT (
+       EXISTS (SELECT 1 FROM campaign_domain cd
+               JOIN campaign c ON c.id = cd.campaign_id AND NOT c.disabled
+               WHERE cd.domain_id = d.id)
+    OR EXISTS (SELECT 1 FROM domain ch WHERE ch.parent_id = d.id)
+    -- NULL-safe (deviation from 04 §8's literal text): a never-live-checked
+    -- row has last_requested_at NULL; the raw >= comparison makes NOT(...)
+    -- NULL and silently exempts the row from S3–S5.
+    OR COALESCE(d.last_requested_at >= now() - @live_check_linkage::interval, false));
+
+-- name: SweepStampOrphans :execrows
+UPDATE domain d
+SET orphaned_at = now(), updated_at = now()
+WHERE NOT d.disabled AND d.rank IS NULL AND d.created_by <> 'live_check'
+  AND NOT (
+       EXISTS (SELECT 1 FROM campaign_domain cd
+               JOIN campaign c ON c.id = cd.campaign_id AND NOT c.disabled
+               WHERE cd.domain_id = d.id)
+    OR EXISTS (SELECT 1 FROM domain ch WHERE ch.parent_id = d.id)
+    -- NULL-safe (deviation from 04 §8's literal text): a never-live-checked
+    -- row has last_requested_at NULL; the raw >= comparison makes NOT(...)
+    -- NULL and silently exempts the row from S3–S5.
+    OR COALESCE(d.last_requested_at >= now() - @live_check_linkage::interval, false))
+  AND d.orphaned_at IS NULL;
+
+-- name: SweepDelistExpired :execrows
+UPDATE domain d
+SET disabled = true, disabled_reason = 'delisted', disabled_at = now(),
+    next_check_at = now() + @slow_lane_every::interval, updated_at = now()
+WHERE NOT d.disabled AND d.rank IS NULL AND d.created_by <> 'live_check'
+  AND NOT (
+       EXISTS (SELECT 1 FROM campaign_domain cd
+               JOIN campaign c ON c.id = cd.campaign_id AND NOT c.disabled
+               WHERE cd.domain_id = d.id)
+    OR EXISTS (SELECT 1 FROM domain ch WHERE ch.parent_id = d.id)
+    -- NULL-safe (deviation from 04 §8's literal text): a never-live-checked
+    -- row has last_requested_at NULL; the raw >= comparison makes NOT(...)
+    -- NULL and silently exempts the row from S3–S5.
+    OR COALESCE(d.last_requested_at >= now() - @live_check_linkage::interval, false))
+  AND d.orphaned_at IS NOT NULL AND d.orphaned_at < now() - @delist_grace::interval;

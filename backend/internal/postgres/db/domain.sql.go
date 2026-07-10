@@ -336,3 +336,132 @@ func (q *Queries) DomainMembershipReEntry(ctx context.Context, id int64) error {
 	_, err := q.db.Exec(ctx, DomainMembershipReEntry, id)
 	return err
 }
+
+const SweepClearOrphans = `-- name: SweepClearOrphans :execrows
+
+UPDATE domain d
+SET orphaned_at = NULL, updated_at = now()
+WHERE d.orphaned_at IS NOT NULL
+  AND (d.rank IS NOT NULL
+    OR EXISTS (SELECT 1 FROM campaign_domain cd
+               JOIN campaign c ON c.id = cd.campaign_id AND NOT c.disabled
+               WHERE cd.domain_id = d.id)
+    OR EXISTS (SELECT 1 FROM domain ch WHERE ch.parent_id = d.id)
+    OR d.last_requested_at >= now() - $1::interval)
+`
+
+// The daily lifecycle sweep S1–S5 (04-lifecycle-scheduling.md §8): one
+// transaction, set-based; the linkage predicate is spelled identically in
+// every statement. @live_check_linkage / @delist_grace / @slow_lane_every.
+func (q *Queries) SweepClearOrphans(ctx context.Context, liveCheckLinkage pgtype.Interval) (int64, error) {
+	result, err := q.db.Exec(ctx, SweepClearOrphans, liveCheckLinkage)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const SweepDelistExpired = `-- name: SweepDelistExpired :execrows
+UPDATE domain d
+SET disabled = true, disabled_reason = 'delisted', disabled_at = now(),
+    next_check_at = now() + $1::interval, updated_at = now()
+WHERE NOT d.disabled AND d.rank IS NULL AND d.created_by <> 'live_check'
+  AND NOT (
+       EXISTS (SELECT 1 FROM campaign_domain cd
+               JOIN campaign c ON c.id = cd.campaign_id AND NOT c.disabled
+               WHERE cd.domain_id = d.id)
+    OR EXISTS (SELECT 1 FROM domain ch WHERE ch.parent_id = d.id)
+    -- NULL-safe (deviation from 04 §8's literal text): a never-live-checked
+    -- row has last_requested_at NULL; the raw >= comparison makes NOT(...)
+    -- NULL and silently exempts the row from S3–S5.
+    OR COALESCE(d.last_requested_at >= now() - $2::interval, false))
+  AND d.orphaned_at IS NOT NULL AND d.orphaned_at < now() - $3::interval
+`
+
+type SweepDelistExpiredParams struct {
+	SlowLaneEvery    pgtype.Interval `json:"slow_lane_every"`
+	LiveCheckLinkage pgtype.Interval `json:"live_check_linkage"`
+	DelistGrace      pgtype.Interval `json:"delist_grace"`
+}
+
+func (q *Queries) SweepDelistExpired(ctx context.Context, arg SweepDelistExpiredParams) (int64, error) {
+	result, err := q.db.Exec(ctx, SweepDelistExpired, arg.SlowLaneEvery, arg.LiveCheckLinkage, arg.DelistGrace)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const SweepDelistLiveCheck = `-- name: SweepDelistLiveCheck :execrows
+UPDATE domain d
+SET disabled = true, disabled_reason = 'delisted', disabled_at = now(),
+    next_check_at = now() + $1::interval, updated_at = now()
+WHERE NOT d.disabled AND d.rank IS NULL AND d.created_by = 'live_check'
+  AND NOT (
+       EXISTS (SELECT 1 FROM campaign_domain cd
+               JOIN campaign c ON c.id = cd.campaign_id AND NOT c.disabled
+               WHERE cd.domain_id = d.id)
+    OR EXISTS (SELECT 1 FROM domain ch WHERE ch.parent_id = d.id)
+    -- NULL-safe (deviation from 04 §8's literal text): a never-live-checked
+    -- row has last_requested_at NULL; the raw >= comparison makes NOT(...)
+    -- NULL and silently exempts the row from S3–S5.
+    OR COALESCE(d.last_requested_at >= now() - $2::interval, false))
+`
+
+type SweepDelistLiveCheckParams struct {
+	SlowLaneEvery    pgtype.Interval `json:"slow_lane_every"`
+	LiveCheckLinkage pgtype.Interval `json:"live_check_linkage"`
+}
+
+func (q *Queries) SweepDelistLiveCheck(ctx context.Context, arg SweepDelistLiveCheckParams) (int64, error) {
+	result, err := q.db.Exec(ctx, SweepDelistLiveCheck, arg.SlowLaneEvery, arg.LiveCheckLinkage)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const SweepReenableDelisted = `-- name: SweepReenableDelisted :execrows
+UPDATE domain d
+SET disabled = false, disabled_reason = NULL, disabled_at = NULL,
+    orphaned_at = NULL, next_check_at = now(), updated_at = now()
+WHERE d.disabled AND d.disabled_reason = 'delisted'
+  AND (d.rank IS NOT NULL
+    OR EXISTS (SELECT 1 FROM campaign_domain cd
+               JOIN campaign c ON c.id = cd.campaign_id AND NOT c.disabled
+               WHERE cd.domain_id = d.id)
+    OR EXISTS (SELECT 1 FROM domain ch WHERE ch.parent_id = d.id)
+    OR d.last_requested_at >= now() - $1::interval)
+`
+
+func (q *Queries) SweepReenableDelisted(ctx context.Context, liveCheckLinkage pgtype.Interval) (int64, error) {
+	result, err := q.db.Exec(ctx, SweepReenableDelisted, liveCheckLinkage)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const SweepStampOrphans = `-- name: SweepStampOrphans :execrows
+UPDATE domain d
+SET orphaned_at = now(), updated_at = now()
+WHERE NOT d.disabled AND d.rank IS NULL AND d.created_by <> 'live_check'
+  AND NOT (
+       EXISTS (SELECT 1 FROM campaign_domain cd
+               JOIN campaign c ON c.id = cd.campaign_id AND NOT c.disabled
+               WHERE cd.domain_id = d.id)
+    OR EXISTS (SELECT 1 FROM domain ch WHERE ch.parent_id = d.id)
+    -- NULL-safe (deviation from 04 §8's literal text): a never-live-checked
+    -- row has last_requested_at NULL; the raw >= comparison makes NOT(...)
+    -- NULL and silently exempts the row from S3–S5.
+    OR COALESCE(d.last_requested_at >= now() - $1::interval, false))
+  AND d.orphaned_at IS NULL
+`
+
+func (q *Queries) SweepStampOrphans(ctx context.Context, liveCheckLinkage pgtype.Interval) (int64, error) {
+	result, err := q.db.Exec(ctx, SweepStampOrphans, liveCheckLinkage)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}

@@ -23,3 +23,62 @@ func (q *Queries) ASNSentinelID(ctx context.Context) (int32, error) {
 	err := row.Scan(&id)
 	return id, err
 }
+
+const RecomputeASNCounters = `-- name: RecomputeASNCounters :exec
+UPDATE asn a SET
+  count_total = agg.count_total,
+  count_v6    = agg.count_v6
+FROM (
+  SELECT asn_id,
+         count(*)                                                      AS count_total,
+         count(*) FILTER (WHERE classification IN ('partial','hero'))  AS count_v6
+  FROM domain
+  WHERE rank IS NOT NULL AND NOT disabled
+  GROUP BY asn_id
+) agg
+WHERE a.id = agg.asn_id
+`
+
+func (q *Queries) RecomputeASNCounters(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, RecomputeASNCounters)
+	return err
+}
+
+const RecomputeProviderCounters = `-- name: RecomputeProviderCounters :exec
+UPDATE dns_provider p SET
+  count_total = agg.count_total,
+  count_v6    = agg.count_v6
+FROM (
+  SELECT dns_provider_id,
+         count(*)                                                      AS count_total,
+         count(*) FILTER (WHERE classification IN ('partial','hero'))  AS count_v6
+  FROM domain
+  WHERE rank IS NOT NULL AND NOT disabled AND dns_provider_id IS NOT NULL
+  GROUP BY dns_provider_id
+) agg
+WHERE p.id = agg.dns_provider_id
+`
+
+func (q *Queries) RecomputeProviderCounters(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, RecomputeProviderCounters)
+	return err
+}
+
+const ResetASNCounters = `-- name: ResetASNCounters :exec
+UPDATE asn SET count_total = 0, count_v6 = 0
+`
+
+// Tick step 3 — ASN + DNS-provider counter recompute (06-ingest.md §10.6).
+func (q *Queries) ResetASNCounters(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, ResetASNCounters)
+	return err
+}
+
+const ResetProviderCounters = `-- name: ResetProviderCounters :exec
+UPDATE dns_provider SET count_total = 0, count_v6 = 0
+`
+
+func (q *Queries) ResetProviderCounters(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, ResetProviderCounters)
+	return err
+}

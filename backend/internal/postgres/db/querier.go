@@ -44,6 +44,10 @@ type Querier interface {
 	// The in-memory country.tld -> id map for insert-time/commit attribution
 	// (06-ingest.md §6.5); loaded once per run.
 	CountryTLDMap(ctx context.Context) ([]CountryTLDMapRow, error)
+	// db/query/service_candidate.sql — sqlc query source (layout: 05-schema.md §10.2).
+	// Tick step 4 — candidate detection, never auto-disable (04 §9).
+	DetectServiceCandidatesApex(ctx context.Context) (int64, error)
+	DetectServiceCandidatesIndegree(ctx context.Context, indegreeThreshold int32) (int64, error)
 	// db/query/domain.sql — sqlc query source (layout: 05-schema.md §10.2).
 	DomainByHost(ctx context.Context, host string) (DomainByHostRow, error)
 	DomainInsertEntity(ctx context.Context, arg DomainInsertEntityParams) (int64, error)
@@ -67,6 +71,32 @@ type Querier interface {
 	// db/query/provider.sql — dns_provider reference data + attribution stamp
 	// (05-schema.md — dns_provider; 06-ingest.md §6.10/§6.11).
 	ProviderList(ctx context.Context) ([]DnsProvider, error)
+	// db/query/check_job.sql — sqlc query source (layout: 05-schema.md §10.2).
+	// Tick step 6 — the 30d check_job purge (04 §9; key: live_check.retention).
+	PurgeCheckJobs(ctx context.Context, retention pgtype.Interval) (int64, error)
+	RecomputeASNCounters(ctx context.Context) error
+	RecomputeCountryCounters(ctx context.Context) error
+	RecomputeProviderCounters(ctx context.Context) error
+	// Tick step 3 — ASN + DNS-provider counter recompute (06-ingest.md §10.6).
+	ResetASNCounters(ctx context.Context) error
+	// Tick step 3 — country counter recompute (06-ingest.md §10.6): reset, then
+	// recompute over the publicly-ranked scope.
+	ResetCountryCounters(ctx context.Context) error
+	ResetProviderCounters(ctx context.Context) error
+	SnapshotASNDaily(ctx context.Context) error
+	SnapshotCampaignDaily(ctx context.Context) error
+	SnapshotCountryDaily(ctx context.Context) error
+	// db/query/stats.sql — sqlc query source (layout: 05-schema.md §10.2).
+	// Tick step 2 — the four confirmed-state snapshot upserts (06-ingest.md §10).
+	SnapshotGlobalDaily(ctx context.Context) error
+	// The daily lifecycle sweep S1–S5 (04-lifecycle-scheduling.md §8): one
+	// transaction, set-based; the linkage predicate is spelled identically in
+	// every statement. @live_check_linkage / @delist_grace / @slow_lane_every.
+	SweepClearOrphans(ctx context.Context, liveCheckLinkage pgtype.Interval) (int64, error)
+	SweepDelistExpired(ctx context.Context, arg SweepDelistExpiredParams) (int64, error)
+	SweepDelistLiveCheck(ctx context.Context, arg SweepDelistLiveCheckParams) (int64, error)
+	SweepReenableDelisted(ctx context.Context, liveCheckLinkage pgtype.Interval) (int64, error)
+	SweepStampOrphans(ctx context.Context, liveCheckLinkage pgtype.Interval) (int64, error)
 	TrancoInsertAborted(ctx context.Context, arg TrancoInsertAbortedParams) error
 	TrancoInsertProvenance(ctx context.Context, arg TrancoInsertProvenanceParams) (int64, error)
 	TrancoLastSuccessAt(ctx context.Context) (pgtype.Timestamptz, error)

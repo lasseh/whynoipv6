@@ -95,3 +95,36 @@ func (q *Queries) CountryTLDMap(ctx context.Context) ([]CountryTLDMapRow, error)
 	}
 	return items, nil
 }
+
+const RecomputeCountryCounters = `-- name: RecomputeCountryCounters :exec
+UPDATE country c SET
+  sites   = agg.sites,
+  v6sites = agg.v6sites,
+  percent = CASE WHEN agg.sites = 0 THEN 0
+                 ELSE ROUND(agg.v6sites::numeric / agg.sites::numeric * 100, 2) END
+FROM (
+  SELECT country_id,
+         count(*)                                                      AS sites,
+         count(*) FILTER (WHERE classification IN ('partial','hero'))  AS v6sites
+  FROM domain
+  WHERE rank IS NOT NULL AND NOT disabled
+  GROUP BY country_id
+) agg
+WHERE c.id = agg.country_id
+`
+
+func (q *Queries) RecomputeCountryCounters(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, RecomputeCountryCounters)
+	return err
+}
+
+const ResetCountryCounters = `-- name: ResetCountryCounters :exec
+UPDATE country SET sites = 0, v6sites = 0, percent = 0
+`
+
+// Tick step 3 — country counter recompute (06-ingest.md §10.6): reset, then
+// recompute over the publicly-ranked scope.
+func (q *Queries) ResetCountryCounters(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, ResetCountryCounters)
+	return err
+}
