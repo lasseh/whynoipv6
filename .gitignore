@@ -1,2 +1,6 @@
 # Local scratch / issue-tracker area (see CLAUDE.md)
 .scratch/
+backend/bin/
+backend/dist/
+backend/coverage.out
+backend/coverage.html
