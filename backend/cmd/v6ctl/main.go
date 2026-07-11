@@ -36,6 +36,7 @@ func main() {
 		},
 	}
 	root.AddCommand(migrateCmd())
+	root.AddCommand(geoipCmd())
 	root.AddCommand(trancoCmd())
 	root.AddCommand(campaignCmd())
 	root.AddCommand(providerCmd())

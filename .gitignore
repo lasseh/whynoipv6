@@ -1,5 +1,7 @@
 # Local scratch / issue-tracker area (see CLAUDE.md)
 .scratch/
+# Local compose secrets (IPINFO_TOKEN, etc.)
+.env
 backend/bin/
 backend/dist/
 backend/coverage.out

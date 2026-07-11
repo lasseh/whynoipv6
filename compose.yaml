@@ -6,7 +6,7 @@ services:
       POSTGRES_PASSWORD: whynoipv6
       POSTGRES_DB: whynoipv6
     ports: ["5432:5432"]
-    volumes: ["pgdata:/var/lib/postgresql/data"]
+    volumes: ["pgdata:/var/lib/postgresql"]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U whynoipv6"]
       interval: 5s
@@ -44,6 +44,18 @@ services:
     depends_on:
       migrate: {condition: service_completed_successfully}
 
+  # Init container: fetch the IPinfo Lite mmdb into the geoip volume before the
+  # crawler starts. Runs as root to write the root-owned volume; the crawler
+  # reads it :ro. Set IPINFO_TOKEN in a gitignored .env (free IPinfo token).
+  geoip-init:
+    build: {context: ./backend, dockerfile: Dockerfile}
+    entrypoint: ["/v6ctl", "geoip", "update"]
+    user: root
+    environment:
+      IPINFO_TOKEN: ${IPINFO_TOKEN:-}
+      GEOIP_PATH: /var/lib/GeoIP
+    volumes: ["geoip:/var/lib/GeoIP"]
+
   crawler:
     build: {context: ./backend, dockerfile: Dockerfile}
     entrypoint: ["/crawler"]
@@ -57,6 +69,7 @@ services:
       - "datasets:/var/lib/whynoipv6/datasets"
     depends_on:
       migrate: {condition: service_completed_successfully}
+      geoip-init: {condition: service_completed_successfully}
 
 volumes:
   pgdata:
