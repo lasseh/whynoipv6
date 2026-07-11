@@ -17,6 +17,21 @@ crystallized *after* the spec was frozen.
   on `checker.ScanResult` (never by map key, never by re-asserting types).
   _Avoid:_ "details map", `map[string]any` payloads.
 
+- **Confirmed sextet.** The six per-dimension confirmed (status, since) column
+  pairs in canonical dimension order (base, www, ns, mx, conn, resources),
+  carried by `db.ConfirmedSextet` / `postgres.DomainRow.Confirmed()`. Every
+  public `StatusBlock` is built from it by the one constructor pair in `api`
+  (`statusBlockOf`/`statusBlockTyped`); each row type lists its
+  column→dimension pairing exactly once, in its `Confirmed` method.
+  _Avoid:_ hand-mapping the six `*_status`/`*_since` columns in a handler.
+
+- **LinkSet.** The normalized `[]observe.LinkedResource` input to the
+  resources roll-up, built only by the two constructors in `observe` —
+  `PersistedLinks` (commit path) and `LiveLinks` (live-check path) — which
+  share one convention: a missing or NULL registry status stays `nil` and
+  defers the dimension (`rollupResources` → error). _Avoid:_ building
+  `LinkedResource` slices in callers.
+
 - **Keyset spec.** The per-endpoint description of a keyset-paginated list —
   `api.KeysetSpec{Sort, Positioned, Fetch, Key}` — consumed by `api.KeysetPage`,
   which owns the whole cursor pipeline (fingerprint → decode → seek → N+1 fetch →
