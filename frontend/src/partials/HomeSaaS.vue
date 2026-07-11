@@ -8,7 +8,7 @@
           <header class="mb-8">
             <!-- Title -->
             <div class="text-center md:text-left">
-              <h1 class="h1 mb-4">Introducing Shame as a Service!</h1>
+              <h1 class="h1 mb-4">IPv6 Shame as a Service!</h1>
             </div>
           </header>
 
