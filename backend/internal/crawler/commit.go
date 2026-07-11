@@ -13,6 +13,7 @@ import (
 
 	"github.com/lasseh/whynoipv6/internal/checker"
 	"github.com/lasseh/whynoipv6/internal/domain"
+	"github.com/lasseh/whynoipv6/internal/observe"
 	db "github.com/lasseh/whynoipv6/internal/postgres/db"
 )
 
@@ -33,13 +34,13 @@ type Attribution struct {
 // CommitInput carries one domain's commit unit inputs (03 §3, §16).
 type CommitInput struct {
 	Snapshot     ClaimedDomain
-	Obs          Observations // core + informational + latency (02 §7.2)
-	Unresolvable bool         // the dead signal U (03 §4)
-	Attribution  *Attribution // nil = deferred (base non-definitive)
-	Discovered   []string     // canonical resource hosts; consumed only when DiscoveryOK
-	DiscoveryOK  bool         // resources enabled AND discovery status ok
-	BreakerOpen  bool         // consensus.FastLaneSuppressed()
-	Details      []byte       // scan_detail JSON payload (03 §14.2)
+	Obs          observe.Observations // core + informational + latency (02 §7.2)
+	Unresolvable bool                 // the dead signal U (03 §4)
+	Attribution  *Attribution         // nil = deferred (base non-definitive)
+	Discovered   []string             // canonical resource hosts; consumed only when DiscoveryOK
+	DiscoveryOK  bool                 // resources enabled AND discovery status ok
+	BreakerOpen  bool                 // consensus.FastLaneSuppressed()
+	Details      []byte               // scan_detail JSON payload (03 §14.2)
 	DurationMS   int32
 	T            time.Time // fixed once per domain
 }

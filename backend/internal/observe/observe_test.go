@@ -1,4 +1,4 @@
-package crawler
+package observe
 
 import (
 	"maps"
@@ -10,6 +10,8 @@ import (
 )
 
 var t0 = time.Date(2026, 7, 10, 12, 0, 0, 0, time.UTC)
+
+func ptr[T any](v T) *T { return &v }
 
 // scan builds a synthetic ScanResult with every expected check present
 // (the runner records every registered check), overridden per test.

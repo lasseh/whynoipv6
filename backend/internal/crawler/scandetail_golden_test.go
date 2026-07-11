@@ -11,6 +11,7 @@ import (
 
 	"github.com/lasseh/whynoipv6/internal/checker"
 	"github.com/lasseh/whynoipv6/internal/domain"
+	"github.com/lasseh/whynoipv6/internal/observe"
 )
 
 var updateGolden = flag.Bool("update", false, "rewrite scan_detail golden files")
@@ -34,7 +35,7 @@ func TestScanDetailGolden(t *testing.T) {
 		name             string
 		sr               checker.ScanResult
 		preflight        time.Time
-		links            []LinkedResource
+		links            []observe.LinkedResource
 		resourcesEnabled bool
 	}{
 		{
@@ -60,7 +61,7 @@ func TestScanDetailGolden(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			obs := MapObservations(domain.KindApex, tc.sr, tc.preflight, scanTime, tc.links, tc.resourcesEnabled)
+			obs := observe.MapObservations(domain.KindApex, tc.sr, tc.preflight, scanTime, tc.links, tc.resourcesEnabled)
 			raw := buildDetails(tc.sr, &obs)
 
 			golden := filepath.Join("testdata", "scan_detail_"+tc.name+".golden.json")
@@ -103,7 +104,7 @@ func TestScanDetailRoundTrip(t *testing.T) {
 		fixtureHero(scanTime), fixtureV4Only(scanTime), fixtureErrorPaths(scanTime),
 	} {
 		t.Run(fresh.Domain, func(t *testing.T) {
-			obs := MapObservations(domain.KindApex, fresh, scanTime, scanTime, heroLinks(), true)
+			obs := observe.MapObservations(domain.KindApex, fresh, scanTime, scanTime, heroLinks(), true)
 			raw := buildDetails(fresh, &obs)
 
 			var loaded checker.ScanResult
@@ -310,9 +311,9 @@ func fixtureHero(ts time.Time) checker.ScanResult {
 	}
 }
 
-func heroLinks() []LinkedResource {
+func heroLinks() []observe.LinkedResource {
 	s := domain.StatusSupported
-	return []LinkedResource{{AAAAStatus: &s}, {AAAAStatus: &s}}
+	return []observe.LinkedResource{{AAAAStatus: &s}, {AAAAStatus: &s}}
 }
 
 // fixtureV4Only covers the v4-only and skip shapes: conditional-A outcomes

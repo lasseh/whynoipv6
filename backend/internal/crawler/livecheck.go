@@ -15,6 +15,7 @@ import (
 	"github.com/lasseh/whynoipv6/internal/campaign"
 	"github.com/lasseh/whynoipv6/internal/checker"
 	"github.com/lasseh/whynoipv6/internal/domain"
+	"github.com/lasseh/whynoipv6/internal/observe"
 	db "github.com/lasseh/whynoipv6/internal/postgres/db"
 )
 
@@ -128,8 +129,8 @@ func (lc *LiveChecker) process(ctx context.Context, id int64, host string) {
 		return
 	}
 
-	links := LiveLinks(ctx, lc.Pool, sr, lc.Cfg.ResourcesEnabled)
-	res := MapLiveResult(kind, sr, lc.Preflight.LastPass(), time.Now().UTC(), links, lc.Cfg.ResourcesEnabled)
+	links := observe.LiveLinks(ctx, lc.Pool, sr, lc.Cfg.ResourcesEnabled)
+	res := observe.MapLiveResult(kind, sr, lc.Preflight.LastPass(), time.Now().UTC(), links, lc.Cfg.ResourcesEnabled)
 	raw, err := json.Marshal(res)
 	if err != nil {
 		_ = lc.Q.CheckJobFail(ctx, db.CheckJobFailParams{ID: id, Error: ptr("result encode failed")})
@@ -193,42 +194,6 @@ func (lc *LiveChecker) ensureDomain(ctx context.Context, host string) (domain.Ki
 		return "", err
 	}
 	return kind, nil
-}
-
-// LiveLinks resolves the run's discovered resource hosts against the
-// confirmed registry — read-only, no registry rows written (Rule 0). A
-// discovered host with no registry row maps to a nil status (→ error in
-// the roll-up, per §5.1.4 "missing/unswept → NULL → error").
-func LiveLinks(ctx context.Context, pool *pgxpool.Pool, sr checker.ScanResult, enabled bool) []LinkedResource {
-	if !enabled {
-		return nil
-	}
-	_, disc, ok := sr.ResourceDiscovery()
-	if !ok {
-		return nil
-	}
-	rawHosts := disc.Hosts
-	if len(rawHosts) == 0 {
-		return nil
-	}
-	// One set-based probe, not a per-host loop.
-	byHost := map[string]domain.IPv6Status{}
-	if rows, err := db.New(pool).ResourceHostStatuses(ctx, rawHosts); err == nil {
-		for _, row := range rows {
-			if row.AaaaStatus != nil {
-				byHost[row.Host] = domain.IPv6Status(*row.AaaaStatus)
-			}
-		}
-	}
-	links := make([]LinkedResource, 0, len(rawHosts))
-	for _, h := range rawHosts {
-		if s, ok := byHost[h]; ok {
-			links = append(links, LinkedResource{AAAAStatus: &s})
-		} else {
-			links = append(links, LinkedResource{}) // missing/unswept → error in the roll-up
-		}
-	}
-	return links
 }
 
 func ptr[T any](v T) *T { return &v }

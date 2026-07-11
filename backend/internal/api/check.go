@@ -16,8 +16,8 @@ import (
 
 	"github.com/lasseh/whynoipv6/internal/campaign"
 	"github.com/lasseh/whynoipv6/internal/checker"
-	"github.com/lasseh/whynoipv6/internal/crawler"
 	"github.com/lasseh/whynoipv6/internal/domain"
+	"github.com/lasseh/whynoipv6/internal/observe"
 	db "github.com/lasseh/whynoipv6/internal/postgres/db"
 )
 
@@ -232,8 +232,8 @@ func (s *Server) dedupeEnvelope(r *http.Request, row *db.DomainConfirmedRow, hos
 	scanTS := row.LastCheckedAt.Time.UTC()
 	// The stored detail is a real crawl: preflight was necessarily fresh at
 	// scan time, so both clock inputs anchor to the scan timestamp.
-	links := crawler.LiveLinks(r.Context(), s.svc.Pool, sr, s.opts.ResourcesEnabled)
-	result := crawler.MapLiveResult(domain.Kind(row.Kind), sr, scanTS, scanTS, links, s.opts.ResourcesEnabled)
+	links := observe.LiveLinks(r.Context(), s.svc.Pool, sr, s.opts.ResourcesEnabled)
+	result := observe.MapLiveResult(domain.Kind(row.Kind), sr, scanTS, scanTS, links, s.opts.ResourcesEnabled)
 	resultRaw, _ := json.Marshal(result)
 
 	return CheckEnvelope{

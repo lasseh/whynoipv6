@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/lasseh/whynoipv6/internal/domain"
+	"github.com/lasseh/whynoipv6/internal/observe"
 	db "github.com/lasseh/whynoipv6/internal/postgres/db"
 )
 
@@ -70,7 +71,7 @@ func (m *Metrics) RunID() uuid.UUID { return m.runID }
 
 // RecordScan tallies one processed domain (04 §15.1/§15.2). commitErr is a
 // non-lease failure; res carries lease-lost and transitions.
-func (m *Metrics) RecordScan(ctx context.Context, obs *Observations, unresolvable bool,
+func (m *Metrics) RecordScan(ctx context.Context, obs *observe.Observations, unresolvable bool,
 	res CommitResult, commitErr error, dur time.Duration,
 ) {
 	m.mu.Lock()

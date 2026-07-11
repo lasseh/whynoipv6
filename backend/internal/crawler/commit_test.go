@@ -6,6 +6,7 @@ import (
 
 	"github.com/lasseh/whynoipv6/internal/checker"
 	"github.com/lasseh/whynoipv6/internal/domain"
+	"github.com/lasseh/whynoipv6/internal/observe"
 	db "github.com/lasseh/whynoipv6/internal/postgres/db"
 )
 
@@ -52,8 +53,8 @@ func newMachine(t *testing.T) *machine {
 
 // stableObs returns Observations where every core dim holds `supported`
 // except the overridden dimension under test.
-func stableObs(dim domain.Dimension, o domain.Observation) Observations {
-	obs := Observations{
+func stableObs(dim domain.Dimension, o domain.Observation) observe.Observations {
+	obs := observe.Observations{
 		Base: domain.ObsSupported, WWW: domain.ObsSupported, NS: domain.ObsSupported,
 		MX: domain.ObsSupported, Conn: domain.ObsSupported, Resources: domain.ObsSupported,
 		DNSSEC: domain.ObsSupported, PTR: domain.ObsSupported,
@@ -78,7 +79,7 @@ func stableObs(dim domain.Dimension, o domain.Observation) Observations {
 
 // step applies one scan at T0+dt and folds the computed unit back into the
 // snapshot (what the fenced UPDATE would persist).
-func (m *machine) step(dt time.Duration, obs Observations, unresolvable bool) *commitUnit {
+func (m *machine) step(dt time.Duration, obs observe.Observations, unresolvable bool) *commitUnit {
 	m.t.Helper()
 	u, err := ComputeCommit(&CommitInput{
 		Snapshot: m.s, Obs: obs, Unresolvable: unresolvable,
@@ -92,7 +93,7 @@ func (m *machine) step(dt time.Duration, obs Observations, unresolvable bool) *c
 	return u
 }
 
-func (m *machine) stepErr(dt time.Duration, obs Observations) error {
+func (m *machine) stepErr(dt time.Duration, obs observe.Observations) error {
 	m.t.Helper()
 	_, err := ComputeCommit(&CommitInput{
 		Snapshot: m.s, Obs: obs, T: seqT0.Add(dt),

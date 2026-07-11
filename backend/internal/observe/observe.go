@@ -1,16 +1,26 @@
-// Package crawler contains the scan→observe→commit pipeline around the
-// lifted engine: the Result→observation mapper (02-observation-model.md §7),
-// the confirmed-status commit machine (03), and the frontier/scheduling
-// machinery (04).
-package crawler
+// Package observe is the neutral observation-mapping module between the
+// engine and its two consumers: the Result→observation mapper
+// (02-observation-model.md §7) and the §5.1.3 public live-result shape.
+// Both the crawler daemon (commit pipeline, scan_detail hoists) and the
+// read API (live check, evidence) depend on it downward — the API never
+// imports the daemon.
+package observe
 
 import (
+	"context"
 	"log/slog"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"github.com/lasseh/whynoipv6/internal/checker"
 	"github.com/lasseh/whynoipv6/internal/domain"
+	db "github.com/lasseh/whynoipv6/internal/postgres/db"
 )
+
+// ConnKey is the scan_detail hoist key for the derived conn object
+// (03 §14.2); shared with the crawler's buildDetails serialization.
+const ConnKey = "conn"
 
 // Conditional-A outcome tokens (02 §2.7 — mirrored from internal/consensus).
 const (
@@ -334,7 +344,7 @@ func MapLiveResult(
 		string(domain.DimWWW):       status(o.WWW),
 		string(domain.DimNS):        status(o.NS),
 		string(domain.DimMX):        status(o.MX),
-		connKey:                     status(o.Conn),
+		ConnKey:                     status(o.Conn),
 		string(domain.DimResources): status(o.Resources),
 		"tls":                       raw(needStatus(sr.Domain, checker.NameTLS, sr.TLS)),
 		"smtp":                      status(infoSMTP(needStatus(sr.Domain, checker.NameSMTP, sr.SMTP))),
@@ -356,4 +366,40 @@ func MapLiveResult(
 		"checks":      checks,
 		"latency":     map[string]any{"v4_ms": v4, "v6_ms": v6},
 	}
+}
+
+// LiveLinks resolves the run's discovered resource hosts against the
+// confirmed registry — read-only, no registry rows written (Rule 0). A
+// discovered host with no registry row maps to a nil status (→ error in
+// the roll-up, per §5.1.4 "missing/unswept → NULL → error").
+func LiveLinks(ctx context.Context, pool *pgxpool.Pool, sr checker.ScanResult, enabled bool) []LinkedResource {
+	if !enabled {
+		return nil
+	}
+	_, disc, ok := sr.ResourceDiscovery()
+	if !ok {
+		return nil
+	}
+	rawHosts := disc.Hosts
+	if len(rawHosts) == 0 {
+		return nil
+	}
+	// One set-based probe, not a per-host loop.
+	byHost := map[string]domain.IPv6Status{}
+	if rows, err := db.New(pool).ResourceHostStatuses(ctx, rawHosts); err == nil {
+		for _, row := range rows {
+			if row.AaaaStatus != nil {
+				byHost[row.Host] = domain.IPv6Status(*row.AaaaStatus)
+			}
+		}
+	}
+	links := make([]LinkedResource, 0, len(rawHosts))
+	for _, h := range rawHosts {
+		if s, ok := byHost[h]; ok {
+			links = append(links, LinkedResource{AAAAStatus: &s})
+		} else {
+			links = append(links, LinkedResource{}) // missing/unswept → error in the roll-up
+		}
+	}
+	return links
 }

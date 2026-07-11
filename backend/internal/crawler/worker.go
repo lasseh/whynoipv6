@@ -13,11 +13,9 @@ import (
 	"github.com/lasseh/whynoipv6/internal/domain"
 	"github.com/lasseh/whynoipv6/internal/geoip"
 	"github.com/lasseh/whynoipv6/internal/ingest"
+	"github.com/lasseh/whynoipv6/internal/observe"
 	db "github.com/lasseh/whynoipv6/internal/postgres/db"
 )
-
-// connKey is the scan_detail hoist key for the derived conn object (03 §14.2).
-const connKey = "conn"
 
 // Worker is the per-domain slot body (04 §12 a–f): engine run → map →
 // schedule/commit → metrics, plus attribution and the pivot stamps.
@@ -50,7 +48,7 @@ func (w *Worker) Process(ctx context.Context, d ClaimedDomain) { //nolint:gocrit
 	sr := w.Runner.Run(ctx, d.Host, checker.Kind(d.Kind))
 
 	links := w.readLinks(ctx, d.ID)
-	obs := MapObservations(d.Kind, sr, w.Preflight.LastPass(), t, links, w.ResourcesEnabled)
+	obs := observe.MapObservations(d.Kind, sr, w.Preflight.LastPass(), t, links, w.ResourcesEnabled)
 
 	unresolvable := Unresolvable(sr)
 	attribution := w.attribution(ctx, &d, sr)
@@ -93,7 +91,7 @@ func (w *Worker) Process(ctx context.Context, d ClaimedDomain) { //nolint:gocrit
 
 // readLinks loads the persisted required-host statuses for the roll-up
 // (02 §6); only meaningful while resources are enabled.
-func (w *Worker) readLinks(ctx context.Context, domainID int64) []LinkedResource {
+func (w *Worker) readLinks(ctx context.Context, domainID int64) []observe.LinkedResource {
 	if !w.ResourcesEnabled {
 		return nil
 	}
@@ -102,9 +100,9 @@ func (w *Worker) readLinks(ctx context.Context, domainID int64) []LinkedResource
 		slog.Warn("resource link read failed", "err", err.Error())
 		return nil
 	}
-	var links []LinkedResource
+	var links []observe.LinkedResource
 	for _, status := range statuses {
-		var l LinkedResource
+		var l observe.LinkedResource
 		if status != nil {
 			s := domain.IPv6Status(*status)
 			l.AAAAStatus = &s
@@ -234,22 +232,22 @@ func discoveredHosts(sr checker.ScanResult) []string {
 }
 
 // wasStepR detects a dead-recovery commit for the metrics counter.
-func wasStepR(d *ClaimedDomain, obs *Observations) bool {
+func wasStepR(d *ClaimedDomain, obs *observe.Observations) bool {
 	return d.Disabled && d.DisabledReason != nil &&
 		*d.DisabledReason == domain.DisabledDead && obs.Base.Definitive()
 }
 
 // buildDetails assembles the scan_detail payload (03 §14.2): the engine
 // ScanResult serialization plus the conn and consensus hoists.
-func buildDetails(sr checker.ScanResult, obs *Observations) []byte {
+func buildDetails(sr checker.ScanResult, obs *observe.Observations) []byte {
 	payload := map[string]any{
-		"domain":     sr.Domain,
-		"scanned_at": sr.ScannedAt.UTC().Format(time.RFC3339),
-		"duration":   sr.Duration.Nanoseconds(),
-		"results":    sr.Results,
-		connKey:      obs.ConnDetail,
+		"domain":        sr.Domain,
+		"scanned_at":    sr.ScannedAt.UTC().Format(time.RFC3339),
+		"duration":      sr.Duration.Nanoseconds(),
+		"results":       sr.Results,
+		observe.ConnKey: obs.ConnDetail,
 	}
-	if consensusHoist := QuorumHoist(sr); len(consensusHoist) > 0 {
+	if consensusHoist := observe.QuorumHoist(sr); len(consensusHoist) > 0 {
 		payload["consensus"] = consensusHoist
 	}
 	raw, err := json.Marshal(payload)
