@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"net/url"
@@ -149,39 +150,35 @@ func (s *Server) serveChangelogFeed(w http.ResponseWriter, r *http.Request, doma
 		return
 	}
 
-	fingerprint := FilterFingerprint(q)
-	params := db.ChangelogGlobalParams{
-		Field:    win.Field,
-		WithFrom: win.HasFrom, FromTs: pgTS(win.From, win.HasFrom),
-		WithTo: win.HasTo, ToTs: pgTS(win.To, win.HasTo),
-		Lim: int32(limit + 1),
+	rows, page, err := KeysetPage(r, generation, limit, KeysetSpec[db.ChangelogGlobalRow]{
+		Sort: SortChangelog,
+		Fetch: func(ctx context.Context, seek *Seek, lim int, backward bool) ([]db.ChangelogGlobalRow, error) {
+			params := db.ChangelogGlobalParams{
+				Field:    win.Field,
+				WithFrom: win.HasFrom, FromTs: pgTS(win.From, win.HasFrom),
+				WithTo: win.HasTo, ToTs: pgTS(win.To, win.HasTo),
+				Lim: int32(lim + 1),
+			}
+			if seek != nil {
+				params.WithSeek = true
+				params.SeekTs = pgTS(time.Unix(0, seek.TS).UTC(), true)
+				params.SeekDomain = seek.ID
+				params.SeekField = seek.Field
+			}
+			return s.changelogRows(ctx, domainID, &params, backward)
+		},
+		Key: func(row *db.ChangelogGlobalRow) []any {
+			return []any{row.Ts.Time.UnixNano(), row.DomainID, row.Field}
+		},
+	})
+	if errors.Is(err, ErrCursorInvalid) {
+		InvalidParameter(w, r, err.Error())
+		return
 	}
-	backward := false
-	if token := q.Get(paramCursor); token != "" {
-		c, err := DecodeCursor(token, SortChangelog, fingerprint, generation)
-		if err != nil {
-			InvalidParameter(w, r, err.Error())
-			return
-		}
-		st, err := c.SeekTuple()
-		if err != nil {
-			InvalidParameter(w, r, err.Error())
-			return
-		}
-		params.WithSeek = true
-		params.SeekTs = pgTS(time.Unix(0, st.TS).UTC(), true)
-		params.SeekDomain = st.ID
-		params.SeekField = st.Field
-		backward = c.Backward()
-	}
-
-	rows, err := s.changelogRows(r, domainID, &params, backward)
 	if err != nil {
 		InternalError(w, r, err)
 		return
 	}
-
-	rows, forwardMore, backwardMore := trimWindow(rows, limit, backward, params.WithSeek)
 	items := make([]ChangelogItem, len(rows))
 	for i := range rows {
 		items[i] = changelogItem(&rows[i])
@@ -190,28 +187,21 @@ func (s *Server) serveChangelogFeed(w http.ResponseWriter, r *http.Request, doma
 		writeChangelogCSV(w, items)
 		return
 	}
-	clKey := func(row *db.ChangelogGlobalRow) []any {
-		return []any{row.Ts.Time.UnixNano(), row.DomainID, row.Field}
-	}
-	var firstK, lastK []any
-	if len(rows) > 0 {
-		firstK, lastK = clKey(&rows[0]), clKey(&rows[len(rows)-1])
-	}
 
 	WriteJSON(w, http.StatusOK, ListEnvelope{
 		Items: items,
-		Page:  BuildPage(generation, SortChangelog, fingerprint, forwardMore, backwardMore, firstK, lastK),
+		Page:  page,
 		Meta:  NewMeta(asOf, generation),
 	})
 }
 
 // changelogRows dispatches the scope × direction query matrix; backward
 // rows come back re-reversed into ts-DESC display order.
-func (s *Server) changelogRows(r *http.Request, domainID *int64, params *db.ChangelogGlobalParams, backward bool) ([]db.ChangelogGlobalRow, error) {
+func (s *Server) changelogRows(ctx context.Context, domainID *int64, params *db.ChangelogGlobalParams, backward bool) ([]db.ChangelogGlobalRow, error) {
 	var rows []db.ChangelogGlobalRow
 	switch {
 	case domainID != nil && backward:
-		dr, err := s.svc.Q.ChangelogByDomainPrev(r.Context(), db.ChangelogByDomainPrevParams{
+		dr, err := s.svc.Q.ChangelogByDomainPrev(ctx, db.ChangelogByDomainPrevParams{
 			DomainID: *domainID, Field: params.Field,
 			WithFrom: params.WithFrom, FromTs: params.FromTs,
 			WithTo: params.WithTo, ToTs: params.ToTs,
@@ -226,7 +216,7 @@ func (s *Server) changelogRows(r *http.Request, domainID *int64, params *db.Chan
 			rows[i] = db.ChangelogGlobalRow(dr[i])
 		}
 	case domainID != nil:
-		dr, err := s.svc.Q.ChangelogByDomain(r.Context(), db.ChangelogByDomainParams{
+		dr, err := s.svc.Q.ChangelogByDomain(ctx, db.ChangelogByDomainParams{
 			DomainID: *domainID, Field: params.Field,
 			WithFrom: params.WithFrom, FromTs: params.FromTs,
 			WithTo: params.WithTo, ToTs: params.ToTs,
@@ -242,7 +232,7 @@ func (s *Server) changelogRows(r *http.Request, domainID *int64, params *db.Chan
 			rows[i] = db.ChangelogGlobalRow(dr[i])
 		}
 	case backward:
-		gr, err := s.svc.Q.ChangelogGlobalPrev(r.Context(), db.ChangelogGlobalPrevParams{
+		gr, err := s.svc.Q.ChangelogGlobalPrev(ctx, db.ChangelogGlobalPrevParams{
 			Field:    params.Field,
 			WithFrom: params.WithFrom, FromTs: params.FromTs,
 			WithTo: params.WithTo, ToTs: params.ToTs,
@@ -258,7 +248,7 @@ func (s *Server) changelogRows(r *http.Request, domainID *int64, params *db.Chan
 		}
 	default:
 		var err error
-		rows, err = s.svc.Q.ChangelogGlobal(r.Context(), *params)
+		rows, err = s.svc.Q.ChangelogGlobal(ctx, *params)
 		if err != nil {
 			return nil, err
 		}

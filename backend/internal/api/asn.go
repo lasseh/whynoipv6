@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"net/url"
@@ -65,66 +66,53 @@ func (s *Server) listASNs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fingerprint := FilterFingerprint(q)
-	params := db.ASNLeaderboardByV6Params{Q: q.Get("q"), Lim: int32(limit + 1)}
-	backward := false
-	if token := q.Get(paramCursor); token != "" {
-		c, err := DecodeCursor(token, sortKey, fingerprint, generation)
-		if err != nil {
-			InvalidParameter(w, r, err.Error())
-			return
-		}
-		st, err := c.SeekTuple()
-		if err != nil {
-			InvalidParameter(w, r, err.Error())
-			return
-		}
-		if st.Rank != nil {
-			params.WithSeek, params.SeekCount, params.SeekNumber = true, *st.Rank, st.ID
-			backward = c.Backward()
-		}
+	items, page, err := KeysetPage(r, generation, limit, KeysetSpec[ASNBody]{
+		Sort: sortKey,
+		Fetch: func(ctx context.Context, seek *Seek, lim int, backward bool) ([]ASNBody, error) {
+			params := db.ASNLeaderboardByV6Params{Q: q.Get("q"), Lim: int32(lim + 1)}
+			if seek != nil && seek.Rank != nil {
+				params.WithSeek, params.SeekCount, params.SeekNumber = true, *seek.Rank, seek.ID
+			}
+			return s.asnLeaderboardRows(ctx, sortKey, params, backward)
+		},
+		Key: func(a *ASNBody) []any {
+			count := a.CountV6
+			if sortKey == SortCountTotal {
+				count = a.CountTotal
+			}
+			return []any{count, a.Number}
+		},
+	})
+	if errors.Is(err, ErrCursorInvalid) {
+		InvalidParameter(w, r, err.Error())
+		return
 	}
-
-	items, err := s.asnLeaderboardRows(r, sortKey, params, backward)
 	if err != nil {
 		InternalError(w, r, err)
 		return
 	}
-
-	items, forwardMore, backwardMore := trimWindow(items, limit, backward, params.WithSeek)
 	if wantCSV {
 		writeASNsCSV(w, items)
 		return
 	}
-	asnKey := func(a ASNBody) []any {
-		count := a.CountV6
-		if sortKey == SortCountTotal {
-			count = a.CountTotal
-		}
-		return []any{count, a.Number}
-	}
-	var firstK, lastK []any
-	if len(items) > 0 {
-		firstK, lastK = asnKey(items[0]), asnKey(items[len(items)-1])
-	}
 
 	WriteJSON(w, http.StatusOK, ListEnvelope{
 		Items: items,
-		Page:  BuildPage(generation, sortKey, fingerprint, forwardMore, backwardMore, firstK, lastK),
+		Page:  page,
 		Meta:  NewMeta(asOf, generation),
 	})
 }
 
 // asnLeaderboardRows dispatches the sort × direction query matrix; backward
 // rows come back re-reversed into display order.
-func (s *Server) asnLeaderboardRows(r *http.Request, sortKey string, params db.ASNLeaderboardByV6Params, backward bool) ([]ASNBody, error) {
+func (s *Server) asnLeaderboardRows(ctx context.Context, sortKey string, params db.ASNLeaderboardByV6Params, backward bool) ([]ASNBody, error) {
 	var items []ASNBody
 	add := func(number int64, name string, total, v6 int32) {
 		items = append(items, asnBody(number, name, total, v6))
 	}
 	switch {
 	case sortKey == SortCountTotal && backward:
-		rows, err := s.svc.Q.ASNLeaderboardByTotalPrev(r.Context(), db.ASNLeaderboardByTotalPrevParams{
+		rows, err := s.svc.Q.ASNLeaderboardByTotalPrev(ctx, db.ASNLeaderboardByTotalPrevParams{
 			Q: params.Q, SeekCount: params.SeekCount, SeekNumber: params.SeekNumber, Lim: params.Lim,
 		})
 		if err != nil {
@@ -134,7 +122,7 @@ func (s *Server) asnLeaderboardRows(r *http.Request, sortKey string, params db.A
 			add(rows[i].Number, rows[i].Name, rows[i].CountTotal, rows[i].CountV6)
 		}
 	case sortKey == SortCountTotal:
-		rows, err := s.svc.Q.ASNLeaderboardByTotal(r.Context(), db.ASNLeaderboardByTotalParams(params))
+		rows, err := s.svc.Q.ASNLeaderboardByTotal(ctx, db.ASNLeaderboardByTotalParams(params))
 		if err != nil {
 			return nil, err
 		}
@@ -142,7 +130,7 @@ func (s *Server) asnLeaderboardRows(r *http.Request, sortKey string, params db.A
 			add(rows[i].Number, rows[i].Name, rows[i].CountTotal, rows[i].CountV6)
 		}
 	case backward:
-		rows, err := s.svc.Q.ASNLeaderboardByV6Prev(r.Context(), db.ASNLeaderboardByV6PrevParams{
+		rows, err := s.svc.Q.ASNLeaderboardByV6Prev(ctx, db.ASNLeaderboardByV6PrevParams{
 			Q: params.Q, SeekCount: params.SeekCount, SeekNumber: params.SeekNumber, Lim: params.Lim,
 		})
 		if err != nil {
@@ -152,7 +140,7 @@ func (s *Server) asnLeaderboardRows(r *http.Request, sortKey string, params db.A
 			add(rows[i].Number, rows[i].Name, rows[i].CountTotal, rows[i].CountV6)
 		}
 	default:
-		rows, err := s.svc.Q.ASNLeaderboardByV6(r.Context(), params)
+		rows, err := s.svc.Q.ASNLeaderboardByV6(ctx, params)
 		if err != nil {
 			return nil, err
 		}

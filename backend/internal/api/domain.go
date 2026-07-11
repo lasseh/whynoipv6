@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -354,45 +355,42 @@ func (s *Server) serveDomainList(w http.ResponseWriter, r *http.Request, preset 
 		return
 	}
 
-	fingerprint := FilterFingerprint(q)
-	var seek *postgres.DomainSeek
-	backward := false
-	if token := q.Get(paramCursor); token != "" {
-		c, err := DecodeCursor(token, sortKey, fingerprint, generation)
-		if err != nil {
-			InvalidParameter(w, r, err.Error())
-			return
-		}
-		st, err := c.SeekTuple()
-		if err != nil {
-			InvalidParameter(w, r, err.Error())
-			return
-		}
-		seek = &postgres.DomainSeek{Rank: st.Rank, ID: st.ID, Host: st.Host}
-		backward = c.Backward()
-	}
-
-	// The N+1 window walk: forwardMore/backwardMore drive next/prev cursor
-	// minting (§3.2 bidirectional). A positioned forward page always has
-	// rows before it (at least the one the cursor came from).
+	// The N+1 window walk (§3.2 bidirectional) via the keyset pipeline;
+	// around_rank arrives from the two-sided fetch instead of the cursor
+	// walk and shares only the minting.
 	var rows []postgres.DomainRow
-	var forwardMore, backwardMore bool
-	switch {
-	case aroundRank != nil:
-		rows, backwardMore, forwardMore, err = postgres.ListDomainsAround(
+	var page Page
+	if aroundRank != nil {
+		var moreAbove, moreBelow bool
+		rows, moreAbove, moreBelow, err = postgres.ListDomainsAround(
 			r.Context(), s.svc.Pool, &filter, *aroundRank, limit)
 		if err != nil {
 			InternalError(w, r, err)
 			return
 		}
-	default:
-		rows, err = postgres.ListDomains(r.Context(), s.svc.Pool, &filter,
-			postgres.ListSort(sortKey), seek, afterRank, limit, backward)
+		page = MintPage(generation, sortKey, FilterFingerprint(q), moreBelow, moreAbove, rows, domainKey(sortKey))
+	} else {
+		rows, page, err = KeysetPage(r, generation, limit, KeysetSpec[postgres.DomainRow]{
+			Sort:       sortKey,
+			Positioned: afterRank != nil,
+			Fetch: func(ctx context.Context, seek *Seek, lim int, backward bool) ([]postgres.DomainRow, error) {
+				var ds *postgres.DomainSeek
+				if seek != nil {
+					ds = &postgres.DomainSeek{Rank: seek.Rank, ID: seek.ID, Host: seek.Host}
+				}
+				return postgres.ListDomains(ctx, s.svc.Pool, &filter,
+					postgres.ListSort(sortKey), ds, afterRank, lim, backward)
+			},
+			Key: domainKey(sortKey),
+		})
+		if errors.Is(err, ErrCursorInvalid) {
+			InvalidParameter(w, r, err.Error())
+			return
+		}
 		if err != nil {
 			InternalError(w, r, err)
 			return
 		}
-		rows, forwardMore, backwardMore = trimWindow(rows, limit, backward, seek != nil || afterRank != nil)
 	}
 
 	items := make([]DomainSummary, len(rows))
@@ -403,8 +401,6 @@ func (s *Server) serveDomainList(w http.ResponseWriter, r *http.Request, preset 
 		writeDomainsCSV(w, items)
 		return
 	}
-
-	firstK, lastK := domainSeekKeys(rows, sortKey)
 
 	meta := NewMeta(asOf, generation)
 	var est int64
@@ -421,7 +417,7 @@ func (s *Server) serveDomainList(w http.ResponseWriter, r *http.Request, preset 
 
 	WriteJSON(w, http.StatusOK, ListEnvelope{
 		Items: trimFields(items, q.Get("fields")),
-		Page:  BuildPage(generation, sortKey, fingerprint, forwardMore, backwardMore, firstK, lastK),
+		Page:  page,
 		Meta:  meta,
 	})
 }
@@ -430,39 +426,31 @@ func (s *Server) serveDomainList(w http.ResponseWriter, r *http.Request, preset 
 // the shared engine for campaign members and subdomains (§3.2: host is a
 // unique key, total even when rank is NULL).
 func (s *Server) hostOrderedPage(r *http.Request, filter *postgres.DomainListFilter, generation int32, limit int) ([]DomainSummary, Page, error) {
-	q := r.URL.Query()
-	fingerprint := FilterFingerprint(q)
-	var seek *postgres.DomainSeek
-	backward := false
-	if token := q.Get(paramCursor); token != "" {
-		c, err := DecodeCursor(token, SortHost, fingerprint, generation)
-		if err != nil {
-			return nil, Page{}, err
-		}
-		st, err := c.SeekTuple()
-		if err != nil {
-			return nil, Page{}, err
-		}
-		seek = &postgres.DomainSeek{Host: st.Host}
-		backward = c.Backward()
-	}
-	rows, err := postgres.ListDomains(r.Context(), s.svc.Pool, filter, postgres.ListSortHost, seek, nil, limit, backward)
+	rows, page, err := KeysetPage(r, generation, limit, KeysetSpec[postgres.DomainRow]{
+		Sort: SortHost,
+		Fetch: func(ctx context.Context, seek *Seek, lim int, backward bool) ([]postgres.DomainRow, error) {
+			var ds *postgres.DomainSeek
+			if seek != nil {
+				ds = &postgres.DomainSeek{Host: seek.Host}
+			}
+			return postgres.ListDomains(ctx, s.svc.Pool, filter, postgres.ListSortHost, ds, nil, lim, backward)
+		},
+		Key: domainKey(SortHost),
+	})
 	if err != nil {
 		return nil, Page{}, err
 	}
-	rows, forwardMore, backwardMore := trimWindow(rows, limit, backward, seek != nil)
 	items := make([]DomainSummary, len(rows))
 	for i := range rows {
 		items[i] = summaryFromRow(&rows[i])
 	}
-	firstK, lastK := domainSeekKeys(rows, SortHost)
-	return items, BuildPage(generation, SortHost, fingerprint, forwardMore, backwardMore, firstK, lastK), nil
+	return items, page, nil
 }
 
-// domainSeekKeys mints the first/last seek tuples of a page for cursor
-// encoding.
-func domainSeekKeys(rows []postgres.DomainRow, sortKey string) (firstK, lastK []any) {
-	key := func(row *postgres.DomainRow) []any {
+// domainKey is the per-row seek-tuple extractor for cursor minting; a
+// rank-NULL row on a rank ordering cannot anchor a cursor.
+func domainKey(sortKey string) func(*postgres.DomainRow) []any {
+	return func(row *postgres.DomainRow) []any {
 		if sortKey == SortHost {
 			return []any{row.Host}
 		}
@@ -471,10 +459,6 @@ func domainSeekKeys(rows []postgres.DomainRow, sortKey string) (firstK, lastK []
 		}
 		return []any{*row.Rank, row.ID}
 	}
-	if len(rows) == 0 {
-		return nil, nil
-	}
-	return key(&rows[0]), key(&rows[len(rows)-1])
 }
 
 // trimFields applies the ?fields= sparse fieldset (07 §3.3) by re-projecting

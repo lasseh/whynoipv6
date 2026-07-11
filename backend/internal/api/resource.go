@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"time"
@@ -132,30 +133,32 @@ func (s *Server) listResourceDependents(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	fingerprint := FilterFingerprint(q)
-	var seek *postgres.DependentSeek
-	backward := false
-	if token := q.Get(paramCursor); token != "" {
-		c, err := DecodeCursor(token, SortDependents, fingerprint, generation)
-		if err != nil {
-			InvalidParameter(w, r, err.Error())
-			return
-		}
-		st, err := c.SeekTuple()
-		if err != nil {
-			InvalidParameter(w, r, err.Error())
-			return
-		}
-		seek = &postgres.DependentSeek{RankNull: st.RankNull, Rank: st.Rank, ID: st.ID}
-		backward = c.Backward()
+	rows, page, err := KeysetPage(r, generation, limit, KeysetSpec[postgres.DependentRow]{
+		Sort: SortDependents,
+		Fetch: func(ctx context.Context, seek *Seek, lim int, backward bool) ([]postgres.DependentRow, error) {
+			var ds *postgres.DependentSeek
+			if seek != nil {
+				ds = &postgres.DependentSeek{RankNull: seek.RankNull, Rank: seek.Rank, ID: seek.ID}
+			}
+			return postgres.ListDependents(ctx, s.svc.Pool, row.ID, ds, lim, backward)
+		},
+		Key: func(d *postgres.DependentRow) []any {
+			isNull := d.Rank == nil
+			var rank int32
+			if d.Rank != nil {
+				rank = *d.Rank
+			}
+			return []any{isNull, rank, d.ID}
+		},
+	})
+	if errors.Is(err, ErrCursorInvalid) {
+		InvalidParameter(w, r, err.Error())
+		return
 	}
-
-	rows, err := postgres.ListDependents(r.Context(), s.svc.Pool, row.ID, seek, limit, backward)
 	if err != nil {
 		InternalError(w, r, err)
 		return
 	}
-	rows, forwardMore, backwardMore := trimWindow(rows, limit, backward, seek != nil)
 
 	type dependentItem struct {
 		DomainSummary
@@ -167,19 +170,6 @@ func (s *Server) listResourceDependents(w http.ResponseWriter, r *http.Request) 
 		items[i] = dependentItem{summaryFromRow(&rows[i].DomainRow), rows[i].Source, rows[i].Required}
 	}
 
-	depKey := func(d *postgres.DependentRow) []any {
-		isNull := d.Rank == nil
-		var rank int32
-		if d.Rank != nil {
-			rank = *d.Rank
-		}
-		return []any{isNull, rank, d.ID}
-	}
-	var firstK, lastK []any
-	if len(rows) > 0 {
-		firstK, lastK = depKey(&rows[0]), depKey(&rows[len(rows)-1])
-	}
-
 	est := int64(row.DependentCount)
 	meta := NewMeta(asOf, generation)
 	meta.CountEstimate = &est
@@ -188,8 +178,7 @@ func (s *Server) listResourceDependents(w http.ResponseWriter, r *http.Request) 
 		Items    any              `json:"items"`
 		Page     Page             `json:"page"`
 		Meta     Meta             `json:"meta"`
-	}{resourceHostBody(&row), items,
-		BuildPage(generation, SortDependents, fingerprint, forwardMore, backwardMore, firstK, lastK), meta})
+	}{resourceHostBody(&row), items, page, meta})
 }
 
 func (s *Server) resourceByPathHost(w http.ResponseWriter, r *http.Request) (db.ResourceHostByHostRow, bool) {

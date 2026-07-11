@@ -16,3 +16,11 @@ crystallized *after* the spec was frozen.
   `conn`/`consensus` hoists. Consumers reach it only through the per-check accessors
   on `checker.ScanResult` (never by map key, never by re-asserting types).
   _Avoid:_ "details map", `map[string]any` payloads.
+
+- **Keyset spec.** The per-endpoint description of a keyset-paginated list —
+  `api.KeysetSpec{Sort, Positioned, Fetch, Key}` — consumed by `api.KeysetPage`,
+  which owns the whole cursor pipeline (fingerprint → decode → seek → N+1 fetch →
+  trim → cursor minting). Endpoints supply only what varies; the backward/positioned
+  window conventions live in one place. The `around_rank` centered window shares
+  only the minting half (`MintPage`). _Avoid:_ hand-rolling the decode→trim→mint
+  sequence in a handler.
