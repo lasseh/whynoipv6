@@ -253,7 +253,7 @@ Country/asn/provider-scoped lists are **not** "small bounded": a single large co
 
 Rationale: offset degrades linearly with depth (walk-and-discard), is incorrect on a mutating set (the daily crawl re-ranks), whereas keyset uses a `WHERE key > :last` seek on an index — constant cost regardless of depth. Rank is the ideal keyset key on rank-ordered views: monotonic, indexable (`idx_domain_rank`), human-meaningful.
 
-**Default `/domains` scope.** The bare top-level `/domains` collection is **ranked, non-disabled rows only** (`WHERE rank IS NOT NULL AND NOT disabled`; columns on the `domain` table, see 05-schema.md — domain table). Rank-NULL entities (campaign-only hosts, subdomains, live-check hosts) are real `domain` rows reachable **only via their sub-collections** (`/campaigns/{uuid}/domains`, `/domains/{host}/subdomains`, `/resources/{host}/dependents`), never from the top-level leaderboard. `meta.count_estimate = max(rank)` is an **upper bound** (disabled ranked rows retain their rank but are filtered out), which is why it is labelled an estimate. Queries spell out `AND rank IS NOT NULL AND NOT disabled` **verbatim** so the planner's partial-index predicate-implication check is trivial (`idx_domain_heroes`/`idx_domain_sinners`/`idx_domain_partial`, see 05-schema.md — domain table).
+**Default `/domains` scope.** The bare top-level `/domains` collection is **ranked, non-disabled rows only** (`WHERE rank IS NOT NULL AND NOT disabled`; columns on the `domain` table, see 05-schema.md — domain table). Rank-NULL entities (campaign-only hosts, subdomains, live-check hosts) are real `domain` rows reachable **only via their sub-collections** (`/campaigns/{uuid}/domains`, `/domains/{host}/subdomains`, `/resources/{host}/dependents`), never from the top-level leaderboard — with **one exception**: the `?q=` search predicate spans rank-NULL rows (§3.3, Decision 2026-07-11). `meta.count_estimate = max(rank)` is an **upper bound** (disabled ranked rows retain their rank but are filtered out), which is why it is labelled an estimate. Queries spell out `AND rank IS NOT NULL AND NOT disabled` **verbatim** so the planner's partial-index predicate-implication check is trivial (`idx_domain_heroes`/`idx_domain_sinners`/`idx_domain_partial`, see 05-schema.md — domain table).
 
 ### 3.2 Cursor design
 
@@ -315,7 +315,7 @@ Filters are plain query params, aligned with response field names, and **constra
 | `flag` | one of `class_flags` | **expensive** — scope-required (below) | |
 | `base`/`www`/`ns`/`mx`/`conn`/`resources` | an `ipv6_status` value | **expensive** — scope-required (below) | per-dimension confirmed-status filters (drives the mail track) |
 | `rank_max` / `rank_min` | int | `idx_domain_rank` | cohort ranges (top-1000 etc.) |
-| `q` | substring | `idx_domain_host_trgm` | search; **does not** compose with rank ordering — ordered and cursor-paged on the `host` seek key (§3.2); trigram similarity is not a strict total order, so relevance never orders pages |
+| `q` | substring | `idx_domain_host_trgm` | search; **does not** compose with rank ordering — ordered and cursor-paged on the `host` seek key (§3.2); trigram similarity is not a strict total order, so relevance never orders pages. **Scope exception (Decision 2026-07-11):** `?q=` spans **all non-disabled rows including rank-NULL** (campaign-only hosts, subdomains, live-check origins) — the one read that surfaces rank-NULL rows outside their sub-collections; without it, search cannot find campaign-only hosts (12-frontend.md §7.3). The host seek needs no rank, so the ordering is unaffected; `rank` serves as `null` in the row |
 | `sort` | `rank` (default) \| `-rank` \| `host` | index-dependent | each sort binds a distinct cursor ordering (§3.2) |
 | `fields` | comma list | — | sparse fieldset to trim the leaderboard row |
 | `format` | `json` (default) \| `csv` | — | content negotiation (§5.5) |
@@ -529,7 +529,7 @@ The companion **hosting/CDN provider** axis is `domain.hosting_provider` — a n
 
 ### 4.7 Campaign (composite detail)
 
-`GET /campaigns` lists campaigns (with a `?tag=` filter, §5.6); the detail is a **composite** (metadata + paged members + adoption):
+`GET /campaigns` lists campaigns (with a `?tag=` filter, §5.6). **Each list row carries the same `adoption` object as the detail** (`{v6_ready_percent, day}` from the latest `stats_campaign_daily` row; `null` before the campaign's first stats tick) alongside `domain_count` — the campaign set is small (tens of rows), so the per-row stats join is trivially cheap, and it spares the frontend's card grid an N+1 detail fan-out (Decision 2026-07-11; 12-frontend.md §8). The detail is a **composite** (metadata + paged members + adoption):
 
 ```json
 {
@@ -598,7 +598,9 @@ The item id for feed serializations (§5.4) is the composite `(host, ts, field)`
 }
 ```
 
-`day` is date granularity. `resources` is `null` (never confirmed, per §4.1) — the confirmed-never `null`, correct here because the source is the confirmed reconstruction. No pagination (`points` collection); `interval=weekly` samples the reconstructed state at each week boundary, not averaging. **Day-1 note:** the trajectory is changelog-sourced and starts empty (OPEN-9, start fresh), filling as the fresh crawl accumulates confirmed transitions; the latency overlay likewise fills as scans accumulate.
+`day` is date granularity. `resources` is `null` (never confirmed, per §4.1) — the confirmed-never `null`, correct here because the source is the confirmed reconstruction. No pagination (`points` collection); `interval=weekly` samples the reconstructed state at each week boundary, not averaging.
+
+**Baseline seeding (Decision 2026-07-11).** Bootstrap confirmations (NULL→value) write **no** changelog row, so a pure changelog replay renders every never-flipped domain — the overwhelmingly common stable case — as `points: []` forever (a permanently blank frontend tracker, 12-frontend.md §7.3). The reconstruction therefore **seeds each dimension from the domain row's confirmed `(value, *_since)` pair**: from `since` (clamped to the window/created_at) onward the dimension holds its confirmed value; days before `since` are `null` (unconfirmed — never fabricated). Dimensions with changelog transitions replay exactly as before, including the first transition's `old_value` backfill toward `created_at`; where both sources describe a day, the changelog replay wins (it is the authoritative transition record — the seed only fills dimensions the replay never touches). This uses only the new system's own confirmed state — OPEN-9 (no legacy history import) is untouched. **Day-1 note (amended):** the trajectory starts at the first confirmed baseline rather than empty, and deepens as the fresh crawl accumulates transitions; the latency overlay fills as scans accumulate.
 
 ### 4.10 Stats / overview (adoption over time)
 
