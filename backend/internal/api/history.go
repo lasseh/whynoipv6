@@ -151,9 +151,22 @@ func (s *Server) getDomainHistory(w http.ResponseWriter, r *http.Request) {
 		InternalError(w, r, err)
 		return
 	}
-	// Day-1 rule (OPEN-9): the trajectory is changelog-sourced and starts
-	// empty, filling as confirmed transitions accumulate.
-	if len(replay) == 0 {
+	// Baseline seeding (07 §4.9, Decision 2026-07-11): bootstrap confirmations
+	// (NULL→value) write no changelog row, so a pure replay renders every
+	// never-flipped domain as points:[] forever. Seed each dimension from the
+	// domain row's confirmed (value, *_since) pair (done per-dimension in
+	// dimTrack.valueAt). Only a domain with neither changelog transitions nor
+	// any confirmed status has nothing to render → points:[].
+	seedable := func(st *db.Ipv6Status, since pgtype.Timestamptz) bool {
+		return st != nil && since.Valid
+	}
+	hasSeed := seedable(row.BaseStatus, row.BaseSince) ||
+		seedable(row.WwwStatus, row.WwwSince) ||
+		seedable(row.NsStatus, row.NsSince) ||
+		seedable(row.MxStatus, row.MxSince) ||
+		seedable(row.ConnStatus, row.ConnSince) ||
+		seedable(row.ResourcesStatus, row.ResourcesSince)
+	if len(replay) == 0 && !hasSeed {
 		WriteJSON(w, http.StatusOK, out)
 		return
 	}

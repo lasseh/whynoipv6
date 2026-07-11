@@ -202,19 +202,37 @@ func TestHistory(t *testing.T) {
 	srv, pool := newAPI(t)
 	seedEntities(t, pool)
 
-	// No changelog rows → 200 with points: [] (day-1 rule, OPEN-9).
+	// No changelog rows but confirmed statuses (base/ns/mx supported) → 200
+	// with seeded points (baseline seeding, 07 §4.9, Decision 2026-07-11):
+	// the trajectory starts at the confirmed baseline, not empty.
 	var fresh struct {
 		Host   string `json:"host"`
-		Points []any  `json:"points"`
-		Meta   struct {
+		Points []struct {
+			Base *string `json:"base"`
+			NS   *string `json:"ns"`
+		} `json:"points"`
+		Meta struct {
 			RetentionDays int `json:"retention_days"`
 		} `json:"meta"`
 	}
-	if resp := getJSON(t, srv.URL+"/domains/d3.example/history", &fresh); resp.StatusCode != 200 || len(fresh.Points) != 0 {
-		t.Fatalf("fresh history: %d, %d points", resp.StatusCode, len(fresh.Points))
+	if resp := getJSON(t, srv.URL+"/domains/d3.example/history", &fresh); resp.StatusCode != 200 || len(fresh.Points) == 0 {
+		t.Fatalf("fresh history: %d, %d points (want seeded)", resp.StatusCode, len(fresh.Points))
+	}
+	last := fresh.Points[len(fresh.Points)-1]
+	if last.Base == nil || *last.Base != "supported" || last.NS == nil || *last.NS != "supported" {
+		t.Errorf("seeded last point base/ns = %v/%v, want supported (confirmed baseline)", last.Base, last.NS)
 	}
 	if fresh.Meta.RetentionDays != 730 {
 		t.Errorf("retention_days = %d", fresh.Meta.RetentionDays)
+	}
+
+	// A domain with NO confirmed statuses and no changelog still renders
+	// points: [] (nothing to seed).
+	var bare struct {
+		Points []any `json:"points"`
+	}
+	if resp := getJSON(t, srv.URL+"/domains/campaign-only.example/history", &bare); resp.StatusCode != 200 || len(bare.Points) != 0 {
+		t.Fatalf("bare history: %d, %d points (want empty)", resp.StatusCode, len(bare.Points))
 	}
 
 	seedChangelog(t, pool)
