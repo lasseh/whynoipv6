@@ -139,6 +139,13 @@ func buildDomainList(f *DomainListFilter, sortKey ListSort, seek *DomainSeek, af
 			Where(sq.Expr("NOT d.disabled"))
 	case f.ParentID != nil:
 		q = q.Where(sq.Expr(fmt.Sprintf("d.parent_id = %d AND NOT d.disabled", *f.ParentID)))
+	case f.Query != "":
+		// ?q= search spans all non-disabled rows including rank-NULL
+		// (campaign-only hosts, subdomains, live-check origins) — the one
+		// read that surfaces rank-NULL rows outside their sub-collections
+		// (07 §3.1/§3.3, Decision 2026-07-11). Only rank IS NOT NULL is
+		// dropped; NOT disabled stays. The host seek is unaffected.
+		q = q.Where(sq.Expr("NOT d.disabled"))
 	default:
 		q = q.Where(sq.Expr("d.rank IS NOT NULL AND NOT d.disabled"))
 	}

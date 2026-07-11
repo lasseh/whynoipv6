@@ -367,6 +367,45 @@ func TestSearchForcesHostOrder(t *testing.T) {
 	}
 }
 
+// TestSearchSpansRankNull (07 §3.1/§3.3, Decision 2026-07-11): ?q= is the one
+// read that surfaces rank-NULL rows (campaign-only hosts, subdomains) outside
+// their sub-collections; disabled rows stay excluded.
+func TestSearchSpansRankNull(t *testing.T) {
+	srv, _ := newAPI(t)
+
+	// campaign-only.example is a rank-NULL apex — invisible on the plain
+	// leaderboard, but findable by search.
+	var env envelope
+	getJSON(t, srv.URL+"/domains?q=campaign-only", &env)
+	h := hosts(t, env.Items)
+	if len(h) != 1 || h[0] != "campaign-only.example" {
+		t.Fatalf("q=campaign-only = %v, want [campaign-only.example]", h)
+	}
+	var rank *int32
+	if err := json.Unmarshal(env.Items[0]["rank"], &rank); err != nil {
+		t.Fatal(err)
+	}
+	if rank != nil {
+		t.Errorf("campaign-only rank = %v, want JSON null", *rank)
+	}
+
+	// The bare leaderboard (no q) still hides the rank-NULL row.
+	var plain envelope
+	getJSON(t, srv.URL+"/domains", &plain)
+	for _, host := range hosts(t, plain.Items) {
+		if host == "campaign-only.example" {
+			t.Errorf("rank-NULL host leaked onto the bare leaderboard")
+		}
+	}
+
+	// Disabled rows (d9) stay excluded even under the q scope.
+	var disabled envelope
+	getJSON(t, srv.URL+"/domains?q=d9", &disabled)
+	if len(disabled.Items) != 0 {
+		t.Errorf("q=d9 = %v, want empty (disabled excluded)", hosts(t, disabled.Items))
+	}
+}
+
 // TestDetailMasking (07 §4.3): error/inconsistent → null everywhere; partial
 // survives only on ptr/parity; evidence only with ?include=evidence.
 func TestDetailMasking(t *testing.T) {
