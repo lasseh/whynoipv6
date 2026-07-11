@@ -193,8 +193,8 @@ func queryFingerprint(r *http.Request) string {
 }
 
 // pgTS wraps a time as a pgtype.Timestamptz, invalid when absent.
-func pgTS(t time.Time, valid bool) pgtype.Timestamptz {
-	return pgtype.Timestamptz{Time: t, Valid: valid}
+func pgTS(t time.Time) pgtype.Timestamptz {
+	return pgtype.Timestamptz{Time: t, Valid: true}
 }
 
 // hashString is FNV-1a (deterministic across instances; not security).

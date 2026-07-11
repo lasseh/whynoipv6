@@ -20,12 +20,6 @@ type Querier interface {
 	// updated on later scans.
 	ASNEnsure(ctx context.Context, arg ASNEnsureParams) (int32, error)
 	ASNIDByNumber(ctx context.Context, number int64) (int32, error)
-	ASNLeaderboardByTotal(ctx context.Context, arg ASNLeaderboardByTotalParams) ([]ASNLeaderboardByTotalRow, error)
-	ASNLeaderboardByTotalPrev(ctx context.Context, arg ASNLeaderboardByTotalPrevParams) ([]ASNLeaderboardByTotalPrevRow, error)
-	ASNLeaderboardByV6(ctx context.Context, arg ASNLeaderboardByV6Params) ([]ASNLeaderboardByV6Row, error)
-	// The §3.2 prev_cursor (backward) variants: flipped comparison + order;
-	// the handler re-reverses rows for display.
-	ASNLeaderboardByV6Prev(ctx context.Context, arg ASNLeaderboardByV6PrevParams) ([]ASNLeaderboardByV6PrevRow, error)
 	// db/query/asn.sql — sqlc query source (layout: 05-schema.md §10.2).
 	// Sentinel lookup: binaries resolve the sentinel ASN once at startup by
 	// lookup, never by literal id (05-schema.md §5).
@@ -48,20 +42,17 @@ type Querier interface {
 	CampaignUUIDBySourceFile(ctx context.Context, sourceFile *string) (pgtype.UUID, error)
 	CampaignUpdateFromFile(ctx context.Context, arg CampaignUpdateFromFileParams) (int32, error)
 	ChangelogByCampaign(ctx context.Context, campaignID int32) ([]ChangelogByCampaignRow, error)
+	// Changelog read surface (07 §4.8). The paginating global + per-domain
+	// feeds are builder-built in internal/postgres/changeloglist.go (05-schema
+	// §10.2 — one seek builder derives both walk directions); the scoped
+	// country/campaign feeds below are capped to the latest-50 recent window
+	// (OPEN-15 guardrail) and stay sqlc.
 	ChangelogByCountry(ctx context.Context, countryID int32) ([]ChangelogByCountryRow, error)
-	ChangelogByDomain(ctx context.Context, arg ChangelogByDomainParams) ([]ChangelogByDomainRow, error)
-	ChangelogByDomainPrev(ctx context.Context, arg ChangelogByDomainPrevParams) ([]ChangelogByDomainPrevRow, error)
 	// The ?scope=campaign global feed (07 §4.8): transitions of domains in ANY
 	// campaign. Driven from the bounded campaign_domain set via a lateral read
 	// of the (domain_id, ts, field) PK — never a sparse probe of the global ts
 	// index. Same latest-50 recent-window cap as the other scoped feeds.
 	ChangelogCampaignScope(ctx context.Context) ([]ChangelogCampaignScopeRow, error)
-	// Changelog read surface (07 §4.8). Global + per-domain feeds paginate on
-	// the (ts, domain_id, field) DESC keyset; the scoped country/campaign feeds
-	// are capped to the latest-50 recent window (OPEN-15 guardrail).
-	ChangelogGlobal(ctx context.Context, arg ChangelogGlobalParams) ([]ChangelogGlobalRow, error)
-	// The §3.2 prev_cursor (backward) variants.
-	ChangelogGlobalPrev(ctx context.Context, arg ChangelogGlobalPrevParams) ([]ChangelogGlobalPrevRow, error)
 	ChangelogMaxTS(ctx context.Context) (pgtype.Timestamptz, error)
 	// The §4.9 confirmed-trajectory replay: the full transition history of one
 	// domain, ascending, reconstructed API-side (never raw scan observations).

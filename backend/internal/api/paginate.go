@@ -335,13 +335,6 @@ func trimWindow[T any](rows []T, limit int, backward, positioned bool) (trimmed 
 	return rows, overflow, positioned
 }
 
-// reverseSlice restores display order after a backward fetch.
-func reverseSlice[T any](rows []T) {
-	for i, j := 0, len(rows)-1; i < j; i, j = i+1, j-1 {
-		rows[i], rows[j] = rows[j], rows[i]
-	}
-}
-
 func jsonInt32(v any) (int32, bool) {
 	switch n := v.(type) {
 	case float64:

@@ -1,27 +1,8 @@
--- Changelog read surface (07 §4.8). Global + per-domain feeds paginate on
--- the (ts, domain_id, field) DESC keyset; the scoped country/campaign feeds
--- are capped to the latest-50 recent window (OPEN-15 guardrail).
-
--- name: ChangelogGlobal :many
-SELECT cl.ts, d.host, cl.field, cl.old_value, cl.new_value, cl.domain_id
-FROM changelog cl JOIN domain d ON d.id = cl.domain_id
-WHERE (@field::TEXT = '' OR cl.field = @field)
-  AND (NOT @with_from::BOOL OR cl.ts >= @from_ts::TIMESTAMPTZ)
-  AND (NOT @with_to::BOOL OR cl.ts <= @to_ts::TIMESTAMPTZ)
-  AND (NOT @with_seek::BOOL OR (cl.ts, cl.domain_id, cl.field) < (@seek_ts::TIMESTAMPTZ, @seek_domain::BIGINT, @seek_field::TEXT))
-ORDER BY cl.ts DESC, cl.domain_id DESC, cl.field DESC
-LIMIT @lim;
-
--- name: ChangelogByDomain :many
-SELECT cl.ts, d.host, cl.field, cl.old_value, cl.new_value, cl.domain_id
-FROM changelog cl JOIN domain d ON d.id = cl.domain_id
-WHERE cl.domain_id = @domain_id
-  AND (@field::TEXT = '' OR cl.field = @field)
-  AND (NOT @with_from::BOOL OR cl.ts >= @from_ts::TIMESTAMPTZ)
-  AND (NOT @with_to::BOOL OR cl.ts <= @to_ts::TIMESTAMPTZ)
-  AND (NOT @with_seek::BOOL OR (cl.ts, cl.domain_id, cl.field) < (@seek_ts::TIMESTAMPTZ, @seek_domain::BIGINT, @seek_field::TEXT))
-ORDER BY cl.ts DESC, cl.domain_id DESC, cl.field DESC
-LIMIT @lim;
+-- Changelog read surface (07 §4.8). The paginating global + per-domain
+-- feeds are builder-built in internal/postgres/changeloglist.go (05-schema
+-- §10.2 — one seek builder derives both walk directions); the scoped
+-- country/campaign feeds below are capped to the latest-50 recent window
+-- (OPEN-15 guardrail) and stay sqlc.
 
 -- name: ChangelogByCountry :many
 SELECT cl.ts, d.host, cl.field, cl.old_value, cl.new_value
@@ -78,24 +59,3 @@ FROM scan
 WHERE domain_id = @domain_id AND ts >= @from_ts::TIMESTAMPTZ AND ts < @to_ts::TIMESTAMPTZ
 ORDER BY ts::date, ts DESC;
 
--- The §3.2 prev_cursor (backward) variants.
--- name: ChangelogGlobalPrev :many
-SELECT cl.ts, d.host, cl.field, cl.old_value, cl.new_value, cl.domain_id
-FROM changelog cl JOIN domain d ON d.id = cl.domain_id
-WHERE (@field::TEXT = '' OR cl.field = @field)
-  AND (NOT @with_from::BOOL OR cl.ts >= @from_ts::TIMESTAMPTZ)
-  AND (NOT @with_to::BOOL OR cl.ts <= @to_ts::TIMESTAMPTZ)
-  AND (cl.ts, cl.domain_id, cl.field) > (@seek_ts::TIMESTAMPTZ, @seek_domain::BIGINT, @seek_field::TEXT)
-ORDER BY cl.ts ASC, cl.domain_id ASC, cl.field ASC
-LIMIT @lim;
-
--- name: ChangelogByDomainPrev :many
-SELECT cl.ts, d.host, cl.field, cl.old_value, cl.new_value, cl.domain_id
-FROM changelog cl JOIN domain d ON d.id = cl.domain_id
-WHERE cl.domain_id = @domain_id
-  AND (@field::TEXT = '' OR cl.field = @field)
-  AND (NOT @with_from::BOOL OR cl.ts >= @from_ts::TIMESTAMPTZ)
-  AND (NOT @with_to::BOOL OR cl.ts <= @to_ts::TIMESTAMPTZ)
-  AND (cl.ts, cl.domain_id, cl.field) > (@seek_ts::TIMESTAMPTZ, @seek_domain::BIGINT, @seek_field::TEXT)
-ORDER BY cl.ts ASC, cl.domain_id ASC, cl.field ASC
-LIMIT @lim;

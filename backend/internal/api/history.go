@@ -186,7 +186,7 @@ func (s *Server) getDomainHistory(w http.ResponseWriter, r *http.Request) {
 	setCurrent("resources", row.ResourcesStatus, row.ResourcesSince)
 
 	latency, err := s.svc.Q.ScanLatencyDaily(r.Context(), db.ScanLatencyDailyParams{
-		DomainID: row.ID, FromTs: pgTS(from, true), ToTs: pgTS(to.AddDate(0, 0, 1), true),
+		DomainID: row.ID, FromTs: pgTS(from), ToTs: pgTS(to.AddDate(0, 0, 1)),
 	})
 	if err != nil {
 		InternalError(w, r, err)

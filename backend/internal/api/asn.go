@@ -9,8 +9,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
-
-	db "github.com/lasseh/whynoipv6/internal/postgres/db"
+	"github.com/lasseh/whynoipv6/internal/postgres"
 )
 
 // ASNBody is the §4.6 network representation; count_v4 is synthesized
@@ -69,11 +68,20 @@ func (s *Server) listASNs(w http.ResponseWriter, r *http.Request) {
 	items, page, err := KeysetPage(r, generation, limit, KeysetSpec[ASNBody]{
 		Sort: sortKey,
 		Fetch: func(ctx context.Context, seek *Seek, lim int, backward bool) ([]ASNBody, error) {
-			params := db.ASNLeaderboardByV6Params{Q: q.Get("q"), Lim: int32(lim + 1)}
+			var as *postgres.ASNSeek
 			if seek != nil && seek.Rank != nil {
-				params.WithSeek, params.SeekCount, params.SeekNumber = true, *seek.Rank, seek.ID
+				as = &postgres.ASNSeek{Count: *seek.Rank, Number: seek.ID}
 			}
-			return s.asnLeaderboardRows(ctx, sortKey, params, backward)
+			rows, err := postgres.ListASNLeaderboard(ctx, s.svc.Pool, q.Get("q"),
+				sortKey == SortCountTotal, as, lim, backward)
+			if err != nil {
+				return nil, err
+			}
+			bodies := make([]ASNBody, len(rows))
+			for i := range rows {
+				bodies[i] = asnBody(rows[i].Number, rows[i].Name, rows[i].CountTotal, rows[i].CountV6)
+			}
+			return bodies, nil
 		},
 		Key: func(a *ASNBody) []any {
 			count := a.CountV6
@@ -101,57 +109,6 @@ func (s *Server) listASNs(w http.ResponseWriter, r *http.Request) {
 		Page:  page,
 		Meta:  NewMeta(asOf, generation),
 	})
-}
-
-// asnLeaderboardRows dispatches the sort × direction query matrix; backward
-// rows come back re-reversed into display order.
-func (s *Server) asnLeaderboardRows(ctx context.Context, sortKey string, params db.ASNLeaderboardByV6Params, backward bool) ([]ASNBody, error) {
-	var items []ASNBody
-	add := func(number int64, name string, total, v6 int32) {
-		items = append(items, asnBody(number, name, total, v6))
-	}
-	switch {
-	case sortKey == SortCountTotal && backward:
-		rows, err := s.svc.Q.ASNLeaderboardByTotalPrev(ctx, db.ASNLeaderboardByTotalPrevParams{
-			Q: params.Q, SeekCount: params.SeekCount, SeekNumber: params.SeekNumber, Lim: params.Lim,
-		})
-		if err != nil {
-			return nil, err
-		}
-		for i := range rows {
-			add(rows[i].Number, rows[i].Name, rows[i].CountTotal, rows[i].CountV6)
-		}
-	case sortKey == SortCountTotal:
-		rows, err := s.svc.Q.ASNLeaderboardByTotal(ctx, db.ASNLeaderboardByTotalParams(params))
-		if err != nil {
-			return nil, err
-		}
-		for i := range rows {
-			add(rows[i].Number, rows[i].Name, rows[i].CountTotal, rows[i].CountV6)
-		}
-	case backward:
-		rows, err := s.svc.Q.ASNLeaderboardByV6Prev(ctx, db.ASNLeaderboardByV6PrevParams{
-			Q: params.Q, SeekCount: params.SeekCount, SeekNumber: params.SeekNumber, Lim: params.Lim,
-		})
-		if err != nil {
-			return nil, err
-		}
-		for i := range rows {
-			add(rows[i].Number, rows[i].Name, rows[i].CountTotal, rows[i].CountV6)
-		}
-	default:
-		rows, err := s.svc.Q.ASNLeaderboardByV6(ctx, params)
-		if err != nil {
-			return nil, err
-		}
-		for i := range rows {
-			add(rows[i].Number, rows[i].Name, rows[i].CountTotal, rows[i].CountV6)
-		}
-	}
-	if backward { // ASC fetch → re-reverse into leaderboard order
-		reverseSlice(items)
-	}
-	return items, nil
 }
 
 // parseASNNumber resolves the {number} path param; malformed → 404

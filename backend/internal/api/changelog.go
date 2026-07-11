@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/lasseh/whynoipv6/internal/domain"
+	"github.com/lasseh/whynoipv6/internal/postgres"
 	db "github.com/lasseh/whynoipv6/internal/postgres/db"
 )
 
@@ -150,25 +151,24 @@ func (s *Server) serveChangelogFeed(w http.ResponseWriter, r *http.Request, doma
 		return
 	}
 
-	rows, page, err := KeysetPage(r, generation, limit, KeysetSpec[db.ChangelogGlobalRow]{
+	filter := postgres.ChangelogFilter{DomainID: domainID, Field: win.Field}
+	if win.HasFrom {
+		filter.From = &win.From
+	}
+	if win.HasTo {
+		filter.To = &win.To
+	}
+	rows, page, err := KeysetPage(r, generation, limit, KeysetSpec[postgres.ChangelogRow]{
 		Sort: SortChangelog,
-		Fetch: func(ctx context.Context, seek *Seek, lim int, backward bool) ([]db.ChangelogGlobalRow, error) {
-			params := db.ChangelogGlobalParams{
-				Field:    win.Field,
-				WithFrom: win.HasFrom, FromTs: pgTS(win.From, win.HasFrom),
-				WithTo: win.HasTo, ToTs: pgTS(win.To, win.HasTo),
-				Lim: int32(lim + 1),
-			}
+		Fetch: func(ctx context.Context, seek *Seek, lim int, backward bool) ([]postgres.ChangelogRow, error) {
+			var cs *postgres.ChangelogSeek
 			if seek != nil {
-				params.WithSeek = true
-				params.SeekTs = pgTS(time.Unix(0, seek.TS).UTC(), true)
-				params.SeekDomain = seek.ID
-				params.SeekField = seek.Field
+				cs = &postgres.ChangelogSeek{TS: time.Unix(0, seek.TS).UTC(), Domain: seek.ID, Field: seek.Field}
 			}
-			return s.changelogRows(ctx, domainID, &params, backward)
+			return postgres.ListChangelog(ctx, s.svc.Pool, &filter, cs, lim, backward)
 		},
-		Key: func(row *db.ChangelogGlobalRow) []any {
-			return []any{row.Ts.Time.UnixNano(), row.DomainID, row.Field}
+		Key: func(row *postgres.ChangelogRow) []any {
+			return []any{row.Ts.UnixNano(), row.DomainID, row.Field}
 		},
 	})
 	if errors.Is(err, ErrCursorInvalid) {
@@ -195,77 +195,13 @@ func (s *Server) serveChangelogFeed(w http.ResponseWriter, r *http.Request, doma
 	})
 }
 
-// changelogRows dispatches the scope × direction query matrix; backward
-// rows come back re-reversed into ts-DESC display order.
-func (s *Server) changelogRows(ctx context.Context, domainID *int64, params *db.ChangelogGlobalParams, backward bool) ([]db.ChangelogGlobalRow, error) {
-	var rows []db.ChangelogGlobalRow
-	switch {
-	case domainID != nil && backward:
-		dr, err := s.svc.Q.ChangelogByDomainPrev(ctx, db.ChangelogByDomainPrevParams{
-			DomainID: *domainID, Field: params.Field,
-			WithFrom: params.WithFrom, FromTs: params.FromTs,
-			WithTo: params.WithTo, ToTs: params.ToTs,
-			SeekTs: params.SeekTs, SeekDomain: params.SeekDomain, SeekField: params.SeekField,
-			Lim: params.Lim,
-		})
-		if err != nil {
-			return nil, err
-		}
-		rows = make([]db.ChangelogGlobalRow, len(dr))
-		for i := range dr {
-			rows[i] = db.ChangelogGlobalRow(dr[i])
-		}
-	case domainID != nil:
-		dr, err := s.svc.Q.ChangelogByDomain(ctx, db.ChangelogByDomainParams{
-			DomainID: *domainID, Field: params.Field,
-			WithFrom: params.WithFrom, FromTs: params.FromTs,
-			WithTo: params.WithTo, ToTs: params.ToTs,
-			WithSeek: params.WithSeek, SeekTs: params.SeekTs,
-			SeekDomain: params.SeekDomain, SeekField: params.SeekField,
-			Lim: params.Lim,
-		})
-		if err != nil {
-			return nil, err
-		}
-		rows = make([]db.ChangelogGlobalRow, len(dr))
-		for i := range dr {
-			rows[i] = db.ChangelogGlobalRow(dr[i])
-		}
-	case backward:
-		gr, err := s.svc.Q.ChangelogGlobalPrev(ctx, db.ChangelogGlobalPrevParams{
-			Field:    params.Field,
-			WithFrom: params.WithFrom, FromTs: params.FromTs,
-			WithTo: params.WithTo, ToTs: params.ToTs,
-			SeekTs: params.SeekTs, SeekDomain: params.SeekDomain, SeekField: params.SeekField,
-			Lim: params.Lim,
-		})
-		if err != nil {
-			return nil, err
-		}
-		rows = make([]db.ChangelogGlobalRow, len(gr))
-		for i := range gr {
-			rows[i] = db.ChangelogGlobalRow(gr[i])
-		}
-	default:
-		var err error
-		rows, err = s.svc.Q.ChangelogGlobal(ctx, *params)
-		if err != nil {
-			return nil, err
-		}
-	}
-	if backward { // ASC fetch → re-reverse into the ts-DESC feed order
-		reverseSlice(rows)
-	}
-	return rows, nil
-}
-
-func changelogItem(r *db.ChangelogGlobalRow) ChangelogItem {
+func changelogItem(r *postgres.ChangelogRow) ChangelogItem {
 	return ChangelogItem{
-		TS:       r.Ts.Time.UTC(),
+		TS:       r.Ts.UTC(),
 		Host:     r.Host,
 		Field:    r.Field,
-		OldValue: string(r.OldValue),
-		NewValue: string(r.NewValue),
+		OldValue: r.OldValue,
+		NewValue: r.NewValue,
 	}
 }
 

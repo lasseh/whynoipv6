@@ -73,6 +73,7 @@ func (q *Queries) ChangelogByCampaign(ctx context.Context, campaignID int32) ([]
 }
 
 const ChangelogByCountry = `-- name: ChangelogByCountry :many
+
 SELECT cl.ts, d.host, cl.field, cl.old_value, cl.new_value
 FROM changelog cl JOIN domain d ON d.id = cl.domain_id
 WHERE d.country_id = $1
@@ -88,6 +89,11 @@ type ChangelogByCountryRow struct {
 	NewValue Ipv6Status         `json:"new_value"`
 }
 
+// Changelog read surface (07 §4.8). The paginating global + per-domain
+// feeds are builder-built in internal/postgres/changeloglist.go (05-schema
+// §10.2 — one seek builder derives both walk directions); the scoped
+// country/campaign feeds below are capped to the latest-50 recent window
+// (OPEN-15 guardrail) and stay sqlc.
 func (q *Queries) ChangelogByCountry(ctx context.Context, countryID int32) ([]ChangelogByCountryRow, error) {
 	rows, err := q.db.Query(ctx, ChangelogByCountry, countryID)
 	if err != nil {
@@ -103,152 +109,6 @@ func (q *Queries) ChangelogByCountry(ctx context.Context, countryID int32) ([]Ch
 			&i.Field,
 			&i.OldValue,
 			&i.NewValue,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const ChangelogByDomain = `-- name: ChangelogByDomain :many
-SELECT cl.ts, d.host, cl.field, cl.old_value, cl.new_value, cl.domain_id
-FROM changelog cl JOIN domain d ON d.id = cl.domain_id
-WHERE cl.domain_id = $1
-  AND ($2::TEXT = '' OR cl.field = $2)
-  AND (NOT $3::BOOL OR cl.ts >= $4::TIMESTAMPTZ)
-  AND (NOT $5::BOOL OR cl.ts <= $6::TIMESTAMPTZ)
-  AND (NOT $7::BOOL OR (cl.ts, cl.domain_id, cl.field) < ($8::TIMESTAMPTZ, $9::BIGINT, $10::TEXT))
-ORDER BY cl.ts DESC, cl.domain_id DESC, cl.field DESC
-LIMIT $11
-`
-
-type ChangelogByDomainParams struct {
-	DomainID   int64              `json:"domain_id"`
-	Field      string             `json:"field"`
-	WithFrom   bool               `json:"with_from"`
-	FromTs     pgtype.Timestamptz `json:"from_ts"`
-	WithTo     bool               `json:"with_to"`
-	ToTs       pgtype.Timestamptz `json:"to_ts"`
-	WithSeek   bool               `json:"with_seek"`
-	SeekTs     pgtype.Timestamptz `json:"seek_ts"`
-	SeekDomain int64              `json:"seek_domain"`
-	SeekField  string             `json:"seek_field"`
-	Lim        int32              `json:"lim"`
-}
-
-type ChangelogByDomainRow struct {
-	Ts       pgtype.Timestamptz `json:"ts"`
-	Host     string             `json:"host"`
-	Field    string             `json:"field"`
-	OldValue Ipv6Status         `json:"old_value"`
-	NewValue Ipv6Status         `json:"new_value"`
-	DomainID int64              `json:"domain_id"`
-}
-
-func (q *Queries) ChangelogByDomain(ctx context.Context, arg ChangelogByDomainParams) ([]ChangelogByDomainRow, error) {
-	rows, err := q.db.Query(ctx, ChangelogByDomain,
-		arg.DomainID,
-		arg.Field,
-		arg.WithFrom,
-		arg.FromTs,
-		arg.WithTo,
-		arg.ToTs,
-		arg.WithSeek,
-		arg.SeekTs,
-		arg.SeekDomain,
-		arg.SeekField,
-		arg.Lim,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ChangelogByDomainRow{}
-	for rows.Next() {
-		var i ChangelogByDomainRow
-		if err := rows.Scan(
-			&i.Ts,
-			&i.Host,
-			&i.Field,
-			&i.OldValue,
-			&i.NewValue,
-			&i.DomainID,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const ChangelogByDomainPrev = `-- name: ChangelogByDomainPrev :many
-SELECT cl.ts, d.host, cl.field, cl.old_value, cl.new_value, cl.domain_id
-FROM changelog cl JOIN domain d ON d.id = cl.domain_id
-WHERE cl.domain_id = $1
-  AND ($2::TEXT = '' OR cl.field = $2)
-  AND (NOT $3::BOOL OR cl.ts >= $4::TIMESTAMPTZ)
-  AND (NOT $5::BOOL OR cl.ts <= $6::TIMESTAMPTZ)
-  AND (cl.ts, cl.domain_id, cl.field) > ($7::TIMESTAMPTZ, $8::BIGINT, $9::TEXT)
-ORDER BY cl.ts ASC, cl.domain_id ASC, cl.field ASC
-LIMIT $10
-`
-
-type ChangelogByDomainPrevParams struct {
-	DomainID   int64              `json:"domain_id"`
-	Field      string             `json:"field"`
-	WithFrom   bool               `json:"with_from"`
-	FromTs     pgtype.Timestamptz `json:"from_ts"`
-	WithTo     bool               `json:"with_to"`
-	ToTs       pgtype.Timestamptz `json:"to_ts"`
-	SeekTs     pgtype.Timestamptz `json:"seek_ts"`
-	SeekDomain int64              `json:"seek_domain"`
-	SeekField  string             `json:"seek_field"`
-	Lim        int32              `json:"lim"`
-}
-
-type ChangelogByDomainPrevRow struct {
-	Ts       pgtype.Timestamptz `json:"ts"`
-	Host     string             `json:"host"`
-	Field    string             `json:"field"`
-	OldValue Ipv6Status         `json:"old_value"`
-	NewValue Ipv6Status         `json:"new_value"`
-	DomainID int64              `json:"domain_id"`
-}
-
-func (q *Queries) ChangelogByDomainPrev(ctx context.Context, arg ChangelogByDomainPrevParams) ([]ChangelogByDomainPrevRow, error) {
-	rows, err := q.db.Query(ctx, ChangelogByDomainPrev,
-		arg.DomainID,
-		arg.Field,
-		arg.WithFrom,
-		arg.FromTs,
-		arg.WithTo,
-		arg.ToTs,
-		arg.SeekTs,
-		arg.SeekDomain,
-		arg.SeekField,
-		arg.Lim,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ChangelogByDomainPrevRow{}
-	for rows.Next() {
-		var i ChangelogByDomainPrevRow
-		if err := rows.Scan(
-			&i.Ts,
-			&i.Host,
-			&i.Field,
-			&i.OldValue,
-			&i.NewValue,
-			&i.DomainID,
 		); err != nil {
 			return nil, err
 		}
@@ -302,151 +162,6 @@ func (q *Queries) ChangelogCampaignScope(ctx context.Context) ([]ChangelogCampai
 			&i.Field,
 			&i.OldValue,
 			&i.NewValue,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const ChangelogGlobal = `-- name: ChangelogGlobal :many
-
-SELECT cl.ts, d.host, cl.field, cl.old_value, cl.new_value, cl.domain_id
-FROM changelog cl JOIN domain d ON d.id = cl.domain_id
-WHERE ($1::TEXT = '' OR cl.field = $1)
-  AND (NOT $2::BOOL OR cl.ts >= $3::TIMESTAMPTZ)
-  AND (NOT $4::BOOL OR cl.ts <= $5::TIMESTAMPTZ)
-  AND (NOT $6::BOOL OR (cl.ts, cl.domain_id, cl.field) < ($7::TIMESTAMPTZ, $8::BIGINT, $9::TEXT))
-ORDER BY cl.ts DESC, cl.domain_id DESC, cl.field DESC
-LIMIT $10
-`
-
-type ChangelogGlobalParams struct {
-	Field      string             `json:"field"`
-	WithFrom   bool               `json:"with_from"`
-	FromTs     pgtype.Timestamptz `json:"from_ts"`
-	WithTo     bool               `json:"with_to"`
-	ToTs       pgtype.Timestamptz `json:"to_ts"`
-	WithSeek   bool               `json:"with_seek"`
-	SeekTs     pgtype.Timestamptz `json:"seek_ts"`
-	SeekDomain int64              `json:"seek_domain"`
-	SeekField  string             `json:"seek_field"`
-	Lim        int32              `json:"lim"`
-}
-
-type ChangelogGlobalRow struct {
-	Ts       pgtype.Timestamptz `json:"ts"`
-	Host     string             `json:"host"`
-	Field    string             `json:"field"`
-	OldValue Ipv6Status         `json:"old_value"`
-	NewValue Ipv6Status         `json:"new_value"`
-	DomainID int64              `json:"domain_id"`
-}
-
-// Changelog read surface (07 §4.8). Global + per-domain feeds paginate on
-// the (ts, domain_id, field) DESC keyset; the scoped country/campaign feeds
-// are capped to the latest-50 recent window (OPEN-15 guardrail).
-func (q *Queries) ChangelogGlobal(ctx context.Context, arg ChangelogGlobalParams) ([]ChangelogGlobalRow, error) {
-	rows, err := q.db.Query(ctx, ChangelogGlobal,
-		arg.Field,
-		arg.WithFrom,
-		arg.FromTs,
-		arg.WithTo,
-		arg.ToTs,
-		arg.WithSeek,
-		arg.SeekTs,
-		arg.SeekDomain,
-		arg.SeekField,
-		arg.Lim,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ChangelogGlobalRow{}
-	for rows.Next() {
-		var i ChangelogGlobalRow
-		if err := rows.Scan(
-			&i.Ts,
-			&i.Host,
-			&i.Field,
-			&i.OldValue,
-			&i.NewValue,
-			&i.DomainID,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const ChangelogGlobalPrev = `-- name: ChangelogGlobalPrev :many
-SELECT cl.ts, d.host, cl.field, cl.old_value, cl.new_value, cl.domain_id
-FROM changelog cl JOIN domain d ON d.id = cl.domain_id
-WHERE ($1::TEXT = '' OR cl.field = $1)
-  AND (NOT $2::BOOL OR cl.ts >= $3::TIMESTAMPTZ)
-  AND (NOT $4::BOOL OR cl.ts <= $5::TIMESTAMPTZ)
-  AND (cl.ts, cl.domain_id, cl.field) > ($6::TIMESTAMPTZ, $7::BIGINT, $8::TEXT)
-ORDER BY cl.ts ASC, cl.domain_id ASC, cl.field ASC
-LIMIT $9
-`
-
-type ChangelogGlobalPrevParams struct {
-	Field      string             `json:"field"`
-	WithFrom   bool               `json:"with_from"`
-	FromTs     pgtype.Timestamptz `json:"from_ts"`
-	WithTo     bool               `json:"with_to"`
-	ToTs       pgtype.Timestamptz `json:"to_ts"`
-	SeekTs     pgtype.Timestamptz `json:"seek_ts"`
-	SeekDomain int64              `json:"seek_domain"`
-	SeekField  string             `json:"seek_field"`
-	Lim        int32              `json:"lim"`
-}
-
-type ChangelogGlobalPrevRow struct {
-	Ts       pgtype.Timestamptz `json:"ts"`
-	Host     string             `json:"host"`
-	Field    string             `json:"field"`
-	OldValue Ipv6Status         `json:"old_value"`
-	NewValue Ipv6Status         `json:"new_value"`
-	DomainID int64              `json:"domain_id"`
-}
-
-// The §3.2 prev_cursor (backward) variants.
-func (q *Queries) ChangelogGlobalPrev(ctx context.Context, arg ChangelogGlobalPrevParams) ([]ChangelogGlobalPrevRow, error) {
-	rows, err := q.db.Query(ctx, ChangelogGlobalPrev,
-		arg.Field,
-		arg.WithFrom,
-		arg.FromTs,
-		arg.WithTo,
-		arg.ToTs,
-		arg.SeekTs,
-		arg.SeekDomain,
-		arg.SeekField,
-		arg.Lim,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ChangelogGlobalPrevRow{}
-	for rows.Next() {
-		var i ChangelogGlobalPrevRow
-		if err := rows.Scan(
-			&i.Ts,
-			&i.Host,
-			&i.Field,
-			&i.OldValue,
-			&i.NewValue,
-			&i.DomainID,
 		); err != nil {
 			return nil, err
 		}

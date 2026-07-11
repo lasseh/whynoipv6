@@ -56,32 +56,6 @@ SELECT id FROM asn WHERE number = $1;
 -- name: ASNByNumber :one
 SELECT number, name, count_total, count_v6 FROM asn WHERE number = @number;
 
--- name: ASNLeaderboardByV6 :many
-SELECT number, name, count_total, count_v6 FROM asn
-WHERE (@q::TEXT = '' OR name ILIKE '%' || @q || '%')
-  AND (NOT @with_seek::BOOL OR (count_v6, number) < (@seek_count::INT, @seek_number::BIGINT))
-ORDER BY count_v6 DESC, number DESC
-LIMIT @lim;
-
--- name: ASNLeaderboardByTotal :many
-SELECT number, name, count_total, count_v6 FROM asn
-WHERE (@q::TEXT = '' OR name ILIKE '%' || @q || '%')
-  AND (NOT @with_seek::BOOL OR (count_total, number) < (@seek_count::INT, @seek_number::BIGINT))
-ORDER BY count_total DESC, number DESC
-LIMIT @lim;
-
--- The §3.2 prev_cursor (backward) variants: flipped comparison + order;
--- the handler re-reverses rows for display.
--- name: ASNLeaderboardByV6Prev :many
-SELECT number, name, count_total, count_v6 FROM asn
-WHERE (@q::TEXT = '' OR name ILIKE '%' || @q || '%')
-  AND (count_v6, number) > (@seek_count::INT, @seek_number::BIGINT)
-ORDER BY count_v6 ASC, number ASC
-LIMIT @lim;
-
--- name: ASNLeaderboardByTotalPrev :many
-SELECT number, name, count_total, count_v6 FROM asn
-WHERE (@q::TEXT = '' OR name ILIKE '%' || @q || '%')
-  AND (count_total, number) > (@seek_count::INT, @seek_number::BIGINT)
-ORDER BY count_total ASC, number ASC
-LIMIT @lim;
+-- The (count, number) leaderboard walks are builder-built in
+-- internal/postgres/asnlist.go (05-schema §10.2 — one seek builder derives
+-- the sort column and both walk directions).

@@ -13,7 +13,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/lasseh/whynoipv6/internal/domain"
-	db "github.com/lasseh/whynoipv6/internal/postgres/db"
+	"github.com/lasseh/whynoipv6/internal/postgres"
 )
 
 // feedWindow is the fixed feed contract: the latest 50 transitions, no
@@ -173,10 +173,11 @@ func (s *Server) writeJSONFeed(w http.ResponseWriter, r *http.Request, scope *fe
 // Scope loaders — each returns the latest-50 window for its scope.
 
 func (s *Server) globalFeedScope(r *http.Request) (*feedScope, error) {
-	rows, err := s.svc.Q.ChangelogGlobal(r.Context(), db.ChangelogGlobalParams{Lim: feedWindow})
+	rows, err := postgres.ListChangelog(r.Context(), s.svc.Pool, &postgres.ChangelogFilter{}, nil, feedWindow, false)
 	if err != nil {
 		return nil, err
 	}
+	rows = rows[:min(len(rows), feedWindow)] // drop the builder's N+1 probe row
 	items := make([]ChangelogItem, len(rows))
 	for i := range rows {
 		items[i] = changelogItem(&rows[i])
@@ -203,14 +204,16 @@ func (s *Server) domainFeedScope(w http.ResponseWriter, r *http.Request) (*feedS
 		InternalError(w, r, err)
 		return nil, false
 	}
-	rows, err := s.svc.Q.ChangelogByDomain(r.Context(), db.ChangelogByDomainParams{DomainID: d.ID, Lim: feedWindow})
+	rows, err := postgres.ListChangelog(r.Context(), s.svc.Pool,
+		&postgres.ChangelogFilter{DomainID: &d.ID}, nil, feedWindow, false)
 	if err != nil {
 		InternalError(w, r, err)
 		return nil, false
 	}
+	rows = rows[:min(len(rows), feedWindow)] // drop the builder's N+1 probe row
 	items := make([]ChangelogItem, len(rows))
 	for i := range rows {
-		items[i] = changelogItem((*db.ChangelogGlobalRow)(&rows[i]))
+		items[i] = changelogItem(&rows[i])
 	}
 	return &feedScope{
 		Title:   "WhyNoIPv6 — " + host,

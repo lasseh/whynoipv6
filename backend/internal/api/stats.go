@@ -303,7 +303,7 @@ func (s *Server) getASNStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rows, err := s.svc.Q.StatsASNRange(r.Context(), db.StatsASNRangeParams{
-		AsnID: id, FromDay: pgTS(from, true), ToDay: pgTS(to, true),
+		AsnID: id, FromDay: pgTS(from), ToDay: pgTS(to),
 	})
 	if err != nil {
 		InternalError(w, r, err)
