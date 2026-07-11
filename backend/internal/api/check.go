@@ -247,8 +247,8 @@ func (s *Server) dedupeEnvelope(r *http.Request, row *db.DomainConfirmedRow, hos
 // confirmedBlock maps the domain row to the §5.1.3 confirmed object; nil
 // when nothing is confirmed yet (all six statuses NULL).
 func confirmedBlock(row *db.DomainConfirmedRow) *CheckConfirmed {
-	if row.BaseStatus == nil && row.WwwStatus == nil && row.NsStatus == nil &&
-		row.MxStatus == nil && row.ConnStatus == nil && row.ResourcesStatus == nil {
+	sextet := row.Confirmed()
+	if sextet.AllNull() {
 		return nil
 	}
 	flags := row.ClassFlags
@@ -259,15 +259,8 @@ func confirmedBlock(row *db.DomainConfirmedRow) *CheckConfirmed {
 		Classification: string(row.Classification),
 		ClassFlags:     flags,
 		Gold:           row.Gold,
-		Status: StatusBlock{
-			Base:      statusObj(statusPtr(row.BaseStatus), pgTimePtr(row.BaseSince)),
-			WWW:       statusObj(statusPtr(row.WwwStatus), pgTimePtr(row.WwwSince)),
-			NS:        statusObj(statusPtr(row.NsStatus), pgTimePtr(row.NsSince)),
-			MX:        statusObj(statusPtr(row.MxStatus), pgTimePtr(row.MxSince)),
-			Conn:      statusObj(statusPtr(row.ConnStatus), pgTimePtr(row.ConnSince)),
-			Resources: statusObj(statusPtr(row.ResourcesStatus), pgTimePtr(row.ResourcesSince)),
-		},
-		AsOf: pgTimePtr(row.LastCheckedAt),
+		Status:         statusBlockTyped(&sextet),
+		AsOf:           pgTimePtr(row.LastCheckedAt),
 	}
 }
 

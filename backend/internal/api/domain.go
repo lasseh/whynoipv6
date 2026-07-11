@@ -79,27 +79,44 @@ func statusObj(value *string, since *time.Time) StatusObject {
 	return StatusObject{Value: value, Since: since}
 }
 
+// statusBlockOf assembles the §4.1 block from wire pairs in canonical
+// dimension order: base, www, ns, mx, conn, resources.
+func statusBlockOf(value [6]*string, since [6]*time.Time) StatusBlock {
+	return StatusBlock{
+		Base:      statusObj(value[0], since[0]),
+		WWW:       statusObj(value[1], since[1]),
+		NS:        statusObj(value[2], since[2]),
+		MX:        statusObj(value[3], since[3]),
+		Conn:      statusObj(value[4], since[4]),
+		Resources: statusObj(value[5], since[5]),
+	}
+}
+
+// statusBlockTyped adapts a sqlc confirmed sextet onto statusBlockOf.
+func statusBlockTyped(c *db.ConfirmedSextet) StatusBlock {
+	var value [6]*string
+	var since [6]*time.Time
+	for i := range c.Status {
+		value[i] = statusPtr(c.Status[i])
+		since[i] = pgTimePtr(c.Since[i])
+	}
+	return statusBlockOf(value, since)
+}
+
 func summaryFromRow(r *postgres.DomainRow) DomainSummary {
 	flags := r.ClassFlags
 	if flags == nil {
 		flags = []string{}
 	}
 	s := DomainSummary{
-		Host:           r.Host,
-		Rank:           r.Rank,
-		Kind:           r.Kind,
-		Parent:         r.Parent,
-		Classification: r.Classification,
-		ClassFlags:     flags,
-		Gold:           r.Gold,
-		Status: StatusBlock{
-			Base:      statusObj(r.BaseStatus, r.BaseSince),
-			WWW:       statusObj(r.WWWStatus, r.WWWSince),
-			NS:        statusObj(r.NSStatus, r.NSSince),
-			MX:        statusObj(r.MXStatus, r.MXSince),
-			Conn:      statusObj(r.ConnStatus, r.ConnSince),
-			Resources: statusObj(r.ResStatus, r.ResSince),
-		},
+		Host:            r.Host,
+		Rank:            r.Rank,
+		Kind:            r.Kind,
+		Parent:          r.Parent,
+		Classification:  r.Classification,
+		ClassFlags:      flags,
+		Gold:            r.Gold,
+		Status:          statusBlockOf(r.Confirmed()),
 		TLD:             r.TLD,
 		Country:         CountryRef{Code: r.CountryCode, Name: r.CountryName},
 		ASN:             ASNRef{Number: r.ASNNumber, Name: r.ASNName},
@@ -593,6 +610,7 @@ func (s *Server) getDomain(w http.ResponseWriter, r *http.Request) {
 	if flags == nil {
 		flags = []string{}
 	}
+	sextet := row.Confirmed()
 	d := DomainDetail{
 		Host:           row.Host,
 		Rank:           row.Rank,
@@ -601,14 +619,7 @@ func (s *Server) getDomain(w http.ResponseWriter, r *http.Request) {
 		Classification: string(row.Classification),
 		ClassFlags:     flags,
 		Gold:           row.Gold,
-		Status: StatusBlock{
-			Base:      statusObj(statusPtr(row.BaseStatus), pgTimePtr(row.BaseSince)),
-			WWW:       statusObj(statusPtr(row.WwwStatus), pgTimePtr(row.WwwSince)),
-			NS:        statusObj(statusPtr(row.NsStatus), pgTimePtr(row.NsSince)),
-			MX:        statusObj(statusPtr(row.MxStatus), pgTimePtr(row.MxSince)),
-			Conn:      statusObj(statusPtr(row.ConnStatus), pgTimePtr(row.ConnSince)),
-			Resources: statusObj(statusPtr(row.ResourcesStatus), pgTimePtr(row.ResourcesSince)),
-		},
+		Status:         statusBlockTyped(&sextet),
 		Informational: Informational{
 			DNSSEC:      maskObservation(row.DnssecObserved, false),
 			PTR:         maskObservation(row.PtrObserved, true),

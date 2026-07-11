@@ -86,6 +86,13 @@ type DomainRow struct {
 	LastCheckedAt  *time.Time `db:"last_checked_at"`
 }
 
+// Confirmed returns the six confirmed (status, since) pairs in canonical
+// dimension order: base, www, ns, mx, conn, resources.
+func (r *DomainRow) Confirmed() ([6]*string, [6]*time.Time) {
+	return [6]*string{r.BaseStatus, r.WWWStatus, r.NSStatus, r.MXStatus, r.ConnStatus, r.ResStatus},
+		[6]*time.Time{r.BaseSince, r.WWWSince, r.NSSince, r.MXSince, r.ConnSince, r.ResSince}
+}
+
 const domainRowColumns = `d.id, d.host, d.rank, d.kind::text AS kind, p.host AS parent,
 d.classification::text AS classification, d.class_flags, d.gold,
 d.base_status::text AS base_status, d.base_since,
