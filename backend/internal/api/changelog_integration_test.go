@@ -165,6 +165,34 @@ func TestChangelog(t *testing.T) {
 	if resp := getJSON(t, srv.URL+"/campaigns/"+campaignUUID+"/domains/d1.example/changelog", &problem); resp.StatusCode != 404 {
 		t.Errorf("non-member feed: %d, want 404", resp.StatusCode)
 	}
+
+	// ?scope=campaign: campaign-member domains only (d3's 2 rows, never d5's
+	// conn row), recent-window envelope with null cursors.
+	var scoped struct {
+		Items []struct {
+			Host string `json:"host"`
+		} `json:"items"`
+		Page struct {
+			NextCursor *string `json:"next_cursor"`
+			PrevCursor *string `json:"prev_cursor"`
+			HasMore    bool    `json:"has_more"`
+		} `json:"page"`
+	}
+	getJSON(t, srv.URL+"/changelog?scope=campaign", &scoped)
+	if len(scoped.Items) != 2 {
+		t.Errorf("scope=campaign rows = %d, want 2 (member d3 only)", len(scoped.Items))
+	}
+	for _, it := range scoped.Items {
+		if it.Host != "d3.example" {
+			t.Errorf("scope=campaign leaked non-member host %s", it.Host)
+		}
+	}
+	if scoped.Page.NextCursor != nil || scoped.Page.PrevCursor != nil || scoped.Page.HasMore {
+		t.Errorf("scope=campaign page = %+v, want null cursors / has_more=false", scoped.Page)
+	}
+	if resp := getJSON(t, srv.URL+"/changelog?scope=bogus", &problem); resp.StatusCode != 422 {
+		t.Errorf("bad scope: %d, want 422", resp.StatusCode)
+	}
 }
 
 // TestHistory (P4.14 / 07 §4.9): changelog-reconstructed trajectory — the

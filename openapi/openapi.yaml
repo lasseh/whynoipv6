@@ -641,7 +641,13 @@ paths:
       operationId: listChangelog
       tags: [changelog]
       summary: Global recent-transitions feed
+      description: >-
+        With `scope=campaign` the feed is restricted to transitions of domains
+        that are members of any campaign, served as the fixed latest-50 recent
+        window (no pagination — `page` cursors are null); the other query
+        parameters are ignored in that mode.
       parameters:
+        - $ref: "#/components/parameters/changelogScope"
         - $ref: "#/components/parameters/changelogField"
         - $ref: "#/components/parameters/changelogFrom"
         - $ref: "#/components/parameters/changelogTo"
@@ -934,6 +940,11 @@ components:
       name: format
       in: query
       schema: { type: string, enum: [json, csv], default: json }
+    changelogScope:
+      name: scope
+      in: query
+      description: Restrict the feed to campaign-member domains (recent-window capped).
+      schema: { type: string, enum: [campaign] }
     changelogField:
       name: field
       in: query

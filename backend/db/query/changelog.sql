@@ -38,6 +38,24 @@ JOIN campaign_domain cd ON cd.domain_id = cl.domain_id AND cd.campaign_id = @cam
 ORDER BY cl.ts DESC, cl.domain_id DESC, cl.field DESC
 LIMIT 50;
 
+-- The ?scope=campaign global feed (07 §4.8): transitions of domains in ANY
+-- campaign. Driven from the bounded campaign_domain set via a lateral read
+-- of the (domain_id, ts, field) PK — never a sparse probe of the global ts
+-- index. Same latest-50 recent-window cap as the other scoped feeds.
+-- name: ChangelogCampaignScope :many
+SELECT sub.ts, d.host, sub.field, sub.old_value, sub.new_value
+FROM (SELECT DISTINCT domain_id FROM campaign_domain) m
+CROSS JOIN LATERAL (
+  SELECT cl.ts, cl.domain_id, cl.field, cl.old_value, cl.new_value
+  FROM changelog cl
+  WHERE cl.domain_id = m.domain_id
+  ORDER BY cl.ts DESC, cl.field DESC
+  LIMIT 50
+) sub
+JOIN domain d ON d.id = sub.domain_id
+ORDER BY sub.ts DESC, sub.domain_id DESC, sub.field DESC
+LIMIT 50;
+
 -- name: CampaignHasMember :one
 SELECT EXISTS(
   SELECT 1 FROM campaign_domain WHERE campaign_id = @campaign_id AND domain_id = @domain_id

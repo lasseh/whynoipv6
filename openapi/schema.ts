@@ -674,7 +674,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Global recent-transitions feed */
+        /**
+         * Global recent-transitions feed
+         * @description With `scope=campaign` the feed is restricted to transitions of domains that are members of any campaign, served as the fixed latest-50 recent window (no pagination — `page` cursors are null); the other query parameters are ignored in that mode.
+         */
         get: operations["listChangelog"];
         put?: never;
         post?: never;
@@ -1511,6 +1514,8 @@ export interface components {
         /** @description Sparse fieldset (comma-separated top-level keys). */
         fields: string;
         format: "json" | "csv";
+        /** @description Restrict the feed to campaign-member domains (recent-window capped). */
+        changelogScope: "campaign";
         changelogField: components["schemas"]["Dimension"];
         /** @description Window start (YYYY-MM-DD or RFC 3339). */
         changelogFrom: string;
@@ -2613,6 +2618,8 @@ export interface operations {
     listChangelog: {
         parameters: {
             query?: {
+                /** @description Restrict the feed to campaign-member domains (recent-window capped). */
+                scope?: components["parameters"]["changelogScope"];
                 field?: components["parameters"]["changelogField"];
                 /** @description Window start (YYYY-MM-DD or RFC 3339). */
                 from?: components["parameters"]["changelogFrom"];

@@ -51,6 +51,11 @@ type Querier interface {
 	ChangelogByCountry(ctx context.Context, countryID int32) ([]ChangelogByCountryRow, error)
 	ChangelogByDomain(ctx context.Context, arg ChangelogByDomainParams) ([]ChangelogByDomainRow, error)
 	ChangelogByDomainPrev(ctx context.Context, arg ChangelogByDomainPrevParams) ([]ChangelogByDomainPrevRow, error)
+	// The ?scope=campaign global feed (07 §4.8): transitions of domains in ANY
+	// campaign. Driven from the bounded campaign_domain set via a lateral read
+	// of the (domain_id, ts, field) PK — never a sparse probe of the global ts
+	// index. Same latest-50 recent-window cap as the other scoped feeds.
+	ChangelogCampaignScope(ctx context.Context) ([]ChangelogCampaignScopeRow, error)
 	// Changelog read surface (07 §4.8). Global + per-domain feeds paginate on
 	// the (ts, domain_id, field) DESC keyset; the scoped country/campaign feeds
 	// are capped to the latest-50 recent window (OPEN-15 guardrail).

@@ -74,9 +74,22 @@ func parseChangelogWindow(q url.Values) (changelogWindow, error) {
 }
 
 // listChangelog is GET /changelog — the global recent-transitions feed,
-// keyset on (ts, domain_id, field) DESC over idx_changelog_ts.
+// keyset on (ts, domain_id, field) DESC over idx_changelog_ts. ?scope=campaign
+// restricts to campaign-member domains as a capped recent window (07 §4.8).
 func (s *Server) listChangelog(w http.ResponseWriter, r *http.Request) {
-	s.serveChangelogFeed(w, r, nil)
+	switch r.URL.Query().Get("scope") {
+	case "":
+		s.serveChangelogFeed(w, r, nil)
+	case "campaign":
+		rows, err := s.svc.Q.ChangelogCampaignScope(r.Context())
+		if err != nil {
+			InternalError(w, r, err)
+			return
+		}
+		s.writeRecentWindow(w, r, changelogScopeItems(rows))
+	default:
+		ValidationError(w, r, []FieldError{{Field: "scope", Reason: "must be campaign"}})
+	}
 }
 
 // listDomainChangelog is GET /domains/{host}/changelog (native PK read).
@@ -371,6 +384,17 @@ func changelogWindowItems(rows []db.ChangelogByCountryRow) []ChangelogItem {
 }
 
 func changelogCampaignItems(rows []db.ChangelogByCampaignRow) []ChangelogItem {
+	items := make([]ChangelogItem, len(rows))
+	for i := range rows {
+		items[i] = ChangelogItem{
+			TS: rows[i].Ts.Time.UTC(), Host: rows[i].Host, Field: rows[i].Field,
+			OldValue: string(rows[i].OldValue), NewValue: string(rows[i].NewValue),
+		}
+	}
+	return items
+}
+
+func changelogScopeItems(rows []db.ChangelogCampaignScopeRow) []ChangelogItem {
 	items := make([]ChangelogItem, len(rows))
 	for i := range rows {
 		items[i] = ChangelogItem{
