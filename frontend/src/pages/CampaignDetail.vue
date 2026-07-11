@@ -2,9 +2,8 @@
 import { ref } from 'vue'
 import { useRoute } from 'vue-router'
 
-import Header from '@/partials/Header.vue'
-import PageIllustration from '@/partials/PageIllustration.vue'
-import Footer from '@/partials/Footer.vue'
+import PageShell from '@/components/PageShell.vue'
+import Breadcrumb from '@/components/Breadcrumb.vue'
 
 import CampaignDomainTable from '@/components/CampaignDomainTable.vue'
 import ChangelogTable from '@/components/ChangelogTable.vue'
@@ -67,140 +66,76 @@ const goNext = () => {
 </script>
 
 <template>
-  <div class="flex flex-col min-h-screen overflow-hidden">
-    <!-- Site header -->
-    <Header />
+  <PageShell>
+    <!-- Page sections -->
+    <section class="relative">
+      <div class="max-w-6xl mx-auto px-4 sm:px-6">
+        <div class="pt-20 pb-4 md:pt-24 md:pb-4">
+          <Breadcrumb :trail="[{ label: 'Campaigns', to: '/campaigns' }]" />
 
-    <!-- Page content -->
-    <main class="grow">
-      <!-- Page illustration -->
-      <div class="relative max-w-6xl mx-auto h-0 pointer-events-none" aria-hidden="true">
-        <PageIllustration />
+          <!-- Campaign not found -->
+          <div v-if="notFound" class="flex justify-center py-16">
+            <div class="text-center">
+              <div class="text-xl font-medium">Campaign not found</div>
+            </div>
+          </div>
+
+          <template v-else>
+            <header ref="anchorTop" class="mb-8">
+              <!-- Title and excerpt -->
+              <div class="text-center md:text-left">
+                <h1 class="h2 mb-4">{{ campaign?.name ?? '' }}</h1>
+                <p class="text-xl text-gray-400">{{ campaign?.description ?? '' }}</p>
+              </div>
+            </header>
+
+            <div class="flex justify-between items-center">
+              <div>
+                <RatingBadge
+                  :percent="campaign?.adoption?.v6_ready_percent ?? null"
+                  size="text-base"
+                />
+              </div>
+              <div>
+                <div class="text-sm font-medium text-zinc-500 mb-2">
+                  {{ meta?.count ?? '—' }} Domains
+                </div>
+                <div class="text-sm font-medium text-zinc-500 mb-2">
+                  {{ campaign?.adoption?.v6_ready_percent ?? 0 }}% V6 Ready
+                </div>
+              </div>
+            </div>
+            <div class="mt-3 mb-4">
+              <ProgressBar :percent="campaign?.adoption?.v6_ready_percent ?? null" height="h-4" />
+            </div>
+
+            <!-- CampaignDomains -->
+            <div>
+              <!-- Error state (§6.3) -->
+              <div
+                v-if="error"
+                class="bg-zinc-800/50 border border-zinc-700 rounded-sm shadow-lg p-5 text-center"
+              >
+                <div class="text-xl font-medium">{{ error.title }}</div>
+                <p v-if="error.detail" class="text-gray-400 mt-2">{{ error.detail }}</p>
+              </div>
+              <CampaignDomainTable v-else :domains="items" :uuid="uuid" />
+            </div>
+
+            <!-- Pagination -->
+            <div class="mt-6">
+              <Pagination :page="page" @previous="goPrevious" @next="goNext" />
+            </div>
+          </template>
+        </div>
       </div>
 
-      <!-- Page sections -->
-      <section class="relative">
-        <div class="max-w-6xl mx-auto px-4 sm:px-6">
-          <div class="pt-20 pb-4 md:pt-24 md:pb-4">
-            <!-- Breadcrumb -->
-            <div class="mb-4">
-              <nav class="flex" aria-label="Breadcrumb">
-                <ol class="inline-flex items-center space-x-1 md:space-x-3">
-                  <li class="inline-flex items-center">
-                    <router-link
-                      to="/"
-                      class="inline-flex items-center text-sm font-medium text-gray-400 hover:text-white"
-                    >
-                      <svg
-                        class="w-3 h-3 mr-2.5"
-                        aria-hidden="true"
-                        xmlns="http://www.w3.org/2000/svg"
-                        fill="currentColor"
-                        viewBox="0 0 20 20"
-                      >
-                        <path
-                          d="m19.707 9.293-2-2-7-7a1 1 0 0 0-1.414 0l-7 7-2 2a1 1 0 0 0 1.414 1.414L2 10.414V18a2 2 0 0 0 2 2h3a1 1 0 0 0 1-1v-4a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v4a1 1 0 0 0 1 1h3a2 2 0 0 0 2-2v-7.586l.293.293a1 1 0 0 0 1.414-1.414Z"
-                        />
-                      </svg>
-                      Home
-                    </router-link>
-                  </li>
-                  <li aria-current="page">
-                    <div class="flex items-center">
-                      <svg
-                        class="w-3 h-3 text-gray-400 mx-1"
-                        aria-hidden="true"
-                        xmlns="http://www.w3.org/2000/svg"
-                        fill="none"
-                        viewBox="0 0 6 10"
-                      >
-                        <path
-                          stroke="currentColor"
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          stroke-width="2"
-                          d="m1 9 4-4-4-4"
-                        />
-                      </svg>
-                      <router-link
-                        to="/campaigns"
-                        class="ml-1 text-sm font-medium md:ml-2 text-gray-400 hover:text-white"
-                        >Campaigns</router-link
-                      >
-                    </div>
-                  </li>
-                </ol>
-              </nav>
-            </div>
-            <!-- End breadcrumb -->
-
-            <!-- Campaign not found -->
-            <div v-if="notFound" class="flex justify-center py-16">
-              <div class="text-center">
-                <div class="text-xl font-medium">Campaign not found</div>
-              </div>
-            </div>
-
-            <template v-else>
-              <header ref="anchorTop" class="mb-8">
-                <!-- Title and excerpt -->
-                <div class="text-center md:text-left">
-                  <h1 class="h2 mb-4">{{ campaign?.name ?? '' }}</h1>
-                  <p class="text-xl text-gray-400">{{ campaign?.description ?? '' }}</p>
-                </div>
-              </header>
-
-              <div class="flex justify-between items-center">
-                <div>
-                  <RatingBadge
-                    :percent="campaign?.adoption?.v6_ready_percent ?? null"
-                    size="text-base"
-                  />
-                </div>
-                <div>
-                  <div class="text-sm font-medium text-zinc-500 mb-2">
-                    {{ meta?.count ?? '—' }} Domains
-                  </div>
-                  <div class="text-sm font-medium text-zinc-500 mb-2">
-                    {{ campaign?.adoption?.v6_ready_percent ?? 0 }}% V6 Ready
-                  </div>
-                </div>
-              </div>
-              <div class="mt-3 mb-4">
-                <ProgressBar :percent="campaign?.adoption?.v6_ready_percent ?? null" height="h-4" />
-              </div>
-
-              <!-- CampaignDomains -->
-              <div>
-                <!-- Error state (§6.3) -->
-                <div
-                  v-if="error"
-                  class="bg-zinc-800/50 border border-zinc-700 rounded-sm shadow-lg p-5 text-center"
-                >
-                  <div class="text-xl font-medium">{{ error.title }}</div>
-                  <p v-if="error.detail" class="text-gray-400 mt-2">{{ error.detail }}</p>
-                </div>
-                <CampaignDomainTable v-else :domains="items" :uuid="uuid" />
-              </div>
-
-              <!-- Pagination -->
-              <div class="mt-6">
-                <Pagination :page="page" @previous="goPrevious" @next="goNext" />
-              </div>
-            </template>
-          </div>
-        </div>
-
-        <div v-if="!notFound">
-          <ChangelogTable
-            :changelogs="campaignChangelog"
-            :domain-route="(h: string) => ({ name: 'CampaignDomain', params: { uuid, domain: h } })"
-          />
-        </div>
-      </section>
-    </main>
-
-    <!-- Site footer -->
-    <Footer />
-  </div>
+      <div v-if="!notFound">
+        <ChangelogTable
+          :changelogs="campaignChangelog"
+          :domain-route="(h: string) => ({ name: 'CampaignDomain', params: { uuid, domain: h } })"
+        />
+      </div>
+    </section>
+  </PageShell>
 </template>

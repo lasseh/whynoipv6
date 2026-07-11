@@ -2,9 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 
-import Header from '@/partials/Header.vue'
-import PageIllustration from '@/partials/PageIllustration.vue'
-import Footer from '@/partials/Footer.vue'
+import PageShell from '@/components/PageShell.vue'
 
 import ChangelogTable from '@/components/ChangelogTable.vue'
 import Pagination from '@/components/Pagination.vue'
@@ -60,67 +58,53 @@ const goNext = () => {
 </script>
 
 <template>
-  <div class="flex flex-col min-h-screen overflow-hidden">
-    <!-- Site header -->
-    <Header />
+  <PageShell>
+    <!-- Page sections -->
+    <section class="relative">
+      <div class="max-w-6xl mx-auto px-4 sm:px-6">
+        <div class="pt-32 pb-4 md:pt-32 md:pb-4">
+          <header ref="anchorTop" class="mb-8">
+            <!-- Title and excerpt -->
+            <div class="text-center md:text-left">
+              <p class="text-md text-gray-400">Live changelog from the crawler</p>
+            </div>
+          </header>
 
-    <!-- Page content -->
-    <main class="grow">
-      <!-- Page illustration -->
-      <div class="relative max-w-6xl mx-auto h-0 pointer-events-none" aria-hidden="true">
-        <PageIllustration />
-      </div>
-
-      <!-- Page sections -->
-      <section class="relative">
-        <div class="max-w-6xl mx-auto px-4 sm:px-6">
-          <div class="pt-32 pb-4 md:pt-32 md:pb-4">
-            <header ref="anchorTop" class="mb-8">
-              <!-- Title and excerpt -->
-              <div class="text-center md:text-left">
-                <p class="text-md text-gray-400">Live changelog from the crawler</p>
-              </div>
-            </header>
-
-            <div class="mb-4">
-              <div class="w-full flex flex-wrap -space-x-px">
-                <button
-                  :class="[
-                    'btn grow border-zinc-700 hover:bg-zinc-800/20 rounded-none first:rounded-l last:rounded-r',
-                    queryFilter === 'tranco'
-                      ? 'text-fuchsia-600 bg-zinc-500/20'
-                      : 'text-slate-300 bg-zinc-700/20',
-                  ]"
-                  @click="setFilter('filter', 'tranco')"
-                >
-                  Tranco
-                </button>
-                <button
-                  :class="[
-                    'btn grow border-zinc-700 hover:bg-zinc-800/20 rounded-none first:rounded-l last:rounded-r',
-                    queryFilter === 'campaign'
-                      ? 'text-fuchsia-600 bg-zinc-500/20'
-                      : 'text-slate-300 bg-zinc-700/20',
-                  ]"
-                  @click="setFilter('filter', 'campaign')"
-                >
-                  Campaigns
-                </button>
-              </div>
+          <div class="mb-4">
+            <div class="w-full flex flex-wrap -space-x-px">
+              <button
+                :class="[
+                  'btn grow border-zinc-700 hover:bg-zinc-800/20 rounded-none first:rounded-l last:rounded-r',
+                  queryFilter === 'tranco'
+                    ? 'text-fuchsia-600 bg-zinc-500/20'
+                    : 'text-slate-300 bg-zinc-700/20',
+                ]"
+                @click="setFilter('filter', 'tranco')"
+              >
+                Tranco
+              </button>
+              <button
+                :class="[
+                  'btn grow border-zinc-700 hover:bg-zinc-800/20 rounded-none first:rounded-l last:rounded-r',
+                  queryFilter === 'campaign'
+                    ? 'text-fuchsia-600 bg-zinc-500/20'
+                    : 'text-slate-300 bg-zinc-700/20',
+                ]"
+                @click="setFilter('filter', 'campaign')"
+              >
+                Campaigns
+              </button>
             </div>
           </div>
         </div>
+      </div>
 
-        <ChangelogTable :changelogs="items" :header="changelogHeader" />
+      <ChangelogTable :changelogs="items" :header="changelogHeader" />
 
-        <!-- Pagination -->
-        <div class="mt-4">
-          <Pagination :page="page" @previous="goPrevious" @next="goNext" />
-        </div>
-      </section>
-    </main>
-
-    <!-- Site footer -->
-    <Footer />
-  </div>
+      <!-- Pagination -->
+      <div class="mt-4">
+        <Pagination :page="page" @previous="goPrevious" @next="goNext" />
+      </div>
+    </section>
+  </PageShell>
 </template>
