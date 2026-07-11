@@ -1,0 +1,149 @@
+/* The 12-frontend.md §2.2 token port — the drift gate. Every value here is
+ * normative: it reproduces the old v3 `theme.extend` overrides so classes like
+ * `border-gray-700` keep computing the custom hex (#33363A), not the stock
+ * Tailwind palette. Do not remove tokens without checking the spec. */
+@import url('https://fonts.googleapis.com/css2?family=Architects+Daughter&family=Inter:wght@400;500;600;700;800;900&display=fallback');
+@import 'tailwindcss';
+@import './theme.css';
+@plugin '@tailwindcss/forms';
+
+@theme {
+  /* Custom gray — overrides the default palette (steps 50/950 stay stock). */
+  --color-gray-100: #ebf1f5;
+  --color-gray-200: #d9e3ea;
+  --color-gray-300: #c5d2dc;
+  --color-gray-400: #9ba9b4;
+  --color-gray-500: #707d86;
+  --color-gray-600: #55595f;
+  --color-gray-700: #33363a;
+  --color-gray-800: #25282c;
+  --color-gray-900: #151719;
+
+  /* Custom purple — illustration/form accent. */
+  --color-purple-100: #f4f4ff;
+  --color-purple-200: #e2e1ff;
+  --color-purple-300: #cbccff;
+  --color-purple-400: #ababff;
+  --color-purple-500: #8d8dff;
+  --color-purple-600: #5d5dff;
+  --color-purple-700: #4b4acf;
+  --color-purple-800: #38379c;
+  --color-purple-900: #262668;
+
+  --font-inter: Inter, sans-serif;
+  --font-architects-daughter: 'Architects Daughter', sans-serif;
+
+  /* Font-size scale — bare sizes, exactly like the old config. The old v3
+   * sizes carried no per-size line-height, so sized text inherited the
+   * surrounding leading; the `initial` pairings below neutralize v4's default
+   * --text-*--line-height companions to preserve that. */
+  --text-xs: 0.75rem;
+  --text-xs--line-height: initial;
+  --text-sm: 0.875rem;
+  --text-sm--line-height: initial;
+  --text-base: 1rem;
+  --text-base--line-height: initial;
+  --text-lg: 1.125rem;
+  --text-lg--line-height: initial;
+  --text-xl: 1.25rem;
+  --text-xl--line-height: initial;
+  --text-2xl: 1.5rem;
+  --text-2xl--line-height: initial;
+  --text-3xl: 2rem;
+  --text-3xl--line-height: initial;
+  --text-4xl: 2.5rem;
+  --text-4xl--line-height: initial;
+  --text-5xl: 3.25rem;
+  --text-5xl--line-height: initial;
+  --text-6xl: 4rem;
+  --text-6xl--line-height: initial;
+
+  --tracking-tighter: -0.02em;
+  --tracking-tight: -0.01em;
+  --tracking-normal: 0;
+  --tracking-wide: 0.01em;
+  --tracking-wider: 0.02em;
+  --tracking-widest: 0.4em;
+
+  /* Old-config extras not ported: spacing 9/16, 3/4, 1/1 (unused in any
+   * template; fractions are not valid v4 token names), minWidth 10 and
+   * scale 98 (v4 covers both natively). */
+}
+
+@layer components {
+  /* Typography */
+  .h1 {
+    @apply text-4xl font-extrabold leading-tight tracking-tighter md:text-5xl;
+  }
+
+  .h2 {
+    @apply text-3xl font-extrabold leading-tight tracking-tighter md:text-4xl;
+  }
+
+  .h3 {
+    @apply text-3xl font-bold leading-tight;
+  }
+
+  .h4 {
+    @apply text-2xl font-bold leading-snug tracking-tight;
+  }
+
+  /* Buttons */
+  .btn,
+  .btn-sm {
+    @apply font-medium inline-flex items-center justify-center border border-transparent rounded-sm leading-snug transition duration-150 ease-in-out;
+  }
+
+  .btn {
+    @apply px-8 py-3;
+  }
+
+  .btn-sm {
+    @apply px-4 py-2;
+  }
+
+  /* Forms */
+  .form-input,
+  .form-textarea,
+  .form-multiselect,
+  .form-select,
+  .form-checkbox,
+  .form-radio {
+    @apply bg-transparent border border-gray-700 focus:border-gray-500;
+  }
+
+  .form-input,
+  .form-textarea,
+  .form-multiselect,
+  .form-select,
+  .form-checkbox {
+    @apply rounded-sm;
+  }
+
+  .form-input,
+  .form-textarea,
+  .form-multiselect,
+  .form-select {
+    @apply py-3 px-4;
+  }
+
+  .form-input,
+  .form-textarea {
+    @apply placeholder-gray-500;
+  }
+
+  .form-select {
+    @apply pr-10;
+  }
+
+  .form-checkbox,
+  .form-radio {
+    @apply text-purple-600;
+  }
+
+  .a-gradient {
+    @apply bg-gradient-to-r from-fuchsia-500 to-fuchsia-700 text-transparent;
+    -webkit-background-clip: text;
+    background-clip: text;
+  }
+}
