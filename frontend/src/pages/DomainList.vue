@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import { useRoute } from 'vue-router'
 
 import PageShell from '@/components/PageShell.vue'
+import ApiError from '@/components/ApiError.vue'
 
 import DomainTable from '@/components/DomainTable.vue'
 import Pagination from '@/components/Pagination.vue'
@@ -14,7 +15,10 @@ import { useCursorList } from '@/composables/useCursorList'
 
 const route = useRoute()
 
+const anchorTop = ref<HTMLElement | null>(null)
+
 const { items, page, loading, error, next, prev, setFilter } = useCursorList<DomainSummary>({
+  anchor: anchorTop,
   fetch: (params, signal) =>
     params.filter === 'heroes'
       ? listHeroes({ cursor: params.cursor }, signal)
@@ -33,18 +37,6 @@ function applyFilter(filter: string) {
 }
 
 // Pagination keeps the old scroll-to-anchor behavior.
-const anchorTop = ref<HTMLElement | null>(null)
-const scrollToAnchor = () => {
-  anchorTop.value?.scrollIntoView({ behavior: 'auto' })
-}
-const goPrevious = () => {
-  scrollToAnchor()
-  prev()
-}
-const goNext = () => {
-  scrollToAnchor()
-  next()
-}
 </script>
 
 <template>
@@ -94,12 +86,7 @@ const goNext = () => {
           </div>
 
           <!-- Error state -->
-          <div
-            v-if="error"
-            class="bg-zinc-800/50 border border-zinc-700 rounded-sm shadow-lg p-5 text-center"
-          >
-            <div class="text-xl font-medium">{{ error.title }}</div>
-          </div>
+          <ApiError v-if="error" :problem="error" />
 
           <!-- Domains -->
           <div v-else>
@@ -109,7 +96,7 @@ const goNext = () => {
 
           <!-- Pagination -->
           <div class="mt-6">
-            <Pagination :page="page" @previous="goPrevious" @next="goNext" />
+            <Pagination :page="page" @previous="prev" @next="next" />
           </div>
         </div>
       </div>

@@ -3,6 +3,7 @@ import { ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
 import PageShell from '@/components/PageShell.vue'
+import ApiError from '@/components/ApiError.vue'
 
 import DomainTable from '@/components/DomainTable.vue'
 import Pagination from '@/components/Pagination.vue'
@@ -87,12 +88,7 @@ function submitSearch() {
           </div>
 
           <!-- Error state -->
-          <div
-            v-if="error"
-            class="bg-zinc-800/50 border border-zinc-700 rounded-sm shadow-lg p-5 text-center"
-          >
-            <div class="text-xl font-medium">{{ error.title }}</div>
-          </div>
+          <ApiError v-if="error" :problem="error" />
 
           <div v-else>
             <header class="mb-4">

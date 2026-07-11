@@ -3,6 +3,7 @@
 // sole fetch trigger, so back/forward and reload just work and there is no
 // state↔URL feedback loop to guard.
 import { computed, shallowRef, ref, watch } from 'vue'
+import type { Ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import type { LocationQuery, LocationQueryValue } from 'vue-router'
 import { ApiProblem } from '@/api/problem'
@@ -21,6 +22,8 @@ export interface CursorListOptions<T> {
   ) => Promise<ItemCollection<T>>
   /** Query keys (e.g. ['filter']) synced alongside cursor; changing one clears the cursor. */
   filterKeys?: string[]
+  /** Scrolled into view on next()/prev() so pagination lands at the list top. */
+  anchor?: Ref<HTMLElement | null>
 }
 
 function first(v: LocationQueryValue | LocationQueryValue[] | undefined): string | undefined {
@@ -86,11 +89,13 @@ export function useCursorList<T>(opts: CursorListOptions<T>) {
   }
 
   function next(): void {
+    opts.anchor?.value?.scrollIntoView({ behavior: 'auto' })
     const target = page.value?.has_more ? page.value.next_cursor : null
     if (target) void router.push({ query: { ...route.query, cursor: target } })
   }
 
   function prev(): void {
+    opts.anchor?.value?.scrollIntoView({ behavior: 'auto' })
     const target = page.value?.prev_cursor
     if (target) void router.push({ query: { ...route.query, cursor: target } })
   }

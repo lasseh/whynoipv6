@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import { useRoute } from 'vue-router'
 
 import PageShell from '@/components/PageShell.vue'
+import ApiError from '@/components/ApiError.vue'
 import Breadcrumb from '@/components/Breadcrumb.vue'
 
 import CampaignDomainTable from '@/components/CampaignDomainTable.vue'
@@ -24,7 +25,10 @@ const uuid = String(route.params.uuid)
 const campaign = ref<CampaignDetail | null>(null)
 const notFound = ref(false)
 
+const anchorTop = ref<HTMLElement | null>(null)
+
 const { items, page, meta, error, next, prev } = useCursorList({
+  anchor: anchorTop,
   fetch: async (params, signal) => {
     try {
       const res = await getCampaign(
@@ -51,18 +55,6 @@ getCampaignChangelog(uuid)
   })
 
 // Pagination
-const anchorTop = ref<HTMLElement | null>(null)
-const scrollToAnchor = () => {
-  anchorTop.value?.scrollIntoView({ behavior: 'auto' })
-}
-const goPrevious = () => {
-  scrollToAnchor()
-  prev()
-}
-const goNext = () => {
-  scrollToAnchor()
-  next()
-}
 </script>
 
 <template>
@@ -112,19 +104,13 @@ const goNext = () => {
             <!-- CampaignDomains -->
             <div>
               <!-- Error state (§6.3) -->
-              <div
-                v-if="error"
-                class="bg-zinc-800/50 border border-zinc-700 rounded-sm shadow-lg p-5 text-center"
-              >
-                <div class="text-xl font-medium">{{ error.title }}</div>
-                <p v-if="error.detail" class="text-gray-400 mt-2">{{ error.detail }}</p>
-              </div>
+              <ApiError v-if="error" :problem="error" />
               <CampaignDomainTable v-else :domains="items" :uuid="uuid" />
             </div>
 
             <!-- Pagination -->
             <div class="mt-6">
-              <Pagination :page="page" @previous="goPrevious" @next="goNext" />
+              <Pagination :page="page" @previous="prev" @next="next" />
             </div>
           </template>
         </div>

@@ -1,20 +1,23 @@
 import { describe, expect, it } from 'vitest'
 import {
-  statusBorderClass,
+  statusCardBorderClass,
+  statusCardTextClass,
   statusIcon,
   statusLabel,
   statusTextClass,
   statusTooltip,
 } from '@/utils/status'
 
-// All five §7.2 states → icon/class/label/tooltip.
+// All five §7.2 states → icon/class/label/tooltip. Tables use the 500 shades
+// (text), the detail accordion the old site's stronger 600 (cardText/border).
 describe('status maps', () => {
   const table = [
     {
       value: 'supported',
       icon: 'check',
       text: 'text-emerald-500',
-      border: 'border-emerald-500',
+      cardText: 'text-emerald-600',
+      border: 'border-emerald-600',
       label: 'Success',
       tooltip: 'Supported',
     },
@@ -22,7 +25,8 @@ describe('status maps', () => {
       value: 'unsupported',
       icon: 'cross',
       text: 'text-pink-500',
-      border: 'border-pink-500',
+      cardText: 'text-pink-600',
+      border: 'border-pink-600',
       label: 'Missing',
       tooltip: 'Missing',
     },
@@ -30,6 +34,7 @@ describe('status maps', () => {
       value: 'no_record',
       icon: 'minus',
       text: 'text-amber-500',
+      cardText: 'text-amber-500',
       border: 'border-amber-500',
       label: 'No Record',
       tooltip: 'No Records',
@@ -38,6 +43,7 @@ describe('status maps', () => {
       value: 'not_applicable',
       icon: 'minus',
       text: 'text-zinc-600',
+      cardText: 'text-zinc-600',
       border: 'border-zinc-600',
       label: 'Not applicable',
       tooltip: 'Not applicable',
@@ -46,6 +52,7 @@ describe('status maps', () => {
       value: null,
       icon: 'minus',
       text: 'text-zinc-600',
+      cardText: 'text-zinc-600',
       border: 'border-zinc-600',
       label: 'Not yet checked',
       tooltip: 'Not yet checked',
@@ -55,7 +62,8 @@ describe('status maps', () => {
   it.each(table)('$value', (row) => {
     expect(statusIcon(row.value)).toBe(row.icon)
     expect(statusTextClass(row.value)).toBe(row.text)
-    expect(statusBorderClass(row.value)).toBe(row.border)
+    expect(statusCardTextClass(row.value)).toBe(row.cardText)
+    expect(statusCardBorderClass(row.value)).toBe(row.border)
     expect(statusLabel(row.value)).toBe(row.label)
     expect(statusTooltip(row.value)).toBe(row.tooltip)
   })

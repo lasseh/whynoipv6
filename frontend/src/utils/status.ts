@@ -29,12 +29,27 @@ export function statusTextClass(value: StatusValue): string {
   }
 }
 
-export function statusBorderClass(value: StatusValue): string {
+// The detail accordion (DomainStatusCard) uses the stronger 600 shades the old
+// site had there — tables keep 500 via statusTextClass.
+export function statusCardTextClass(value: StatusValue): string {
   switch (value) {
     case 'supported':
-      return 'border-emerald-500'
+      return 'text-emerald-600'
     case 'unsupported':
-      return 'border-pink-500'
+      return 'text-pink-600'
+    case 'no_record':
+      return 'text-amber-500'
+    default:
+      return 'text-zinc-600'
+  }
+}
+
+export function statusCardBorderClass(value: StatusValue): string {
+  switch (value) {
+    case 'supported':
+      return 'border-emerald-600'
+    case 'unsupported':
+      return 'border-pink-600'
     case 'no_record':
       return 'border-amber-500'
     default:

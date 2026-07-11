@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 
 import PageShell from '@/components/PageShell.vue'
+import ApiError from '@/components/ApiError.vue'
 
 import CountryFlag from '@/components/CountryFlag.vue'
 import RatingBadge from '@/components/RatingBadge.vue'
@@ -98,13 +99,7 @@ onMounted(() => {
             </div>
 
             <!-- Error state (§6.3) -->
-            <div
-              v-if="error"
-              class="bg-zinc-800/50 border border-zinc-700 rounded-sm shadow-lg p-5 text-center"
-            >
-              <div class="text-xl font-medium">{{ error.title }}</div>
-              <p v-if="error.detail" class="text-gray-400 mt-2">{{ error.detail }}</p>
-            </div>
+            <ApiError v-if="error" :problem="error" />
 
             <div v-else class="grid grid-cols-2 xl:grid-cols-8 gap-4">
               <router-link

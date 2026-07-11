@@ -3,7 +3,7 @@ import { computed, reactive } from 'vue'
 import type { Dimension, DomainDetail, HistoryPoint } from '@/api'
 import RatingStars from '@/components/RatingStars.vue'
 import Tracker from '@/components/Tracker.vue'
-import { statusBorderClass, statusLabel, statusTextClass } from '@/utils/status'
+import { statusCardBorderClass, statusCardTextClass, statusLabel } from '@/utils/status'
 import { formatDateTime } from '@/utils/date'
 
 // The Domain Status card shared by DomainDetail and its CampaignDomain
@@ -14,9 +14,13 @@ const props = withDefaults(
     domain: DomainDetail
     history: HistoryPoint[]
     /** DomainDetail centers the header on mobile; CampaignDomain is left-aligned. */
-    headerAlignClass?: string
+    align?: 'center' | 'start'
   }>(),
-  { headerAlignClass: 'text-center md:text-left' },
+  { align: 'center' },
+)
+
+const headerAlignClass = computed(() =>
+  props.align === 'start' ? 'text-left' : 'text-center md:text-left',
 )
 
 // Accordion state per dimension row.
@@ -63,14 +67,14 @@ const formattedTsCheck = computed(() =>
       <button
         type="button"
         class="w-full flex justify-between items-center p-3 text-base rounded group hover:shadow bg-gray-800 hover:bg-gray-800/30 text-white border-l-4 cursor-pointer"
-        :class="statusBorderClass(row.value)"
+        :class="statusCardBorderClass(row.value)"
         :aria-expanded="open[row.key]"
         :aria-controls="`tracker-${row.key}`"
         @click="open[row.key] = !open[row.key]"
       >
         <span class="flex-1 ml-3 whitespace-nowrap font-mono text-sm">{{ row.label }}</span>
         <span
-          :class="statusTextClass(row.value)"
+          :class="statusCardTextClass(row.value)"
           class="inline-flex items-center justify-center px-2 py-0.5 ml-3"
         >
           {{ statusLabel(row.value) }}

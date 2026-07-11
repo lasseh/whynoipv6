@@ -1,44 +1,22 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 
 import PageShell from '@/components/PageShell.vue'
+import ApiError from '@/components/ApiError.vue'
 import Breadcrumb from '@/components/Breadcrumb.vue'
 
 import ChangelogTable from '@/components/ChangelogTable.vue'
 import DomainStatusCard from '@/components/DomainStatusCard.vue'
 
-import { getDomain, getDomainChangelog, getDomainHistory } from '@/api'
-import type { ChangelogItem, DomainDetail, HistoryPoint } from '@/api'
-import { ApiProblem } from '@/api/problem'
+import { getDomainChangelog } from '@/api'
+import { useDomainDetail } from '@/composables/useDomainDetail'
 
 const route = useRoute()
-const router = useRouter()
 const host = route.params.domain as string
 
-const domain = ref<DomainDetail | null>(null)
-const changelogs = ref<ChangelogItem[]>([])
-const history = ref<HistoryPoint[]>([])
-const error = ref<ApiProblem | null>(null)
-
-onMounted(async () => {
-  try {
-    domain.value = await getDomain(host)
-  } catch (e) {
-    if (e instanceof ApiProblem && e.code === 'not-found') {
-      void router.replace({ name: 'DomainNotFound', params: { domain: host } })
-      return
-    }
-    error.value = ApiProblem.from(e)
-    return
-  }
-  // Non-fatal side surfaces — an error just leaves them empty.
-  getDomainChangelog(host)
-    .then((res) => (changelogs.value = res.items))
-    .catch(() => (changelogs.value = []))
-  getDomainHistory(host)
-    .then((res) => (history.value = res.points))
-    .catch(() => (history.value = []))
+const { domain, changelogs, history, error } = useDomainDetail(host, {
+  notFoundRoute: { name: 'DomainNotFound', params: { domain: host } },
+  fetchChangelog: () => getDomainChangelog(host),
 })
 </script>
 
@@ -51,13 +29,7 @@ onMounted(async () => {
           <Breadcrumb :trail="[{ label: 'Domains', to: '/domains' }]" />
 
           <!-- Error state -->
-          <div
-            v-if="error"
-            class="bg-zinc-800/50 border border-zinc-700 rounded-sm shadow-lg p-5 text-center"
-          >
-            <div class="text-xl font-medium">{{ error.title }}</div>
-            <p v-if="error.detail" class="text-gray-400 mt-2">{{ error.detail }}</p>
-          </div>
+          <ApiError v-if="error" :problem="error" />
 
           <template v-else-if="domain">
             <div class="flex justify-between items-center mb-8">

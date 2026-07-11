@@ -14,7 +14,10 @@ const route = useRoute()
 
 // ?filter=tranco → GET /changelog; ?filter=campaign → GET /changelog?scope=campaign
 // (07 §4.8 — a fixed recent window whose null cursors self-disable Pagination).
+const anchorTop = ref<HTMLElement | null>(null)
+
 const { items, page, next, prev, setFilter, reload } = useCursorList({
+  anchor: anchorTop,
   fetch: (params, signal) =>
     listChangelog(
       {
@@ -43,18 +46,6 @@ onBeforeUnmount(() => {
 })
 
 // Pagination
-const anchorTop = ref<HTMLElement | null>(null)
-const scrollToAnchor = () => {
-  anchorTop.value?.scrollIntoView({ behavior: 'auto' })
-}
-const goPrevious = () => {
-  scrollToAnchor()
-  prev()
-}
-const goNext = () => {
-  scrollToAnchor()
-  next()
-}
 </script>
 
 <template>
@@ -103,7 +94,7 @@ const goNext = () => {
 
       <!-- Pagination -->
       <div class="mt-4">
-        <Pagination :page="page" @previous="goPrevious" @next="goNext" />
+        <Pagination :page="page" @previous="prev" @next="next" />
       </div>
     </section>
   </PageShell>
