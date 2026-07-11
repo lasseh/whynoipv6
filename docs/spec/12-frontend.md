@@ -1,0 +1,345 @@
+# 12 — Frontend Rebuild
+
+_Status: Draft 1.0 — authored from a full inventory of the live frontend (`whynoipv6-web`, Vue 3 + Tailwind v3), the Tailwind-v4 migration attempt (`whynoipv6-web2`), and 07-api.md Round 3.0._
+
+**Purpose:** The complete contract for rebuilding the Vue app in `frontend/`. Two locked goals, in priority order:
+
+1. **Visual fidelity is absolute.** The rebuilt site must be pixel-faithful to the current whynoipv6.com — same dark theme, same palette, same fonts and type scale, same layout, same component look. §2 pins every token; nothing in this rebuild is a redesign.
+2. **The code is modernized and bound to the new API.** Vue 3.5 `<script setup>` + strict TS everywhere, Tailwind v4 via `@tailwindcss/vite` with the old theme ported into `@theme` tokens, a fully-typed API layer generated from the committed `openapi/openapi.yaml` (07 §7), cursor pagination, RFC 9457 error handling. No axios, no untyped services, no dead config.
+
+**Deliverables:** the `frontend/` subtree (§4 layout), consuming the drift-gated `openapi/schema.ts`; the `@theme` token port (§2.2); the page + component set (§8–§9); vitest coverage for the mapping layer (§11); Vite/nginx build + deploy config (§12).
+
+**Companion files:** 07-api.md (every endpoint, envelope, cursor, and error shape consumed here), 00-overview.md §4 (monorepo layout — `frontend/` is a sibling of `backend/`, never compiled by the backend workflow), 08-migration-cutover.md (cutover is a DNS flip; this app ships to the same origin).
+
+**Reference repos (read-only inputs, never imported):** `../whynoipv6-web` — the visual source of truth; `../whynoipv6-web2` — scaffold reference for tooling (strict tsconfig, ESLint 9 flat config, vitest setup, router-meta SEO guard). web2's cautionary lesson is normative: under Tailwind v4 its config files were dead (`@import 'tailwindcss'` with no `@theme`/`@config`), so the site silently fell back to stock Tailwind palettes. **The token port in §2.2 is what prevents that drift; it is a build gate, not a nice-to-have.**
+
+---
+
+## 1. Product scope & phasing
+
+The rebuild lands in two phases. Phase 1 is a **parity rebuild**: the current site's pages, sections, and behaviors, re-implemented on the new API. Phase 2 is **additive surfaces** the new API unlocks (§10) — same visual language, new pages/blocks. Nothing in phase 2 blocks the cutover.
+
+Phase 1 page set (the current site, §8): Home, Domain list, Domain detail, Search, Metrics (overview + network providers), Country list/detail, Campaign list/detail/domain, Changelog, FAQ, 404.
+
+Out of scope entirely: accounts, auth, theming/light mode, i18n, SSR (§3 decision).
+
+---
+
+## 2. The visual contract (locked)
+
+### 2.1 Identity
+
+- **Dark-only.** No light theme, no toggle, no `dark:` variants. `<body class="font-inter antialiased bg-zinc-900 text-slate-200 tracking-tight">` — page background stock `zinc-900`, default text stock `slate-200`.
+- **Brand accent: Tailwind default `fuchsia`.** Logo gradient `from-fuchsia-500 to-fuchsia-700`, buttons `bg-fuchsia-700 hover:bg-fuchsia-800`, active/emphasis links `text-fuchsia-600`, table header accents `text-fuchsia-600`, rank badge hover fuchsia.
+- **Status colors (the site's semantic core):** `emerald` = supported/success, `pink` = unsupported/missing, `amber` = no_record, muted `zinc-600` = not-applicable / never-checked (§7.2 — the one new visual state, deliberately quiet).
+- **Fonts:** `Inter` (400–900) body via `font-inter`; `Architects Daughter` accent. Loaded via Google Fonts `@import` exactly as today.
+- **Layout skeleton (every page):** `flex flex-col min-h-screen overflow-hidden` → absolute overlay `Header` (`h-20 w-full z-30`) → `main.grow` → hex-dot `PageIllustration` (`relative max-w-6xl mx-auto h-0 pointer-events-none`) → sections in `max-w-6xl mx-auto px-4 sm:px-6` → `Footer`.
+- **Cards/surfaces:** `bg-zinc-800/50` (or `bg-zinc-800`), `border border-zinc-700`, `rounded-sm`, `shadow-lg`. Table row hover `hover:bg-gray-800` (the **custom** gray-800, §2.2).
+- **Rating badges** (country/campaign/detail): Good `bg-emerald-600/10 text-emerald-600 ring-emerald-600/40` (≥60%), Medium `bg-amber-600/10 text-amber-600 ring-amber-600/20` (≥40%), Bad `bg-rose-600/10 text-rose-600/80 ring-rose-600/20`, Unknown gray. Progress-bar gradients: teal-700→800 / amber-700→800 / pink-700→800.
+- **Scroll animation:** AOS, initialized as the live site does — `{ once: true, disable: "phone", duration: 600, easing: "ease-out-sine" }` — with the existing `data-aos` placements carried over. *Rejected — web2's `disable: true`* (kills a visible behavior of the live site) *and dropping AOS* (same reason).
+
+### 2.2 Tailwind v4 token port (`@theme`) — the drift gate
+
+The old v3 `theme.extend` **overrode** stock palettes; classes like `border-gray-700` render the *custom* hex on the live site. All of it moves into `@theme` in `src/css/style.css`. Normative values:
+
+**Custom `gray` (overrides default):**
+
+| step | hex | step | hex |
+|---|---|---|---|
+| 100 | `#EBF1F5` | 500 | `#707D86` |
+| 200 | `#D9E3EA` | 600 | `#55595F` |
+| 300 | `#C5D2DC` | 700 | `#33363A` |
+| 400 | `#9BA9B4` | 800 | `#25282C` |
+| | | 900 | `#151719` |
+
+**Custom `purple` (overrides default; illustration/form accent):**
+
+| step | hex | step | hex |
+|---|---|---|---|
+| 100 | `#F4F4FF` | 500 | `#8D8DFF` |
+| 200 | `#E2E1FF` | 600 | `#5D5DFF` |
+| 300 | `#CBCCFF` | 700 | `#4B4ACF` |
+| 400 | `#ABABFF` | 800 | `#38379C` |
+| | | 900 | `#262668` |
+
+**Font size scale (overrides defaults — visually load-bearing, e.g. `3xl` is 2rem not 1.875rem):** `xs .75rem · sm .875rem · base 1rem · lg 1.125rem · xl 1.25rem · 2xl 1.5rem · 3xl 2rem · 4xl 2.5rem · 5xl 3.25rem · 6xl 4rem` (with the old config's per-size line-heights/letter-spacing carried over verbatim from `whynoipv6-web/src/css/tailwind.config.cjs`).
+
+**Letter spacing:** `tighter -0.02em · tight -0.01em · normal 0 · wide 0.01em · wider 0.02em · widest 0.4em`. **Spacing extras:** `9/16: 56.25%`, `3/4: 75%`, `1/1: 100%`. **minWidth:** `10: 2.5rem`. **scale:** `98: .98`.
+
+**Fonts:** `--font-inter: Inter, sans-serif`, `--font-architects-daughter: "Architects Daughter", sans-serif`.
+
+**Component classes** (ported verbatim into `@layer components`): `.h1`–`.h4` (extrabold/bold display scale with `md:` bumps), `.btn`/`.btn-sm` (`rounded-sm`, `px-8 py-3` / `px-4 py-2`), `.form-input/-textarea/-select/-checkbox/-radio` (transparent bg, `border-gray-700`, `focus:border-gray-500`, `rounded-sm`), `.a-gradient` (`bg-gradient-to-r from-fuchsia-500 to-fuchsia-700` text-clip). Plus `theme.css` extras: hamburger animation, `.pulse` keyframes, AOS translate-distance overrides (10px).
+
+**Plugins:** `@tailwindcss/forms` (as a v4 CSS `@plugin`).
+
+**Acceptance:** a rendered page's computed styles for `gray-*`, `purple-*`, the type scale, and the component classes match the old site byte-for-hex. A quick manual check exists for each: `border-gray-700` must compute to `#33363A`, `h1` on Home must be `2.5rem` at mobile. *Rejected — keeping `tailwind.config.{js,ts}` files* (the exact web2 failure: two dead configs, zero effect, silent stock-palette fallback).
+
+### 2.3 Assets carried over
+
+`public/` favicon set, `WhyNoSticker.webp` OG image, robots.txt, sitemap.xml, security.txt; the hex-dot `PageIllustration` SVG (the variant actually exported today — `PageIllustrationHex`); the inline Check/Cross/Minus status SVGs; circle-flags (`https://hatscripts.github.io/circle-flags/flags/{code}.svg`) for country flags; the 404 illustration.
+
+---
+
+## 3. Stack & tooling decisions
+
+| Concern | Decision | Rejected |
+|---|---|---|
+| Framework | Vue **3.5** + TS, `<script setup lang="ts">` in **every** SFC | Options API stragglers (web2 has 3) |
+| Build | **Vite** (current major) + `vue-tsc` type-check in `build` | — |
+| CSS | **Tailwind v4 via `@tailwindcss/vite`**, tokens in `@theme` (§2.2) | v4-via-PostCSS (web2's setup — works, but the Vite plugin is the first-party path); v3 |
+| Router | vue-router 4, `createWebHistory`, lazy route imports | — |
+| HTTP + types | **openapi-fetch** + the committed **openapi-typescript** output (§6) | axios (both old apps: per-call instances, zero generics — the type gap this rebuild deletes); Orval/Hey-API (07 §7 already rejected) |
+| State | **No store library.** URL query is the source of truth for every list/tab/pagination state; component-local `ref`/`computed` for the rest; shared logic in small composables | Pinia (nothing here is cross-page client state; a read-only site whose canonical state is the URL doesn't need a store — add it later if a real one appears) |
+| Lint/format | ESLint 9 flat config (web2's: `@eslint/js` + `eslint-plugin-vue` flat/recommended + typescript-eslint + Prettier-compat); Prettier with a normal `printWidth` (100) | the old repo's `printWidth: 1200` one-liner format; lint script with no config |
+| tsconfig | web2's strict set: `strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `noUnusedLocals/Parameters`, `noImplicitReturns`; `@` → `./src` | — |
+| Tests | **Vitest** + `@vue/test-utils` + jsdom (§11) | — |
+| SSR/SSG | **None** — SPA, as today. The API is CDN-cached public data; SEO is served by static meta + sitemap + per-route titles as today | Nuxt (a rebuild-the-world move; violates "modernize, don't redesign") |
+| Rendering-time deps | `aos` (§2.1). Nothing else — no UI kit, no chart lib (all bars/trackers stay hand-built divs, exactly the current look) | headlessui/chart.js |
+
+Node tooling roots at `frontend/` (own `package.json`); the root `Makefile` gains `frontend-dev`, `frontend-build`, `frontend-test`, `frontend-lint` targets that `cd frontend && …`, keeping Make the universal interface.
+
+---
+
+## 4. Project layout
+
+```
+frontend/
+├── index.html                 # static meta/OG (§9.6), umami script, body classes (§2.1)
+├── package.json  vite.config.ts  tsconfig.json  eslint.config.js  .prettierrc.json
+├── public/                    # §2.3 assets
+└── src/
+    ├── main.ts                # createApp, router, AOS init (§2.1 config)
+    ├── App.vue
+    ├── router.ts              # §5 route table + meta guard (§9.6) + scrollBehavior
+    ├── api/
+    │   ├── client.ts          # the ONE openapi-fetch client (§6.1)
+    │   ├── problem.ts         # RFC 9457 parsing → typed ApiProblem (§6.3)
+    │   └── index.ts           # narrow per-resource call helpers (§6.2)
+    ├── composables/
+    │   ├── useCursorPager.ts  # §9.1
+    │   ├── usePageMeta.ts     # route-meta titles (§9.6)
+    │   └── useVisitorIp.ts    # GET /ip (§9.5)
+    ├── components/            # DomainTable, ChangelogTable, Pagination, Tracker,
+    │                          # StatusIcon, RatingStars, RatingBadge, ProgressBar,
+    │                          # CountryFlag, Notification, LoadingSpinner
+    ├── partials/              # Header, Footer, Searchbar, HomeSaaS, HomeSinners,
+    │                          # HomeDomains, MetricCrawler, MetricASN,
+    │                          # PageIllustration (hex), icons/
+    ├── pages/                 # one SFC per §5 route
+    ├── utils/
+    │   ├── rating.ts          # percent → badge/gradient classes (§2.1 thresholds)
+    │   ├── date.ts            # Intl.DateTimeFormat en-GB "DD Month YYYY HH:MM"
+    │   └── changelog.ts       # (field, old, new) → message + color (§7.4)
+    └── css/
+        ├── style.css          # @import 'tailwindcss' + @theme + @layer components (§2.2)
+        └── theme.css          # hamburger/pulse/AOS extras
+```
+
+Deleted relative to the old repos (never ported): the axios `services/` layer, `types/` namespaces (replaced by generated types), web2's speculative composables (`useCache`, `useCachedApi`, `useAsyncData`, `usePagination`, `useSearch`, `useToggle`, `useErrorHandler` — the browser HTTP cache plus §6 replaces all of them), Alpine remnants (`x-data`, `[x-cloak]`), `ensureTrailingSlash` (§5), unused `HomeMetric.vue`/wave `PageIllustration.vue`/`Dropdown.vue`, `range-slider.css`/`toggle-switch.css`, the stray `import { off } from "process"`.
+
+---
+
+## 5. Routing & URL contract
+
+**Decision: public URLs are preserved verbatim.** They are indexed, linked, and part of the product's identity; the API redesign is invisible to the address bar. The only change: pagination state moves from `?offset=` to `?cursor=` (opaque token, §9.1) — old `?offset=` links degrade gracefully to page 1.
+
+| Path | Page | Query state | Data (07-api) |
+|---|---|---|---|
+| `/` | Home | — | §8.1 |
+| `/domain` | DomainList | `filter=sinners\|heroes`, `cursor` | `/sinners`, `/heroes` |
+| `/domain/:domain(.*)` | DomainDetail | — | `/domains/{host}`, `/domains/{host}/changelog`, `/domains/{host}/history` |
+| `/domain/:domain(.*)/not-found` | DomainNotFound | — | — |
+| `/search` | Search | `q` | `/domains?q=` |
+| `/metrics` | Metrics | `t=overview\|asn`, `sort` | `/stats/overview`, `/asns` |
+| `/country` | CountryList | — | `/countries` |
+| `/country/:id` | CountryDetail | `filter`, `cursor` | `/countries/{code}`, `/countries/{code}/domains?class=` |
+| `/campaign` | CampaignList | — | `/campaigns` |
+| `/campaign/:uuid` | CampaignDetail | `cursor` | `/campaigns/{uuid}` (composite), `/campaigns/{uuid}/changelog` |
+| `/campaign/:uuid/:domain(.*)` | CampaignDomain | — | `/domains/{host}` + campaign changelog scope |
+| `/campaign/:uuid/:domain(.*)/not-found` | DomainNotFound | — | — |
+| `/changelog` | Changelog | `filter=tranco\|campaign`, `cursor` | `/changelog` |
+| `/faq` | FAQ | `page=1..4` | static |
+| `/:catchAll(.*)` | PageNotFound | — | — |
+
+Route conventions (from web2, kept): per-route `meta: { title, description }` consumed by a global `beforeEach` guard (§9.6); `scrollBehavior` honoring saved position/hash/top; every page component lazy-imported. The old `ensureTrailingSlash` guard is **deleted** — it existed to appease the old backend; the new API canonicalizes hosts itself (07 §2.8), and `:domain(.*)` params pass through encode-safely.
+
+---
+
+## 6. API integration layer
+
+### 6.1 One typed client
+
+`openapi/schema.ts` (openapi-typescript output, already committed and CI-drift-gated per 07 §7) is the **only** wire-type source; the frontend never hand-writes a response interface. It is consumed in place via a tsconfig path alias + Vite `server.fs.allow` entry (`@openapi` → `../openapi/schema.ts`) — one generated file, zero copies. `src/api/client.ts` exports a single `createClient<paths>({ baseUrl: import.meta.env.VITE_API_URL })` instance. Wire fields are `snake_case` end-to-end (07 §2.3) — **no** camelCase transform layer; templates bind `domain.class_flags` directly.
+
+Environments: `.env.development` → `http://localhost:8080` (the API's dev bind, 07 §1.1); `.env.production` → `https://api.whynoipv6.com`. The client sends no auth, no custom headers; conditional-request/ETag revalidation is left entirely to the browser HTTP cache (the API's `Cache-Control`/`ETag` design, 07 §6.1, makes a client-side cache layer redundant — this deletes web2's `useCache` machinery).
+
+### 6.2 Call helpers
+
+`src/api/index.ts` exports narrow, typed helpers per resource (`getDomain(host)`, `listTier(tier, params)`, `getOverviewStats()`, …) — thin wrappers over the client so pages never build paths inline and tests can stub one seam. Envelope handling is uniform (07 §2.4): item collections are `{ items, page, meta }`, time series are `{ points, meta }`, single resources carry sibling `meta`. Helpers return the typed body; `error` results are converted via §6.3.
+
+### 6.3 Errors — RFC 9457
+
+Every non-2xx is `application/problem+json` (07 §2.5). `problem.ts` parses it into `ApiProblem { type, title, status, detail }` keyed by the type-URI tail (`not-found`, `rate-limited`, …). Page policy:
+
+- `not-found` on a detail route → redirect to the sibling `…/not-found` page (domain/campaign-domain) or render the inline empty state (country/campaign).
+- Zero-result lists are `200` with empty `items` (07 §2.6) — rendered as the existing empty states ("No domains found", "No changes yet"), **never** treated as errors.
+- Anything else → the page-level error state (existing card style) with `title`; no toast library.
+
+### 6.4 What the frontend consumes (phase 1 surface)
+
+`/heroes`, `/sinners`, `/shame`, `/domains?q=`, `/domains/{host}`, `/domains/{host}/changelog`, `/domains/{host}/history`, `/countries`, `/countries/{code}`, `/countries/{code}/domains`, `/campaigns`, `/campaigns/{uuid}` (composite), `/campaigns/{uuid}/changelog`, `/campaigns/{uuid}/domains/{host}/changelog`, `/changelog`, `/stats/overview`, `/asns`, `/ip`. Phase 2 adds §10's list.
+
+---
+
+## 7. Data-model mapping (old wire → new wire → pixels)
+
+The visual output of each component is unchanged; only its input changes. This section is the normative mapping.
+
+### 7.1 Domain status dimensions
+
+Old: 4 fields (`base_domain`, `www_domain`, `nameserver`, `mx_record`), 3-value strings. New: 6 status objects (07 §4.1), 4-value enum + `null`. **Phase 1 renders the same four dimensions** — table columns Apex/WWW/E-Mail/Nameserver and the 4-row detail accordion map to `status.base/www/mx/ns.value`. `conn` and `resources` stay off-screen until phase 2 (§10.3).
+
+### 7.2 Status → icon/color (component `StatusIcon`)
+
+| `value` | Icon | Color | Old equivalent |
+|---|---|---|---|
+| `supported` | Check | `text-emerald-500` | `supported` |
+| `unsupported` | Cross | `text-pink-500` | `unsupported` |
+| `no_record` | Minus | `text-amber-500` | `no_record` |
+| `not_applicable` | Minus | `text-zinc-600`, tooltip "Not applicable" | (was folded into `no_record`) |
+| `null` (never confirmed) | Minus | `text-zinc-600`, tooltip "Not yet checked" | (n/a) |
+
+The two muted states are the **only** new pixels in phase 1 — deliberately quieter than the three legacy colors so the page reads identically at a glance. Detail-accordion border-l-4 uses the same mapping (`border-emerald-500` / `border-pink-500` / `border-amber-500` / `border-zinc-600`), status text Success / Missing / No Record / Not applicable / Not yet checked.
+
+### 7.3 Per-view field mapping
+
+| View element | Old source | New source |
+|---|---|---|
+| Rank badge | `domain.rank` (0 = none) | `rank` (`null` = none — hide badge on `null`, never render 0) |
+| Provider line on detail | `asn` display string | `asn.name` (+ `AS{asn.number}`) |
+| Country on detail | `country` string | `country.name` + link `/country/{country.code}` |
+| 4-star rating (detail) | count of `supported` among 4 fields | count of `status.{base,www,ns,mx}.value == "supported"` — same outcome for no-MX domains (`not_applicable` scores 0, as `no_record` did) |
+| "Last checked" | `ts_check` | `last_checked_at` |
+| Sinners list | `GET /domain?offset=` | `GET /sinners?cursor=` |
+| Heroes list | `GET /domain/heroes?offset=` | `GET /heroes?cursor=` |
+| Home top-shame | `GET /domain/topsinner` | `GET /shame` (curated; render `host` + `reason`) |
+| Search | `GET /domain/search/{q}` (`{data:{data:[…]}}` quirk) | `GET /domains?q=` (standard envelope; the separate campaign-domain search section is dropped — rank-NULL campaign hosts are `/domains` rows and appear in the same result list) |
+| Country card/detail numbers | `sites`, `v6sites`, `percent` (÷10 hack upstream) | `sites`, `v6_sites`, `percent` (served correct — **no client ÷10**) |
+| Country scoped lists | `/country/{id}/sinners\|heroes` | `/countries/{code}/domains?class=sinner\|hero` |
+| Campaign card % | client-computed from `count`/`v6_ready` | `adoption.v6_ready_percent` (server-computed) |
+| Campaign member count | `count` | `meta.count` (exact) |
+| Campaign members table | campaign detail rows | composite `domains.items` (§4.2 rows, `rank: null`); "fully ready" row highlight `bg-emerald-900/50` when the four §7.1 dimensions are all `supported` or `not_applicable` |
+| Metrics overview grid | `/metric/overview` `[0].data.{domains, base_domain, www_domain, nameserver, mx_record, heroes, top_heroes, top_nameserver}` | latest point of `GET /stats/overview` → `{domains, base_supported, www_supported, ns_supported, mx_supported, heroes, top_heroes, top_nameserver}` |
+| ASN bars | `/metric/asn?order=ipv4\|ipv6` → `count_v4/count_v6` | `GET /asns?sort=count_total\|count_v6` → `count_v6` (emerald segment) vs `count_v4` (violet segment); ASN search via `GET /asns?q=` |
+| Visitor banner | `GET /ip`, client sniffs `:` | `GET /ip` → show "No IPv6?!" iff `family !== "ipv6"` (no string sniffing) |
+| Tracker (uptime timeline) | `/domain/{d}/log` per-scan rows | `GET /domains/{host}/history` daily `points`; each accordion row's tracker colors day-blocks by **that dimension's** value via §7.2; 30/60/90-day responsive windows unchanged. Empty history (fresh crawl, 07 §4.9 day-1) → the existing neutral `bg-gray-800` blocks |
+
+### 7.4 Changelog rendering (`utils/changelog.ts`)
+
+Old rows carried a server-rendered `message` + `domain_url`. New rows are structured `{ts, host, field, old_value, new_value}` (07 §4.8); the frontend derives the message, mirroring the feed serializer's phrasing (07 §5.4):
+
+- `new_value == "supported"` → `"{host} now supports IPv6 on {field_label}"`, color emerald.
+- `new_value == "unsupported"` → `"{host} lost IPv6 on {field_label}"`, color pink.
+- `new_value == "no_record"` → `"{host} no longer publishes records for {field_label}"`, color amber.
+- `new_value == "not_applicable"` → `"{host} no longer uses {field_label}"`, muted zinc.
+
+`field_label`: base → "the base domain", www → "www", ns → "nameservers", mx → "e-mail", conn → "connectivity", resources → "page resources". Timestamp column stays violet-500 mono, host links to `/domain/{host}`. The Changelog page's Tranco/Campaigns toggle maps to `GET /changelog` (global) vs — until a campaign-wide global feed exists — the same global feed filtered client-side is **not** attempted; the toggle's campaign mode lists per-campaign changelogs only from campaign pages, and the global page shows the global feed with its `?field=` filter available. The 30 s auto-refresh stays (aligned with the API's 300 s public cache: refreshes hit the CDN, which is fine — freshness comes from `max(changelog.ts)`-seeded ETags, 07 §6.1).
+
+---
+
+## 8. Pages (phase 1)
+
+Every page keeps its current copy, section order, and AOS attributes. Only data plumbing changes.
+
+1. **Home** — HomeSaaS hero ("Shame as a Service" copy verbatim) → Searchbar (GET-form to `/search?q=`) → HomeSinners (curated `/shame` picks + rotating testimonial) → HomeDomains (top-of-`/sinners` preview table) → Notification banner (§9.5).
+2. **DomainList** — title "Unmasking the Top 1M Websites", Sinners/Heroes toggle buttons (`?filter=`), `DomainTable`, `Pagination` (§9.1). Page size 50 (`?limit=50`, the API default).
+3. **DomainDetail** — breadcrumb, host + Provider/Rank header (rank badge `bg-fuchsia-900`), Domain Status card: `RatingStars` (4 stars, §7.3) + 4-row accordion (§7.1/§7.2) each expanding a `Tracker` (§7.3) + "Last checked", then `ChangelogTable` from `/domains/{host}/changelog`. Unknown host → §6.3 not-found redirect.
+4. **CampaignDomain** — DomainDetail variant: campaign breadcrumb, changelog scope `/campaigns/{uuid}/domains/{host}/changelog`.
+5. **Search** — input + single "Domains" result table from `/domains?q=` (§7.3 note on the dropped second section).
+6. **Metrics** — tabs `?t=overview|asn`. Overview: MetricCrawler stat grid (§7.3 mapping). ASN: MetricASN bars + sort toggle + search (§7.3).
+7. **CountryList** — client-side name filter over `/countries`; 2/xl:8 card grid: flag, name, `RatingBadge`, percent `ProgressBar`.
+8. **CountryDetail** — country header + counts + big percent bar, Sinners/Heroes toggle over `/countries/{code}/domains?class=`, `DomainTable` + `Pagination`.
+9. **CampaignList** — intro copy, client-side filter, "Create Campaign" GitHub link, card grid with `adoption.v6_ready_percent` bars.
+10. **CampaignDetail** — name/description/`RatingBadge`/counts, members table (`CampaignDomainTable` look: no Rank column, ready-row highlight), `Pagination` over the composite's `domains.page` cursors, `ChangelogTable` from the campaign scope.
+11. **Changelog** — §7.4; toggle + `Pagination` + 30 s refresh.
+12. **FAQ** — 4 sub-pages via `?page=`, sidebar nav, active `text-fuchsia-600`. Content ported verbatim **except** the "Rules and API" page, which is rewritten for the new API: base URL `api.whynoipv6.com` (no `/v1`), `/docs` + `/openapi.json` + `/llms.txt` links, datasets (§5.3), badge usage string, feeds. (Content task, tracked in `.scratch/`.)
+13. **PageNotFound / DomainNotFound** — unchanged art + copy.
+
+---
+
+## 9. Cross-cutting behaviors
+
+### 9.1 Cursor pagination (`useCursorPager` + `Pagination`)
+
+The visible control is unchanged: Previous/Next buttons. The mechanics map 1:1 onto the API's page block (07 §2.4): Next → `page.next_cursor`, enabled iff `has_more`; Previous → `page.prev_cursor`, enabled iff non-null. The active cursor lives in `?cursor=` (URL = source of truth; back/forward and reload just work). A `400 invalid-parameter` on a stale/foreign cursor (07 §3.2) resets to page 1 silently. `meta.count_estimate` is available to the pager but unused in phase 1 (no count is displayed today).
+
+### 9.2 Loading / empty / error states
+
+Loading: the existing animated fuchsia SVG spinner (`LoadingSpinner`). Empty: the existing per-table copy. Error: §6.3. No skeletons, no new spinners.
+
+### 9.3 Dates
+
+`utils/date.ts` — `Intl.DateTimeFormat` en-GB, "DD Month YYYY HH:MM", as today. All API timestamps are RFC 3339 UTC; `day` fields are `YYYY-MM-DD`.
+
+### 9.4 Header / Footer
+
+Verbatim port: logo gradient text, nav (Domains, Campaigns, Countries, Metrics, Changelog, FAQ), active-route underline, mobile hamburger animation; footer GitHub/Twitter icons + Blix hosting credit.
+
+### 9.5 Visitor IPv6 banner (`Notification` + `useVisitorIp`)
+
+Bottom-right toast; `GET /ip`; warn iff `family !== "ipv6"`; auto-hide 15 s / on scroll; fade transition. Fails silent (network error → no banner).
+
+### 9.6 SEO / meta / analytics
+
+Static OG/Twitter/canonical block in `index.html` (WhyNoSticker.webp, @WhyNoIPv6, `notranslate`) as today; per-route `document.title` + meta-description via route `meta` + the global guard (web2's pattern — replaces the old imperative onMounted titles); umami `<script>` kept verbatim; `public/` robots.txt + sitemap.xml + security.txt carried over (sitemap regenerated for the §5 route set).
+
+---
+
+## 10. Phase 2 — new API surfaces (additive, post-cutover)
+
+Same visual language (§2), each independently shippable; none block the DNS flip. Priority order:
+
+1. **Live check page** (`/check`) — the flagship new feature: input → `POST /check` → 202 → poll `GET /check/{id}` every 2 s (07 §5.1.2) until `done|failed`; render `result.checks` with §7.2 icons (the raw-observation vocabulary incl. `error`; live results are labelled "live observation", never confirmed state) plus the `confirmed` block when present; handle `429 rate-limited` with `retry_after` countdown; dedupe responses (`cached: true`) get a "checked recently" note.
+2. **Classification & gold surfacing** — classification badge (`RatingBadge` visuals) + `class_flags` chips on DomainDetail; `/gold` and `/almost` as new `?filter=` options on DomainList; gold star affordance on hero rows.
+3. **Six-dimension detail** — add `conn` (and, once `crawler.resources.enabled` flips, `resources`) rows to the detail accordion; `informational` block (dnssec/ptr/smtp/parity + latency pair) as a quiet secondary card.
+4. **Badge promo** — an "Embed this badge" snippet on DomainDetail (`![IPv6](https://api.whynoipv6.com/badge/{host}.svg)` + shields endpoint variant).
+5. **Adoption graphs** — `/stats/overview` + country/campaign/asn `/stats` time series as CSS/SVG line-or-bar blocks on Metrics/detail pages (still no chart library unless a real need appears).
+6. **Providers league table** — `/providers` page mirroring the ASN view; `?provider=` filter links.
+7. **Mail track** (`/mail` preset), **resource dependents** ("this v4-only host breaks N sites", once resources ship), **mandates view** (`/campaigns?tag=mandate`), **feeds/datasets/CSV links** in footer/FAQ (`.atom`, `.feed.json`, `?format=csv`, `/datasets`).
+
+---
+
+## 11. Testing
+
+Vitest + `@vue/test-utils` + jsdom; API stubbed at the §6.2 helper seam (no live network). Priority coverage — the mapping layer, where regressions are silent:
+
+1. `StatusIcon`: all five §7.2 states → icon/class/tooltip.
+2. `utils/changelog.ts`: message + color table (§7.4) — golden table-driven cases per (field, new_value).
+3. `useCursorPager`: next/prev enablement from `page`, URL sync, stale-cursor reset.
+4. `utils/rating.ts`: threshold boundaries (0/40/60, zero-total Unknown).
+5. `RatingStars`: star count across enum combinations (incl. `not_applicable` scoring 0).
+6. `Tracker`: day-block coloring from history points; empty-history rendering.
+7. One mount smoke test per page with stubbed helpers (renders, no console errors).
+
+Type safety is itself a gate: `vue-tsc` runs in `build`, and the generated `schema.ts` types make backend contract drift a compile error — that replaces the old world's absent API tests.
+
+---
+
+## 12. Build, environments, deploy
+
+- **Envs:** `VITE_API_URL` — development `http://localhost:8080`, production `https://api.whynoipv6.com`. No other runtime config.
+- **Build:** `vite build` (with `vue-tsc`) → static `dist/`. Sensible default chunking; revisit web2's manualChunks only if bundle analysis shows a need.
+- **Serve:** static nginx vhost for `whynoipv6.com` (deploy/nginx, 09-ops.md): SPA fallback `try_files $uri $uri/ /index.html`, gzip/brotli, long-cache hashed assets. Cutover remains a DNS flip (08-migration-cutover.md).
+- **Make targets (root):** `frontend-dev`, `frontend-build`, `frontend-test`, `frontend-lint`; `make generate` already regenerates `openapi/schema.ts`, which CI drift-gates (07 §7).
+
+---
+
+## 13. Open items
+
+| # | Question | Default until decided |
+|---|---|---|
+| OPEN-F1 | Does `not_applicable` MX deserve a star / count as "ready" on the detail rating? (§7.3 keeps old behavior: only `supported` scores.) Note the API's own `v6_ready` treats `www: not_applicable` as ready (07 §4.7) — the star widget and campaign highlight are intentionally not the same metric. | Keep old behavior |
+| OPEN-F2 | Changelog page "Campaigns" toggle: the old API had a global campaign-changelog feed; the new API scopes campaign changelogs per-campaign (07 §4.8). Options: drop the toggle, or ask the backend for a `?scope=campaign` filter on `/changelog`. | Drop the toggle on the global page (campaign changelogs live on campaign pages) |
+| OPEN-F3 | Keep the `/domain`, `/country`, `/campaign` singular public paths forever, or 301 to plural (`/domains`, …) at cutover for consistency with the API? SEO says keep. | Keep singular paths |
+| OPEN-F4 | FAQ "Rules and API" rewrite copy — content task, needs human wording pass. | Draft in phase 1, human-review before cutover |
+| OPEN-F5 | Phase 2 ordering/scope (§10) — confirm the priority list, especially whether the live-check page should be pulled into phase 1. | As listed |
