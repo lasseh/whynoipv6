@@ -278,6 +278,28 @@ func rollupResources(conn domain.Observation, links []LinkedResource) domain.Obs
 	}
 }
 
+// obsFromStatus is the single CheckStatus→Observation value bridge. The two
+// enums are unrelated string types; this table is the one place their value
+// correspondence is written down — an unknown status lands on error rather
+// than leaking through a silent cast.
+func obsFromStatus(st checker.CheckStatus) domain.Observation {
+	switch st {
+	case checker.StatusSupported:
+		return domain.ObsSupported
+	case checker.StatusPartial:
+		return domain.ObsPartial
+	case checker.StatusUnsupported:
+		return domain.ObsUnsupported
+	case checker.StatusNotApplicable:
+		return domain.ObsNotApplicable
+	case checker.StatusError:
+		return domain.ObsError
+	default:
+		slog.Warn("unknown check status", "status", st)
+		return domain.ObsError
+	}
+}
+
 // infoRaw stores the raw engine status; partialOK=false defensively maps an
 // illegal partial to error (02 §7.4).
 func infoRaw(st checker.CheckStatus, partialOK bool) domain.Observation {
@@ -285,14 +307,14 @@ func infoRaw(st checker.CheckStatus, partialOK bool) domain.Observation {
 		slog.Warn("unexpected partial on informational dimension")
 		return domain.ObsError
 	}
-	return domain.Observation(st)
+	return obsFromStatus(st)
 }
 
 func infoSMTP(st checker.CheckStatus) domain.Observation {
 	if st == checker.StatusPartial {
 		return domain.ObsUnsupported // a half-working EHLO does not accept mail
 	}
-	return domain.Observation(st)
+	return obsFromStatus(st)
 }
 
 func latencyMs(st checker.CheckStatus, d *checker.LatencyDetail) *int32 {

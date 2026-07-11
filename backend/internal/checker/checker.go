@@ -6,15 +6,18 @@ package checker
 import (
 	"context"
 	"time"
+
+	"github.com/lasseh/whynoipv6/internal/domain"
 )
 
-// Kind is the entity kind the engine scans (values match the domain.kind
-// enum; the crawler maps the DB value onto this when calling Runner.Run).
-type Kind string
+// Kind aliases the domain entity kind — one enum, no parallel type world;
+// the alias keeps check signatures readable next to their `domain string`
+// host parameters.
+type Kind = domain.Kind
 
 const (
-	KindApex      Kind = "apex"
-	KindSubdomain Kind = "subdomain"
+	KindApex      = domain.KindApex
+	KindSubdomain = domain.KindSubdomain
 )
 
 // CheckStatus is a bounded set of possible check outcomes.

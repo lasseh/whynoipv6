@@ -45,7 +45,7 @@ func (w *Worker) Process(ctx context.Context, d ClaimedDomain) { //nolint:gocrit
 	start := time.Now()
 	t := time.Now().UTC() // T — fixed once per domain (03 §3)
 
-	sr := w.Runner.Run(ctx, d.Host, checker.Kind(d.Kind))
+	sr := w.Runner.Run(ctx, d.Host, d.Kind)
 
 	links := w.readLinks(ctx, d.ID)
 	obs := observe.MapObservations(d.Kind, sr, w.Preflight.LastPass(), t, links, w.ResourcesEnabled)

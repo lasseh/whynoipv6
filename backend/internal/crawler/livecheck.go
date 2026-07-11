@@ -118,7 +118,7 @@ func (lc *LiveChecker) process(ctx context.Context, id int64, host string) {
 	}
 
 	runCtx, cancel := context.WithTimeout(ctx, lc.Cfg.JobBudget)
-	sr := lc.Runner.Run(runCtx, host, checker.Kind(kind))
+	sr := lc.Runner.Run(runCtx, host, kind)
 	budgetBlown := errors.Is(runCtx.Err(), context.DeadlineExceeded)
 	cancel()
 	if budgetBlown {

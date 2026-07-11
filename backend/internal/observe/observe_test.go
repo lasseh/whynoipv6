@@ -283,3 +283,24 @@ func TestResourcesRollup(t *testing.T) {
 		}
 	})
 }
+
+// TestObsFromStatus pins the one CheckStatus→Observation value bridge:
+// every engine status maps to its same-named observation; unknown → error.
+func TestObsFromStatus(t *testing.T) {
+	rows := []struct {
+		st   checker.CheckStatus
+		want domain.Observation
+	}{
+		{checker.StatusSupported, domain.ObsSupported},
+		{checker.StatusPartial, domain.ObsPartial},
+		{checker.StatusUnsupported, domain.ObsUnsupported},
+		{checker.StatusNotApplicable, domain.ObsNotApplicable},
+		{checker.StatusError, domain.ObsError},
+		{checker.CheckStatus("bogus"), domain.ObsError},
+	}
+	for _, tc := range rows {
+		if got := obsFromStatus(tc.st); got != tc.want {
+			t.Errorf("obsFromStatus(%s) = %s, want %s", tc.st, got, tc.want)
+		}
+	}
+}
