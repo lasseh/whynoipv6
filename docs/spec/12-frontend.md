@@ -338,7 +338,7 @@ Loading: the existing animated fuchsia SVG spinner (`LoadingSpinner`). Empty: th
 
 ### 9.4 Header / Footer
 
-Verbatim port: logo gradient text, nav (Domains, Campaigns, Countries, Metrics, Changelog, FAQ), active-route underline, mobile hamburger animation; footer GitHub/Twitter icons + Blix hosting credit.
+Verbatim port: logo gradient text, nav (Domains, Campaigns, Countries, Metrics, Changelog, FAQ), active-route underline, mobile hamburger animation; footer GitHub/Twitter icons + Blix hosting credit. **One required addition to the footer:** an IPinfo attribution link (`IP data by IPinfo` → `https://ipinfo.io`) — the country/ASN GeoIP data is IPinfo Lite, whose CC BY-SA 4.0 license mandates crediting the source (a link suffices; 09-ops §11, ADR 0001). This is the single non-verbatim footer element.
 
 ### 9.5 Visitor IPv6 banner (`Notification` + `useVisitorIp`)
 

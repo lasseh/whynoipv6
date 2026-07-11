@@ -6,7 +6,7 @@ _Status: Round 3.0 — API redesign folded in (docs/api-design-research.md, deci
 run the three binaries on his own VMs. This file is the **single source of truth for
 every configuration key** across `api`, `crawler`, and `v6ctl` (§2), and it owns all
 deploy artifacts: systemd units and timers, nginx vhosts, Unbound deployment + stats,
-the docker-compose dev environment, backup & restore, the GeoLite2 lifecycle,
+the docker-compose dev environment, backup & restore, the IPinfo Lite lifecycle,
 liveness heartbeats + Grafana alert rules, logging conventions, and the
 Makefile/`.golangci.yml`/CI gate.
 
@@ -19,7 +19,7 @@ Makefile/`.golangci.yml`/CI gate.
 - `deploy/nginx/api.whynoipv6.com.conf` — the API + datasets vhost (§7).
 - `deploy/unbound/` — `unbound@.service`, `unbound-base.conf`, per-instance drop-ins (§8).
 - `deploy/pgbackrest/` — `pgbackrest.conf`, `whynoipv6-export.sh` logical export (§10).
-- `deploy/geoip/GeoIP.conf` template + `geoipupdate.timer` override (§11).
+- `v6ctl geoip update` systemd service + daily timer, `IPINFO_TOKEN` from vault (§11).
 - `deploy/grafana/alerts.yaml` — provisioned alert rules (§12).
 - `Makefile`, `compose.yaml` at the monorepo root; `backend/.golangci.yml` with the Go module (see 00-overview.md §4); CI workflow (§14). The root `Makefile` orchestrates `cd backend && …`; all `make`/`go`/`sqlc`/lint invocations run from `backend/`.
 
@@ -101,9 +101,9 @@ in logs, or in the git tree:
 | Ops-webhook URL (bearer path) | `ops.webhook_url` | same env file |
 | healthchecks.io ping URLs | `ops.healthcheck_url`, `ops.healthcheck_tick_url` | same env file (one per crawler process, §5.5/§12) |
 
-MaxMind and pgBackRest credentials are not backend config — they live in
-`/etc/GeoIP.conf` and `/etc/pgbackrest/pgbackrest.conf`, both Ansible-vault templated
-(§10, §11). The startup config summary (§13) redacts every secret: `DATABASE_URL` is
+The IPinfo token and pgBackRest credentials are not backend config — they live in the
+`v6ctl-geoip-update.service` environment and `/etc/pgbackrest/pgbackrest.conf`, both
+Ansible-vault templated (§10, §11). The startup config summary (§13) redacts every secret: `DATABASE_URL` is
 logged host+db only (`postgres://…@dbhost:5432/whynoipv6`), and webhook/ping URLs are
 logged as `set`/`unset`, never their value.
 
@@ -136,7 +136,7 @@ needs them.
 |---|---|---|---|---|---|
 | `DATABASE_URL` | string (pgx DSN) | — (required) | api, crawler, v6ctl | 05,06 | Postgres connection string; pool params in the DSN (§1). |
 | `API_LISTEN` | string `host:port` | `[::1]:8080` | api | 07 §1.1 | HTTP bind; IPv6 loopback by design (nginx-fronted). Override to `:8080` only for dev. |
-| `GEOIP_PATH` | string (dir) | `/var/lib/GeoIP` | crawler | 05,11 | Directory holding `GeoLite2-ASN.mmdb` + `GeoLite2-Country.mmdb`; hourly mtime check + atomic reader swap. |
+| `GEOIP_PATH` | string (dir) | `/var/lib/GeoIP` | crawler | 05,11 | Directory holding `ipinfo_lite.mmdb` (IPinfo Lite, country + ASN); hourly mtime check + atomic reader swap. |
 | `DATASETS_DIR` | string (dir) | `/var/lib/whynoipv6/datasets` | api, v6ctl(export) | 07 §7.2 | Dataset snapshot root; API reads `manifest.json`, `v6ctl export` writes snapshots. |
 | `PUBLIC_BASE_URL` | string (URL) | `https://api.whynoipv6.com` | api | 07 | Public origin for absolute Atom/JSON-Feed self-links (report §6.4) and any absolute dataset/manifest URLs (report §6.3); the API binds `[::1]:8080` behind nginx and cannot infer its own origin. |
 | `LOG_LEVEL` | string enum `debug\|info\|warn\|error` | `info` (api, crawler) / `warn` (v6ctl) | all | 13 | slog level (§13). |
@@ -287,7 +287,7 @@ only registers the two tuning knobs.
   over env for the nested tuning sections. Absent in the reference deployment.
 - `/var/lib/whynoipv6/datasets/` — owned `whynoipv6`, world-readable; nginx serves it
   read-only (§7). Layout and atomic-publish mechanics are in 07-api.md — On-disk layout (§7.2) and Atomic publish procedure (§7.4).
-- `/var/lib/GeoIP/` — written by the distro `geoipupdate` package, read by `crawler`.
+- `/var/lib/GeoIP/` — written by `v6ctl geoip update` (systemd timer, §11), read by `crawler`.
 - `/var/backups/whynoipv6/` — logical CSV exports staging (DB VM, §10).
 
 **Migrations are embedded in `v6ctl` via `go:embed` + golang-migrate's `iofs` source.**
@@ -416,19 +416,30 @@ GitHub Actions `repository_dispatch` webhook → operator CI runs `v6ctl campaig
 |---|---|---|---|---|
 | `whynoipv6-export.timer` | backend | `04:30`, `Persistent=true` | `v6ctl export` | Datasets snapshot after the 03:30 stats tick (1h headroom); applies the 07-api.md §7.4 retention (dailies 90d, first-of-month kept). A late tick degrades to yesterday's stats, never a failure. |
 | `whynoipv6-unbound-stats.timer` | crawler/Unbound | `*:*:00` (every 60s) | `v6ctl ops unbound-stats` | §8; ~1,440 rows/day/host. |
-| `geoipupdate.timer` (distro, overridden) | crawler | `Wed,Sat 06:30` + `RandomizedDelaySec=4h` | `geoipupdate` | §11; MaxMind publishes Tue/Fri, twice-weekly pickup. Crawler picks up new mmdb via §11's hourly mtime check — no restart. |
+| `v6ctl-geoip-update.timer` | crawler | `*-*-* 06:30` + `RandomizedDelaySec=4h` | `v6ctl geoip update` | §11; IPinfo Lite refreshes daily. Crawler picks up new mmdb via §11's hourly mtime check — no restart. |
 | `whynoipv6-logical-export.timer` | DB VM | `Sun 04:30`, `Persistent=true` | `/usr/local/bin/whynoipv6-export.sh` | Weekly CSV export of `changelog` + `domain` (§10.3). **Decision:** unit named `whynoipv6-logical-export` (design gave only the script path) to disambiguate from the backend `whynoipv6-export` datasets unit — the two share the name "export" but run on different hosts. |
 | `pgbackrest-full.timer` | DB VM | `Sun 03:30`, `Persistent=true` | `pgbackrest --stanza=whynoipv6 --type=full backup` | §10.1; 03:30 is outside the crawl write window and the 23:15 Tranco window. |
 | `pgbackrest-diff.timer` | DB VM | `Mon..Sat 03:30`, `Persistent=true` | `pgbackrest --stanza=whynoipv6 --type=diff backup` | §10.1. |
 | `pgbackrest-verify.timer` | DB VM | `05:00`, `Persistent=true` | `/usr/local/bin/whynoipv6-backup-verify.sh` | §10.5 nightly backup+version monitoring. **Decision:** unit/script named `pgbackrest-verify` (design described the job, unnamed). |
 
-`geoipupdate.timer` override drop-in (`deploy/systemd/geoipupdate.timer.d/override.conf`):
+`v6ctl-geoip-update` units (`deploy/systemd/`):
 
 ```ini
+# v6ctl-geoip-update.service
+[Service]
+Type=oneshot
+Environment=IPINFO_TOKEN={{ vault_ipinfo_token }}
+Environment=GEOIP_PATH=/var/lib/GeoIP
+ExecStart=/usr/local/bin/v6ctl geoip update
+
+# v6ctl-geoip-update.timer
 [Timer]
-OnCalendar=
-OnCalendar=Wed,Sat 06:30
+OnCalendar=*-*-* 06:30
 RandomizedDelaySec=4h
+Persistent=true
+
+[Install]
+WantedBy=timers.target
 ```
 
 (The empty `OnCalendar=` clears the packaged schedule before setting ours.)
@@ -716,6 +727,17 @@ services:
     depends_on:
       migrate: {condition: service_completed_successfully}
 
+  # Init container: fetch the IPinfo Lite mmdb into the geoip volume (§11 dev
+  # equivalent). Runs as root to write the root-owned volume; crawler reads :ro.
+  geoip-init:
+    build: {context: ./backend, dockerfile: Dockerfile}
+    entrypoint: ["/v6ctl", "geoip", "update"]
+    user: root
+    environment:
+      IPINFO_TOKEN: ${IPINFO_TOKEN:-}          # set in gitignored .env
+      GEOIP_PATH: /var/lib/GeoIP
+    volumes: ["geoip:/var/lib/GeoIP"]
+
   crawler:
     build: {context: ./backend, dockerfile: Dockerfile}
     entrypoint: ["/crawler"]
@@ -729,6 +751,7 @@ services:
       - "datasets:/var/lib/whynoipv6/datasets"
     depends_on:
       migrate: {condition: service_completed_successfully}
+      geoip-init: {condition: service_completed_successfully}
 
 volumes:
   pgdata:
@@ -868,33 +891,34 @@ webhook alert is the required part.
 
 ---
 
-## 11. GeoLite2 lifecycle (`deploy/geoip/`)
+## 11. IPinfo Lite lifecycle (`deploy/geoip/`)
 
 Replaces production's repo-bundled Jan-2023 mmdb files. The attribution logic, the
 `GEOIP_PATH` key, and the crawler's hourly mtime check + atomic reader swap are owned by
-06-ingest.md — §6.8 (`internal/geoip`); this section owns the update lifecycle.
+06-ingest.md — §6.8 (`internal/geoip`); this section owns the update lifecycle. The
+MaxMind → IPinfo switch is ADR 0001.
 
-1. **Account:** free MaxMind account + license key. Store `AccountID` + `LicenseKey` in
-   Ansible vault (`MAXMIND_ACCOUNT_ID`, `MAXMIND_LICENSE_KEY`).
-2. **Ansible:** install the distro `geoipupdate` package; template `/etc/GeoIP.conf`:
-   ```conf
-   AccountID {{ vault_maxmind_account_id }}
-   LicenseKey {{ vault_maxmind_license_key }}
-   EditionIDs GeoLite2-ASN GeoLite2-Country
-   DatabaseDirectory /var/lib/GeoIP
-   ```
-3. **Timer:** enable the packaged `geoipupdate.timer`, overridden to
-   `OnCalendar=Wed,Sat 06:30` + `RandomizedDelaySec=4h` (§5). MaxMind publishes Tue/Fri;
-   twice-weekly pickup, weekly is the acceptable minimum. Pickup by the crawler is the
-   hourly mtime check + atomic reader swap — no tick step, no restart.
+1. **Token:** free IPinfo account + API token. Store it in Ansible vault
+   (`vault_ipinfo_token`). No account-ID/license-key pair, no distro package — IPinfo
+   Lite is one CC BY-SA 4.0 file (country + ASN, IPv4+IPv6) fetched by token.
+2. **Ansible:** deploy the `v6ctl` binary (already shipped for migrations). No
+   `geoipupdate` package, no `/etc/GeoIP.conf`. The updater is `v6ctl geoip update`,
+   which downloads `ipinfo_lite.mmdb` into `GEOIP_PATH` atomically (temp file →
+   mmdb-verify → rename), so the crawler's mtime swap never sees a torn file.
+3. **Timer:** a `v6ctl-geoip-update.service` (`Environment=IPINFO_TOKEN={{ vault_ipinfo_token }}`,
+   `ExecStart=/usr/local/bin/v6ctl geoip update`) on a daily timer,
+   `OnCalendar=*-*-* 06:30` + `RandomizedDelaySec=4h` (§5); IPinfo Lite refreshes every
+   24 h. Pickup by the crawler is the hourly mtime check + atomic reader swap — no tick
+   step, no restart. (Dev equivalent: the compose `geoip-init` service.)
 4. **Monitoring:** the crawler exports the loaded mmdb build epoch into
    `crawler_metrics.geoip_build_epoch` (05-schema.md — crawler_metrics);
-   Grafana alerts when it is older than **30 days** (catches expired license keys and
-   broken timers — the exact failure mode production was stuck in).
+   Grafana alerts when it is older than **7 days** (daily updates → a 7-day-stale epoch
+   means a broken token or timer).
 
-Filenames (`GeoLite2-ASN.mmdb`, `GeoLite2-Country.mmdb`) and the reload interval are
-fixed, not config. Only the directory (`GEOIP_PATH`, default `/var/lib/GeoIP`) is
-configurable.
+Attribution: IPinfo Lite (CC BY-SA 4.0) requires crediting IPinfo — the frontend footer
+carries the link (12-frontend §9.4). The filename (`ipinfo_lite.mmdb`) and the reload
+interval are fixed, not config. Only the directory (`GEOIP_PATH`, default
+`/var/lib/GeoIP`) is configurable.
 
 ---
 

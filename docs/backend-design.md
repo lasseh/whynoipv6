@@ -1869,14 +1869,17 @@ table-scanning `LIKE '%x%'` (`db/query/domain.sql:65`) dies here.
 
 **GeoIP attribution.**
 
-**Library and files.** MaxMind GeoLite2-ASN + GeoLite2-Country mmdb, read with the
-official reader `github.com/oschwald/geoip2-golang/v2` (has `Close()`, netip-based;
-readers are safe for concurrent use). Filenames are fixed: `GeoLite2-ASN.mmdb`,
-`GeoLite2-Country.mmdb`, both in the directory given by config key `GEOIP_PATH`
-(uppercase-env viper convention, same as `API_LISTEN`), default `/var/lib/GeoIP`.
-Only the **crawler binary** opens them (attribution is a scan-commit concern; the
-API never does GeoIP lookups). The crawler **fails fast at startup** if either file
-is missing or unreadable — Phase 1 gates on GeoIP wiring.
+**Library and files.** The **IPinfo Lite** database — one combined file carrying
+both country and ASN for IPv4+IPv6 — read with the generic mmdb reader
+`github.com/oschwald/maxminddb-golang/v2` (has `Close()`, netip-based; readers are
+safe for concurrent use). The record fields consumed are `asn` (textual, e.g.
+`"AS13335"`), `as_name`, and `country_code`. The filename is fixed:
+`ipinfo_lite.mmdb`, in the directory given by config key `GEOIP_PATH` (uppercase-env
+viper convention, same as `API_LISTEN`), default `/var/lib/GeoIP`. Only the
+**crawler binary** opens it (attribution is a scan-commit concern; the API never
+does GeoIP lookups). The crawler **fails fast at startup** if the file is missing or
+unreadable — Phase 1 gates on GeoIP wiring. (See ADR 0001 for the MaxMind → IPinfo
+switch.)
 
 **Attribution input IP** (replaces production `resolver.IPLookup`, which is rejected
 with the rest of that resolver). Computed from the scan's own §2.3.1 base-composite
@@ -1895,7 +1898,8 @@ every scan).
 
 **ASN attribution** (`domain.asn_id`), production parity with geoip.go
 `getNetworkProvider`:
-- GeoLite2-ASN lookup of the input IP → (AS number, organization name).
+- IPinfo Lite lookup of the input IP → `asn` (parsed from `"AS<n>"` to a number) +
+  `as_name` (organization name).
 - AS number ≠ 0: find `asn` row by `number`; if absent, `INSERT (number, name)`
   (`ON CONFLICT (number) DO NOTHING`, then re-read). New ASNs are auto-registered
   exactly as production does; existing names are **not** updated on later scans.
@@ -1909,7 +1913,7 @@ under OPEN-5 (ccTLD wins over server location), PSL-correct per the doc:
    Match it against `country.tld` (seed stores production's dot-prefixed uppercase
    form, e.g. `.NO`; normalize the probe to `"." + strings.ToUpper(label)`).
    A match wins unconditionally — no GeoIP lookup is made.
-2. **GeoIP fallback**: GeoLite2-Country ISO code of the input IP, matched against
+2. **GeoIP fallback**: the input IP's IPinfo Lite `country_code`, matched against
    `country.code`.
 3. **Sentinel** otherwise (no input IP, lookup miss, or unmapped code).
 
@@ -1938,9 +1942,9 @@ resolves sentinel ids **once at startup by lookup**, never by literal id:
 Both appear in `/metric/asn` and `/country` listings exactly as they do today
 (production parity; the frontend already renders them).
 
-**mmdb reload.** The crawler stats the two mmdb files hourly; on mtime change it
-opens new readers, swaps them via `atomic.Pointer`, and `Close()`s the old ones.
-Startup and each swap log the databases' build epochs (slog, `geoip.build_epoch`).
+**mmdb reload.** The crawler stats the mmdb file hourly; on mtime change it opens a
+new reader, swaps it via `atomic.Pointer`, and `Close()`s the old one. Startup and
+each swap log the database's build epoch (slog, `geoip.build_epoch`).
 A plain systemd restart after update is an acceptable operational substitute; the
 mtime swap just avoids interrupting long crawl runs.
 
@@ -2790,7 +2794,7 @@ backend/
                            #   v2 configured it and then hand-wrote everything)
     service/               # use-case layer the api handlers call
     api/                   # chi server, handlers, legacy-shape mappers, gen/ (oapi-codegen)
-    geoip/                 # MaxMind mmdb
+    geoip/                 # IPinfo Lite mmdb
     notify/                # webhook + healthcheck ping (v2's Notifier, actually invoked)
     config/                # viper env config
   db/migrations/           # golang-migrate; 001 schema, 002 timescale, 003 seed
@@ -3327,31 +3331,33 @@ Retention on the backup host: last 8 weeklies + first-of-month for 12 months (tm
 
 Nightly systemd timer runs `pgbackrest --stanza=whynoipv6 info --output=json` and `psql -Atc "SELECT version(), (SELECT extversion FROM pg_extension WHERE extname='timescaledb')"`, appends both to `/var/log/pgbackrest/verify.log` (this is the version-of-record for §2 item 1), and alerts the ops webhook if: newest backup is older than 26 h, newest archived WAL is older than 1 h, or the last export timer failed. Optionally expose the same three as a Grafana panel via a textfile/exec collector — but the webhook alert is the required part.
 
-### 11.2 GeoLite2 lifecycle runbook (Ansible + systemd)
+### 11.2 IPinfo Lite lifecycle runbook (Ansible + systemd)
 
 Production's repo-bundled mmdb files date from January 2023 — this procedure
 replaces that. (The attribution logic itself, the `GEOIP_PATH` config key, and the
-crawler's hourly mtime check + atomic reader swap are specified in §4.9.)
+crawler's hourly mtime check + atomic reader swap are specified in §4.9; the
+MaxMind → IPinfo decision is ADR 0001.)
 
-1. **Account**: free MaxMind account; generate a license key. Store `AccountID` +
-   `LicenseKey` in Ansible vault (`MAXMIND_ACCOUNT_ID`, `MAXMIND_LICENSE_KEY`).
-2. **Ansible**: install the distro `geoipupdate` package; template
-   `/etc/GeoIP.conf`:
-   ```
-   AccountID <vault>
-   LicenseKey <vault>
-   EditionIDs GeoLite2-ASN GeoLite2-Country
-   DatabaseDirectory /var/lib/GeoIP
-   ```
-3. **Timer**: enable the packaged `geoipupdate.timer`, overridden to
-   `OnCalendar=Wed,Sat 06:30` + `RandomizedDelaySec=4h` (GeoLite2 publishes
-   Tuesdays and Fridays; twice-weekly pickup, weekly is the acceptable minimum).
+1. **Token**: free IPinfo account; generate an API token. Store it in Ansible vault
+   (`IPINFO_TOKEN`). No account-ID/license-key pair and no distro package — IPinfo
+   Lite is one CC BY-SA 4.0 file fetched by token.
+2. **Ansible**: deploy the `v6ctl` binary (already shipped for migrations) — no
+   `geoipupdate` package, no `/etc/GeoIP.conf`. The updater is `v6ctl geoip update`,
+   which downloads `ipinfo_lite.mmdb` into `GEOIP_PATH` atomically (temp file →
+   mmdb-verify → rename) so the crawler's hourly mtime swap never sees a torn file.
+3. **Timer**: a `v6ctl-geoip-update.service`
+   (`Environment=IPINFO_TOKEN=<vault>`, `Environment=GEOIP_PATH=/var/lib/GeoIP`,
+   `ExecStart=/usr/local/bin/v6ctl geoip update`) driven by a daily timer
+   (`OnCalendar=*-*-* 06:30` + `RandomizedDelaySec=4h`; IPinfo Lite refreshes every
+   24 h). The dev equivalent is the compose `geoip-init` service.
 4. **Monitoring**: crawler exports the loaded mmdb build epoch in
-   `crawler_metrics`; Grafana alert when it is older than 30 days (catches expired
-   license keys and broken timers — the exact failure mode production is in).
+   `crawler_metrics`; Grafana alert when it is older than 7 days (daily updates → a
+   7-day-stale epoch means a broken token or timer).
 
-Config key: `GEOIP_PATH` (string, default `/var/lib/GeoIP`, crawler) — introduced
-in §4.9. Reload interval and filenames are fixed, not config.
+Attribution: IPinfo Lite (CC BY-SA 4.0) requires crediting IPinfo — the frontend
+footer carries the link (12-frontend §9.4). Config key: `GEOIP_PATH` (string,
+default `/var/lib/GeoIP`, crawler) — introduced in §4.9. Reload interval and
+filename are fixed, not config.
 
 ### 11.3 Crawl liveness, Unbound stats, Grafana alerting
 
@@ -3434,7 +3440,7 @@ The nginx api vhost (proxy_set_header block, [::1] rationale) is specified in
   crawler/consensus/lifecycle keys.
 - `/var/lib/whynoipv6/datasets/` — owned whynoipv6, world-readable; nginx serves it read-only
   per §5.4 (`autoindex off`, manifest is the index).
-- `/var/lib/GeoIP/` — written by the distro `geoipupdate` package, read by crawler.
+- `/var/lib/GeoIP/` — written by `v6ctl geoip update` (systemd timer, §11.2), read by crawler.
 - Migrations are **embedded in `v6ctl` via `go:embed` (golang-migrate iofs source)** —
   no migrations directory ships to the host; the deploy artifact set is exactly the
   three binaries. (`db/migrations/` in the repo stays the sqlc/dev source of truth.)
@@ -3483,7 +3489,7 @@ Semaphore webhook + daily tick, per §7's explicit "Both".
 |---|---|---|---|
 | `whynoipv6-export.timer` | `04:30`, `Persistent=true` | `v6ctl export` | Satisfies §5.4 "after the stats tick" with 1h headroom over the 03:30 tick; export reads confirmed state + latest stats snapshot, so a late tick degrades to yesterday's stats row, never a failure. Also applies the §5.4 retention (dailies 90d, first-of-month kept). |
 | `whynoipv6-unbound-stats.timer` | `*:*:00` (every 60s) | `v6ctl ops unbound-stats` | §11.3 mechanism, on the Unbound host. |
-| `geoipupdate.timer` (distro package) | `Wed,Sat 06:30` + `RandomizedDelaySec=4h` | `geoipupdate` (`/etc/GeoIP.conf`: GeoLite2-ASN + GeoLite2-Country, account/license key) | Cadence per §11.2 (MaxMind publishes Tue/Fri); pickup by the crawler is §4.9's hourly mtime check + atomic reader swap — no tick step, no restart needed. |
+| `v6ctl-geoip-update.timer` | `*-*-* 06:30` + `RandomizedDelaySec=4h` | `v6ctl geoip update` (`IPINFO_TOKEN` from vault → `ipinfo_lite.mmdb`) | Cadence per §11.2 (IPinfo Lite refreshes daily); pickup by the crawler is §4.9's hourly mtime check + atomic reader swap — no tick step, no restart needed. |
 
 Timer service units are `Type=oneshot`, `User=whynoipv6`,
 `EnvironmentFile=/etc/whynoipv6/env`. Timer failures alert via the existing ops

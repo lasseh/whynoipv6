@@ -394,7 +394,7 @@ early risk experiments.
 - **Governs:** see 06-ingest.md — GeoIP / ASN attribution (§6); design OPEN-5 (ccTLD
   precedence, GeoIP fallback).
 - **Depends:** P1.4, P1.5, P1.6
-- **Deliverables:** `internal/geoip/` (MaxMind mmdb readers, attribution algorithm, hot
+- **Deliverables:** `internal/geoip/` (IPinfo Lite mmdb reader, attribution algorithm, hot
   reload).
 - **Acceptance:** `TestAttribution` covers ccTLD-beats-GeoIP, deferred scans leaving
   `asn_id/country_id` untouched, insert-time attribution = ccTLD-or-sentinel country + sentinel
@@ -1260,11 +1260,11 @@ remaining runbooks. Closes the whole build.
   by the bot commit (design §8 Phase 7 verify); the sync is serialized with the daily tick via
   the advisory lock (no double-run). Recorded to `docs/gates/P7-e2e.md`.
 
-### P7.3 — Runbooks + GeoLite2 lifecycle
-- **Governs:** see 09-ops.md — GeoLite2 lifecycle (§11); design §11 (Unbound, Timescale jobs,
+### P7.3 — Runbooks + IPinfo Lite lifecycle
+- **Governs:** see 09-ops.md — IPinfo Lite lifecycle (§11); design §11 (Unbound, Timescale jobs,
   frontier surgery runbooks).
 - **Depends:** P3.1, P1.9
-- **Deliverables:** `deploy/geoip/GeoIP.conf` template + `geoipupdate.timer` override;
+- **Deliverables:** `deploy/geoip/` `v6ctl-geoip-update.service` + `.timer` units;
   `docs/runbooks/{unbound,timescale-jobs,frontier-surgery}.md`.
 - **Acceptance:** `systemd-analyze verify` passes on the geoip timer override; the runbooks
   exist and each documents its trigger + recovery steps (design §11 topics covered).
@@ -1356,7 +1356,7 @@ matrix against the §-headings of files 01–10; any section with no task ID is 
 | 09-ops — §8 (Unbound + stats) | P3.1 |
 | 09-ops — §9 (docker-compose) | P0.4 |
 | 09-ops — §10 (backup & restore) | P3.3 |
-| 09-ops — §11 (GeoLite2 lifecycle) | P7.3 |
+| 09-ops — §11 (IPinfo Lite lifecycle) | P7.3 |
 | 09-ops — §12 (liveness, heartbeats, alerts) | P2.12, P3.2 |
 | 09-ops — §13 (logging conventions) | P0.6 |
 | 09-ops — §14 (Makefile, golangci, CI) | P0.3, P0.5 |

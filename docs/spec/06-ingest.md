@@ -8,7 +8,7 @@ _Status: Round 3.0 — API redesign folded in (docs/api-design-research.md, deci
 - `internal/domain/host.go` — `Canonicalize(host)` (the one canonicalization function)
 - `internal/ingest/` — Tranco fetcher, parser, staging upserter, sanity guard, retry cycle
 - `internal/campaign/` — YAML parse + validation + idempotent `Sync`, PR-validation logic
-- `internal/geoip/` — MaxMind mmdb readers, attribution algorithm, hot reload
+- `internal/geoip/` — IPinfo Lite mmdb reader, attribution algorithm, hot reload
 - `internal/crawler/resourcesweep.go` — resource-host sweep worker (runs inside `cmd/crawler`)
 - resource discovery/prune/counter statements executed inside the per-domain commit transaction (transaction machinery owned by 03-state-machine.md)
 - `db/query/stats.sql`, `db/query/country.sql`, `db/query/asn.sql` — the four `stats_*` snapshot upserts and the ported `update_country_metrics`/`update_asn_metrics` counter recomputes (§10), called by the daily tick steps 2–3 (04-lifecycle-scheduling.md — The daily tick) and by `v6ctl stats recalc`
@@ -546,7 +546,7 @@ next_check_at   = now() + interval '24 hours'
 
 ### 6.1 Library, files, startup
 
-MaxMind GeoLite2-ASN + GeoLite2-Country mmdb, read with the official reader `github.com/oschwald/geoip2-golang/v2` (has `Close()`, netip-based; readers are safe for concurrent use). Filenames are fixed (not config): `GeoLite2-ASN.mmdb`, `GeoLite2-Country.mmdb`, both in the directory given by config key `GEOIP_PATH` (uppercase-env viper convention; string, default `/var/lib/GeoIP`; registry: 09-ops.md). Only the **crawler binary** opens them (attribution is a scan-commit concern; the API never does GeoIP lookups; `v6ctl` needs them only via code paths it never exercises — insert-time attribution needs no mmdb, §6.5). The crawler **fails fast at startup** if either file is missing or unreadable. File freshness is operated by the distro `geoipupdate.timer` (`OnCalendar=Wed,Sat 06:30` + 4h randomized delay) — unit definitions and the MaxMind account runbook live in 09-ops.md.
+The **IPinfo Lite** database — one combined file (`ipinfo_lite.mmdb`) carrying both country and ASN for IPv4+IPv6 — read with the generic mmdb reader `github.com/oschwald/maxminddb-golang/v2` (has `Close()`, netip-based; readers are safe for concurrent use). The record fields consumed are `asn` (textual, e.g. `"AS13335"`), `as_name`, and `country_code`. The filename is fixed (not config): `ipinfo_lite.mmdb`, in the directory given by config key `GEOIP_PATH` (uppercase-env viper convention; string, default `/var/lib/GeoIP`; registry: 09-ops.md). Only the **crawler binary** opens it (attribution is a scan-commit concern; the API never does GeoIP lookups; `v6ctl` needs it only via code paths it never exercises — insert-time attribution needs no mmdb, §6.5). The crawler **fails fast at startup** if the file is missing or unreadable. File freshness is operated by the `v6ctl-geoip-update.timer` (daily `OnCalendar=*-*-* 06:30` + 4h randomized delay) — unit definitions and the IPinfo token runbook live in 09-ops.md; the MaxMind → IPinfo switch is ADR 0001.
 
 ### 6.2 Attribution input IP
 
@@ -560,7 +560,7 @@ Address order within the RRset is "as returned"; cross-scan determinism is not r
 
 ### 6.3 ASN attribution (`domain.asn_id`)
 
-1. GeoLite2-ASN lookup of the input IP → (AS number, organization name).
+1. IPinfo Lite lookup of the input IP → `asn` (parsed from `"AS<n>"` to a number) + `as_name` (organization name).
 2. AS number ≠ 0: find the `asn` row by `number`; if absent:
 
    ```sql
@@ -574,7 +574,7 @@ Address order within the RRset is "as returned"; cross-scan determinism is not r
 ### 6.4 Country attribution (`domain.country_id`) — ccTLD wins over server location
 
 1. **ccTLD:** take the final label of the host's ICANN public suffix — equivalently (and implemented as) the host's **final DNS label**. Probe `country.tld` with `"." + strings.ToUpper(label)` (the seed stores production's dot-prefixed uppercase form, `.NO`). A match wins **unconditionally** — no GeoIP lookup is made.
-2. **GeoIP fallback:** GeoLite2-Country ISO code of the input IP, matched against `country.code`.
+2. **GeoIP fallback:** the input IP's IPinfo Lite `country_code`, matched against `country.code`.
 3. **Sentinel** otherwise (no input IP, lookup miss, or unmapped code).
 
 ### 6.5 Insert-time attribution (no mmdb, no input IP)
@@ -593,7 +593,7 @@ Seed data (migration ordering in 05-schema.md: sentinels land with the asn/count
 
 ### 6.8 mmdb hot reload
 
-The crawler stats the two mmdb files hourly; on mtime change it opens new readers, swaps them via `atomic.Pointer[geoip2.Reader]`, and `Close()`s the old ones. Startup and each swap log the databases' build epochs (slog key `geoip.build_epoch`); the loaded build epoch is also exported in `crawler_metrics` for the Grafana >30d staleness alert (09-ops.md). A plain systemd restart after update is an acceptable operational substitute; the mtime swap avoids interrupting long crawl runs. Reload interval and filenames are fixed, not config.
+The crawler stats the mmdb file hourly; on mtime change it opens a new reader, swaps it via `atomic.Pointer[maxminddb.Reader]`, and `Close()`s the old one. Startup and each swap log the database's build epoch (slog key `geoip.build_epoch`); the loaded build epoch is also exported in `crawler_metrics` for the Grafana >7d staleness alert (09-ops.md — daily updates). A plain systemd restart after update is an acceptable operational substitute; the mtime swap avoids interrupting long crawl runs. Reload interval and filename are fixed, not config.
 
 ---
 

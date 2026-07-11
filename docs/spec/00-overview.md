@@ -71,7 +71,7 @@ whynoipv6/                     # monorepo root ("whynoipv6-new" is the seed)
       postgres/                # sqlc-generated queries (db/) + hand-written adapters [05]
       service/                 # use-case layer the api handlers call [07]
       api/                     # chi router, handlers, keyset pagination, feeds/badges/datasets/CSV serializers, gen/ (oapi-codegen) [07]
-      geoip/                   # MaxMind mmdb readers + attribution + hot reload [06]
+      geoip/                   # IPinfo Lite mmdb reader + attribution + hot reload [06]
       notify/                  # ops-webhook + healthchecks.io ping client [09]
       config/                  # viper loader, all three binaries [09]
       lock/                    # advisory-lock singleton coordination [04]
@@ -91,7 +91,7 @@ whynoipv6/                     # monorepo root ("whynoipv6-new" is the seed)
     nginx/                     # api.whynoipv6.com.conf (API + /datasets vhost) [09]
     unbound/                   # unbound@.service, unbound-base.conf, per-instance drop-ins [09]
     pgbackrest/                # pgbackrest.conf + whynoipv6-export.sh logical export [09]
-    geoip/                     # GeoIP.conf template + geoipupdate.timer override [09]
+    geoip/                     # v6ctl-geoip-update.service + .timer units [09]
     grafana/                   # alerts.yaml provisioned alert rules [09]
 
   docs/
