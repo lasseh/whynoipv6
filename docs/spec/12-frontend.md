@@ -153,25 +153,27 @@ Deleted relative to the old repos (never ported): the axios `services/` layer, `
 
 ## 5. Routing & URL contract
 
-**Decision: public URLs are preserved verbatim.** They are indexed, linked, and part of the product's identity; the API redesign is invisible to the address bar. The only change: pagination state moves from `?offset=` to `?cursor=` (opaque token, §9.1) — old `?offset=` links degrade gracefully to page 1.
+**Decision (resolved OPEN-F3): canonical paths go plural, old singular URLs 301-redirect.** The new canonical routes use plural collection nouns, matching the API's resource naming (07 §2.2); every existing singular URL keeps working via a **real HTTP 301 at nginx** (SEO-correct: link equity transfers, crawlers re-index) with a router-level `redirect:` backstop for anything that slips through to the SPA. Pagination state moves from `?offset=` to `?cursor=` (opaque token, §9.1) — old `?offset=` links degrade gracefully to page 1; other query params are preserved across the redirect.
 
 | Path | Page | Query state | Data (07-api) |
 |---|---|---|---|
 | `/` | Home | — | §8.1 |
-| `/domain` | DomainList | `filter=sinners\|heroes`, `cursor` | `/sinners`, `/heroes` |
-| `/domain/:domain(.*)` | DomainDetail | — | `/domains/{host}`, `/domains/{host}/changelog`, `/domains/{host}/history` |
-| `/domain/:domain(.*)/not-found` | DomainNotFound | — | — |
+| `/domains` | DomainList | `filter=sinners\|heroes`, `cursor` | `/sinners`, `/heroes` |
+| `/domains/:domain(.*)` | DomainDetail | — | `/domains/{host}`, `/domains/{host}/changelog`, `/domains/{host}/history` |
+| `/domains/:domain(.*)/not-found` | DomainNotFound | — | — |
 | `/search` | Search | `q` | `/domains?q=` |
 | `/metrics` | Metrics | `t=overview\|asn`, `sort` | `/stats/overview`, `/asns` |
-| `/country` | CountryList | — | `/countries` |
-| `/country/:id` | CountryDetail | `filter`, `cursor` | `/countries/{code}`, `/countries/{code}/domains?class=` |
-| `/campaign` | CampaignList | — | `/campaigns` |
-| `/campaign/:uuid` | CampaignDetail | `cursor` | `/campaigns/{uuid}` (composite), `/campaigns/{uuid}/changelog` |
-| `/campaign/:uuid/:domain(.*)` | CampaignDomain | — | `/domains/{host}` + campaign changelog scope |
-| `/campaign/:uuid/:domain(.*)/not-found` | DomainNotFound | — | — |
-| `/changelog` | Changelog | `filter=tranco\|campaign`, `cursor` | `/changelog` |
+| `/countries` | CountryList | — | `/countries` |
+| `/countries/:id` | CountryDetail | `filter`, `cursor` | `/countries/{code}`, `/countries/{code}/domains?class=` |
+| `/campaigns` | CampaignList | — | `/campaigns` |
+| `/campaigns/:uuid` | CampaignDetail | `cursor` | `/campaigns/{uuid}` (composite), `/campaigns/{uuid}/changelog` |
+| `/campaigns/:uuid/:domain(.*)` | CampaignDomain | — | `/domains/{host}` + campaign changelog scope |
+| `/campaigns/:uuid/:domain(.*)/not-found` | DomainNotFound | — | — |
+| `/changelog` | Changelog | `filter=tranco\|campaign`, `cursor` | `/changelog` (+ `?scope=campaign`, §7.4) |
 | `/faq` | FAQ | `page=1..4` | static |
 | `/:catchAll(.*)` | PageNotFound | — | — |
+
+Redirect map (nginx `location` 301s, query string preserved): `/domain` → `/domains`, `/domain/…` → `/domains/…`, `/country[/…]` → `/countries[/…]`, `/campaign[/…]` → `/campaigns[/…]`. The sitemap lists only plural URLs.
 
 Route conventions (from web2, kept): per-route `meta: { title, description }` consumed by a global `beforeEach` guard (§9.6); `scrollBehavior` honoring saved position/hash/top; every page component lazy-imported. The old `ensureTrailingSlash` guard is **deleted** — it existed to appease the old backend; the new API canonicalizes hosts itself (07 §2.8), and `:domain(.*)` params pass through encode-safely.
 
@@ -201,7 +203,7 @@ Every non-2xx is `application/problem+json` (07 §2.5). `problem.ts` parses it i
 
 ### 6.4 What the frontend consumes (phase 1 surface)
 
-`/heroes`, `/sinners`, `/shame`, `/domains?q=`, `/domains/{host}`, `/domains/{host}/changelog`, `/domains/{host}/history`, `/countries`, `/countries/{code}`, `/countries/{code}/domains`, `/campaigns`, `/campaigns/{uuid}` (composite), `/campaigns/{uuid}/changelog`, `/campaigns/{uuid}/domains/{host}/changelog`, `/changelog`, `/stats/overview`, `/asns`, `/ip`. Phase 2 adds §10's list.
+`/heroes`, `/sinners`, `/shame`, `/domains?q=`, `/domains/{host}`, `/domains/{host}/changelog`, `/domains/{host}/history`, `/countries`, `/countries/{code}`, `/countries/{code}/domains`, `/campaigns`, `/campaigns/{uuid}` (composite), `/campaigns/{uuid}/changelog`, `/campaigns/{uuid}/domains/{host}/changelog`, `/changelog` (+ `?scope=campaign`), `/stats/overview`, `/asns`, `/ip`. Phase 2 adds §10's list.
 
 ---
 
@@ -231,8 +233,8 @@ The two muted states are the **only** new pixels in phase 1 — deliberately qui
 |---|---|---|
 | Rank badge | `domain.rank` (0 = none) | `rank` (`null` = none — hide badge on `null`, never render 0) |
 | Provider line on detail | `asn` display string | `asn.name` (+ `AS{asn.number}`) |
-| Country on detail | `country` string | `country.name` + link `/country/{country.code}` |
-| 4-star rating (detail) | count of `supported` among 4 fields | count of `status.{base,www,ns,mx}.value == "supported"` — same outcome for no-MX domains (`not_applicable` scores 0, as `no_record` did) |
+| Country on detail | `country` string | `country.name` + link `/countries/{country.code}` |
+| 4-star rating (detail) | count of `supported` among 4 fields | over `status.{base,www,ns,mx}.value`; `supported` fills a star, and `not_applicable` **must not penalize** (principle locked 2026-07-11 — rendering pending OPEN-F1) |
 | "Last checked" | `ts_check` | `last_checked_at` |
 | Sinners list | `GET /domain?offset=` | `GET /sinners?cursor=` |
 | Heroes list | `GET /domain/heroes?offset=` | `GET /heroes?cursor=` |
@@ -257,7 +259,7 @@ Old rows carried a server-rendered `message` + `domain_url`. New rows are struct
 - `new_value == "no_record"` → `"{host} no longer publishes records for {field_label}"`, color amber.
 - `new_value == "not_applicable"` → `"{host} no longer uses {field_label}"`, muted zinc.
 
-`field_label`: base → "the base domain", www → "www", ns → "nameservers", mx → "e-mail", conn → "connectivity", resources → "page resources". Timestamp column stays violet-500 mono, host links to `/domain/{host}`. The Changelog page's Tranco/Campaigns toggle maps to `GET /changelog` (global) vs — until a campaign-wide global feed exists — the same global feed filtered client-side is **not** attempted; the toggle's campaign mode lists per-campaign changelogs only from campaign pages, and the global page shows the global feed with its `?field=` filter available. The 30 s auto-refresh stays (aligned with the API's 300 s public cache: refreshes hit the CDN, which is fine — freshness comes from `max(changelog.ts)`-seeded ETags, 07 §6.1).
+`field_label`: base → "the base domain", www → "www", ns → "nameservers", mx → "e-mail", conn → "connectivity", resources → "page resources". Timestamp column stays violet-500 mono, host links to the domain detail page. The Changelog page's Tranco/Campaigns toggle is preserved (**resolved OPEN-F2**): `?filter=tranco` → `GET /changelog` (paginated), `?filter=campaign` → `GET /changelog?scope=campaign` (07 §4.8 — a fixed recent window of 50; its envelope carries `null` cursors, so the `Pagination` control self-disables with zero special-casing). The 30 s auto-refresh stays (aligned with the API's 300 s public cache: refreshes hit the CDN, which is fine — freshness comes from `max(changelog.ts)`-seeded ETags, 07 §6.1).
 
 ---
 
@@ -369,10 +371,10 @@ Type safety is itself a gate: `vue-tsc` runs in `build`, and the generated `sche
 
 ## 13. Open items
 
-| # | Question | Default until decided |
+| # | Question | Status |
 |---|---|---|
-| OPEN-F1 | Does `not_applicable` MX deserve a star / count as "ready" on the detail rating? (§7.3 keeps old behavior: only `supported` scores.) Note the API's own `v6_ready` treats `www: not_applicable` as ready (07 §4.7) — the star widget and campaign highlight are intentionally not the same metric. | Keep old behavior |
-| OPEN-F2 | Changelog page "Campaigns" toggle: the old API had a global campaign-changelog feed; the new API scopes campaign changelogs per-campaign (07 §4.8). Options: drop the toggle, or ask the backend for a `?scope=campaign` filter on `/changelog`. | Drop the toggle on the global page (campaign changelogs live on campaign pages) |
-| OPEN-F3 | Keep the `/domain`, `/country`, `/campaign` singular public paths forever, or 301 to plural (`/domains`, …) at cutover for consistency with the API? SEO says keep. | Keep singular paths |
-| OPEN-F4 | FAQ "Rules and API" rewrite copy — content task, needs human wording pass. | Draft in phase 1, human-review before cutover |
-| OPEN-F5 | Phase 2 ordering/scope (§10) — confirm the priority list, especially whether the live-check page should be pulled into phase 1. | As listed |
+| OPEN-F1 | How does `not_applicable` render in the 4-star detail rating? Principle set 2026-07-11: **a domain without an MX record must not be shamed for it** — the old only-`supported`-scores behavior is out. Candidates: (a) `not_applicable` fills the star (matches classification/hero semantics, no layout change, tooltip "No mail service"); (b) the star is dropped from the denominator (rate out of applicable dimensions, e.g. 3/3). | **Open — under discussion** |
+| OPEN-F2 | Changelog page "Campaigns" toggle. | **Resolved 2026-07-11: keep the page** (`/changelog?filter=campaign`), backed by the additive `GET /changelog?scope=campaign` (07 §4.8); recent-window cap, pagination self-disables (§7.4) |
+| OPEN-F3 | Singular vs plural public paths. | **Resolved 2026-07-11: plural canonical, 301 from singular** (§5) |
+| OPEN-F4 | FAQ "Rules and API" rewrite copy. | **Resolved 2026-07-11: yes** — draft in phase 1, human wording pass before cutover |
+| OPEN-F5 | Phase 2 ordering/scope (§10). | **Resolved 2026-07-11: as listed** — live check stays phase 2 |

@@ -566,7 +566,7 @@ Served **structured**, one row per confirmed dimension transition — no message
 
 `ts` is a full RFC 3339 **timestamp** (event time). `old_value`/`new_value` are the raw 4-value enum, always non-null, always distinct. **All native fields are served**, including `conn` and `resources` transitions and `not_applicable` transitions — the legacy coverage filter (which admitted only `base/www/ns/mx` with 3 legacy strings) is deleted. Feeds:
 
-- `GET /changelog` — global recent-transitions feed, cursor on `ts DESC` (`idx_changelog_ts`, see 05-schema.md — changelog table), `?field=` and `?from=/&to=` windows.
+- `GET /changelog` — global recent-transitions feed, cursor on `ts DESC` (`idx_changelog_ts`, see 05-schema.md — changelog table), `?field=` and `?from=/&to=` windows. **`?scope=campaign`** (Decision, 2026-07-11 — frontend parity, 12-frontend.md §7.4): restricts the feed to transitions of domains that are members of *any* campaign. Implementation is driven from the **domain side**, never a global-index probe: the bounded `campaign_domain` set (curated, low thousands) feeds a lateral per-domain read of the `(domain_id, ts)` PK, merged `ts DESC` — k index probes, no sparse scan of `idx_changelog_ts`. Like the per-campaign/per-country feeds it is **capped to the fixed recent window** (latest 50, no pagination — uniform envelope, cursors `null`, `has_more: false`); lifting the cap rides the OPEN-15 denormalization if it ever lands. Any other `scope` value → `422 validation-error`.
 - `GET /domains/{host}/changelog` — per-domain (native PK read).
 - `GET /campaigns/{uuid}/changelog` — campaign-wide (members' transitions).
 - `GET /campaigns/{uuid}/domains/{host}/changelog` — one member.
