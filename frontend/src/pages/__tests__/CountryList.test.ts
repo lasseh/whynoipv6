@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import CountryList from '@/pages/CountryList.vue'
 import { listCountries } from '@/api'
-import { chromeStubs, emptyCollection, makeRouter, meta } from './smoke-helpers'
+import { layoutStubs, emptyCollection, makeRouter, meta } from './test-utils'
 
 vi.mock('@/api', () => ({
   listCountries: vi.fn(),
@@ -14,7 +14,7 @@ describe('CountryList (smoke)', () => {
     vi.mocked(listCountries).mockResolvedValue(emptyCollection)
     const router = await makeRouter('/countries', CountryList)
     const wrapper = mount(CountryList, {
-      global: { plugins: [router], stubs: chromeStubs },
+      global: { plugins: [router], stubs: layoutStubs },
     })
     await flushPromises()
     expect(wrapper.text()).toContain('Country List')
@@ -29,7 +29,7 @@ describe('CountryList (smoke)', () => {
     })
     const router = await makeRouter('/countries', CountryList)
     const wrapper = mount(CountryList, {
-      global: { plugins: [router], stubs: chromeStubs },
+      global: { plugins: [router], stubs: layoutStubs },
     })
     await flushPromises()
     expect(wrapper.text()).toContain('Norway')

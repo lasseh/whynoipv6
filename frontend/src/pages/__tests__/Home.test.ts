@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import Home from '@/pages/Home.vue'
-import { chromeStubs, makeRouter } from './smoke-helpers'
+import { layoutStubs, makeRouter } from './test-utils'
 
 describe('Home (smoke)', () => {
   it('mounts', async () => {
@@ -11,7 +11,7 @@ describe('Home (smoke)', () => {
       global: {
         plugins: [router],
         stubs: {
-          ...chromeStubs,
+          ...layoutStubs,
           HomeSaaS: { template: '<div />' },
           Searchbar: { template: '<div />' },
           TopSinners: { template: '<div />' },

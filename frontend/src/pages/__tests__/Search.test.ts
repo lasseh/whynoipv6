@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import Search from '@/pages/Search.vue'
 import { searchDomains } from '@/api'
-import { chromeStubs, emptyCollection, makeRouter } from './smoke-helpers'
+import { layoutStubs, emptyCollection, makeRouter } from './test-utils'
 
 vi.mock('@/api', () => ({
   searchDomains: vi.fn(),
@@ -13,7 +13,7 @@ describe('Search (smoke)', () => {
   it('mounts without fetching when q is absent', async () => {
     const router = await makeRouter('/search', Search)
     const wrapper = mount(Search, {
-      global: { plugins: [router], stubs: chromeStubs },
+      global: { plugins: [router], stubs: layoutStubs },
     })
     await flushPromises()
     expect(wrapper.text()).toContain('Domains')
@@ -25,7 +25,7 @@ describe('Search (smoke)', () => {
     const router = await makeRouter('/search', Search)
     await router.push({ path: '/search', query: { q: 'example' } })
     const wrapper = mount(Search, {
-      global: { plugins: [router], stubs: chromeStubs },
+      global: { plugins: [router], stubs: layoutStubs },
     })
     await flushPromises()
     expect(searchDomains).toHaveBeenCalledWith(

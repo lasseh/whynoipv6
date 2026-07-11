@@ -18,7 +18,7 @@ async function fetchCampaignList() {
     const response = await listCampaigns()
     campaignList.value = response.items
   } catch (e) {
-    error.value = e instanceof ApiProblem ? e : new ApiProblem({ title: 'Request failed' }, 0)
+    error.value = ApiProblem.from(e)
   }
 }
 

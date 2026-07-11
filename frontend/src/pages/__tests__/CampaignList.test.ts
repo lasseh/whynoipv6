@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import CampaignList from '@/pages/CampaignList.vue'
 import { listCampaigns } from '@/api'
-import { chromeStubs, emptyCollection, makeRouter, meta } from './smoke-helpers'
+import { layoutStubs, emptyCollection, makeRouter, meta } from './test-utils'
 
 vi.mock('@/api', () => ({
   listCampaigns: vi.fn(),
@@ -14,7 +14,7 @@ describe('CampaignList (smoke)', () => {
     vi.mocked(listCampaigns).mockResolvedValue(emptyCollection)
     const router = await makeRouter('/campaigns', CampaignList)
     const wrapper = mount(CampaignList, {
-      global: { plugins: [router], stubs: chromeStubs },
+      global: { plugins: [router], stubs: layoutStubs },
     })
     await flushPromises()
     expect(wrapper.text()).toContain('Campaigns')
@@ -48,7 +48,7 @@ describe('CampaignList (smoke)', () => {
     })
     const router = await makeRouter('/campaigns', CampaignList)
     const wrapper = mount(CampaignList, {
-      global: { plugins: [router], stubs: chromeStubs },
+      global: { plugins: [router], stubs: layoutStubs },
     })
     await flushPromises()
     expect(wrapper.text()).toContain('Banks')

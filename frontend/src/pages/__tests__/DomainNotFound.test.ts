@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import DomainNotFound from '@/pages/DomainNotFound.vue'
-import { layoutStubs } from './fixtures'
+import { layoutStubs } from './test-utils'
 
 describe('DomainNotFound page', () => {
   it('mounts and names the missing domain', async () => {

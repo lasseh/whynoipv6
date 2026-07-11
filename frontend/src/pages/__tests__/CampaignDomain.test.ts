@@ -3,7 +3,13 @@ import { describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import CampaignDomain from '@/pages/CampaignDomain.vue'
-import { campaignDetail, domainDetail, emptyChangelog, emptyHistory, layoutStubs } from './fixtures'
+import {
+  campaignDetail,
+  domainDetail,
+  emptyChangelog,
+  emptyHistory,
+  layoutStubs,
+} from './test-utils'
 
 vi.mock('@/api', () => ({
   getDomain: vi.fn(() => Promise.resolve(domainDetail)),

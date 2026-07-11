@@ -30,7 +30,7 @@ onMounted(async () => {
       void router.replace({ name: 'DomainNotFound', params: { domain: host } })
       return
     }
-    error.value = e instanceof ApiProblem ? e : new ApiProblem({ title: 'Request failed' }, 0)
+    error.value = ApiProblem.from(e)
     return
   }
   // Non-fatal side surfaces — an error just leaves them empty.

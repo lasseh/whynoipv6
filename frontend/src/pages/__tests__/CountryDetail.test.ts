@@ -2,7 +2,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import CountryDetail from '@/pages/CountryDetail.vue'
-import { layoutStubs, makeRouter } from './helpers'
+import { layoutStubs, makeRouter } from './test-utils'
 
 vi.mock('@/api', () => ({
   getCountry: vi.fn().mockResolvedValue({
@@ -22,9 +22,7 @@ vi.mock('@/api', () => ({
 
 describe('CountryDetail', () => {
   it('mounts and renders the country header', async () => {
-    const router = makeRouter('/countries/:id', CountryDetail)
-    await router.push('/countries/NO')
-    await router.isReady()
+    const router = await makeRouter('/countries/:id', CountryDetail, '/countries/NO')
     const wrapper = mount(CountryDetail, {
       global: { plugins: [router], stubs: layoutStubs },
     })

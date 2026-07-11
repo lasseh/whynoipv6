@@ -2,7 +2,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import CampaignDetail from '@/pages/CampaignDetail.vue'
-import { layoutStubs, makeRouter } from './helpers'
+import { layoutStubs, makeRouter } from './test-utils'
 
 vi.mock('@/api', () => ({
   getCampaign: vi.fn().mockResolvedValue({
@@ -33,9 +33,11 @@ vi.mock('@/api', () => ({
 
 describe('CampaignDetail', () => {
   it('mounts, renders the campaign header and null-adoption empty bar', async () => {
-    const router = makeRouter('/campaigns/:uuid', CampaignDetail)
-    await router.push('/campaigns/f9a0a3c4-0000-0000-0000-000000000000')
-    await router.isReady()
+    const router = await makeRouter(
+      '/campaigns/:uuid',
+      CampaignDetail,
+      '/campaigns/f9a0a3c4-0000-0000-0000-000000000000',
+    )
     const wrapper = mount(CampaignDetail, {
       global: { plugins: [router], stubs: layoutStubs },
     })

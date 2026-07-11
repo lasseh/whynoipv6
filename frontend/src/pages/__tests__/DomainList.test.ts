@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import DomainList from '@/pages/DomainList.vue'
 import { listHeroes, listSinners } from '@/api'
-import { chromeStubs, emptyCollection, makeRouter } from './smoke-helpers'
+import { layoutStubs, emptyCollection, makeRouter } from './test-utils'
 
 vi.mock('@/api', () => ({
   listSinners: vi.fn(),
@@ -16,7 +16,7 @@ describe('DomainList (smoke)', () => {
     vi.mocked(listHeroes).mockResolvedValue(emptyCollection)
     const router = await makeRouter('/domains', DomainList)
     const wrapper = mount(DomainList, {
-      global: { plugins: [router], stubs: chromeStubs },
+      global: { plugins: [router], stubs: layoutStubs },
     })
     await flushPromises()
     expect(wrapper.text()).toContain('Unmasking the Top 1M Websites of the World')

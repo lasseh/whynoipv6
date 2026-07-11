@@ -60,9 +60,12 @@ const formattedTsCheck = computed(() =>
   <!-- Domain Status With dropdown -->
   <ul class="my-4 space-y-3">
     <li v-for="row in rows" :key="row.key">
-      <div
-        class="flex justify-between items-center p-3 text-base rounded group hover:shadow bg-gray-800 hover:bg-gray-800/30 text-white border-l-4 cursor-pointer"
+      <button
+        type="button"
+        class="w-full flex justify-between items-center p-3 text-base rounded group hover:shadow bg-gray-800 hover:bg-gray-800/30 text-white border-l-4 cursor-pointer"
         :class="statusBorderClass(row.value)"
+        :aria-expanded="open[row.key]"
+        :aria-controls="`tracker-${row.key}`"
         @click="open[row.key] = !open[row.key]"
       >
         <span class="flex-1 ml-3 whitespace-nowrap font-mono text-sm">{{ row.label }}</span>
@@ -98,9 +101,10 @@ const formattedTsCheck = computed(() =>
             <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 15.75 7.5-7.5 7.5 7.5" />
           </svg>
         </span>
-      </div>
+      </button>
       <div
         v-show="open[row.key] && history.length > 0"
+        :id="`tracker-${row.key}`"
         class="mt-2 p-2 mr-1 ml-1 bg-gray-800/30 rounded-md"
       >
         <Tracker

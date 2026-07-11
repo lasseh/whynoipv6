@@ -2,13 +2,11 @@
 import { describe, expect, it } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import FAQ from '@/pages/FAQ.vue'
-import { layoutStubs, makeRouter } from './helpers'
+import { layoutStubs, makeRouter } from './test-utils'
 
 describe('FAQ', () => {
   it('mounts on page 1 and switches to the rewritten API page via ?page=2', async () => {
-    const router = makeRouter('/faq', FAQ)
-    await router.push('/faq')
-    await router.isReady()
+    const router = await makeRouter('/faq', FAQ)
     const wrapper = mount(FAQ, {
       global: { plugins: [router], stubs: layoutStubs },
     })

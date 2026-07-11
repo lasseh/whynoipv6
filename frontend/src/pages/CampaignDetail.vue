@@ -25,7 +25,7 @@ const uuid = String(route.params.uuid)
 const campaign = ref<CampaignDetail | null>(null)
 const notFound = ref(false)
 
-const { items, page, meta, next, prev } = useCursorList({
+const { items, page, meta, error, next, prev } = useCursorList({
   fetch: async (params, signal) => {
     try {
       const res = await getCampaign(
@@ -172,7 +172,15 @@ const goNext = () => {
 
               <!-- CampaignDomains -->
               <div>
-                <CampaignDomainTable :domains="items" :uuid="uuid" />
+                <!-- Error state (§6.3) -->
+                <div
+                  v-if="error"
+                  class="bg-zinc-800/50 border border-zinc-700 rounded-sm shadow-lg p-5 text-center"
+                >
+                  <div class="text-xl font-medium">{{ error.title }}</div>
+                  <p v-if="error.detail" class="text-gray-400 mt-2">{{ error.detail }}</p>
+                </div>
+                <CampaignDomainTable v-else :domains="items" :uuid="uuid" />
               </div>
 
               <!-- Pagination -->

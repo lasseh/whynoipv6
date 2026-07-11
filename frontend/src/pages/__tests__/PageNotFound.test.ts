@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import PageNotFound from '@/pages/PageNotFound.vue'
-import { layoutStubs } from './fixtures'
+import { layoutStubs } from './test-utils'
 
 describe('PageNotFound page', () => {
   it('mounts and renders the 404 copy', async () => {

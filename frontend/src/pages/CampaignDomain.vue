@@ -39,7 +39,7 @@ onMounted(async () => {
       void router.replace({ name: 'CampaignDomainNotFound', params: { uuid, domain: host } })
       return
     }
-    error.value = e instanceof ApiProblem ? e : new ApiProblem({ title: 'Request failed' }, 0)
+    error.value = ApiProblem.from(e)
     return
   }
   getCampaignDomainChangelog(uuid, host)

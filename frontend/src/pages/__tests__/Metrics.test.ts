@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import Metrics from '@/pages/Metrics.vue'
-import { chromeStubs, makeRouter } from './smoke-helpers'
+import { layoutStubs, makeRouter } from './test-utils'
 
 describe('Metrics (smoke)', () => {
   it('mounts on the overview tab by default', async () => {
@@ -11,7 +11,7 @@ describe('Metrics (smoke)', () => {
       global: {
         plugins: [router],
         stubs: {
-          ...chromeStubs,
+          ...layoutStubs,
           MetricCrawler: { template: '<div data-test="crawler" />' },
           MetricASN: { template: '<div data-test="asn" />' },
         },
@@ -30,7 +30,7 @@ describe('Metrics (smoke)', () => {
       global: {
         plugins: [router],
         stubs: {
-          ...chromeStubs,
+          ...layoutStubs,
           MetricCrawler: { template: '<div data-test="crawler" />' },
           MetricASN: { template: '<div data-test="asn" />' },
         },

@@ -66,27 +66,5 @@ export async function get<P extends GetPath>(
   return handle(res)
 }
 
-type PostOp<P extends keyof paths> = paths[P] extends { post: infer O } ? O : never
-type PostPath = { [P in keyof paths]: PostOp<P> extends never ? never : P }[keyof paths]
-type PostBody<O> = O extends { requestBody?: { content: { 'application/json': infer B } } }
-  ? B
-  : never
-type PostJson<O> = O extends { responses: { 202: { content: { 'application/json': infer J } } } }
-  ? J
-  : O extends { responses: { 200: { content: { 'application/json': infer J } } } }
-    ? J
-    : never
-
-export async function post<P extends PostPath>(
-  path: P,
-  body: PostBody<PostOp<P>>,
-  signal?: AbortSignal,
-): Promise<PostJson<PostOp<P>>> {
-  const res = await fetch(buildURL(path), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-    body: JSON.stringify(body),
-    signal: withTimeout(signal),
-  })
-  return handle(res)
-}
+// The phase-2 live-check flow (POST /check, §10.1) adds a `post()` sibling
+// here when it lands — nothing in the phase-1 surface writes.

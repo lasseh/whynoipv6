@@ -67,7 +67,7 @@ export function useCursorList<T>(opts: CursorListOptions<T>) {
         void router.replace({ query: withoutCursor(route.query) })
         return
       }
-      error.value = e instanceof ApiProblem ? e : new ApiProblem({ title: 'Request failed' }, 0)
+      error.value = ApiProblem.from(e)
     } finally {
       if (controller === c) loading.value = false
     }

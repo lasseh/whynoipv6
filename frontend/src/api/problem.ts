@@ -40,4 +40,9 @@ export class ApiProblem extends Error {
     const body: ProblemBody | null = await res.json().catch(() => null)
     return new ApiProblem(body ?? { title: res.statusText }, res.status)
   }
+
+  /** Wrap non-problem failures (network TypeError, timeout) as a generic problem. */
+  static from(e: unknown): ApiProblem {
+    return e instanceof ApiProblem ? e : new ApiProblem({ title: 'Request failed' }, 0)
+  }
 }

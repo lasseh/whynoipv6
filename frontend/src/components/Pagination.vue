@@ -16,7 +16,7 @@ const isNextDisabled = computed(() => !props.page?.has_more || !props.page.next_
 <template>
   <div class="mt-2">
     <div class="flex justify-center">
-      <nav class="flex" role="navigation" aria-label="Navigation">
+      <nav class="flex" role="navigation" aria-label="Pagination">
         <div class="mr-2">
           <button
             :disabled="isPreviousDisabled"

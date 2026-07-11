@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import Changelog from '@/pages/Changelog.vue'
-import { layoutStubs, makeRouter } from './helpers'
+import { layoutStubs, makeRouter } from './test-utils'
 
 vi.mock('@/api', () => ({
   listChangelog: vi.fn().mockResolvedValue({
@@ -30,9 +30,7 @@ describe('Changelog', () => {
 
   it('mounts, renders derived messages, and clears its refresh interval', async () => {
     const clearSpy = vi.spyOn(window, 'clearInterval')
-    const router = makeRouter('/changelog', Changelog)
-    await router.push('/changelog')
-    await router.isReady()
+    const router = await makeRouter('/changelog', Changelog)
     const wrapper = mount(Changelog, {
       global: { plugins: [router], stubs: layoutStubs },
     })

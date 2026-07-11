@@ -22,7 +22,7 @@ async function fetchCountryList() {
     const response = await listCountries()
     countryList.value = response.items
   } catch (e) {
-    error.value = e instanceof ApiProblem ? e : new ApiProblem({ title: 'Request failed' }, 0)
+    error.value = ApiProblem.from(e)
   }
 }
 

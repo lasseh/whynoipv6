@@ -31,7 +31,7 @@ getCountry(code)
     if (e instanceof ApiProblem && e.code === 'not-found') notFound.value = true
   })
 
-const { items, page, loading, next, prev, setFilter } = useCursorList({
+const { items, page, loading, error, next, prev, setFilter } = useCursorList({
   fetch: (params, signal) =>
     listCountryDomains(
       code,
@@ -205,7 +205,15 @@ const goNext = () => {
               </div>
 
               <div class="min-h-screen">
-                <DomainTable v-if="items.length > 0" :domains="items" />
+                <!-- Error state (§6.3) -->
+                <div
+                  v-if="error"
+                  class="bg-zinc-800/50 border border-zinc-700 rounded-sm shadow-lg p-5 text-center"
+                >
+                  <div class="text-xl font-medium">{{ error.title }}</div>
+                  <p v-if="error.detail" class="text-gray-400 mt-2">{{ error.detail }}</p>
+                </div>
+                <DomainTable v-else-if="items.length > 0" :domains="items" />
                 <LoadingSpinner v-if="loading" />
               </div>
 
