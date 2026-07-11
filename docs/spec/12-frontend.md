@@ -238,7 +238,7 @@ Old: 4 fields (`base_domain`, `www_domain`, `nameserver`, `mx_record`), 3-value 
 | `not_applicable` | Minus | `text-zinc-600`, tooltip "Not applicable" | (was folded into `no_record`) |
 | `null` (never confirmed) | Minus | `text-zinc-600`, tooltip "Not yet checked" | (n/a) |
 
-The two muted states are the **only** new pixels in phase 1 — deliberately quieter than the three legacy colors so the page reads identically at a glance. Detail-accordion border-l-4 uses the same mapping (`border-emerald-500` / `border-pink-500` / `border-amber-500` / `border-zinc-600`), status text Success / Missing / No Record / Not applicable / Not yet checked.
+The two muted states are the **only** new pixels in phase 1 — deliberately quieter than the three legacy colors so the page reads identically at a glance. The detail accordion uses the old site's stronger 600 shades for its border-l-4 and label text (`border-emerald-600`/`text-emerald-600` / `border-pink-600`/`text-pink-600`, amber and zinc unchanged — helpers `statusCardBorderClass`/`statusCardTextClass`), status text Success / Missing / No Record / Not applicable / Not yet checked.
 
 ### 7.3 Per-view field mapping
 

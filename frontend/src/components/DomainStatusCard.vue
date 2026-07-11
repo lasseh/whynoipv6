@@ -66,7 +66,7 @@ const formattedTsCheck = computed(() =>
     <li v-for="row in rows" :key="row.key">
       <button
         type="button"
-        class="w-full flex justify-between items-center p-3 text-base rounded group hover:shadow bg-gray-800 hover:bg-gray-800/30 text-white border-l-4 cursor-pointer"
+        class="w-full flex justify-between items-center p-3 text-base text-left rounded group hover:shadow bg-gray-800 hover:bg-gray-800/30 text-white border-l-4 cursor-pointer"
         :class="statusCardBorderClass(row.value)"
         :aria-expanded="open[row.key]"
         :aria-controls="`tracker-${row.key}`"

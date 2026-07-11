@@ -140,7 +140,12 @@
   .form-radio {
     @apply text-purple-600;
   }
+}
 
+/* Must live in the utilities layer: elements pair `.a-gradient` with color
+ * utilities like `text-zinc-200`, and a components-layer rule loses that
+ * fight — the text renders solid instead of gradient. */
+@layer utilities {
   .a-gradient {
     @apply bg-gradient-to-r from-fuchsia-500 to-fuchsia-700 text-transparent;
     -webkit-background-clip: text;
