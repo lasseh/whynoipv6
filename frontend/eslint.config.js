@@ -33,5 +33,10 @@ export default tseslint.config(
     files: ['*.{js,ts}', 'vite.config.ts'],
     languageOptions: { globals: { ...globals.node } },
   },
+  {
+    // Page SFCs keep the site's established single-word names (Home, Search, …).
+    files: ['src/pages/*.vue'],
+    rules: { 'vue/multi-word-component-names': 'off' },
+  },
   configPrettier,
 )
