@@ -1,0 +1,15 @@
+# Our security address
+Contact: mailto:whynoipv6@protonmail.com
+
+# Our PGP key
+Encryption: https://whynoipv6.com/.well-known/pgp-key.txt
+
+# Our security policy
+Policy: https://whynoipv6.com/security-policy
+
+# Our security acknowledgements page
+Acknowledgments: https://whynoipv6.com/security-acknowledgments
+
+# Our security update page
+Preferred-Languages: en
+Canonical: https://whynoipv6.com/.well-known/security.txt

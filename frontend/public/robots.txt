@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://whynoipv6.com/sitemap.xml

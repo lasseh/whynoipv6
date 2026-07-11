@@ -1,0 +1,35 @@
+# Why No IPv6?
+
+> whynoipv6.com tracks IPv6 adoption across the top 1 million websites,
+> per country, and per curated campaign — and publicly shames the holdouts.
+> Every fact on the site comes from a JSON API you can query directly;
+> you do not need to render this JavaScript app.
+
+## What the data means
+
+Each domain is checked on several dimensions: the base (apex) domain,
+www, nameservers (ns), e-mail (mx), connectivity (conn), and page
+resources. Each dimension holds a confirmed status: `supported` (IPv6
+works), `unsupported` (no IPv6), `no_record` (no records published),
+`not_applicable` (the domain does not use that service — never penalized),
+or null (never checked). Domains classify as `hero` (full IPv6),
+`partial`, `sinner` (no IPv6), `inactive`, or `unknown`; `gold` marks
+exemplary heroes.
+
+## The API (use this instead of scraping)
+
+- [API guide for LLM agents](https://api.whynoipv6.com/llms.txt): start here
+- [OpenAPI spec](https://api.whynoipv6.com/openapi.json): every endpoint and schema
+- [Interactive docs](https://api.whynoipv6.com/docs): human-browsable reference
+- [Bulk datasets](https://api.whynoipv6.com/datasets): daily snapshots, CSV/Parquet, CC-BY-NC-4.0
+- [Live check](https://api.whynoipv6.com/docs#tag/check): POST /check runs a fresh scan of any host
+- [Badges](https://api.whynoipv6.com/docs#tag/badge): /badge/{host}.svg embeddable IPv6 status badge
+
+## Examples
+
+- Domain detail: https://api.whynoipv6.com/domains/example.com
+- Top sites without IPv6: https://api.whynoipv6.com/sinners
+- Per-country adoption: https://api.whynoipv6.com/countries
+- Recent changes: https://api.whynoipv6.com/changelog
+
+Attribution: Data: whynoipv6.com (CC-BY-NC-4.0). Ranks: Tranco.
