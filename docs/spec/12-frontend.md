@@ -234,7 +234,7 @@ The two muted states are the **only** new pixels in phase 1 — deliberately qui
 | Rank badge | `domain.rank` (0 = none) | `rank` (`null` = none — hide badge on `null`, never render 0) |
 | Provider line on detail | `asn` display string | `asn.name` (+ `AS{asn.number}`) |
 | Country on detail | `country` string | `country.name` + link `/countries/{country.code}` |
-| 4-star rating (detail) | count of `supported` among 4 fields | over `status.{base,www,ns,mx}.value`; `supported` fills a star, and `not_applicable` **must not penalize** (principle locked 2026-07-11 — rendering pending OPEN-F1) |
+| 4-star rating (detail) | count of `supported` among 4 fields | over `status.{base,www,ns,mx}.value`, three star states (resolved OPEN-F1): `supported` → filled emerald star; `not_applicable` → **muted zinc-600 star** (tooltip "Not applicable" — neither earned nor missing; a no-MX domain is never penalized); everything else (`unsupported`/`no_record`/`null`) → empty gray star |
 | "Last checked" | `ts_check` | `last_checked_at` |
 | Sinners list | `GET /domain?offset=` | `GET /sinners?cursor=` |
 | Heroes list | `GET /domain/heroes?offset=` | `GET /heroes?cursor=` |
@@ -351,7 +351,7 @@ Vitest + `@vue/test-utils`; API stubbed at the §6.2 helper seam (no live networ
 2. `utils/changelog.ts`: message + color table (§7.4) — golden table-driven cases per (field, new_value).
 3. `useCursorList`: next/prev enablement from `page`, URL two-way sync + loop guard, filter-change cursor reset, stale-cursor reset, superseded-fetch abort.
 4. `utils/rating.ts`: threshold boundaries (0/40/60, zero-total Unknown).
-5. `RatingStars`: star count across enum combinations (incl. `not_applicable` scoring 0).
+5. `RatingStars`: the three star states across enum combinations (§7.3 — filled/muted/empty, incl. the all-`not_applicable` and `null` edges).
 6. `Tracker`: day-block coloring from history points; empty-history rendering.
 7. One mount smoke test per page with stubbed helpers (renders, no console errors).
 8. **Cross-language contract goldens** (taillight's strongest test idea, cheap in this monorepo): a `__tests__` file imports the backend's committed golden JSON fixtures by relative path and (a) assigns them to the generated `schema.ts` wire types — drift fails `vue-tsc`; (b) runtime-asserts no undeclared keys. This locks the *actual handler output* to the frontend types, complementing the spec-level drift gate (07 §7) which only locks both sides to `openapi.yaml`.
@@ -373,7 +373,7 @@ Type safety is itself a gate: `vue-tsc` runs in `build`, and the generated `sche
 
 | # | Question | Status |
 |---|---|---|
-| OPEN-F1 | How does `not_applicable` render in the 4-star detail rating? Principle set 2026-07-11: **a domain without an MX record must not be shamed for it** — the old only-`supported`-scores behavior is out. Candidates: (a) `not_applicable` fills the star (matches classification/hero semantics, no layout change, tooltip "No mail service"); (b) the star is dropped from the denominator (rate out of applicable dimensions, e.g. 3/3). | **Open — under discussion** |
+| OPEN-F1 | `not_applicable` in the 4-star detail rating. Principle: **a domain without an MX record must not be shamed for it.** | **Resolved 2026-07-11: muted third star state** — `not_applicable` renders a muted zinc star (neither filled nor empty, tooltip "Not applicable"), fixed 4-star layout preserved, star language matches the accordion's muted row (§7.3). *Rejected — filled star* (implies IPv6 mail exists) *and dropping to 3 stars* (variable layout, weakest visual parity) |
 | OPEN-F2 | Changelog page "Campaigns" toggle. | **Resolved 2026-07-11: keep the page** (`/changelog?filter=campaign`), backed by the additive `GET /changelog?scope=campaign` (07 §4.8); recent-window cap, pagination self-disables (§7.4) |
 | OPEN-F3 | Singular vs plural public paths. | **Resolved 2026-07-11: plural canonical, 301 from singular** (§5) |
 | OPEN-F4 | FAQ "Rules and API" rewrite copy. | **Resolved 2026-07-11: yes** — draft in phase 1, human wording pass before cutover |
