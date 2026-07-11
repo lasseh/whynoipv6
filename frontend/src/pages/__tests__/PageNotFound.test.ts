@@ -25,7 +25,7 @@ describe('PageNotFound page', () => {
     })
     await flushPromises()
 
-    expect(wrapper.text()).toContain('IPv4 and this page: both elusive.')
+    expect(wrapper.text()).toContain("Shame! Shame! This page doesn't exist.")
     expect(warn).not.toHaveBeenCalled()
     expect(error).not.toHaveBeenCalled()
     warn.mockRestore()
