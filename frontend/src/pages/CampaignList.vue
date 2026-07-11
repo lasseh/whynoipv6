@@ -7,13 +7,19 @@ import Footer from '@/partials/Footer.vue'
 
 import { listCampaigns } from '@/api'
 import type { CampaignListItem } from '@/api'
+import { ApiProblem } from '@/api/problem'
 
 const campaignList = ref<CampaignListItem[]>([])
 const searchQuery = ref('')
+const error = ref<ApiProblem | null>(null)
 
 async function fetchCampaignList() {
-  const response = await listCampaigns()
-  campaignList.value = response.items
+  try {
+    const response = await listCampaigns()
+    campaignList.value = response.items
+  } catch (e) {
+    error.value = e instanceof ApiProblem ? e : new ApiProblem({ title: 'Request failed' }, 0)
+  }
 }
 
 // A computed property to get the filtered campaign list based on the search query
@@ -159,8 +165,17 @@ onMounted(() => {
                 </form>
               </div>
 
+              <!-- Error state (§6.3) -->
+              <div
+                v-if="error"
+                class="bg-zinc-800/50 border border-zinc-700 rounded-sm shadow-lg p-5 text-center"
+              >
+                <div class="text-xl font-medium">{{ error.title }}</div>
+                <p v-if="error.detail" class="text-gray-400 mt-2">{{ error.detail }}</p>
+              </div>
+
               <!-- Cards -->
-              <div class="grid grid-cols-2 xl:grid-cols-8 gap-4">
+              <div v-else class="grid grid-cols-2 xl:grid-cols-8 gap-4">
                 <!-- Card -->
                 <router-link
                   v-for="campaign in filteredCampaignList"

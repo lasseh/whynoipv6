@@ -11,13 +11,19 @@ import ProgressBar from '@/components/ProgressBar.vue'
 
 import { listCountries } from '@/api'
 import type { Country } from '@/api'
+import { ApiProblem } from '@/api/problem'
 
 const countryList = ref<Country[]>([])
 const searchQuery = ref('')
+const error = ref<ApiProblem | null>(null)
 
 async function fetchCountryList() {
-  const response = await listCountries()
-  countryList.value = response.items
+  try {
+    const response = await listCountries()
+    countryList.value = response.items
+  } catch (e) {
+    error.value = e instanceof ApiProblem ? e : new ApiProblem({ title: 'Request failed' }, 0)
+  }
 }
 
 // Client-side name filter over the country list (§8.7).
@@ -103,7 +109,16 @@ onMounted(() => {
                 </p>
               </div>
 
-              <div class="grid grid-cols-2 xl:grid-cols-8 gap-4">
+              <!-- Error state (§6.3) -->
+              <div
+                v-if="error"
+                class="bg-zinc-800/50 border border-zinc-700 rounded-sm shadow-lg p-5 text-center"
+              >
+                <div class="text-xl font-medium">{{ error.title }}</div>
+                <p v-if="error.detail" class="text-gray-400 mt-2">{{ error.detail }}</p>
+              </div>
+
+              <div v-else class="grid grid-cols-2 xl:grid-cols-8 gap-4">
                 <router-link
                   v-for="country in filteredCountryList"
                   :key="country.code"
