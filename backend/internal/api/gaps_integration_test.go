@@ -18,7 +18,6 @@ import (
 	"github.com/lasseh/whynoipv6/internal/crawler"
 	db "github.com/lasseh/whynoipv6/internal/postgres/db"
 	"github.com/lasseh/whynoipv6/internal/postgres/pgtest"
-	"github.com/lasseh/whynoipv6/internal/service"
 )
 
 // TestAroundRank (07 §3.2): the centered window — ⌈limit/2⌉ rows ranked ≤ N
@@ -266,7 +265,7 @@ func TestGraphsEqualLists(t *testing.T) {
 // newServerOver serves the API over an existing (caller-seeded) pool.
 func newServerOver(t *testing.T, pool *pgxpool.Pool) *httptest.Server {
 	t.Helper()
-	srv := httptest.NewServer(api.NewRouter(service.New(pool), api.Options{}))
+	srv := httptest.NewServer(api.NewRouter(pool, api.Options{}))
 	t.Cleanup(srv.Close)
 	return srv
 }

@@ -9,7 +9,8 @@ import (
 
 	"github.com/lasseh/whynoipv6/internal/export"
 	"github.com/lasseh/whynoipv6/internal/lock"
-	"github.com/lasseh/whynoipv6/internal/service"
+	"github.com/lasseh/whynoipv6/internal/postgres"
+	db "github.com/lasseh/whynoipv6/internal/postgres/db"
 )
 
 // exportCmd runs the nightly dataset snapshot export (07 §5.3), serialized
@@ -27,7 +28,7 @@ func exportCmd() *cobra.Command {
 			defer pool.Close()
 
 			err = lock.TryRun(cmd.Context(), pool, lock.JobDatasetExport, func(ctx context.Context) error {
-				generation, _, err := service.New(pool).Generation(ctx)
+				generation, _, err := postgres.Generation(ctx, db.New(pool))
 				if err != nil {
 					return fmt.Errorf("generation: %w", err)
 				}

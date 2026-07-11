@@ -83,7 +83,7 @@ func (s *Server) listChangelog(w http.ResponseWriter, r *http.Request) {
 	case "":
 		s.serveChangelogFeed(w, r, nil)
 	case "campaign":
-		rows, err := s.svc.Q.ChangelogCampaignScope(r.Context())
+		rows, err := s.q.ChangelogCampaignScope(r.Context())
 		if err != nil {
 			InternalError(w, r, err)
 			return
@@ -101,7 +101,7 @@ func (s *Server) listDomainChangelog(w http.ResponseWriter, r *http.Request) {
 		NotFound(w, r, "Domain not found", "The host is not a valid public domain name.")
 		return
 	}
-	d, err := s.svc.Q.DomainByHost(r.Context(), host)
+	d, err := s.q.DomainByHost(r.Context(), host)
 	if errors.Is(err, pgx.ErrNoRows) {
 		NotFound(w, r, "Domain not found", "No such domain: "+host)
 		return
@@ -137,12 +137,12 @@ func (s *Server) serveChangelogFeed(w http.ResponseWriter, r *http.Request, doma
 		return
 	}
 
-	generation, asOf, err := s.svc.Generation(r.Context())
+	generation, asOf, err := s.generation(r.Context())
 	if err != nil {
 		InternalError(w, r, err)
 		return
 	}
-	maxTS, err := s.svc.Q.ChangelogMaxTS(r.Context())
+	maxTS, err := s.q.ChangelogMaxTS(r.Context())
 	if err != nil {
 		InternalError(w, r, err)
 		return
@@ -165,7 +165,7 @@ func (s *Server) serveChangelogFeed(w http.ResponseWriter, r *http.Request, doma
 			if seek != nil {
 				cs = &postgres.ChangelogSeek{TS: time.Unix(0, seek.TS).UTC(), Domain: seek.ID, Field: seek.Field}
 			}
-			return postgres.ListChangelog(ctx, s.svc.Pool, &filter, cs, lim, backward)
+			return postgres.ListChangelog(ctx, s.pool, &filter, cs, lim, backward)
 		},
 		Key: func(row *postgres.ChangelogRow) []any {
 			return []any{row.Ts.UnixNano(), row.DomainID, row.Field}
@@ -213,7 +213,7 @@ func (s *Server) listCountryChangelog(w http.ResponseWriter, r *http.Request) {
 		NotFound(w, r, "Country not found", "Country codes are two-letter ISO 3166-1 alpha-2.")
 		return
 	}
-	id, err := s.svc.Q.CountryIDByCode(r.Context(), code)
+	id, err := s.q.CountryIDByCode(r.Context(), code)
 	if errors.Is(err, pgx.ErrNoRows) {
 		NotFound(w, r, "Country not found", "No such country: "+code)
 		return
@@ -222,7 +222,7 @@ func (s *Server) listCountryChangelog(w http.ResponseWriter, r *http.Request) {
 		InternalError(w, r, err)
 		return
 	}
-	rows, err := s.svc.Q.ChangelogByCountry(r.Context(), id)
+	rows, err := s.q.ChangelogByCountry(r.Context(), id)
 	if err != nil {
 		InternalError(w, r, err)
 		return
@@ -237,7 +237,7 @@ func (s *Server) listCampaignChangelog(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	rows, err := s.svc.Q.ChangelogByCampaign(r.Context(), row.ID)
+	rows, err := s.q.ChangelogByCampaign(r.Context(), row.ID)
 	if err != nil {
 		InternalError(w, r, err)
 		return
@@ -257,7 +257,7 @@ func (s *Server) listCampaignDomainChangelog(w http.ResponseWriter, r *http.Requ
 		NotFound(w, r, "Domain not found", "The host is not a valid public domain name.")
 		return
 	}
-	d, err := s.svc.Q.DomainByHost(r.Context(), host)
+	d, err := s.q.DomainByHost(r.Context(), host)
 	if errors.Is(err, pgx.ErrNoRows) {
 		NotFound(w, r, "Domain not found", "No such domain: "+host)
 		return
@@ -266,7 +266,7 @@ func (s *Server) listCampaignDomainChangelog(w http.ResponseWriter, r *http.Requ
 		InternalError(w, r, err)
 		return
 	}
-	member, err := s.svc.Q.CampaignHasMember(r.Context(), db.CampaignHasMemberParams{
+	member, err := s.q.CampaignHasMember(r.Context(), db.CampaignHasMemberParams{
 		CampaignID: c.ID, DomainID: d.ID,
 	})
 	if err != nil {
@@ -282,12 +282,12 @@ func (s *Server) listCampaignDomainChangelog(w http.ResponseWriter, r *http.Requ
 
 // writeRecentWindow emits the capped scoped feed: trivial page, no cursor.
 func (s *Server) writeRecentWindow(w http.ResponseWriter, r *http.Request, items []ChangelogItem) {
-	generation, asOf, err := s.svc.Generation(r.Context())
+	generation, asOf, err := s.generation(r.Context())
 	if err != nil {
 		InternalError(w, r, err)
 		return
 	}
-	maxTS, err := s.svc.Q.ChangelogMaxTS(r.Context())
+	maxTS, err := s.q.ChangelogMaxTS(r.Context())
 	if err != nil {
 		InternalError(w, r, err)
 		return

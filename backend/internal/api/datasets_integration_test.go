@@ -10,7 +10,6 @@ import (
 
 	"github.com/lasseh/whynoipv6/internal/api"
 	"github.com/lasseh/whynoipv6/internal/postgres/pgtest"
-	"github.com/lasseh/whynoipv6/internal/service"
 )
 
 // TestDatasetsEndpoint (P6.3 / 07 §5.3): GET /datasets serves the on-disk
@@ -19,7 +18,7 @@ import (
 func TestDatasetsEndpoint(t *testing.T) {
 	pool := pgtest.NewDB(t)
 	dir := t.TempDir()
-	srv := httptest.NewServer(api.NewRouter(service.New(pool), api.Options{DatasetsDir: dir}))
+	srv := httptest.NewServer(api.NewRouter(pool, api.Options{DatasetsDir: dir}))
 	t.Cleanup(srv.Close)
 
 	var problem struct {

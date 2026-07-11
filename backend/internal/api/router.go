@@ -10,7 +10,9 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/rs/cors"
 
-	"github.com/lasseh/whynoipv6/internal/service"
+	"github.com/jackc/pgx/v5/pgxpool"
+
+	db "github.com/lasseh/whynoipv6/internal/postgres/db"
 )
 
 // Options are the serving knobs plumbed from the config registry (09-ops).
@@ -26,17 +28,20 @@ type Options struct {
 	ResourcesEnabled  bool          // crawler.resources.enabled
 }
 
-// Server carries the handler dependencies.
+// Server carries the handler dependencies: the pool for the builder-built
+// queries, the sqlc queries for everything else (the one data seam,
+// 05-schema §10.3).
 type Server struct {
-	svc  *service.Service
+	pool *pgxpool.Pool
+	q    *db.Queries
 	opts Options
 }
 
 // NewRouter builds the chi router with the 07 §1.7 middleware order
 // (outermost first): RealIP → RequestID → slog access log → Recoverer →
 // Timeout(30s) → CORS → security headers. No trailing-slash redirection.
-func NewRouter(svc *service.Service, opts Options) http.Handler {
-	s := &Server{svc: svc, opts: opts}
+func NewRouter(pool *pgxpool.Pool, opts Options) http.Handler {
+	s := &Server{pool: pool, q: db.New(pool), opts: opts}
 	if s.opts.PublicBaseURL == "" {
 		s.opts.PublicBaseURL = "https://api.whynoipv6.com"
 	}

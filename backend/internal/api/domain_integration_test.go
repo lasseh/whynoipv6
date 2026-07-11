@@ -15,7 +15,6 @@ import (
 
 	"github.com/lasseh/whynoipv6/internal/api"
 	"github.com/lasseh/whynoipv6/internal/postgres/pgtest"
-	"github.com/lasseh/whynoipv6/internal/service"
 )
 
 func TestMain(m *testing.M) { os.Exit(pgtest.Main(m)) }
@@ -77,7 +76,7 @@ func newAPI(t *testing.T) (*httptest.Server, *pgxpool.Pool) {
 	t.Helper()
 	pool := pgtest.NewDB(t)
 	seedLeaderboard(t, pool)
-	srv := httptest.NewServer(api.NewRouter(service.New(pool), api.Options{}))
+	srv := httptest.NewServer(api.NewRouter(pool, api.Options{}))
 	t.Cleanup(srv.Close)
 	return srv, pool
 }

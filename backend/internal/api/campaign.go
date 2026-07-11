@@ -54,7 +54,7 @@ func (s *Server) listCampaigns(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) serveCampaignList(w http.ResponseWriter, r *http.Request, tag string) {
-	generation, asOf, err := s.svc.Generation(r.Context())
+	generation, asOf, err := s.generation(r.Context())
 	if err != nil {
 		InternalError(w, r, err)
 		return
@@ -62,7 +62,7 @@ func (s *Server) serveCampaignList(w http.ResponseWriter, r *http.Request, tag s
 	if CacheList(w, r, generation) {
 		return
 	}
-	rows, err := s.svc.Q.CampaignPublicList(r.Context(), tag)
+	rows, err := s.q.CampaignPublicList(r.Context(), tag)
 	if err != nil {
 		InternalError(w, r, err)
 		return
@@ -95,7 +95,7 @@ func (s *Server) campaignByPathUUID(w http.ResponseWriter, r *http.Request) (db.
 		NotFound(w, r, "Campaign not found", "Campaigns are keyed by their raw UUID.")
 		return db.CampaignPublicDetailRow{}, false
 	}
-	row, err := s.svc.Q.CampaignPublicDetail(r.Context(), pgtype.UUID{Bytes: id, Valid: true})
+	row, err := s.q.CampaignPublicDetail(r.Context(), pgtype.UUID{Bytes: id, Valid: true})
 	if errors.Is(err, pgx.ErrNoRows) {
 		NotFound(w, r, "Campaign not found", "No such campaign: "+id.String())
 		return row, false
@@ -114,7 +114,7 @@ func (s *Server) getCampaign(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	generation, asOf, err := s.svc.Generation(r.Context())
+	generation, asOf, err := s.generation(r.Context())
 	if err != nil {
 		InternalError(w, r, err)
 		return
@@ -149,7 +149,7 @@ func (s *Server) getCampaign(w http.ResponseWriter, r *http.Request) {
 	if d.Tags == nil {
 		d.Tags = []string{}
 	}
-	if adoption, err := s.svc.Q.CampaignAdoption(r.Context(), row.ID); err == nil &&
+	if adoption, err := s.q.CampaignAdoption(r.Context(), row.ID); err == nil &&
 		adoption.Domains != nil && *adoption.Domains > 0 && adoption.V6Ready != nil {
 		pct := float64(*adoption.V6Ready) * 100 / float64(*adoption.Domains)
 		d.Adoption = &CampaignAdoption{
@@ -171,7 +171,7 @@ func (s *Server) listCampaignDomains(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	generation, asOf, err := s.svc.Generation(r.Context())
+	generation, asOf, err := s.generation(r.Context())
 	if err != nil {
 		InternalError(w, r, err)
 		return

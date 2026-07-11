@@ -140,7 +140,7 @@ func (s *Server) badgeHost(w http.ResponseWriter, r *http.Request, raw string) (
 // badgeVariantFor runs the read-only lookup: never inserts, never enqueues,
 // never touches last_requested_at (07 §5.2).
 func (s *Server) badgeVariantFor(r *http.Request, host string) (string, error) {
-	row, err := s.svc.Q.BadgeDomain(r.Context(), host)
+	row, err := s.q.BadgeDomain(r.Context(), host)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return pickBadgeVariant(false, "", false, false), nil
 	}
@@ -151,7 +151,7 @@ func (s *Server) badgeVariantFor(r *http.Request, host string) (string, error) {
 }
 
 func (s *Server) badgeCache(w http.ResponseWriter, r *http.Request) bool {
-	generation, _, err := s.svc.Generation(r.Context())
+	generation, _, err := s.generation(r.Context())
 	if err != nil {
 		return false // serve uncached rather than fail the embed
 	}

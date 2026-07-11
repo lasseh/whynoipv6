@@ -173,7 +173,7 @@ func (s *Server) writeJSONFeed(w http.ResponseWriter, r *http.Request, scope *fe
 // Scope loaders — each returns the latest-50 window for its scope.
 
 func (s *Server) globalFeedScope(r *http.Request) (*feedScope, error) {
-	rows, err := postgres.ListChangelog(r.Context(), s.svc.Pool, &postgres.ChangelogFilter{}, nil, feedWindow, false)
+	rows, err := postgres.ListChangelog(r.Context(), s.pool, &postgres.ChangelogFilter{}, nil, feedWindow, false)
 	if err != nil {
 		return nil, err
 	}
@@ -195,7 +195,7 @@ func (s *Server) domainFeedScope(w http.ResponseWriter, r *http.Request) (*feedS
 		NotFound(w, r, "Domain not found", "The host is not a valid public domain name.")
 		return nil, false
 	}
-	d, err := s.svc.Q.DomainByHost(r.Context(), host)
+	d, err := s.q.DomainByHost(r.Context(), host)
 	if errors.Is(err, pgx.ErrNoRows) {
 		NotFound(w, r, "Domain not found", "No such domain: "+host)
 		return nil, false
@@ -204,7 +204,7 @@ func (s *Server) domainFeedScope(w http.ResponseWriter, r *http.Request) (*feedS
 		InternalError(w, r, err)
 		return nil, false
 	}
-	rows, err := postgres.ListChangelog(r.Context(), s.svc.Pool,
+	rows, err := postgres.ListChangelog(r.Context(), s.pool,
 		&postgres.ChangelogFilter{DomainID: &d.ID}, nil, feedWindow, false)
 	if err != nil {
 		InternalError(w, r, err)
@@ -228,7 +228,7 @@ func (s *Server) countryFeedScope(w http.ResponseWriter, r *http.Request) (*feed
 		NotFound(w, r, "Country not found", "Country codes are two-letter ISO 3166-1 alpha-2.")
 		return nil, false
 	}
-	c, err := s.svc.Q.CountryByCode(r.Context(), code)
+	c, err := s.q.CountryByCode(r.Context(), code)
 	if errors.Is(err, pgx.ErrNoRows) {
 		NotFound(w, r, "Country not found", "No such country: "+code)
 		return nil, false
@@ -237,12 +237,12 @@ func (s *Server) countryFeedScope(w http.ResponseWriter, r *http.Request) (*feed
 		InternalError(w, r, err)
 		return nil, false
 	}
-	id, err := s.svc.Q.CountryIDByCode(r.Context(), code)
+	id, err := s.q.CountryIDByCode(r.Context(), code)
 	if err != nil {
 		InternalError(w, r, err)
 		return nil, false
 	}
-	rows, err := s.svc.Q.ChangelogByCountry(r.Context(), id)
+	rows, err := s.q.ChangelogByCountry(r.Context(), id)
 	if err != nil {
 		InternalError(w, r, err)
 		return nil, false
@@ -259,7 +259,7 @@ func (s *Server) campaignFeedScope(w http.ResponseWriter, r *http.Request) (*fee
 	if !ok {
 		return nil, false
 	}
-	rows, err := s.svc.Q.ChangelogByCampaign(r.Context(), row.ID)
+	rows, err := s.q.ChangelogByCampaign(r.Context(), row.ID)
 	if err != nil {
 		InternalError(w, r, err)
 		return nil, false

@@ -47,7 +47,7 @@ func statsWindow(r *http.Request) (from, to time.Time, weekly bool, err error) {
 }
 
 func (s *Server) statsMeta(r *http.Request) (Meta, int32, error) {
-	generation, asOf, err := s.svc.Generation(r.Context())
+	generation, asOf, err := s.generation(r.Context())
 	if err != nil {
 		return Meta{}, 0, err
 	}
@@ -92,7 +92,7 @@ func (s *Server) getStatsOverview(w http.ResponseWriter, r *http.Request) {
 	if CacheList(w, r, generation) {
 		return
 	}
-	rows, err := s.svc.Q.StatsGlobalRange(r.Context(), db.StatsGlobalRangeParams{
+	rows, err := s.q.StatsGlobalRange(r.Context(), db.StatsGlobalRangeParams{
 		FromDay: pgDate(from), ToDay: pgDate(to),
 	})
 	if err != nil {
@@ -142,7 +142,7 @@ func (s *Server) getCountryStats(w http.ResponseWriter, r *http.Request) {
 		NotFound(w, r, "Country not found", "Country codes are two-letter ISO 3166-1 alpha-2.")
 		return
 	}
-	id, err := s.svc.Q.CountryIDByCode(r.Context(), code)
+	id, err := s.q.CountryIDByCode(r.Context(), code)
 	if errors.Is(err, pgx.ErrNoRows) {
 		NotFound(w, r, "Country not found", "No such country: "+strings.ToUpper(code))
 		return
@@ -164,7 +164,7 @@ func (s *Server) getCountryStats(w http.ResponseWriter, r *http.Request) {
 	if CacheList(w, r, generation) {
 		return
 	}
-	rows, err := s.svc.Q.StatsCountryRange(r.Context(), db.StatsCountryRangeParams{
+	rows, err := s.q.StatsCountryRange(r.Context(), db.StatsCountryRangeParams{
 		CountryID: id, FromDay: pgDate(from), ToDay: pgDate(to),
 	})
 	if err != nil {
@@ -230,7 +230,7 @@ func (s *Server) getCampaignStats(w http.ResponseWriter, r *http.Request) {
 	if CacheList(w, r, generation) {
 		return
 	}
-	rows, err := s.svc.Q.StatsCampaignRange(r.Context(), db.StatsCampaignRangeParams{
+	rows, err := s.q.StatsCampaignRange(r.Context(), db.StatsCampaignRangeParams{
 		CampaignID: row.ID, FromDay: pgDate(from), ToDay: pgDate(to),
 	})
 	if err != nil {
@@ -280,7 +280,7 @@ func (s *Server) getASNStats(w http.ResponseWriter, r *http.Request) {
 		InvalidParameter(w, r, "ASNs are keyed by their AS number (an optional AS prefix is accepted)")
 		return
 	}
-	id, err := s.svc.Q.ASNIDByNumber(r.Context(), n)
+	id, err := s.q.ASNIDByNumber(r.Context(), n)
 	if errors.Is(err, pgx.ErrNoRows) {
 		NotFound(w, r, "Network not found", "No such ASN: "+strconv.FormatInt(n, 10))
 		return
@@ -302,7 +302,7 @@ func (s *Server) getASNStats(w http.ResponseWriter, r *http.Request) {
 	if CacheList(w, r, generation) {
 		return
 	}
-	rows, err := s.svc.Q.StatsASNRange(r.Context(), db.StatsASNRangeParams{
+	rows, err := s.q.StatsASNRange(r.Context(), db.StatsASNRangeParams{
 		AsnID: id, FromDay: pgTS(from), ToDay: pgTS(to),
 	})
 	if err != nil {

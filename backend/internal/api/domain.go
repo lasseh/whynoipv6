@@ -154,7 +154,7 @@ func (s *Server) parseDomainFilter(r *http.Request, q url.Values) (postgres.Doma
 		f.Gold = true
 	}
 	if v := q.Get(paramCountry); v != "" {
-		id, err := s.svc.Q.CountryIDByCode(r.Context(), strings.ToUpper(v))
+		id, err := s.q.CountryIDByCode(r.Context(), strings.ToUpper(v))
 		switch {
 		case errors.Is(err, pgx.ErrNoRows):
 			f.CountryID = &impossible
@@ -169,7 +169,7 @@ func (s *Server) parseDomainFilter(r *http.Request, q url.Values) (postgres.Doma
 		if err != nil || n < 0 {
 			return f, validationError{paramASN, "must be a non-negative AS number"}
 		}
-		id, err := s.svc.Q.ASNIDByNumber(r.Context(), n)
+		id, err := s.q.ASNIDByNumber(r.Context(), n)
 		switch {
 		case errors.Is(err, pgx.ErrNoRows):
 			f.ASNID = &impossible
@@ -346,7 +346,7 @@ func (s *Server) serveDomainList(w http.ResponseWriter, r *http.Request, preset 
 		return
 	}
 
-	generation, asOf, err := s.svc.Generation(r.Context())
+	generation, asOf, err := s.generation(r.Context())
 	if err != nil {
 		InternalError(w, r, err)
 		return
@@ -363,7 +363,7 @@ func (s *Server) serveDomainList(w http.ResponseWriter, r *http.Request, preset 
 	if aroundRank != nil {
 		var moreAbove, moreBelow bool
 		rows, moreAbove, moreBelow, err = postgres.ListDomainsAround(
-			r.Context(), s.svc.Pool, &filter, *aroundRank, limit)
+			r.Context(), s.pool, &filter, *aroundRank, limit)
 		if err != nil {
 			InternalError(w, r, err)
 			return
@@ -378,7 +378,7 @@ func (s *Server) serveDomainList(w http.ResponseWriter, r *http.Request, preset 
 				if seek != nil {
 					ds = &postgres.DomainSeek{Rank: seek.Rank, ID: seek.ID, Host: seek.Host}
 				}
-				return postgres.ListDomains(ctx, s.svc.Pool, &filter,
+				return postgres.ListDomains(ctx, s.pool, &filter,
 					postgres.ListSort(sortKey), ds, afterRank, lim, backward)
 			},
 			Key: domainKey(sortKey),
@@ -405,9 +405,9 @@ func (s *Server) serveDomainList(w http.ResponseWriter, r *http.Request, preset 
 	meta := NewMeta(asOf, generation)
 	var est int64
 	if isUnfiltered(&filter) {
-		est, err = postgres.MaxRank(r.Context(), s.svc.Pool)
+		est, err = postgres.MaxRank(r.Context(), s.pool)
 	} else {
-		est, err = postgres.EstimateDomainListCount(r.Context(), s.svc.Pool, &filter)
+		est, err = postgres.EstimateDomainListCount(r.Context(), s.pool, &filter)
 	}
 	if err != nil {
 		InternalError(w, r, err)
@@ -433,7 +433,7 @@ func (s *Server) hostOrderedPage(r *http.Request, filter *postgres.DomainListFil
 			if seek != nil {
 				ds = &postgres.DomainSeek{Host: seek.Host}
 			}
-			return postgres.ListDomains(ctx, s.svc.Pool, filter, postgres.ListSortHost, ds, nil, lim, backward)
+			return postgres.ListDomains(ctx, s.pool, filter, postgres.ListSortHost, ds, nil, lim, backward)
 		},
 		Key: domainKey(SortHost),
 	})
@@ -570,7 +570,7 @@ func (s *Server) getDomain(w http.ResponseWriter, r *http.Request) {
 		NotFound(w, r, "Domain not found", "The host is not a valid public domain name.")
 		return
 	}
-	row, err := s.svc.Q.DomainDetailByHost(r.Context(), host)
+	row, err := s.q.DomainDetailByHost(r.Context(), host)
 	if errors.Is(err, pgx.ErrNoRows) {
 		NotFound(w, r, "Domain not found", "No such domain: "+host)
 		return
@@ -580,7 +580,7 @@ func (s *Server) getDomain(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	generation, asOf, err := s.svc.Generation(r.Context())
+	generation, asOf, err := s.generation(r.Context())
 	if err != nil {
 		InternalError(w, r, err)
 		return
@@ -632,7 +632,7 @@ func (s *Server) getDomain(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.URL.Query().Get("include") == "evidence" {
-		raw, err := s.svc.Q.LatestScanDetail(r.Context(), row.ID)
+		raw, err := s.q.LatestScanDetail(r.Context(), row.ID)
 		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			InternalError(w, r, err)
 			return
@@ -646,7 +646,7 @@ func (s *Server) getDomain(w http.ResponseWriter, r *http.Request) {
 				slog.Warn("evidence detail unparseable, omitted", "domain", host, "err", err.Error())
 			} else {
 				scanTS := row.LastCheckedAt.Time.UTC()
-				links := observe.LiveLinks(r.Context(), s.svc.Pool, sr, s.opts.ResourcesEnabled)
+				links := observe.LiveLinks(r.Context(), s.pool, sr, s.opts.ResourcesEnabled)
 				mapped := observe.MapLiveResult(domain.Kind(row.Kind), sr, scanTS, scanTS, links, s.opts.ResourcesEnabled)
 				if evRaw, err := json.Marshal(mapped); err == nil {
 					ev := json.RawMessage(evRaw)
@@ -669,7 +669,7 @@ type ShameItem struct {
 // listShame is GET /shame — the bounded editorial list: visibility computed
 // read-side, no cursor, exact meta.count.
 func (s *Server) listShame(w http.ResponseWriter, r *http.Request) {
-	generation, asOf, err := s.svc.Generation(r.Context())
+	generation, asOf, err := s.generation(r.Context())
 	if err != nil {
 		InternalError(w, r, err)
 		return
@@ -677,7 +677,7 @@ func (s *Server) listShame(w http.ResponseWriter, r *http.Request) {
 	if CacheList(w, r, generation) {
 		return
 	}
-	rows, err := s.svc.Q.ShameList(r.Context())
+	rows, err := s.q.ShameList(r.Context())
 	if err != nil {
 		InternalError(w, r, err)
 		return

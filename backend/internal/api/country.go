@@ -45,7 +45,7 @@ func (s *Server) listCountries(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	generation, asOf, err := s.svc.Generation(r.Context())
+	generation, asOf, err := s.generation(r.Context())
 	if err != nil {
 		InternalError(w, r, err)
 		return
@@ -54,7 +54,7 @@ func (s *Server) listCountries(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rows, err := s.svc.Q.CountryLeaderboard(r.Context())
+	rows, err := s.q.CountryLeaderboard(r.Context())
 	if err != nil {
 		InternalError(w, r, err)
 		return
@@ -100,7 +100,7 @@ func (s *Server) getCountry(w http.ResponseWriter, r *http.Request) {
 		NotFound(w, r, "Country not found", "Country codes are two-letter ISO 3166-1 alpha-2.")
 		return
 	}
-	row, err := s.svc.Q.CountryByCode(r.Context(), code)
+	row, err := s.q.CountryByCode(r.Context(), code)
 	if errors.Is(err, pgx.ErrNoRows) {
 		NotFound(w, r, "Country not found", "No such country: "+strings.ToUpper(code))
 		return
@@ -109,7 +109,7 @@ func (s *Server) getCountry(w http.ResponseWriter, r *http.Request) {
 		InternalError(w, r, err)
 		return
 	}
-	generation, asOf, err := s.svc.Generation(r.Context())
+	generation, asOf, err := s.generation(r.Context())
 	if err != nil {
 		InternalError(w, r, err)
 		return
@@ -131,7 +131,7 @@ func (s *Server) listCountryDomains(w http.ResponseWriter, r *http.Request) {
 		NotFound(w, r, "Country not found", "Country codes are two-letter ISO 3166-1 alpha-2.")
 		return
 	}
-	if _, err := s.svc.Q.CountryByCode(r.Context(), code); err != nil {
+	if _, err := s.q.CountryByCode(r.Context(), code); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			NotFound(w, r, "Country not found", "No such country: "+strings.ToUpper(code))
 			return

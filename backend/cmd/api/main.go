@@ -17,7 +17,6 @@ import (
 
 	"github.com/lasseh/whynoipv6/internal/api"
 	"github.com/lasseh/whynoipv6/internal/config"
-	"github.com/lasseh/whynoipv6/internal/service"
 )
 
 func main() {
@@ -44,10 +43,9 @@ func run() error {
 	}
 	defer pool.Close()
 
-	svc := service.New(pool)
 	srv := &http.Server{
 		Addr: cfg.APIListen,
-		Handler: api.NewRouter(svc, api.Options{
+		Handler: api.NewRouter(pool, api.Options{
 			PublicBaseURL:     cfg.PublicBaseURL,
 			CSVMaxRows:        cfg.Int("export.csv_max_rows"),
 			DatasetsDir:       cfg.DatasetsDir,

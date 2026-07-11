@@ -5,6 +5,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/lasseh/whynoipv6/internal/postgres"
 )
 
 // problemBase is the stable, resolvable type-URI prefix (07 §2.5).
@@ -206,4 +208,9 @@ func hashString(s string) uint64 {
 		h *= prime
 	}
 	return h
+}
+
+// generation resolves the envelope meta sources for this request (07 §2.4).
+func (s *Server) generation(ctx context.Context) (int32, time.Time, error) {
+	return postgres.Generation(ctx, s.q)
 }

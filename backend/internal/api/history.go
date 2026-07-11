@@ -118,7 +118,7 @@ func (s *Server) getDomainHistory(w http.ResponseWriter, r *http.Request) {
 		NotFound(w, r, "Domain not found", "The host is not a valid public domain name.")
 		return
 	}
-	row, err := s.svc.Q.DomainDetailByHost(r.Context(), host)
+	row, err := s.q.DomainDetailByHost(r.Context(), host)
 	if errors.Is(err, pgx.ErrNoRows) {
 		NotFound(w, r, "Domain not found", "No such domain: "+host)
 		return
@@ -133,7 +133,7 @@ func (s *Server) getDomainHistory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	generation, asOf, err := s.svc.Generation(r.Context())
+	generation, asOf, err := s.generation(r.Context())
 	if err != nil {
 		InternalError(w, r, err)
 		return
@@ -146,7 +146,7 @@ func (s *Server) getDomainHistory(w http.ResponseWriter, r *http.Request) {
 	out.Meta.RetentionDays = changelogRetentionDays
 	out.Meta.AsOf = asOf.UTC()
 
-	replay, err := s.svc.Q.ChangelogReplay(r.Context(), row.ID)
+	replay, err := s.q.ChangelogReplay(r.Context(), row.ID)
 	if err != nil {
 		InternalError(w, r, err)
 		return
@@ -185,7 +185,7 @@ func (s *Server) getDomainHistory(w http.ResponseWriter, r *http.Request) {
 	setCurrent("conn", row.ConnStatus, row.ConnSince)
 	setCurrent("resources", row.ResourcesStatus, row.ResourcesSince)
 
-	latency, err := s.svc.Q.ScanLatencyDaily(r.Context(), db.ScanLatencyDailyParams{
+	latency, err := s.q.ScanLatencyDaily(r.Context(), db.ScanLatencyDailyParams{
 		DomainID: row.ID, FromTs: pgTS(from), ToTs: pgTS(to.AddDate(0, 0, 1)),
 	})
 	if err != nil {

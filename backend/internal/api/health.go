@@ -15,7 +15,7 @@ func (s *Server) livez(w http.ResponseWriter, _ *http.Request) {
 // readyz: 200 only when Postgres is reachable (07 §2.7).
 func (s *Server) readyz(w http.ResponseWriter, r *http.Request) {
 	NoStore(w)
-	if err := s.svc.Ping(r.Context()); err != nil {
+	if err := s.pool.Ping(r.Context()); err != nil {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		_, _ = w.Write([]byte("db unreachable"))
 		return

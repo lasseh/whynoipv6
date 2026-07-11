@@ -29,7 +29,7 @@ func (s *Server) listProviders(w http.ResponseWriter, r *http.Request) {
 		InvalidParameter(w, r, err.Error())
 		return
 	}
-	generation, asOf, err := s.svc.Generation(r.Context())
+	generation, asOf, err := s.generation(r.Context())
 	if err != nil {
 		InternalError(w, r, err)
 		return
@@ -37,7 +37,7 @@ func (s *Server) listProviders(w http.ResponseWriter, r *http.Request) {
 	if CacheList(w, r, generation) {
 		return
 	}
-	rows, err := s.svc.Q.ProviderLeaderboard(r.Context())
+	rows, err := s.q.ProviderLeaderboard(r.Context())
 	if err != nil {
 		InternalError(w, r, err)
 		return
@@ -74,7 +74,7 @@ func (s *Server) getProvider(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	row, err := s.svc.Q.ProviderDetail(r.Context(), id)
+	row, err := s.q.ProviderDetail(r.Context(), id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		NotFound(w, r, "Provider not found", "No such DNS provider: "+strconv.FormatInt(id, 10))
 		return
@@ -83,7 +83,7 @@ func (s *Server) getProvider(w http.ResponseWriter, r *http.Request) {
 		InternalError(w, r, err)
 		return
 	}
-	generation, asOf, err := s.svc.Generation(r.Context())
+	generation, asOf, err := s.generation(r.Context())
 	if err != nil {
 		InternalError(w, r, err)
 		return
@@ -102,7 +102,7 @@ func (s *Server) listProviderDomains(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if _, err := s.svc.Q.ProviderDetail(r.Context(), id); err != nil {
+	if _, err := s.q.ProviderDetail(r.Context(), id); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			NotFound(w, r, "Provider not found", "No such DNS provider: "+strconv.FormatInt(id, 10))
 			return

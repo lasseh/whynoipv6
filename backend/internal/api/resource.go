@@ -51,7 +51,7 @@ func (s *Server) listDomainResources(w http.ResponseWriter, r *http.Request) {
 		NotFound(w, r, "Domain not found", "The host is not a valid public domain name.")
 		return
 	}
-	d, err := s.svc.Q.DomainByHost(r.Context(), host)
+	d, err := s.q.DomainByHost(r.Context(), host)
 	if errors.Is(err, pgx.ErrNoRows) {
 		NotFound(w, r, "Domain not found", "No such domain: "+host)
 		return
@@ -60,7 +60,7 @@ func (s *Server) listDomainResources(w http.ResponseWriter, r *http.Request) {
 		InternalError(w, r, err)
 		return
 	}
-	generation, asOf, err := s.svc.Generation(r.Context())
+	generation, asOf, err := s.generation(r.Context())
 	if err != nil {
 		InternalError(w, r, err)
 		return
@@ -68,7 +68,7 @@ func (s *Server) listDomainResources(w http.ResponseWriter, r *http.Request) {
 	if CacheList(w, r, generation) {
 		return
 	}
-	rows, err := s.svc.Q.DomainResourceList(r.Context(), d.ID)
+	rows, err := s.q.DomainResourceList(r.Context(), d.ID)
 	if err != nil {
 		InternalError(w, r, err)
 		return
@@ -97,7 +97,7 @@ func (s *Server) getResource(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	generation, asOf, err := s.svc.Generation(r.Context())
+	generation, asOf, err := s.generation(r.Context())
 	if err != nil {
 		InternalError(w, r, err)
 		return
@@ -124,7 +124,7 @@ func (s *Server) listResourceDependents(w http.ResponseWriter, r *http.Request) 
 		InvalidParameter(w, r, err.Error())
 		return
 	}
-	generation, asOf, err := s.svc.Generation(r.Context())
+	generation, asOf, err := s.generation(r.Context())
 	if err != nil {
 		InternalError(w, r, err)
 		return
@@ -140,7 +140,7 @@ func (s *Server) listResourceDependents(w http.ResponseWriter, r *http.Request) 
 			if seek != nil {
 				ds = &postgres.DependentSeek{RankNull: seek.RankNull, Rank: seek.Rank, ID: seek.ID}
 			}
-			return postgres.ListDependents(ctx, s.svc.Pool, row.ID, ds, lim, backward)
+			return postgres.ListDependents(ctx, s.pool, row.ID, ds, lim, backward)
 		},
 		Key: func(d *postgres.DependentRow) []any {
 			isNull := d.Rank == nil
@@ -187,7 +187,7 @@ func (s *Server) resourceByPathHost(w http.ResponseWriter, r *http.Request) (db.
 		NotFound(w, r, "Resource not found", "The host is not a valid public domain name.")
 		return db.ResourceHostByHostRow{}, false
 	}
-	row, err := s.svc.Q.ResourceHostByHost(r.Context(), host)
+	row, err := s.q.ResourceHostByHost(r.Context(), host)
 	if errors.Is(err, pgx.ErrNoRows) {
 		NotFound(w, r, "Resource not found", "No such resource host: "+host)
 		return row, false
@@ -208,7 +208,7 @@ func (s *Server) listSubdomains(w http.ResponseWriter, r *http.Request) {
 		NotFound(w, r, "Domain not found", "The host is not a valid public domain name.")
 		return
 	}
-	d, err := s.svc.Q.DomainByHost(r.Context(), host)
+	d, err := s.q.DomainByHost(r.Context(), host)
 	if errors.Is(err, pgx.ErrNoRows) {
 		NotFound(w, r, "Domain not found", "No such domain: "+host)
 		return
@@ -223,7 +223,7 @@ func (s *Server) listSubdomains(w http.ResponseWriter, r *http.Request) {
 		InvalidParameter(w, r, err.Error())
 		return
 	}
-	generation, asOf, err := s.svc.Generation(r.Context())
+	generation, asOf, err := s.generation(r.Context())
 	if err != nil {
 		InternalError(w, r, err)
 		return
@@ -242,7 +242,7 @@ func (s *Server) listSubdomains(w http.ResponseWriter, r *http.Request) {
 		InternalError(w, r, err)
 		return
 	}
-	count, err := s.svc.Q.SubdomainExactCount(r.Context(), &d.ID)
+	count, err := s.q.SubdomainExactCount(r.Context(), &d.ID)
 	if err != nil {
 		InternalError(w, r, err)
 		return

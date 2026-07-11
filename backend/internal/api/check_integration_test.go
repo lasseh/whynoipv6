@@ -17,13 +17,12 @@ import (
 	"github.com/lasseh/whynoipv6/internal/api"
 	"github.com/lasseh/whynoipv6/internal/checker"
 	"github.com/lasseh/whynoipv6/internal/postgres/pgtest"
-	"github.com/lasseh/whynoipv6/internal/service"
 )
 
 func newCheckAPI(t *testing.T, opts api.Options) (*httptest.Server, *pgxpool.Pool) {
 	t.Helper()
 	pool := pgtest.NewDB(t)
-	srv := httptest.NewServer(api.NewRouter(service.New(pool), opts))
+	srv := httptest.NewServer(api.NewRouter(pool, opts))
 	t.Cleanup(srv.Close)
 	return srv, pool
 }

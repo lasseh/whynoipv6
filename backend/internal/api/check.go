@@ -84,7 +84,7 @@ func (s *Server) postCheck(w http.ResponseWriter, r *http.Request) {
 		InvalidParameter(w, r, "client address unavailable")
 		return
 	}
-	ipWin, err := s.svc.Q.CheckJobRatePrefix(r.Context(), prefix)
+	ipWin, err := s.q.CheckJobRatePrefix(r.Context(), prefix)
 	if err != nil {
 		InternalError(w, r, err)
 		return
@@ -94,7 +94,7 @@ func (s *Server) postCheck(w http.ResponseWriter, r *http.Request) {
 		RateLimited(w, r, retryAfter(ipWin.MinCreated))
 		return
 	}
-	globalWin, err := s.svc.Q.CheckJobRateGlobal(r.Context())
+	globalWin, err := s.q.CheckJobRateGlobal(r.Context())
 	if err != nil {
 		InternalError(w, r, err)
 		return
@@ -108,14 +108,14 @@ func (s *Server) postCheck(w http.ResponseWriter, r *http.Request) {
 
 	// 3. Lifecycle re-entry — every POST whose host already has a row,
 	// including dedupe hits (§5.1.6).
-	if err := s.svc.Q.DomainLiveCheckReentry(r.Context(), host); err != nil {
+	if err := s.q.DomainLiveCheckReentry(r.Context(), host); err != nil {
 		InternalError(w, r, err)
 		return
 	}
 
 	// 4. Dedupe, domain-side: a fresh crawl within the window serves a
 	// synthetic done envelope from the latest scan_detail. No job row.
-	confirmedRow, confErr := s.svc.Q.DomainConfirmed(r.Context(), host)
+	confirmedRow, confErr := s.q.DomainConfirmed(r.Context(), host)
 	if confErr == nil && confirmedRow.LastCheckedAt.Valid &&
 		time.Since(confirmedRow.LastCheckedAt.Time) < s.opts.DedupeWindow {
 		if env, ok := s.dedupeEnvelope(r, &confirmedRow, host); ok {
@@ -129,7 +129,7 @@ func (s *Server) postCheck(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 5. Dedupe, job-side: a done job within the window replays, cached.
-	if job, err := s.svc.Q.CheckJobDedupe(r.Context(), db.CheckJobDedupeParams{
+	if job, err := s.q.CheckJobDedupe(r.Context(), db.CheckJobDedupeParams{
 		Host: host, DedupeWindow: pgInterval(s.opts.DedupeWindow),
 	}); err == nil {
 		env := s.jobEnvelope(r, &jobFields{
@@ -147,7 +147,7 @@ func (s *Server) postCheck(w http.ResponseWriter, r *http.Request) {
 		InvalidParameter(w, r, "client address unavailable")
 		return
 	}
-	ins, err := s.svc.Q.CheckJobInsert(r.Context(), db.CheckJobInsertParams{
+	ins, err := s.q.CheckJobInsert(r.Context(), db.CheckJobInsertParams{
 		Host: host, RequesterIp: requester,
 	})
 	if err != nil {
@@ -169,7 +169,7 @@ func (s *Server) getCheck(w http.ResponseWriter, r *http.Request) {
 		NotFound(w, r, "Check not found", "Check jobs are keyed by their integer id.")
 		return
 	}
-	job, err := s.svc.Q.CheckJobByID(r.Context(), id)
+	job, err := s.q.CheckJobByID(r.Context(), id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		NotFound(w, r, "Check not found", "No such check job.")
 		return
@@ -212,7 +212,7 @@ func (s *Server) jobEnvelope(r *http.Request, j *jobFields) CheckEnvelope {
 	if j.Result != nil {
 		env.Result = json.RawMessage(j.Result)
 	}
-	if row, err := s.svc.Q.DomainConfirmed(r.Context(), j.Host); err == nil {
+	if row, err := s.q.DomainConfirmed(r.Context(), j.Host); err == nil {
 		env.Confirmed = confirmedBlock(&row)
 	}
 	return env
@@ -221,7 +221,7 @@ func (s *Server) jobEnvelope(r *http.Request, j *jobFields) CheckEnvelope {
 // dedupeEnvelope builds the §5.1.1 step-4 synthetic done envelope from the
 // latest scan_detail via the shared mapper.
 func (s *Server) dedupeEnvelope(r *http.Request, row *db.DomainConfirmedRow, host string) (CheckEnvelope, bool) {
-	raw, err := s.svc.Q.LatestScanDetail(r.Context(), row.ID)
+	raw, err := s.q.LatestScanDetail(r.Context(), row.ID)
 	if err != nil {
 		return CheckEnvelope{}, false
 	}
@@ -232,7 +232,7 @@ func (s *Server) dedupeEnvelope(r *http.Request, row *db.DomainConfirmedRow, hos
 	scanTS := row.LastCheckedAt.Time.UTC()
 	// The stored detail is a real crawl: preflight was necessarily fresh at
 	// scan time, so both clock inputs anchor to the scan timestamp.
-	links := observe.LiveLinks(r.Context(), s.svc.Pool, sr, s.opts.ResourcesEnabled)
+	links := observe.LiveLinks(r.Context(), s.pool, sr, s.opts.ResourcesEnabled)
 	result := observe.MapLiveResult(domain.Kind(row.Kind), sr, scanTS, scanTS, links, s.opts.ResourcesEnabled)
 	resultRaw, _ := json.Marshal(result)
 

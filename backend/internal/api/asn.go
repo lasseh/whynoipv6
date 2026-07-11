@@ -56,7 +56,7 @@ func (s *Server) listASNs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	generation, asOf, err := s.svc.Generation(r.Context())
+	generation, asOf, err := s.generation(r.Context())
 	if err != nil {
 		InternalError(w, r, err)
 		return
@@ -72,7 +72,7 @@ func (s *Server) listASNs(w http.ResponseWriter, r *http.Request) {
 			if seek != nil && seek.Rank != nil {
 				as = &postgres.ASNSeek{Count: *seek.Rank, Number: seek.ID}
 			}
-			rows, err := postgres.ListASNLeaderboard(ctx, s.svc.Pool, q.Get("q"),
+			rows, err := postgres.ListASNLeaderboard(ctx, s.pool, q.Get("q"),
 				sortKey == SortCountTotal, as, lim, backward)
 			if err != nil {
 				return nil, err
@@ -128,7 +128,7 @@ func (s *Server) getASN(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	row, err := s.svc.Q.ASNByNumber(r.Context(), n)
+	row, err := s.q.ASNByNumber(r.Context(), n)
 	if errors.Is(err, pgx.ErrNoRows) {
 		NotFound(w, r, "Network not found", "No such ASN: "+strconv.FormatInt(n, 10))
 		return
@@ -137,7 +137,7 @@ func (s *Server) getASN(w http.ResponseWriter, r *http.Request) {
 		InternalError(w, r, err)
 		return
 	}
-	generation, asOf, err := s.svc.Generation(r.Context())
+	generation, asOf, err := s.generation(r.Context())
 	if err != nil {
 		InternalError(w, r, err)
 		return
@@ -156,7 +156,7 @@ func (s *Server) listASNDomains(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if _, err := s.svc.Q.ASNByNumber(r.Context(), n); err != nil {
+	if _, err := s.q.ASNByNumber(r.Context(), n); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			NotFound(w, r, "Network not found", "No such ASN: "+strconv.FormatInt(n, 10))
 			return
