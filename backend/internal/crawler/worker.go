@@ -47,7 +47,7 @@ func (w *Worker) Process(ctx context.Context, d ClaimedDomain) { //nolint:gocrit
 
 	sr := w.Runner.Run(ctx, d.Host, d.Kind)
 
-	links := w.readLinks(ctx, d.ID)
+	links := observe.PersistedLinks(ctx, w.Pool, d.ID, w.ResourcesEnabled)
 	obs := observe.MapObservations(d.Kind, sr, w.Preflight.LastPass(), t, links, w.ResourcesEnabled)
 
 	unresolvable := Unresolvable(sr)
@@ -87,29 +87,6 @@ func (w *Worker) Process(ctx context.Context, d ClaimedDomain) { //nolint:gocrit
 	slog.Debug("domain processed", "domain", d.Host,
 		"duration_ms", time.Since(start).Milliseconds(),
 		"lease_lost", res.LeaseLost, "transitions", len(res.Transitions))
-}
-
-// readLinks loads the persisted required-host statuses for the roll-up
-// (02 §6); only meaningful while resources are enabled.
-func (w *Worker) readLinks(ctx context.Context, domainID int64) []observe.LinkedResource {
-	if !w.ResourcesEnabled {
-		return nil
-	}
-	statuses, err := db.New(w.Pool).DomainRequiredLinks(ctx, domainID)
-	if err != nil {
-		slog.Warn("resource link read failed", "err", err.Error())
-		return nil
-	}
-	var links []observe.LinkedResource
-	for _, status := range statuses {
-		var l observe.LinkedResource
-		if status != nil {
-			s := domain.IPv6Status(*status)
-			l.AAAAStatus = &s
-		}
-		links = append(links, l)
-	}
-	return links
 }
 
 // attribution computes A (06 §6.2–§6.4): input IP from this scan's base

@@ -7,6 +7,7 @@ import (
 
 	"github.com/lasseh/whynoipv6/internal/checker"
 	"github.com/lasseh/whynoipv6/internal/domain"
+	db "github.com/lasseh/whynoipv6/internal/postgres/db"
 )
 
 var t0 = time.Date(2026, 7, 10, 12, 0, 0, 0, time.UTC)
@@ -302,5 +303,36 @@ func TestObsFromStatus(t *testing.T) {
 		if got := obsFromStatus(tc.st); got != tc.want {
 			t.Errorf("obsFromStatus(%s) = %s, want %s", tc.st, got, tc.want)
 		}
+	}
+}
+
+// TestLinkSetConstructorsAgree pins the two LinkSet constructors to one
+// convention: the same registry state, expressed as persisted statuses and
+// as a discovered-host probe, must roll up identically — including the
+// missing/unswept → nil → defer case.
+func TestLinkSetConstructorsAgree(t *testing.T) {
+	sup := db.Ipv6StatusSupported
+	rows := []struct {
+		name      string
+		persisted []*db.Ipv6Status
+		hosts     []string
+		byHost    map[string]domain.IPv6Status
+		want      domain.Observation
+	}{
+		{"all_known", []*db.Ipv6Status{&sup, &sup}, []string{"a", "b"},
+			map[string]domain.IPv6Status{"a": domain.StatusSupported, "b": domain.StatusSupported},
+			domain.ObsSupported},
+		{"unswept_defers", []*db.Ipv6Status{&sup, nil}, []string{"a", "b"},
+			map[string]domain.IPv6Status{"a": domain.StatusSupported},
+			domain.ObsError},
+	}
+	for _, tc := range rows {
+		t.Run(tc.name, func(t *testing.T) {
+			p := rollupResources(domain.ObsSupported, linksFromStatuses(tc.persisted))
+			l := rollupResources(domain.ObsSupported, linksForHosts(tc.hosts, tc.byHost))
+			if p != l || p != tc.want {
+				t.Errorf("persisted=%s live=%s, want both %s", p, l, tc.want)
+			}
+		})
 	}
 }

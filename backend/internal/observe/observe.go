@@ -390,6 +390,53 @@ func MapLiveResult(
 	}
 }
 
+// The LinkSet constructors: PersistedLinks (commit path) and LiveLinks
+// (live-check path) both normalize registry state onto the one roll-up
+// convention — a missing or NULL status stays nil and defers the resources
+// dimension in rollupResources. The pure folds below are the tested core.
+
+// linksFromStatuses normalizes the persisted required-link statuses (02 §6).
+func linksFromStatuses(statuses []*db.Ipv6Status) []LinkedResource {
+	links := make([]LinkedResource, 0, len(statuses))
+	for _, status := range statuses {
+		var l LinkedResource
+		if status != nil {
+			s := domain.IPv6Status(*status)
+			l.AAAAStatus = &s
+		}
+		links = append(links, l)
+	}
+	return links
+}
+
+// linksForHosts normalizes discovered hosts against the registry probe; a
+// host absent from byHost has no registry row (or a NULL status).
+func linksForHosts(rawHosts []string, byHost map[string]domain.IPv6Status) []LinkedResource {
+	links := make([]LinkedResource, 0, len(rawHosts))
+	for _, h := range rawHosts {
+		if s, ok := byHost[h]; ok {
+			links = append(links, LinkedResource{AAAAStatus: &s})
+		} else {
+			links = append(links, LinkedResource{}) // missing/unswept → error in the roll-up
+		}
+	}
+	return links
+}
+
+// PersistedLinks loads the persisted required-host statuses for one domain —
+// the commit-path LinkSet constructor (02 §6), sibling of LiveLinks.
+func PersistedLinks(ctx context.Context, pool *pgxpool.Pool, domainID int64, enabled bool) []LinkedResource {
+	if !enabled {
+		return nil
+	}
+	statuses, err := db.New(pool).DomainRequiredLinks(ctx, domainID)
+	if err != nil {
+		slog.Warn("resource link read failed", "err", err.Error())
+		return nil
+	}
+	return linksFromStatuses(statuses)
+}
+
 // LiveLinks resolves the run's discovered resource hosts against the
 // confirmed registry — read-only, no registry rows written (Rule 0). A
 // discovered host with no registry row maps to a nil status (→ error in
@@ -415,13 +462,5 @@ func LiveLinks(ctx context.Context, pool *pgxpool.Pool, sr checker.ScanResult, e
 			}
 		}
 	}
-	links := make([]LinkedResource, 0, len(rawHosts))
-	for _, h := range rawHosts {
-		if s, ok := byHost[h]; ok {
-			links = append(links, LinkedResource{AAAAStatus: &s})
-		} else {
-			links = append(links, LinkedResource{}) // missing/unswept → error in the roll-up
-		}
-	}
-	return links
+	return linksForHosts(rawHosts, byHost)
 }
