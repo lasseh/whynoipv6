@@ -6,7 +6,7 @@ import (
 )
 
 // fakeMeta scripts mmdb answers without mmdb fixtures (the Reader is a thin
-// wrapper over the official geoip2 reader; the algorithm is what §9.10 pins).
+// wrapper over the maxminddb reader; the algorithm is what §9.10 pins).
 type fakeMeta struct {
 	asn  uint
 	org  string
