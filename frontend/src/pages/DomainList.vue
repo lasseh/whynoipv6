@@ -4,14 +4,15 @@ import { useRoute } from 'vue-router'
 
 import PageShell from '@/components/PageShell.vue'
 import ApiError from '@/components/ApiError.vue'
+import SegmentedTabs from '@/components/SegmentedTabs.vue'
 
 import DomainTable from '@/components/DomainTable.vue'
 import Pagination from '@/components/Pagination.vue'
 import LoadingSpinner from '@/components/LoadingSpinner.vue'
 
-import { listHeroes, listSinners } from '@/api'
 import type { DomainSummary } from '@/api'
 import { useCursorList } from '@/composables/useCursorList'
+import { TIERS, tierBySlug } from '@/tiers'
 
 const route = useRoute()
 
@@ -19,24 +20,13 @@ const anchorTop = ref<HTMLElement | null>(null)
 
 const { items, page, loading, error, next, prev, setFilter } = useCursorList<DomainSummary>({
   anchor: anchorTop,
-  fetch: (params, signal) =>
-    params.filter === 'heroes'
-      ? listHeroes({ cursor: params.cursor }, signal)
-      : listSinners({ cursor: params.cursor }, signal),
+  fetch: (params, signal) => tierBySlug(params.filter).list({ cursor: params.cursor }, signal),
   filterKeys: ['filter'],
 })
 
-const queryFilter = computed(() => {
-  const filterValue = route.query.filter
-  if (filterValue === null || typeof filterValue === 'undefined') return 'sinners'
-  return Array.isArray(filterValue) ? filterValue[0] || 'sinners' : filterValue
-})
+const queryFilter = computed(() => tierBySlug([route.query.filter].flat()[0] ?? undefined).slug)
 
-function applyFilter(filter: string) {
-  setFilter('filter', filter)
-}
-
-// Pagination keeps the old scroll-to-anchor behavior.
+const tierTabs = TIERS.map((t) => ({ value: t.slug, label: t.label }))
 </script>
 
 <template>
@@ -59,30 +49,11 @@ function applyFilter(filter: string) {
           </header>
 
           <div class="mb-4">
-            <div class="w-full flex flex-wrap -space-x-px">
-              <button
-                :class="[
-                  'btn grow border-zinc-700 hover:bg-zinc-800/40 rounded-none first:rounded-l last:rounded-r',
-                  queryFilter === 'sinners'
-                    ? 'text-fuchsia-600 bg-zinc-600/20'
-                    : 'text-slate-300 bg-zinc-800/20',
-                ]"
-                @click="applyFilter('sinners')"
-              >
-                Sinners
-              </button>
-              <button
-                :class="[
-                  'btn grow border-zinc-700 hover:bg-zinc-800/40 rounded-none first:rounded-l last:rounded-r',
-                  queryFilter === 'heroes'
-                    ? 'text-fuchsia-600 bg-zinc-600/20'
-                    : 'text-slate-300 bg-zinc-800/20',
-                ]"
-                @click="applyFilter('heroes')"
-              >
-                Heroes
-              </button>
-            </div>
+            <SegmentedTabs
+              :options="tierTabs"
+              :model-value="queryFilter"
+              @update:model-value="(v) => setFilter('filter', v)"
+            />
           </div>
 
           <!-- Error state -->

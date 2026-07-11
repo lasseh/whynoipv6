@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 
 import PageShell from '@/components/PageShell.vue'
+import SegmentedTabs from '@/components/SegmentedTabs.vue'
 
 import ChangelogTable from '@/components/ChangelogTable.vue'
 import Pagination from '@/components/Pagination.vue'
@@ -62,30 +63,14 @@ onBeforeUnmount(() => {
           </header>
 
           <div class="mb-4">
-            <div class="w-full flex flex-wrap -space-x-px">
-              <button
-                :class="[
-                  'btn grow border-zinc-700 hover:bg-zinc-800/20 rounded-none first:rounded-l last:rounded-r',
-                  queryFilter === 'tranco'
-                    ? 'text-fuchsia-600 bg-zinc-500/20'
-                    : 'text-slate-300 bg-zinc-700/20',
-                ]"
-                @click="setFilter('filter', 'tranco')"
-              >
-                Tranco
-              </button>
-              <button
-                :class="[
-                  'btn grow border-zinc-700 hover:bg-zinc-800/20 rounded-none first:rounded-l last:rounded-r',
-                  queryFilter === 'campaign'
-                    ? 'text-fuchsia-600 bg-zinc-500/20'
-                    : 'text-slate-300 bg-zinc-700/20',
-                ]"
-                @click="setFilter('filter', 'campaign')"
-              >
-                Campaigns
-              </button>
-            </div>
+            <SegmentedTabs
+              :options="[
+                { value: 'tranco', label: 'Tranco' },
+                { value: 'campaign', label: 'Campaigns' },
+              ]"
+              :model-value="queryFilter"
+              @update:model-value="(v) => setFilter('filter', v)"
+            />
           </div>
         </div>
       </div>

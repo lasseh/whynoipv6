@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import PageShell from '@/components/PageShell.vue'
+import SegmentedTabs from '@/components/SegmentedTabs.vue'
 
 import MetricCrawler from '@/partials/MetricCrawler.vue'
 import MetricASN from '@/partials/MetricASN.vue'
@@ -17,13 +18,6 @@ const queryFilter = computed(() =>
 const applyFilterAndUpdateRoute = (filterType: string) => {
   // Preserve the rest of the query (§5 lists sort/q as retained state).
   void router.push({ query: { ...route.query, t: filterType } })
-}
-
-const tabClass = (filterType: string): string[] => {
-  return [
-    'btn grow border-zinc-700 hover:bg-zinc-800/20 rounded-none first:rounded-l last:rounded-r',
-    queryFilter.value === filterType ? 'text-fuchsia-600 bg-zinc-500/20' : 'text-slate-300',
-  ]
 }
 </script>
 
@@ -47,13 +41,15 @@ const tabClass = (filterType: string): string[] => {
           </div>
 
           <!-- Tab Buttons -->
-          <div class="flex mb-4">
-            <button :class="tabClass('overview')" @click="applyFilterAndUpdateRoute('overview')">
-              Overview
-            </button>
-            <button :class="tabClass('asn')" @click="applyFilterAndUpdateRoute('asn')">
-              Network Providers
-            </button>
+          <div class="mb-4">
+            <SegmentedTabs
+              :options="[
+                { value: 'overview', label: 'Overview' },
+                { value: 'asn', label: 'Network Providers' },
+              ]"
+              :model-value="queryFilter"
+              @update:model-value="applyFilterAndUpdateRoute"
+            />
           </div>
           <!-- Tab Content -->
           <div>

@@ -1,8 +1,17 @@
 import { createWebHistory, createRouter } from 'vue-router'
 import type { RouteRecordRaw } from 'vue-router'
 import { installPageMeta } from '@/composables/usePageMeta'
+import { TIERS } from '@/tiers'
+
+// The tier collections (07 §2.3): /heroes /sinners /gold /almost /mail are
+// presets over the /domains leaderboard — one redirect per TIERS row.
+const tierRoutes: RouteRecordRaw[] = TIERS.map((t) => ({
+  path: `/${t.slug}`,
+  redirect: { path: '/domains', query: { filter: t.slug } },
+}))
 
 const routes: RouteRecordRaw[] = [
+  ...tierRoutes,
   {
     path: '/',
     name: 'Home',
