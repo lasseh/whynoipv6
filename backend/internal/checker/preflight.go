@@ -37,13 +37,13 @@ func NewPreflight(res *Resolver, probeHost string, logger *slog.Logger) *Preflig
 func (p *Preflight) Run(ctx context.Context) bool {
 	host, port, err := net.SplitHostPort(p.probeHost)
 	if err != nil {
-		p.logger.Error("ipv6 preflight: probe host must be host:port", "host", p.probeHost, "error", err)
+		p.logger.Error("ipv6 preflight: probe host must be host:port", "host", p.probeHost, "err", err.Error())
 		return false
 	}
 
 	ips, _, _, _, err := p.res.LookupAAAA(ctx, host)
 	if err != nil {
-		p.logger.Error("ipv6 preflight: AAAA lookup failed", "host", host, "error", err)
+		p.logger.Error("ipv6 preflight: AAAA lookup failed", "host", host, "err", err.Error())
 		return false
 	}
 	if len(ips) == 0 {
@@ -55,7 +55,7 @@ func (p *Preflight) Run(ctx context.Context) bool {
 	d := net.Dialer{Timeout: 5 * time.Second}
 	conn, err := d.DialContext(ctx, "tcp6", addr)
 	if err != nil {
-		p.logger.Error("ipv6 preflight: tcp6 dial failed", "host", host, "addr", addr, "error", err)
+		p.logger.Error("ipv6 preflight: tcp6 dial failed", "host", host, "addr", addr, "err", err.Error())
 		return false
 	}
 	_ = conn.Close()
