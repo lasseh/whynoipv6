@@ -1,0 +1,192 @@
+{
+  "conn": {
+    "http_only": false,
+    "status": "not_applicable"
+  },
+  "consensus": {
+    "base": {
+      "agreement": "2of3",
+      "disagreed": true,
+      "per_resolver": {
+        "cloudflare": "empty",
+        "google": "empty",
+        "quad9": "timeout"
+      },
+      "rcodes": {
+        "cloudflare": "NOERROR",
+        "google": "NOERROR",
+        "quad9": ""
+      }
+    },
+    "www": {
+      "agreement": "2of3",
+      "disagreed": true,
+      "per_resolver": {
+        "cloudflare": "empty",
+        "google": "empty",
+        "quad9": "timeout"
+      },
+      "rcodes": {
+        "cloudflare": "NOERROR",
+        "google": "NOERROR",
+        "quad9": ""
+      }
+    }
+  },
+  "domain": "legacy.no",
+  "duration": 18000000000,
+  "results": {
+    "dns_aaaa_base": {
+      "details": {
+        "a_address": "192.0.2.10",
+        "a_outcome": "a_present",
+        "quorum": {
+          "agreement": "2of3",
+          "disagreed": true,
+          "per_resolver": {
+            "cloudflare": "empty",
+            "google": "empty",
+            "quad9": "timeout"
+          },
+          "rcodes": {
+            "cloudflare": "NOERROR",
+            "google": "NOERROR",
+            "quad9": ""
+          }
+        },
+        "rcode": "NOERROR"
+      },
+      "latency": 130000000,
+      "status": "unsupported"
+    },
+    "dns_aaaa_www": {
+      "details": {
+        "a_outcome": "a_absent",
+        "quorum": {
+          "agreement": "2of3",
+          "disagreed": true,
+          "per_resolver": {
+            "cloudflare": "empty",
+            "google": "empty",
+            "quad9": "timeout"
+          },
+          "rcodes": {
+            "cloudflare": "NOERROR",
+            "google": "NOERROR",
+            "quad9": ""
+          }
+        },
+        "rcode": "NOERROR"
+      },
+      "latency": 125000000,
+      "status": "unsupported"
+    },
+    "dns_dnssec": {
+      "details": {
+        "signed": false
+      },
+      "latency": 70000000,
+      "status": "unsupported"
+    },
+    "dns_mx_ipv6": {
+      "details": {
+        "addresses": [
+          "2a02:c0::99"
+        ],
+        "reason": "implicit MX fallback (RFC 5321 §5.1)"
+      },
+      "latency": 100000000,
+      "status": "supported"
+    },
+    "dns_ns_ipv6": {
+      "details": {
+        "checked": 2,
+        "ipv6_count": 0,
+        "nameservers": {
+          "ns1.legacy.no.": {
+            "addresses": [],
+            "has_ipv6": false
+          },
+          "ns2.legacy.no.": {
+            "addresses": [],
+            "has_ipv6": false
+          }
+        },
+        "total": 2
+      },
+      "latency": 190000000,
+      "status": "unsupported"
+    },
+    "dns_ptr_ipv6": {
+      "details": {
+        "reason": "no AAAA record on base domain"
+      },
+      "latency": 0,
+      "status": "not_applicable"
+    },
+    "http_ipv6": {
+      "details": {
+        "reason": "no AAAA record on base domain"
+      },
+      "latency": 0,
+      "status": "not_applicable"
+    },
+    "http_response_parity": {
+      "details": {
+        "reason": "no AAAA record on base domain"
+      },
+      "latency": 0,
+      "status": "not_applicable"
+    },
+    "https_ipv6": {
+      "details": {
+        "reason": "no AAAA record on base domain"
+      },
+      "latency": 0,
+      "status": "not_applicable"
+    },
+    "latency_ipv4": {
+      "details": {
+        "reason": "no AAAA record on base domain"
+      },
+      "latency": 0,
+      "status": "not_applicable"
+    },
+    "latency_ipv6": {
+      "details": {
+        "reason": "no AAAA record on base domain"
+      },
+      "latency": 0,
+      "status": "not_applicable"
+    },
+    "resource_discovery": {
+      "details": {
+        "reason": "no AAAA record on base domain"
+      },
+      "latency": 0,
+      "status": "not_applicable"
+    },
+    "smtp_ipv6": {
+      "details": {
+        "reason": "no MX with AAAA record"
+      },
+      "latency": 0,
+      "status": "not_applicable"
+    },
+    "spf_ipv6": {
+      "details": {
+        "reason": "no SPF record"
+      },
+      "latency": 60000000,
+      "status": "not_applicable"
+    },
+    "tls_ipv6": {
+      "details": {
+        "reason": "no AAAA record on base domain"
+      },
+      "latency": 0,
+      "status": "not_applicable"
+    }
+  },
+  "scanned_at": "2026-07-01T12:00:00Z"
+}

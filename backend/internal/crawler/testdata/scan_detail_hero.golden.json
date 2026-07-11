@@ -1,0 +1,308 @@
+{
+  "conn": {
+    "http_only": false,
+    "source": "https",
+    "status": "supported"
+  },
+  "consensus": {
+    "base": {
+      "agreement": "3of3",
+      "disagreed": false,
+      "per_resolver": {
+        "cloudflare": "exists",
+        "google": "exists",
+        "quad9": "exists"
+      },
+      "rcodes": {
+        "cloudflare": "NOERROR",
+        "google": "NOERROR",
+        "quad9": "NOERROR"
+      }
+    },
+    "www": {
+      "agreement": "3of3",
+      "disagreed": false,
+      "per_resolver": {
+        "cloudflare": "exists",
+        "google": "exists",
+        "quad9": "exists"
+      },
+      "rcodes": {
+        "cloudflare": "NOERROR",
+        "google": "NOERROR",
+        "quad9": "NOERROR"
+      }
+    }
+  },
+  "domain": "hero.no",
+  "duration": 42000000000,
+  "results": {
+    "dns_aaaa_base": {
+      "details": {
+        "addresses": [
+          "2a02:c0::1",
+          "2a02:c0::2"
+        ],
+        "cname_chain": [
+          "hero.no.",
+          "edge.hero.no."
+        ],
+        "quorum": {
+          "agreement": "3of3",
+          "disagreed": false,
+          "per_resolver": {
+            "cloudflare": "exists",
+            "google": "exists",
+            "quad9": "exists"
+          },
+          "rcodes": {
+            "cloudflare": "NOERROR",
+            "google": "NOERROR",
+            "quad9": "NOERROR"
+          }
+        },
+        "rcode": "NOERROR",
+        "ttl": 300
+      },
+      "latency": 120000000,
+      "status": "supported"
+    },
+    "dns_aaaa_www": {
+      "details": {
+        "addresses": [
+          "2a02:c0::10"
+        ],
+        "cdn_detected": true,
+        "cname_chain": [
+          "www.hero.no.",
+          "hero.cdn77.net."
+        ],
+        "cname_target": "hero.cdn77.net.",
+        "quorum": {
+          "agreement": "3of3",
+          "disagreed": false,
+          "per_resolver": {
+            "cloudflare": "exists",
+            "google": "exists",
+            "quad9": "exists"
+          },
+          "rcodes": {
+            "cloudflare": "NOERROR",
+            "google": "NOERROR",
+            "quad9": "NOERROR"
+          }
+        },
+        "rcode": "NOERROR",
+        "ttl": 60
+      },
+      "latency": 110000000,
+      "status": "supported"
+    },
+    "dns_dnssec": {
+      "details": {
+        "ad_flag": true,
+        "chain_complete": true,
+        "ds_records": [
+          {
+            "algorithm": "ECDSAP256SHA256",
+            "digest_type": 2,
+            "key_tag": 12345
+          }
+        ],
+        "signed": true
+      },
+      "latency": 90000000,
+      "status": "supported"
+    },
+    "dns_mx_ipv6": {
+      "details": {
+        "ipv6_count": 1,
+        "mx_records": {
+          "mx1.hero.no.": {
+            "addresses": [
+              "2a02:c0:3::25"
+            ],
+            "has_ipv6": true,
+            "preference": 10
+          },
+          "mx2.hero.no.": {
+            "addresses": [],
+            "has_ipv6": false,
+            "preference": 20
+          }
+        },
+        "total": 2
+      },
+      "latency": 180000000,
+      "status": "partial"
+    },
+    "dns_ns_ipv6": {
+      "details": {
+        "checked": 2,
+        "ipv6_count": 1,
+        "nameservers": {
+          "ns1.hero.no.": {
+            "addresses": [
+              "2a02:c0:2::53"
+            ],
+            "has_ipv6": true
+          },
+          "ns2.hero.no.": {
+            "addresses": [],
+            "has_ipv6": false
+          }
+        },
+        "total": 3,
+        "zone": "hero.no"
+      },
+      "latency": 200000000,
+      "status": "partial"
+    },
+    "dns_ptr_ipv6": {
+      "details": {
+        "all_confirmed": true,
+        "checks": [
+          {
+            "address": "2a02:c0::1",
+            "forward_confirmed": true,
+            "ptr_name": "web.hero.no."
+          }
+        ]
+      },
+      "latency": 220000000,
+      "status": "supported"
+    },
+    "http_ipv6": {
+      "details": {
+        "address": "2a02:c0::1",
+        "response_time_ms": 45,
+        "server": "nginx",
+        "status_code": 301
+      },
+      "latency": 150000000,
+      "status": "supported"
+    },
+    "http_response_parity": {
+      "details": {
+        "content_length_diff_pct": 0.3,
+        "content_type_match": true,
+        "ipv4": {
+          "address": "192.0.2.10",
+          "content_length": 52140,
+          "content_type": "text/html; charset=utf-8",
+          "response_time_ms": 95,
+          "status_code": 200
+        },
+        "ipv6": {
+          "address": "2a02:c0::1",
+          "content_length": 52290,
+          "content_type": "text/html; charset=utf-8",
+          "response_time_ms": 88,
+          "status_code": 200
+        },
+        "status_match": true
+      },
+      "latency": 400000000,
+      "status": "supported"
+    },
+    "https_ipv6": {
+      "details": {
+        "address": "2a02:c0::1",
+        "response_time_ms": 87,
+        "server": "nginx",
+        "status_code": 200,
+        "tls_version": "TLS 1.3"
+      },
+      "latency": 300000000,
+      "status": "supported"
+    },
+    "latency_ipv4": {
+      "details": {
+        "address": "192.0.2.10",
+        "avg_ms": 31,
+        "measurements": [
+          30,
+          32,
+          40
+        ],
+        "ttfb_ms": 31
+      },
+      "latency": 350000000,
+      "status": "supported"
+    },
+    "latency_ipv6": {
+      "details": {
+        "address": "2a02:c0::1",
+        "avg_ms": 28,
+        "measurements": [
+          28,
+          29,
+          35
+        ],
+        "ttfb_ms": 28
+      },
+      "latency": 340000000,
+      "status": "supported"
+    },
+    "resource_discovery": {
+      "details": {
+        "hosts": [
+          "cdn.example.no",
+          "fonts.example.no"
+        ],
+        "total_hosts": 2
+      },
+      "latency": 600000000,
+      "status": "supported"
+    },
+    "smtp_ipv6": {
+      "details": {
+        "address": "2a02:c0:3::25",
+        "banner": "220 mx1.hero.no ESMTP",
+        "ehlo_response": "250-mx1.hero.no\n250 STARTTLS",
+        "mx_host": "mx1.hero.no.",
+        "mx_preference": 10,
+        "starttls_offered": true
+      },
+      "latency": 500000000,
+      "status": "supported"
+    },
+    "spf_ipv6": {
+      "details": {
+        "has_ip6_mechanism": true,
+        "include_chain": [
+          "_spf.hero.no"
+        ],
+        "include_has_ip6": false,
+        "ip6_mechanisms": [
+          "ip6:2a02:c0::/32"
+        ],
+        "lookup_count": 2,
+        "spf_record": "v=spf1 ip6:2a02:c0::/32 include:_spf.hero.no ~all"
+      },
+      "latency": 80000000,
+      "status": "supported"
+    },
+    "tls_ipv6": {
+      "details": {
+        "address": "2a02:c0::1",
+        "cipher_suite": "TLS_AES_128_GCM_SHA256",
+        "expires_in_days": 30,
+        "expires_soon": true,
+        "issuer": "R11",
+        "not_after": "2026-08-01T00:00:00Z",
+        "not_before": "2026-05-01T00:00:00Z",
+        "san": [
+          "hero.no",
+          "www.hero.no"
+        ],
+        "subject": "hero.no",
+        "tls_version": "TLS 1.3",
+        "valid": true
+      },
+      "latency": 250000000,
+      "status": "supported"
+    }
+  },
+  "scanned_at": "2026-07-01T12:00:00Z"
+}

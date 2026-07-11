@@ -1,0 +1,197 @@
+{
+  "conn": {
+    "error_type": "certificate_error",
+    "http_only": false,
+    "status": "error"
+  },
+  "consensus": {
+    "base": {
+      "agreement": "2of3",
+      "disagreed": true,
+      "per_resolver": {
+        "cloudflare": "empty",
+        "google": "empty",
+        "quad9": "timeout"
+      },
+      "rcodes": {
+        "cloudflare": "NOERROR",
+        "google": "NOERROR",
+        "quad9": ""
+      }
+    }
+  },
+  "domain": "broken.no",
+  "duration": 61000000000,
+  "results": {
+    "dns_aaaa_base": {
+      "details": {
+        "inconsistent": true,
+        "quorum": {
+          "agreement": "2of3",
+          "disagreed": true,
+          "per_resolver": {
+            "cloudflare": "empty",
+            "google": "empty",
+            "quad9": "timeout"
+          },
+          "rcodes": {
+            "cloudflare": "NOERROR",
+            "google": "NOERROR",
+            "quad9": ""
+          }
+        },
+        "rcode": ""
+      },
+      "latency": 140000000,
+      "status": "error"
+    },
+    "dns_aaaa_www": {
+      "details": {
+        "cd_outcome": "cd_fail",
+        "error": "all resolvers failed",
+        "rcode": "SERVFAIL"
+      },
+      "latency": 135000000,
+      "status": "error"
+    },
+    "dns_dnssec": {
+      "details": {
+        "chain_complete": false,
+        "ds_records": [
+          {
+            "algorithm": "RSASHA256",
+            "digest_type": 2,
+            "key_tag": 777
+          }
+        ],
+        "error": "AD flag check failed: could not query domain for AD flag validation",
+        "signed": true
+      },
+      "latency": 95000000,
+      "status": "error"
+    },
+    "dns_mx_ipv6": {
+      "details": {
+        "reason": "null MX record"
+      },
+      "latency": 85000000,
+      "status": "not_applicable"
+    },
+    "dns_ns_ipv6": {
+      "details": {
+        "error": "no NS records found"
+      },
+      "latency": 90000000,
+      "status": "error"
+    },
+    "dns_ptr_ipv6": {
+      "details": {
+        "all_confirmed": false,
+        "checks": [
+          {
+            "address": "2a02:c0::b",
+            "forward_confirmed": false,
+            "ptr_name": ""
+          },
+          {
+            "address": "2a02:c0::c",
+            "forward_confirmed": true,
+            "ptr_name": "host.broken.no."
+          }
+        ]
+      },
+      "latency": 210000000,
+      "status": "partial"
+    },
+    "http_ipv6": {
+      "details": {
+        "error": "context deadline exceeded",
+        "error_type": "timeout"
+      },
+      "latency": 10000000000,
+      "status": "error"
+    },
+    "http_response_parity": {
+      "details": {
+        "content_length_diff_pct": 52.7,
+        "content_type_match": true,
+        "ipv4": {
+          "address": "192.0.2.20",
+          "content_length": 10000,
+          "content_type": "text/html",
+          "response_time_ms": 120,
+          "status_code": 200
+        },
+        "ipv6": {
+          "address": "2a02:c0::b",
+          "content_length": 4730,
+          "content_type": "text/html",
+          "response_time_ms": 300,
+          "status_code": 503
+        },
+        "status_match": false
+      },
+      "latency": 700000000,
+      "status": "unsupported"
+    },
+    "https_ipv6": {
+      "details": {
+        "error": "tls: failed to verify certificate: x509: certificate signed by unknown authority",
+        "error_type": "certificate_error"
+      },
+      "latency": 900000000,
+      "status": "unsupported"
+    },
+    "latency_ipv4": {
+      "details": {
+        "address": "192.0.2.20",
+        "error": "all measurements failed"
+      },
+      "latency": 30000000000,
+      "status": "error"
+    },
+    "latency_ipv6": {
+      "details": {
+        "error": "address in blocked range"
+      },
+      "latency": 5000000,
+      "status": "error"
+    },
+    "resource_discovery": {
+      "details": {
+        "hosts": [],
+        "total_hosts": 0
+      },
+      "latency": 300000000,
+      "status": "supported"
+    },
+    "smtp_ipv6": {
+      "details": {
+        "address": "2a02:c0:4::25",
+        "banner": "554 not accepting mail",
+        "error": "unexpected banner",
+        "mx_host": "mx.broken.no.",
+        "mx_preference": 5
+      },
+      "latency": 450000000,
+      "status": "unsupported"
+    },
+    "spf_ipv6": {
+      "details": {
+        "error": "multiple SPF records found"
+      },
+      "latency": 55000000,
+      "status": "error"
+    },
+    "tls_ipv6": {
+      "details": {
+        "address": "2a02:c0::b",
+        "error": "TLS handshake failed: EOF",
+        "valid": false
+      },
+      "latency": 800000000,
+      "status": "unsupported"
+    }
+  },
+  "scanned_at": "2026-07-01T12:00:00Z"
+}
