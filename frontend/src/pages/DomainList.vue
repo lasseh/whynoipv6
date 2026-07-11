@@ -61,7 +61,7 @@ const tierTabs = TIERS.map((t) => ({ value: t.slug, label: t.label }))
 
           <!-- Domains -->
           <div v-else>
-            <DomainTable :domains="items" />
+            <DomainTable :domains="items" :loading="loading" />
             <LoadingSpinner v-if="loading" />
           </div>
 

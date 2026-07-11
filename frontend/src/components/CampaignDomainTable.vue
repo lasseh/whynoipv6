@@ -6,8 +6,11 @@ import StatusIcon from '@/components/StatusIcon.vue'
 // the server's v6_ready predicate (07 §4.7: base supported ∧ ns supported ∧
 // www ∈ {supported, not_applicable} — MX deliberately excluded) so the
 // highlighted-row count always agrees with adoption.v6_ready_percent.
-withDefaults(defineProps<{ domains?: DomainSummary[]; uuid: string }>(), {
+// `loading` suppresses the empty state so it can't flash before the first
+// page arrives.
+withDefaults(defineProps<{ domains?: DomainSummary[]; uuid: string; loading?: boolean }>(), {
   domains: () => [],
+  loading: false,
 })
 
 function isReady(domain: DomainSummary): boolean {
@@ -118,7 +121,7 @@ function isReady(domain: DomainSummary): boolean {
     </table>
 
     <!-- Empty state -->
-    <div v-else class="flex justify-center">
+    <div v-else-if="!loading" class="flex justify-center">
       <div class="text-center">
         <div class="text-xl font-medium">No domains found</div>
       </div>

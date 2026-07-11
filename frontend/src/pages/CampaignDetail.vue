@@ -27,7 +27,7 @@ const notFound = ref(false)
 
 const anchorTop = ref<HTMLElement | null>(null)
 
-const { items, page, meta, error, next, prev } = useCursorList({
+const { items, page, meta, loading, error, next, prev } = useCursorList({
   anchor: anchorTop,
   fetch: async (params, signal) => {
     try {
@@ -105,7 +105,7 @@ getCampaignChangelog(uuid)
             <div>
               <!-- Error state (§6.3) -->
               <ApiError v-if="error" :problem="error" />
-              <CampaignDomainTable v-else :domains="items" :uuid="uuid" />
+              <CampaignDomainTable v-else :domains="items" :uuid="uuid" :loading="loading" />
             </div>
 
             <!-- Pagination -->

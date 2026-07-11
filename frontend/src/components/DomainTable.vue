@@ -5,8 +5,12 @@ import StatusIcon from '@/components/StatusIcon.vue'
 
 // The §4.2 list row: columns Apex/WWW/E-Mail/Nameserver map to
 // status.base/www/mx/ns.value (§7.1). Rank badge hides on null — never
-// renders 0 (§7.3).
-withDefaults(defineProps<{ domains?: DomainSummary[] }>(), { domains: () => [] })
+// renders 0 (§7.3). `loading` suppresses the empty state so it can't
+// flash before the first page arrives.
+withDefaults(defineProps<{ domains?: DomainSummary[]; loading?: boolean }>(), {
+  domains: () => [],
+  loading: false,
+})
 
 const hoverIndex = ref<number | null>(null)
 </script>
@@ -125,7 +129,7 @@ const hoverIndex = ref<number | null>(null)
     </table>
 
     <!-- No Data Available State -->
-    <div v-else class="flex justify-center">
+    <div v-else-if="!loading" class="flex justify-center">
       <div class="text-center">
         <div class="text-xl font-medium">No domains found</div>
       </div>

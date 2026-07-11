@@ -8,6 +8,7 @@ import { listSinners } from '@/api'
 import type { DomainSummary } from '@/api'
 
 const domainList = ref<DomainSummary[]>([])
+const loading = ref(true)
 
 async function getDomainList() {
   try {
@@ -15,6 +16,8 @@ async function getDomainList() {
     domainList.value = response.items
   } catch {
     domainList.value = []
+  } finally {
+    loading.value = false
   }
 }
 
@@ -45,7 +48,7 @@ onMounted(() => {
 
         <!-- DomainList -->
         <div>
-          <DomainTable :domains="domainList" />
+          <DomainTable :domains="domainList" :loading="loading" />
         </div>
 
         <!-- Button to Domain List-->
