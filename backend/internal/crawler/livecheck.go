@@ -203,20 +203,11 @@ func LiveLinks(ctx context.Context, pool *pgxpool.Pool, sr checker.ScanResult, e
 	if !enabled {
 		return nil
 	}
-	disc, ok := sr.Results["resource_discovery"]
-	if !ok || disc.Details == nil {
+	_, disc, ok := sr.ResourceDiscovery()
+	if !ok {
 		return nil
 	}
-	rawHosts, _ := disc.Details["hosts"].([]string)
-	if rawHosts == nil {
-		if anyHosts, ok := disc.Details["hosts"].([]any); ok {
-			for _, h := range anyHosts {
-				if s, ok := h.(string); ok {
-					rawHosts = append(rawHosts, s)
-				}
-			}
-		}
-	}
+	rawHosts := disc.Hosts
 	if len(rawHosts) == 0 {
 		return nil
 	}

@@ -20,20 +20,21 @@ func NewDNSPTRIPv6(dialer *SafeDialer) *DNSPTRIPv6 {
 	return &DNSPTRIPv6{dialer: dialer}
 }
 
-func (c *DNSPTRIPv6) Name() string { return "dns_ptr_ipv6" }
+func (c *DNSPTRIPv6) Name() string { return NamePTR }
 func (c *DNSPTRIPv6) Check(ctx context.Context, domain string, kind Kind) (Result, error) {
 	start := time.Now()
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
-	details := map[string]any{}
+	d := &PTRDetail{}
 
 	// Resolve AAAA records.
 	ips, _, _, _, err := c.dialer.Resolver().LookupAAAA(ctx, domain)
 	if err != nil || len(ips) == 0 {
+		d.Reason = "no AAAA record"
 		return Result{
 			Status:  StatusNotApplicable,
-			Details: map[string]any{"reason": "no AAAA record"},
+			Detail:  d,
 			Latency: time.Since(start),
 		}, nil
 	}
@@ -42,13 +43,7 @@ func (c *DNSPTRIPv6) Check(ctx context.Context, domain string, kind Kind) (Resul
 		ips = ips[:maxPTRAddresses]
 	}
 
-	type ptrCheck struct {
-		Address          string `json:"address"`
-		PTRName          string `json:"ptr_name"`
-		ForwardConfirmed bool   `json:"forward_confirmed"`
-	}
-
-	var checks []ptrCheck
+	var checks []PTRCheck
 	allConfirmed := true
 	anyPTR := false
 
@@ -56,7 +51,7 @@ func (c *DNSPTRIPv6) Check(ctx context.Context, domain string, kind Kind) (Resul
 		reverseName := reverseIPv6(ip)
 		ptrNames, lookupErr := c.dialer.Resolver().LookupPTR(ctx, reverseName)
 		if lookupErr != nil || len(ptrNames) == 0 {
-			checks = append(checks, ptrCheck{
+			checks = append(checks, PTRCheck{
 				Address:          ip.String(),
 				ForwardConfirmed: false,
 			})
@@ -83,15 +78,15 @@ func (c *DNSPTRIPv6) Check(ctx context.Context, domain string, kind Kind) (Resul
 			allConfirmed = false
 		}
 
-		checks = append(checks, ptrCheck{
+		checks = append(checks, PTRCheck{
 			Address:          ip.String(),
 			PTRName:          ptrName,
 			ForwardConfirmed: confirmed,
 		})
 	}
 
-	details["checks"] = checks
-	details["all_confirmed"] = allConfirmed
+	d.Checks = checks
+	d.AllConfirmed = &allConfirmed
 
 	var status CheckStatus
 	switch {
@@ -105,7 +100,7 @@ func (c *DNSPTRIPv6) Check(ctx context.Context, domain string, kind Kind) (Resul
 
 	return Result{
 		Status:  status,
-		Details: details,
+		Detail:  d,
 		Latency: time.Since(start),
 	}, nil
 }

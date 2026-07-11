@@ -69,15 +69,18 @@ func MapObservations(
 ) Observations {
 	var o Observations
 
-	o.Base = mapAAAA(result(sr, "dns_aaaa_base"), false)
+	baseSt, baseD := need(sr.Domain, checker.NameDNSAAAABase, sr.AAAABase)
+	o.Base = mapAAAA(baseSt, &baseD, false)
 	if kind == domain.KindSubdomain {
 		o.WWW = domain.ObsNotApplicable
 	} else {
-		o.WWW = mapAAAA(result(sr, "dns_aaaa_www"), true)
+		wwwSt, wwwD := need(sr.Domain, checker.NameDNSAAAAWWW, sr.AAAAWWW)
+		o.WWW = mapAAAA(wwwSt, &wwwD, true)
 	}
-	o.NS = mapNS(result(sr, "dns_ns_ipv6"))
-	o.MX = mapMX(result(sr, "dns_mx_ipv6"))
-	o.Conn, o.ConnDetail = composeConn(result(sr, "https_ipv6"), result(sr, "http_ipv6"), preflightPassedAt, now)
+	o.NS = mapNS(needStatus(sr.Domain, checker.NameDNSNS, sr.NS))
+	o.MX = mapMX(needStatus(sr.Domain, checker.NameDNSMX, sr.MX))
+	hSt, hD := need(sr.Domain, checker.NameHTTPS, sr.HTTPS)
+	o.Conn, o.ConnDetail = composeConn(hSt, hD.ErrorType, needStatus(sr.Domain, checker.NameHTTP, sr.HTTP), preflightPassedAt, now)
 
 	if !resourcesEnabled {
 		o.Resources = domain.ObsNotApplicable
@@ -87,32 +90,41 @@ func MapObservations(
 	}
 
 	// Informational dimensions (02 §7.4).
-	o.DNSSEC = infoRaw(result(sr, "dns_dnssec"), false)
-	o.PTR = infoRaw(result(sr, "dns_ptr_ipv6"), true)
-	o.SMTP = infoSMTP(result(sr, "smtp_ipv6"))
-	o.Parity = infoRaw(result(sr, "http_response_parity"), true)
-	o.LatencyV4Ms = latencyMs(result(sr, "latency_ipv4"))
-	o.LatencyV6Ms = latencyMs(result(sr, "latency_ipv6"))
+	o.DNSSEC = infoRaw(needStatus(sr.Domain, checker.NameDNSSEC, sr.DNSSEC), false)
+	o.PTR = infoRaw(needStatus(sr.Domain, checker.NamePTR, sr.PTR), true)
+	o.SMTP = infoSMTP(needStatus(sr.Domain, checker.NameSMTP, sr.SMTP))
+	o.Parity = infoRaw(needStatus(sr.Domain, checker.NameParity, sr.Parity), true)
+	v4St, v4D := need(sr.Domain, checker.NameLatencyV4, sr.LatencyV4)
+	o.LatencyV4Ms = latencyMs(v4St, &v4D)
+	v6St, v6D := need(sr.Domain, checker.NameLatencyV6, sr.LatencyV6)
+	o.LatencyV6Ms = latencyMs(v6St, &v6D)
 
 	return o
 }
 
-// result reads one check with the §7.3 rule-7 defensive fallback.
-func result(sr checker.ScanResult, name string) checker.Result {
-	if r, ok := sr.Results[name]; ok {
-		return r
+// need reads one check through its typed accessor with the §7.3 rule-7
+// defensive fallback: a missing check logs and lands on status error.
+func need[D any](host, name string, f func() (checker.CheckStatus, D, bool)) (st checker.CheckStatus, d D) {
+	st, d, ok := f()
+	if !ok {
+		slog.Error("check result missing", "check", name, "domain", host)
 	}
-	slog.Error("check result missing", "check", name, "domain", sr.Domain)
-	return checker.Result{Status: checker.StatusError}
+	return st, d
+}
+
+// needStatus is need for the consumers that only read the status.
+func needStatus[D any](host, name string, f func() (checker.CheckStatus, D, bool)) checker.CheckStatus {
+	st, _ := need(host, name, f)
+	return st
 }
 
 // mapAAAA implements the §4 base/www composite tables over the §3 Result
 // contract. www=true applies the two www substitutions (nxdomain→n/a,
 // a_absent→n/a). The CD=1 rescue is transparent (reshaped upstream).
-func mapAAAA(r checker.Result, www bool) domain.Observation {
-	switch r.Status {
+func mapAAAA(st checker.CheckStatus, d *checker.AAAADetail, www bool) domain.Observation {
+	switch st {
 	case checker.StatusError:
-		if inconsistent, _ := r.Details["inconsistent"].(bool); inconsistent {
+		if d.Inconsistent {
 			return domain.ObsInconsistent // the only source of `inconsistent`
 		}
 		return domain.ObsError
@@ -124,7 +136,7 @@ func mapAAAA(r checker.Result, www bool) domain.Observation {
 		}
 		return domain.ObsNoRecord
 	case checker.StatusUnsupported: // quorum empty → by a_outcome
-		switch outcome, _ := r.Details["a_outcome"].(string); outcome {
+		switch d.AOutcome {
 		case aPresent:
 			return domain.ObsUnsupported
 		case aAbsent:
@@ -135,7 +147,7 @@ func mapAAAA(r checker.Result, www bool) domain.Observation {
 		case aError:
 			return domain.ObsError
 		default:
-			slog.Warn("a_outcome missing", "check_status", r.Status)
+			slog.Warn("a_outcome missing", "check_status", st)
 			return domain.ObsError
 		}
 	case checker.StatusPartial:
@@ -146,8 +158,8 @@ func mapAAAA(r checker.Result, www bool) domain.Observation {
 	}
 }
 
-func mapNS(r checker.Result) domain.Observation {
-	switch r.Status {
+func mapNS(st checker.CheckStatus) domain.Observation {
+	switch st {
 	case checker.StatusSupported, checker.StatusPartial: // ≥1-host rule
 		return domain.ObsSupported
 	case checker.StatusUnsupported:
@@ -162,8 +174,8 @@ func mapNS(r checker.Result) domain.Observation {
 	}
 }
 
-func mapMX(r checker.Result) domain.Observation {
-	switch r.Status {
+func mapMX(st checker.CheckStatus) domain.Observation {
+	switch st {
 	case checker.StatusSupported, checker.StatusPartial: // ≥1-host rule
 		return domain.ObsSupported
 	case checker.StatusUnsupported:
@@ -179,27 +191,26 @@ func mapMX(r checker.Result) domain.Observation {
 
 // composeConn is the §5 decision table (first match wins) plus the final
 // preflight guard, and builds the scan_detail.details["conn"] payload.
-func composeConn(h, p checker.Result, preflightPassedAt, now time.Time) (obs domain.Observation, detail map[string]any) {
+func composeConn(hSt checker.CheckStatus, errType string, pSt checker.CheckStatus, preflightPassedAt, now time.Time) (obs domain.Observation, detail map[string]any) {
 	preflightFresh := !preflightPassedAt.IsZero() && now.Sub(preflightPassedAt) <= preflightFreshness
-	errType, _ := h.Details["error_type"].(string)
 
 	detail = map[string]any{"http_only": false}
 
 	switch {
-	case h.Status == checker.StatusSupported: // row 1
+	case hSt == checker.StatusSupported: // row 1
 		obs = domain.ObsSupported
 		detail["source"] = "https"
-	case h.Status == checker.StatusUnsupported && errType == errTypeConnRefused && p.Status == checker.StatusSupported: // row 2
+	case hSt == checker.StatusUnsupported && errType == errTypeConnRefused && pSt == checker.StatusSupported: // row 2
 		obs = domain.ObsSupported
 		detail["source"] = "http"
 		detail["http_only"] = true
-	case h.Status == checker.StatusUnsupported: // rows 3–4 (cert error, refused w/o http, no-AAAA)
+	case hSt == checker.StatusUnsupported: // rows 3–4 (cert error, refused w/o http, no-AAAA)
 		obs = domain.ObsUnsupported
-	case h.Status == checker.StatusError && errType == errTypeTimeout && preflightFresh: // row 5a
+	case hSt == checker.StatusError && errType == errTypeTimeout && preflightFresh: // row 5a
 		obs = domain.ObsUnsupported
-	case h.Status == checker.StatusError: // rows 5b–5c
+	case hSt == checker.StatusError: // rows 5b–5c
 		obs = domain.ObsError
-	case h.Status == checker.StatusNotApplicable: // row 6
+	case hSt == checker.StatusNotApplicable: // row 6
 		obs = domain.ObsNotApplicable
 	default:
 		obs = domain.ObsError
@@ -259,50 +270,37 @@ func rollupResources(conn domain.Observation, links []LinkedResource) domain.Obs
 
 // infoRaw stores the raw engine status; partialOK=false defensively maps an
 // illegal partial to error (02 §7.4).
-func infoRaw(r checker.Result, partialOK bool) domain.Observation {
-	if r.Status == checker.StatusPartial && !partialOK {
+func infoRaw(st checker.CheckStatus, partialOK bool) domain.Observation {
+	if st == checker.StatusPartial && !partialOK {
 		slog.Warn("unexpected partial on informational dimension")
 		return domain.ObsError
 	}
-	return domain.Observation(r.Status)
+	return domain.Observation(st)
 }
 
-func infoSMTP(r checker.Result) domain.Observation {
-	if r.Status == checker.StatusPartial {
+func infoSMTP(st checker.CheckStatus) domain.Observation {
+	if st == checker.StatusPartial {
 		return domain.ObsUnsupported // a half-working EHLO does not accept mail
 	}
-	return domain.Observation(r.Status)
+	return domain.Observation(st)
 }
 
-func latencyMs(r checker.Result) *int32 {
-	if r.Status != checker.StatusSupported {
+func latencyMs(st checker.CheckStatus, d *checker.LatencyDetail) *int32 {
+	if st != checker.StatusSupported || d.AvgMS == nil {
 		return nil
 	}
-	switch v := r.Details["avg_ms"].(type) {
-	case int64:
-		ms := int32(v)
-		return &ms
-	case float64:
-		ms := int32(v)
-		return &ms
-	case int:
-		ms := int32(v)
-		return &ms
-	default:
-		return nil
-	}
+	ms := int32(*d.AvgMS)
+	return &ms
 }
 
 // QuorumHoist builds the details["consensus"] payload object (02 §7.5).
 func QuorumHoist(sr checker.ScanResult) map[string]any {
 	out := map[string]any{}
-	if q, ok := result(sr, "dns_aaaa_base").Details["quorum"]; ok {
-		out["base"] = q
+	if _, d, ok := sr.AAAABase(); ok && d.Quorum != nil {
+		out["base"] = d.Quorum
 	}
-	if r, ok := sr.Results["dns_aaaa_www"]; ok {
-		if q, ok := r.Details["quorum"]; ok {
-			out["www"] = q
-		}
+	if _, d, ok := sr.AAAAWWW(); ok && d.Quorum != nil {
+		out["www"] = d.Quorum
 	}
 	return out
 }
@@ -328,8 +326,8 @@ func MapLiveResult(
 	}
 	// tls/parity/dnssec/ptr/spf ride the raw engine status; smtp maps
 	// partial → unsupported (07 §5.1.4).
-	raw := func(name string) map[string]any {
-		return map[string]any{"status": string(result(sr, name).Status)}
+	raw := func(st checker.CheckStatus) map[string]any {
+		return map[string]any{"status": string(st)}
 	}
 	checks := map[string]any{
 		string(domain.DimBase):      status(o.Base),
@@ -338,12 +336,12 @@ func MapLiveResult(
 		string(domain.DimMX):        status(o.MX),
 		connKey:                     status(o.Conn),
 		string(domain.DimResources): status(o.Resources),
-		"tls":                       raw("tls_ipv6"),
-		"smtp":                      status(infoSMTP(result(sr, "smtp_ipv6"))),
-		"parity":                    raw("http_response_parity"),
-		"dnssec":                    raw("dns_dnssec"),
-		"ptr":                       raw("dns_ptr_ipv6"),
-		"spf":                       raw("spf_ipv6"),
+		"tls":                       raw(needStatus(sr.Domain, checker.NameTLS, sr.TLS)),
+		"smtp":                      status(infoSMTP(needStatus(sr.Domain, checker.NameSMTP, sr.SMTP))),
+		"parity":                    raw(needStatus(sr.Domain, checker.NameParity, sr.Parity)),
+		"dnssec":                    raw(needStatus(sr.Domain, checker.NameDNSSEC, sr.DNSSEC)),
+		"ptr":                       raw(needStatus(sr.Domain, checker.NamePTR, sr.PTR)),
+		"spf":                       raw(needStatus(sr.Domain, checker.NameSPF, sr.SPF)),
 	}
 	var v4, v6 any
 	if o.LatencyV4Ms != nil {

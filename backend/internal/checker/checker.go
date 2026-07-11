@@ -33,8 +33,9 @@ type Result struct {
 	// Status is the check outcome. One of the CheckStatus constants.
 	Status CheckStatus `json:"status"`
 
-	// Details contains check-specific structured data.
-	Details map[string]any `json:"details,omitempty"`
+	// Detail is the check's typed payload (detail.go); it serializes under
+	// the scan_detail "details" key exactly as the former untyped map did.
+	Detail Detail `json:"details,omitempty"`
 
 	// Latency is wall-clock time the check took to execute.
 	Latency time.Duration `json:"latency"`

@@ -54,12 +54,12 @@ func (c *SPFIPv6) Check(ctx context.Context, domain string, kind Kind) (Result, 
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	details := map[string]any{}
+	d := &SPFDetail{}
 
 	txtRecords, err := c.dialer.Resolver().LookupTXT(ctx, domain)
 	if err != nil {
-		details["error"] = err.Error()
-		return Result{Status: StatusError, Details: details, Latency: time.Since(start)}, nil
+		d.Error = err.Error()
+		return Result{Status: StatusError, Detail: d, Latency: time.Since(start)}, nil
 	}
 
 	// Find SPF records. Must match "v=spf1" followed by space or end-of-string
@@ -73,21 +73,22 @@ func (c *SPFIPv6) Check(ctx context.Context, domain string, kind Kind) (Result, 
 	}
 
 	if len(spfRecords) == 0 {
+		d.Reason = "no SPF record"
 		return Result{
 			Status:  StatusNotApplicable,
-			Details: map[string]any{"reason": "no SPF record"},
+			Detail:  d,
 			Latency: time.Since(start),
 		}, nil
 	}
 
 	// Multiple SPF records is an error per RFC 7208.
 	if len(spfRecords) > 1 {
-		details["error"] = "multiple SPF records found"
-		return Result{Status: StatusError, Details: details, Latency: time.Since(start)}, nil
+		d.Error = "multiple SPF records found"
+		return Result{Status: StatusError, Detail: d, Latency: time.Since(start)}, nil
 	}
 
 	spfRecord := spfRecords[0]
-	details["spf_record"] = spfRecord
+	d.SPFRecord = spfRecord
 
 	lookupCount := 0
 	ip6Mechanisms := []string{}
@@ -126,9 +127,9 @@ func (c *SPFIPv6) Check(ctx context.Context, domain string, kind Kind) (Result, 
 			includeChain = append(includeChain, includeDomain)
 			lookupCount++
 			if lookupCount > maxSPFLookups {
-				details["error"] = "too many DNS lookups"
-				details["lookup_count"] = lookupCount
-				return Result{Status: StatusError, Details: details, Latency: time.Since(start)}, nil
+				d.Error = "too many DNS lookups"
+				d.LookupCount = &lookupCount
+				return Result{Status: StatusError, Detail: d, Latency: time.Since(start)}, nil
 			}
 			if c.includeHasIPv6(ctx, includeDomain, &lookupCount) {
 				includeHasIP6 = true
@@ -210,31 +211,32 @@ func (c *SPFIPv6) Check(ctx context.Context, domain string, kind Kind) (Result, 
 		}
 	}
 
-	details["has_ip6_mechanism"] = hasDirectIP6 || includeHasIP6
-	details["ip6_mechanisms"] = ip6Mechanisms
-	details["include_has_ip6"] = includeHasIP6
-	details["include_chain"] = includeChain
-	details["lookup_count"] = lookupCount
+	hasIP6 := hasDirectIP6 || includeHasIP6
+	d.HasIP6Mechanism = &hasIP6
+	d.IP6Mechanisms = ip6Mechanisms
+	d.IncludeHasIP6 = &includeHasIP6
+	d.IncludeChain = includeChain
+	d.LookupCount = &lookupCount
 
 	var status CheckStatus
 	switch {
 	case hasExplicitRejectIP6 && !hasDirectIP6 && !includeHasIP6:
 		// Domain explicitly rejects IPv6 senders.
 		status = StatusUnsupported
-		details["reason"] = "SPF explicitly rejects IPv6"
+		d.Reason = "SPF explicitly rejects IPv6"
 	case hasDirectIP6 || includeHasIP6:
 		status = StatusSupported
 	case hasImplicitIP6:
 		// The 'a' or 'mx' mechanism resolves to AAAA, which is valid IPv6 support.
 		status = StatusSupported
-		details["implicit"] = true
+		d.Implicit = true
 	default:
 		status = StatusUnsupported
 	}
 
 	return Result{
 		Status:  status,
-		Details: details,
+		Detail:  d,
 		Latency: time.Since(start),
 	}, nil
 }

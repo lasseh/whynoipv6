@@ -34,7 +34,7 @@ func NewDNSAAAAWWW(res AAAAResolver) *DNSAAAAWww {
 	return &DNSAAAAWww{res: res}
 }
 
-func (c *DNSAAAAWww) Name() string { return "dns_aaaa_www" }
+func (c *DNSAAAAWww) Name() string { return NameDNSAAAAWWW }
 
 func (c *DNSAAAAWww) Check(ctx context.Context, host string, _ Kind) (Result, error) {
 	start := time.Now()
@@ -42,60 +42,56 @@ func (c *DNSAAAAWww) Check(ctx context.Context, host string, _ Kind) (Result, er
 	defer cancel()
 
 	wwwDomain := "www." + host
-	details := map[string]any{}
 
 	ans, err := c.res.LookupAAAA(ctx, wwwDomain)
-	details["rcode"] = ans.Rcode
+	d := &AAAADetail{
+		Rcode:      ans.Rcode,
+		CNAMEChain: ans.CNAMEChain,
+		Quorum:     ans.Quorum,
+		AOutcome:   ans.AOutcome,
+		CDOutcome:  ans.CDOutcome,
+	}
 	if len(ans.CNAMEChain) > 0 {
-		details["cname_chain"] = ans.CNAMEChain
-		details["cname_target"] = ans.CNAMEChain[len(ans.CNAMEChain)-1]
+		d.CNAMETarget = ans.CNAMEChain[len(ans.CNAMEChain)-1]
 
 		// Detect CDN usage.
 		for _, cname := range ans.CNAMEChain {
 			for _, pattern := range knownCDNPatterns {
 				if strings.HasSuffix(strings.TrimSuffix(cname, "."), pattern) {
-					details["cdn_detected"] = true
+					d.CDNDetected = true
 					break
 				}
 			}
 		}
 	}
-	if ans.Quorum != nil {
-		details["quorum"] = ans.Quorum
-	}
-	if ans.AOutcome != "" {
-		details["a_outcome"] = ans.AOutcome
-	}
-	if ans.CDOutcome != "" {
-		details["cd_outcome"] = ans.CDOutcome
-	}
 
 	if errors.Is(err, ErrQuorumInconsistent) {
-		details["inconsistent"] = true
-		return Result{Status: StatusError, Details: details, Latency: time.Since(start)}, nil
+		d.Inconsistent = true
+		return Result{Status: StatusError, Detail: d, Latency: time.Since(start)}, nil
 	}
 	if err != nil {
-		details["error"] = err.Error()
-		return Result{Status: StatusError, Details: details, Latency: time.Since(start)}, nil
+		d.Error = err.Error()
+		return Result{Status: StatusError, Detail: d, Latency: time.Since(start)}, nil
 	}
 
 	// NXDOMAIN means the www subdomain doesn't exist — the domain simply
 	// doesn't use www, so this check is not applicable (not unsupported).
 	if ans.Rcode == "NXDOMAIN" {
-		details["reason"] = "www subdomain does not exist"
-		return Result{Status: StatusNotApplicable, Details: details, Latency: time.Since(start)}, nil
+		d.Reason = "www subdomain does not exist"
+		return Result{Status: StatusNotApplicable, Detail: d, Latency: time.Since(start)}, nil
 	}
 
 	if len(ans.IPs) == 0 {
-		return Result{Status: StatusUnsupported, Details: details, Latency: time.Since(start)}, nil
+		return Result{Status: StatusUnsupported, Detail: d, Latency: time.Since(start)}, nil
 	}
 
 	addrs := make([]string, len(ans.IPs))
 	for i, ip := range ans.IPs {
 		addrs[i] = ip.String()
 	}
-	details["addresses"] = addrs
-	details["ttl"] = ans.TTL
+	d.Addresses = addrs
+	ttl := ans.TTL
+	d.TTL = &ttl
 
-	return Result{Status: StatusSupported, Details: details, Latency: time.Since(start)}, nil
+	return Result{Status: StatusSupported, Detail: d, Latency: time.Since(start)}, nil
 }

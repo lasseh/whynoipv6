@@ -22,20 +22,21 @@ func NewHTTPIPv6(dialer *SafeDialer) *HTTPIPv6 {
 	return &HTTPIPv6{dialer: dialer}
 }
 
-func (c *HTTPIPv6) Name() string { return "http_ipv6" }
+func (c *HTTPIPv6) Name() string { return NameHTTP }
 func (c *HTTPIPv6) Check(ctx context.Context, domain string, kind Kind) (Result, error) {
 	start := time.Now()
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
-	details := map[string]any{}
+	d := &HTTPDetail{}
 
 	// Resolve AAAA records.
 	ips, _, _, _, err := c.dialer.Resolver().LookupAAAA(ctx, domain)
 	if err != nil || len(ips) == 0 {
+		d.Reason = errNoAAAARecord
 		return Result{
 			Status:  StatusUnsupported,
-			Details: map[string]any{"reason": errNoAAAARecord},
+			Detail:  d,
 			Latency: time.Since(start),
 		}, nil
 	}
@@ -47,10 +48,10 @@ func (c *HTTPIPv6) Check(ctx context.Context, domain string, kind Kind) (Result,
 	for i := 0; i < maxAttempts; i++ {
 		ip := ips[i]
 		if err := c.dialer.ValidateIP(ip); err != nil {
-			details["error"] = errAddrBlocked
+			d.Error = errAddrBlocked
 			return Result{
 				Status:  StatusError,
-				Details: details,
+				Detail:  d,
 				Latency: time.Since(start),
 			}, nil
 		}
@@ -73,30 +74,30 @@ func (c *HTTPIPv6) Check(ctx context.Context, domain string, kind Kind) (Result,
 	// conn composition applies identically on the http-only fallback path.
 	// No certificate_error branch exists here (no TLS on port 80).
 	if isConnRefused(lastErr) {
-		details["error"] = errConnRefused
-		details["error_type"] = "connection_refused"
+		d.Error = errConnRefused
+		d.ErrorType = "connection_refused"
 		return Result{
 			Status:  StatusUnsupported,
-			Details: details,
+			Detail:  d,
 			Latency: time.Since(start),
 		}, nil
 	}
 
 	if isTimeout(lastErr) {
-		details["error"] = lastErr.Error()
-		details["error_type"] = "timeout"
+		d.Error = lastErr.Error()
+		d.ErrorType = "timeout"
 		return Result{
 			Status:  StatusError,
-			Details: details,
+			Detail:  d,
 			Latency: time.Since(start),
 		}, nil
 	}
 
-	details["error"] = lastErr.Error()
-	details["error_type"] = "unknown"
+	d.Error = lastErr.Error()
+	d.ErrorType = "unknown"
 	return Result{
 		Status:  StatusError,
-		Details: details,
+		Detail:  d,
 		Latency: time.Since(start),
 	}, nil
 }
@@ -132,20 +133,16 @@ func (c *HTTPIPv6) tryHTTP(ctx context.Context, domain string, ip net.IP) (Resul
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	responseTime := time.Since(reqStart)
-
-	details := map[string]any{
-		"address":          ip.String(),
-		"status_code":      resp.StatusCode,
-		"response_time_ms": responseTime.Milliseconds(),
-	}
-	if server := resp.Header.Get("Server"); server != "" {
-		details["server"] = server
-	}
+	rt := time.Since(reqStart).Milliseconds()
 
 	return Result{
-		Status:  StatusSupported,
-		Details: details,
+		Status: StatusSupported,
+		Detail: &HTTPDetail{
+			Address:        ip.String(),
+			StatusCode:     resp.StatusCode,
+			ResponseTimeMS: &rt,
+			Server:         resp.Header.Get("Server"),
+		},
 	}, nil
 }
 

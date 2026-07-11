@@ -73,28 +73,28 @@ func (r *Runner) Run(ctx context.Context, host string, kind Kind) ScanResult {
 	// Subdomain www skip: forced not_applicable, check excluded from phase 1.
 	wwwSkipped := kind == KindSubdomain
 	if wwwSkipped {
-		results.Store("dns_aaaa_www", Result{
-			Status:  StatusNotApplicable,
-			Details: map[string]any{"reason": "subdomain entity: www check not applicable"},
+		results.Store(NameDNSAAAAWWW, Result{
+			Status: StatusNotApplicable,
+			Detail: &CommonDetail{Reason: "subdomain entity: www check not applicable"},
 		})
 	}
 
 	// Phase 1: independent checks. latency_ipv4 is deliberately NOT here
 	// (design §2.8 C — moved to phase 2 behind the hasAAAA gate).
 	phase1Names := map[string]bool{
-		"dns_aaaa_base": true,
-		"dns_aaaa_www":  !wwwSkipped,
-		"dns_ns_ipv6":   true,
-		"dns_mx_ipv6":   true,
-		"dns_dnssec":    true,
-		"spf_ipv6":      true,
+		NameDNSAAAABase: true,
+		NameDNSAAAAWWW:  !wwwSkipped,
+		NameDNSNS:       true,
+		NameDNSMX:       true,
+		NameDNSSEC:      true,
+		NameSPF:         true,
 	}
 
 	var phase1Checkers []Checker
 	var phase2Checkers []Checker
 	for _, c := range r.checkers {
 		switch {
-		case c.Name() == "dns_aaaa_www" && wwwSkipped:
+		case c.Name() == NameDNSAAAAWWW && wwwSkipped:
 			// already stored; excluded from both phases
 		case phase1Names[c.Name()]:
 			phase1Checkers = append(phase1Checkers, c)
@@ -106,9 +106,9 @@ func (r *Runner) Run(ctx context.Context, host string, kind Kind) ScanResult {
 	r.runPhase(domainCtx, host, kind, phase1Checkers, results)
 
 	// Phase 2: dependent checks (conditional).
-	baseResult := r.getResult(results, "dns_aaaa_base")
-	wwwResult := r.getResult(results, "dns_aaaa_www")
-	mxResult := r.getResult(results, "dns_mx_ipv6")
+	baseResult := r.getResult(results, NameDNSAAAABase)
+	wwwResult := r.getResult(results, NameDNSAAAAWWW)
+	mxResult := r.getResult(results, NameDNSMX)
 
 	// Web checks run if either base or www has AAAA. (For subdomains the
 	// stored not_applicable www result makes this depend on base alone.)
@@ -119,14 +119,14 @@ func (r *Runner) Run(ctx context.Context, host string, kind Kind) ScanResult {
 
 	for _, c := range phase2Checkers {
 		switch c.Name() {
-		case "http_ipv6", "https_ipv6", "tls_ipv6", "latency_ipv6", "resource_discovery", "latency_ipv4":
+		case NameHTTP, NameHTTPS, NameTLS, NameLatencyV6, NameResourceDiscovery, NameLatencyV4:
 			if !hasAAAA {
 				skipReasons[c.Name()] = reasonNoAAAARecord
 				continue
 			}
 			toRun = append(toRun, c)
 
-		case "dns_ptr_ipv6":
+		case NamePTR:
 			// PTR needs apex IPs specifically.
 			if baseResult.Status != StatusSupported {
 				skipReasons[c.Name()] = reasonNoAAAARecord
@@ -134,7 +134,7 @@ func (r *Runner) Run(ctx context.Context, host string, kind Kind) ScanResult {
 			}
 			toRun = append(toRun, c)
 
-		case "http_response_parity":
+		case NameParity:
 			if !hasAAAA {
 				skipReasons[c.Name()] = reasonNoAAAARecord
 				continue
@@ -142,7 +142,7 @@ func (r *Runner) Run(ctx context.Context, host string, kind Kind) ScanResult {
 			// Also need A records — check is done inside the checker itself.
 			toRun = append(toRun, c)
 
-		case "smtp_ipv6":
+		case NameSMTP:
 			if mxResult.Status != StatusSupported && mxResult.Status != StatusPartial {
 				skipReasons[c.Name()] = reasonNoMXWithAAAA
 				continue
@@ -156,9 +156,11 @@ func (r *Runner) Run(ctx context.Context, host string, kind Kind) ScanResult {
 
 	// Record skipped checks.
 	for name, reason := range skipReasons {
+		d := newDetail(name)
+		d.common().Reason = reason
 		results.Store(name, Result{
-			Status:  StatusNotApplicable,
-			Details: map[string]any{"reason": reason},
+			Status: StatusNotApplicable,
+			Detail: d,
 		})
 	}
 
@@ -205,18 +207,22 @@ func (r *Runner) runCheck(ctx context.Context, host string, kind Kind, c Checker
 				"check", c.Name(),
 				"panic", fmt.Sprintf("%v", rec),
 			)
+			d := newDetail(c.Name())
+			d.common().Error = fmt.Sprintf("internal error: %v", rec)
 			results.Store(c.Name(), Result{
 				Status:  StatusError,
-				Details: map[string]any{"error": fmt.Sprintf("internal error: %v", rec)},
+				Detail:  d,
 				Latency: time.Since(start),
 			})
 		}
 	}()
 
 	if ctx.Err() != nil {
+		d := newDetail(c.Name())
+		d.common().Error = "scan cancelled"
 		results.Store(c.Name(), Result{
-			Status:  StatusError,
-			Details: map[string]any{"error": "scan cancelled"},
+			Status: StatusError,
+			Detail: d,
 		})
 		return
 	}
@@ -229,9 +235,11 @@ func (r *Runner) runCheck(ctx context.Context, host string, kind Kind, c Checker
 			"error", err,
 			"duration", time.Since(start),
 		)
+		d := newDetail(c.Name())
+		d.common().Error = err.Error()
 		results.Store(c.Name(), Result{
 			Status:  StatusError,
-			Details: map[string]any{"error": err.Error()},
+			Detail:  d,
 			Latency: time.Since(start),
 		})
 		return
@@ -243,8 +251,8 @@ func (r *Runner) runCheck(ctx context.Context, host string, kind Kind, c Checker
 		"status", result.Status,
 		"duration", result.Latency,
 	}
-	if result.Status == StatusError {
-		if errMsg, ok := result.Details["error"]; ok {
+	if result.Status == StatusError && result.Detail != nil {
+		if errMsg := result.Detail.common().Error; errMsg != "" {
 			attrs = append(attrs, "error", errMsg)
 		}
 	}

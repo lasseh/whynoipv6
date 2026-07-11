@@ -17,7 +17,7 @@ func NewDNSAAAABase(res AAAAResolver) *DNSAAAABase {
 	return &DNSAAAABase{res: res}
 }
 
-func (c *DNSAAAABase) Name() string { return "dns_aaaa_base" }
+func (c *DNSAAAABase) Name() string { return NameDNSAAAABase }
 
 func (c *DNSAAAABase) Check(ctx context.Context, host string, _ Kind) (Result, error) {
 	start := time.Now()
@@ -26,53 +26,46 @@ func (c *DNSAAAABase) Check(ctx context.Context, host string, _ Kind) (Result, e
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 
-	details := map[string]any{}
-
 	ans, err := c.res.LookupAAAA(ctx, host)
-	details["rcode"] = ans.Rcode
-	if len(ans.CNAMEChain) > 0 {
-		details["cname_chain"] = ans.CNAMEChain
-	}
-	if ans.Quorum != nil {
-		details["quorum"] = ans.Quorum
-	}
-	if ans.AOutcome != "" {
-		details["a_outcome"] = ans.AOutcome
+	d := &AAAADetail{
+		Rcode:      ans.Rcode,
+		CNAMEChain: ans.CNAMEChain,
+		Quorum:     ans.Quorum,
+		AOutcome:   ans.AOutcome,
+		CDOutcome:  ans.CDOutcome,
 	}
 	if ans.AIP != nil {
-		details["a_address"] = ans.AIP.String() // v4-only attribution input (06 §6.2)
-	}
-	if ans.CDOutcome != "" {
-		details["cd_outcome"] = ans.CDOutcome
+		d.AAddress = ans.AIP.String() // v4-only attribution input (06 §6.2)
 	}
 
 	if errors.Is(err, ErrQuorumInconsistent) {
-		details["inconsistent"] = true
-		return Result{Status: StatusError, Details: details, Latency: time.Since(start)}, nil
+		d.Inconsistent = true
+		return Result{Status: StatusError, Detail: d, Latency: time.Since(start)}, nil
 	}
 	if err != nil {
-		details["error"] = err.Error()
-		return Result{Status: StatusError, Details: details, Latency: time.Since(start)}, nil
+		d.Error = err.Error()
+		return Result{Status: StatusError, Detail: d, Latency: time.Since(start)}, nil
 	}
 
 	// NXDOMAIN: raw engine status stays not_applicable with the raw rcode
 	// preserved — the observation layer maps base NXDOMAIN to no_record;
 	// dead-detection requires NXDOMAIN specifically (02/03).
 	if ans.Rcode == "NXDOMAIN" {
-		details["reason"] = "domain does not exist"
-		return Result{Status: StatusNotApplicable, Details: details, Latency: time.Since(start)}, nil
+		d.Reason = "domain does not exist"
+		return Result{Status: StatusNotApplicable, Detail: d, Latency: time.Since(start)}, nil
 	}
 
 	if len(ans.IPs) == 0 {
-		return Result{Status: StatusUnsupported, Details: details, Latency: time.Since(start)}, nil
+		return Result{Status: StatusUnsupported, Detail: d, Latency: time.Since(start)}, nil
 	}
 
 	addrs := make([]string, len(ans.IPs))
 	for i, ip := range ans.IPs {
 		addrs[i] = ip.String()
 	}
-	details["addresses"] = addrs
-	details["ttl"] = ans.TTL
+	d.Addresses = addrs
+	ttl := ans.TTL
+	d.TTL = &ttl
 
-	return Result{Status: StatusSupported, Details: details, Latency: time.Since(start)}, nil
+	return Result{Status: StatusSupported, Detail: d, Latency: time.Since(start)}, nil
 }

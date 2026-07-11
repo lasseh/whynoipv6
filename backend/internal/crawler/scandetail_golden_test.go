@@ -92,6 +92,57 @@ func TestScanDetailGolden(t *testing.T) {
 	}
 }
 
+// TestScanDetailRoundTrip proves the fresh-vs-loaded equivalence the typed
+// payload exists for: a scan_detail envelope (hoist keys included)
+// unmarshaled into checker.ScanResult carries the same typed details as the
+// fresh engine result. Runner-synthesized results (bare CommonDetail) load
+// as the check's own struct with the common fields folded in.
+func TestScanDetailRoundTrip(t *testing.T) {
+	scanTime := time.Date(2026, 7, 1, 12, 0, 0, 0, time.UTC)
+	for _, fresh := range []checker.ScanResult{
+		fixtureHero(scanTime), fixtureV4Only(scanTime), fixtureErrorPaths(scanTime),
+	} {
+		t.Run(fresh.Domain, func(t *testing.T) {
+			obs := MapObservations(domain.KindApex, fresh, scanTime, scanTime, heroLinks(), true)
+			raw := buildDetails(fresh, &obs)
+
+			var loaded checker.ScanResult
+			if err := json.Unmarshal(raw, &loaded); err != nil {
+				t.Fatalf("unmarshal scan_detail: %v", err)
+			}
+			if loaded.Domain != fresh.Domain || !loaded.ScannedAt.Equal(fresh.ScannedAt) || loaded.Duration != fresh.Duration {
+				t.Errorf("envelope fields drifted: %s %s %s", loaded.Domain, loaded.ScannedAt, loaded.Duration)
+			}
+			if len(loaded.Results) != len(fresh.Results) {
+				t.Fatalf("results = %d checks, want %d", len(loaded.Results), len(fresh.Results))
+			}
+			for name, want := range fresh.Results {
+				got, ok := loaded.Results[name]
+				if !ok {
+					t.Errorf("%s missing after round trip", name)
+					continue
+				}
+				if got.Status != want.Status || got.Latency != want.Latency {
+					t.Errorf("%s status/latency drifted: %s/%v", name, got.Status, got.Latency)
+				}
+				if cd, isCommon := want.Detail.(*checker.CommonDetail); isCommon {
+					// Synthesized skip: loads as the check's own struct with
+					// the common fields folded in.
+					var gotCD checker.CommonDetail
+					b, err := json.Marshal(got.Detail)
+					if err != nil || json.Unmarshal(b, &gotCD) != nil || gotCD != *cd {
+						t.Errorf("%s synthesized detail drifted: %#v", name, got.Detail)
+					}
+					continue
+				}
+				if !reflect.DeepEqual(got.Detail, want.Detail) {
+					t.Errorf("%s detail drifted after round trip:\n got %#v\nwant %#v", name, got.Detail, want.Detail)
+				}
+			}
+		})
+	}
+}
+
 func decodeJSON(t *testing.T, b []byte) any {
 	t.Helper()
 	var v any
@@ -110,9 +161,11 @@ func indentJSON(t *testing.T, b []byte) string {
 	return string(out)
 }
 
-func fxRes(status checker.CheckStatus, details map[string]any, latency time.Duration) checker.Result {
-	return checker.Result{Status: status, Details: details, Latency: latency}
+func fxRes(status checker.CheckStatus, d checker.Detail, latency time.Duration) checker.Result {
+	return checker.Result{Status: status, Detail: d, Latency: latency}
 }
+
+func fxPtr[T any](v T) *T { return &v }
 
 func quorumAgree() *checker.QuorumInfo {
 	return &checker.QuorumInfo{
@@ -141,117 +194,117 @@ func fixtureHero(ts time.Time) checker.ScanResult {
 		ScannedAt: ts,
 		Duration:  42 * time.Second,
 		Results: map[string]checker.Result{
-			"dns_aaaa_base": fxRes(checker.StatusSupported, map[string]any{
-				"rcode":       "NOERROR",
-				"cname_chain": []string{"hero.no.", "edge.hero.no."},
-				"quorum":      quorumAgree(),
-				"addresses":   []string{"2a02:c0::1", "2a02:c0::2"},
-				"ttl":         300,
+			"dns_aaaa_base": fxRes(checker.StatusSupported, &checker.AAAADetail{
+				Rcode:      "NOERROR",
+				CNAMEChain: []string{"hero.no.", "edge.hero.no."},
+				Quorum:     quorumAgree(),
+				Addresses:  []string{"2a02:c0::1", "2a02:c0::2"},
+				TTL:        fxPtr(300),
 			}, 120*time.Millisecond),
-			"dns_aaaa_www": fxRes(checker.StatusSupported, map[string]any{
-				"rcode":        "NOERROR",
-				"cname_chain":  []string{"www.hero.no.", "hero.cdn77.net."},
-				"cname_target": "hero.cdn77.net.",
-				"cdn_detected": true,
-				"quorum":       quorumAgree(),
-				"addresses":    []string{"2a02:c0::10"},
-				"ttl":          60,
+			"dns_aaaa_www": fxRes(checker.StatusSupported, &checker.AAAADetail{
+				Rcode:       "NOERROR",
+				CNAMEChain:  []string{"www.hero.no.", "hero.cdn77.net."},
+				CNAMETarget: "hero.cdn77.net.",
+				CDNDetected: true,
+				Quorum:      quorumAgree(),
+				Addresses:   []string{"2a02:c0::10"},
+				TTL:         fxPtr(60),
 			}, 110*time.Millisecond),
-			"dns_ns_ipv6": fxRes(checker.StatusPartial, map[string]any{
-				"zone": "hero.no",
-				"nameservers": map[string]any{
-					"ns1.hero.no.": map[string]any{"has_ipv6": true, "addresses": []string{"2a02:c0:2::53"}},
-					"ns2.hero.no.": map[string]any{"has_ipv6": false, "addresses": []string{}},
+			"dns_ns_ipv6": fxRes(checker.StatusPartial, &checker.NSDetail{
+				Zone: "hero.no",
+				Nameservers: map[string]checker.NSHost{
+					"ns1.hero.no.": {HasIPv6: true, Addresses: []string{"2a02:c0:2::53"}},
+					"ns2.hero.no.": {HasIPv6: false, Addresses: []string{}},
 				},
-				"total":      3,
-				"checked":    2,
-				"ipv6_count": 1,
+				Total:     3,
+				Checked:   2,
+				IPv6Count: fxPtr(1),
 			}, 200*time.Millisecond),
-			"dns_mx_ipv6": fxRes(checker.StatusPartial, map[string]any{
-				"mx_records": map[string]any{
-					"mx1.hero.no.": map[string]any{"preference": uint16(10), "has_ipv6": true, "addresses": []string{"2a02:c0:3::25"}},
-					"mx2.hero.no.": map[string]any{"preference": uint16(20), "has_ipv6": false, "addresses": []string{}},
+			"dns_mx_ipv6": fxRes(checker.StatusPartial, &checker.MXDetail{
+				MXRecords: map[string]checker.MXHost{
+					"mx1.hero.no.": {Preference: 10, HasIPv6: true, Addresses: []string{"2a02:c0:3::25"}},
+					"mx2.hero.no.": {Preference: 20, HasIPv6: false, Addresses: []string{}},
 				},
-				"total":      2,
-				"ipv6_count": 1,
+				Total:     2,
+				IPv6Count: fxPtr(1),
 			}, 180*time.Millisecond),
-			"dns_dnssec": fxRes(checker.StatusSupported, map[string]any{
-				"signed": true,
-				"ds_records": []map[string]any{
-					{"key_tag": uint16(12345), "algorithm": "ECDSAP256SHA256", "digest_type": uint8(2)},
+			"dns_dnssec": fxRes(checker.StatusSupported, &checker.DNSSECDetail{
+				Signed: true,
+				DSRecords: []checker.DSRecord{
+					{KeyTag: 12345, Algorithm: "ECDSAP256SHA256", DigestType: 2},
 				},
-				"chain_complete": true,
-				"ad_flag":        true,
+				ChainComplete: fxPtr(true),
+				ADFlag:        fxPtr(true),
 			}, 90*time.Millisecond),
-			"https_ipv6": fxRes(checker.StatusSupported, map[string]any{
-				"address":          "2a02:c0::1",
-				"status_code":      200,
-				"response_time_ms": int64(87),
-				"server":           "nginx",
-				"tls_version":      "TLS 1.3",
+			"https_ipv6": fxRes(checker.StatusSupported, &checker.HTTPDetail{
+				Address:        "2a02:c0::1",
+				StatusCode:     200,
+				ResponseTimeMS: fxPtr(int64(87)),
+				Server:         "nginx",
+				TLSVersion:     "TLS 1.3",
 			}, 300*time.Millisecond),
-			"http_ipv6": fxRes(checker.StatusSupported, map[string]any{
-				"address":          "2a02:c0::1",
-				"status_code":      301,
-				"response_time_ms": int64(45),
-				"server":           "nginx",
+			"http_ipv6": fxRes(checker.StatusSupported, &checker.HTTPDetail{
+				Address:        "2a02:c0::1",
+				StatusCode:     301,
+				ResponseTimeMS: fxPtr(int64(45)),
+				Server:         "nginx",
 			}, 150*time.Millisecond),
-			"tls_ipv6": fxRes(checker.StatusSupported, map[string]any{
-				"address":         "2a02:c0::1",
-				"tls_version":     "TLS 1.3",
-				"cipher_suite":    "TLS_AES_128_GCM_SHA256",
-				"valid":           true,
-				"issuer":          "R11",
-				"subject":         "hero.no",
-				"san":             []string{"hero.no", "www.hero.no"},
-				"not_before":      "2026-05-01T00:00:00Z",
-				"not_after":       "2026-08-01T00:00:00Z",
-				"expires_in_days": 30,
-				"expires_soon":    true,
+			"tls_ipv6": fxRes(checker.StatusSupported, &checker.TLSDetail{
+				Address:       "2a02:c0::1",
+				TLSVersion:    "TLS 1.3",
+				CipherSuite:   "TLS_AES_128_GCM_SHA256",
+				Valid:         fxPtr(true),
+				Issuer:        "R11",
+				Subject:       "hero.no",
+				SAN:           []string{"hero.no", "www.hero.no"},
+				NotBefore:     "2026-05-01T00:00:00Z",
+				NotAfter:      "2026-08-01T00:00:00Z",
+				ExpiresInDays: fxPtr(30),
+				ExpiresSoon:   fxPtr(true),
 			}, 250*time.Millisecond),
-			"http_response_parity": fxRes(checker.StatusSupported, map[string]any{
-				"ipv4": map[string]any{
-					"address": "192.0.2.10", "status_code": 200, "content_type": "text/html; charset=utf-8",
-					"content_length": int64(52140), "response_time_ms": int64(95),
+			"http_response_parity": fxRes(checker.StatusSupported, &checker.ParityDetail{
+				IPv4: &checker.ParityFetch{
+					Address: "192.0.2.10", StatusCode: 200, ContentType: "text/html; charset=utf-8",
+					ContentLength: 52140, ResponseTimeMS: 95,
 				},
-				"ipv6": map[string]any{
-					"address": "2a02:c0::1", "status_code": 200, "content_type": "text/html; charset=utf-8",
-					"content_length": int64(52290), "response_time_ms": int64(88),
+				IPv6: &checker.ParityFetch{
+					Address: "2a02:c0::1", StatusCode: 200, ContentType: "text/html; charset=utf-8",
+					ContentLength: 52290, ResponseTimeMS: 88,
 				},
-				"status_match":            true,
-				"content_type_match":      true,
-				"content_length_diff_pct": 0.3,
+				StatusMatch:          fxPtr(true),
+				ContentTypeMatch:     fxPtr(true),
+				ContentLengthDiffPct: fxPtr(0.3),
 			}, 400*time.Millisecond),
-			"smtp_ipv6": fxRes(checker.StatusSupported, map[string]any{
-				"mx_host":          "mx1.hero.no.",
-				"mx_preference":    uint16(10),
-				"address":          "2a02:c0:3::25",
-				"banner":           "220 mx1.hero.no ESMTP",
-				"ehlo_response":    "250-mx1.hero.no\n250 STARTTLS",
-				"starttls_offered": true,
+			"smtp_ipv6": fxRes(checker.StatusSupported, &checker.SMTPDetail{
+				MXHost:          "mx1.hero.no.",
+				MXPreference:    fxPtr(uint16(10)),
+				Address:         "2a02:c0:3::25",
+				Banner:          "220 mx1.hero.no ESMTP",
+				EHLOResponse:    "250-mx1.hero.no\n250 STARTTLS",
+				STARTTLSOffered: fxPtr(true),
 			}, 500*time.Millisecond),
-			"spf_ipv6": fxRes(checker.StatusSupported, map[string]any{
-				"spf_record":        "v=spf1 ip6:2a02:c0::/32 include:_spf.hero.no ~all",
-				"has_ip6_mechanism": true,
-				"ip6_mechanisms":    []string{"ip6:2a02:c0::/32"},
-				"include_has_ip6":   false,
-				"include_chain":     []string{"_spf.hero.no"},
-				"lookup_count":      2,
+			"spf_ipv6": fxRes(checker.StatusSupported, &checker.SPFDetail{
+				SPFRecord:       "v=spf1 ip6:2a02:c0::/32 include:_spf.hero.no ~all",
+				HasIP6Mechanism: fxPtr(true),
+				IP6Mechanisms:   []string{"ip6:2a02:c0::/32"},
+				IncludeHasIP6:   fxPtr(false),
+				IncludeChain:    []string{"_spf.hero.no"},
+				LookupCount:     fxPtr(2),
 			}, 80*time.Millisecond),
-			"dns_ptr_ipv6": fxRes(checker.StatusSupported, map[string]any{
-				fxKeyChecks: []map[string]any{
-					{"address": "2a02:c0::1", "ptr_name": "web.hero.no.", "forward_confirmed": true},
+			"dns_ptr_ipv6": fxRes(checker.StatusSupported, &checker.PTRDetail{
+				Checks: []checker.PTRCheck{
+					{Address: "2a02:c0::1", PTRName: "web.hero.no.", ForwardConfirmed: true},
 				},
-				"all_confirmed": true,
+				AllConfirmed: fxPtr(true),
 			}, 220*time.Millisecond),
-			"latency_ipv4": fxRes(checker.StatusSupported, map[string]any{
-				"address": "192.0.2.10", "ttfb_ms": int64(31), "measurements": []int64{30, 32, 40}, "avg_ms": int64(31),
+			"latency_ipv4": fxRes(checker.StatusSupported, &checker.LatencyDetail{
+				Address: "192.0.2.10", TTFBMS: fxPtr(int64(31)), Measurements: []int64{30, 32, 40}, AvgMS: fxPtr(int64(31)),
 			}, 350*time.Millisecond),
-			"latency_ipv6": fxRes(checker.StatusSupported, map[string]any{
-				"address": "2a02:c0::1", "ttfb_ms": int64(28), "measurements": []int64{28, 29, 35}, "avg_ms": int64(28),
+			"latency_ipv6": fxRes(checker.StatusSupported, &checker.LatencyDetail{
+				Address: "2a02:c0::1", TTFBMS: fxPtr(int64(28)), Measurements: []int64{28, 29, 35}, AvgMS: fxPtr(int64(28)),
 			}, 340*time.Millisecond),
-			"resource_discovery": fxRes(checker.StatusSupported, map[string]any{
-				"hosts": []string{"cdn.example.no", "fonts.example.no"}, "total_hosts": 2,
+			"resource_discovery": fxRes(checker.StatusSupported, &checker.ResourceDiscoveryDetail{
+				Hosts: []string{"cdn.example.no", "fonts.example.no"}, TotalHosts: fxPtr(2),
 			}, 600*time.Millisecond),
 		},
 	}
@@ -268,38 +321,38 @@ func heroLinks() []LinkedResource {
 // resources dimension.
 func fixtureV4Only(ts time.Time) checker.ScanResult {
 	skip := func(reason string) checker.Result {
-		return checker.Result{Status: checker.StatusNotApplicable, Details: map[string]any{"reason": reason}}
+		return checker.Result{Status: checker.StatusNotApplicable, Detail: &checker.CommonDetail{Reason: reason}}
 	}
 	return checker.ScanResult{
 		Domain:    "legacy.no",
 		ScannedAt: ts,
 		Duration:  18 * time.Second,
 		Results: map[string]checker.Result{
-			"dns_aaaa_base": fxRes(checker.StatusUnsupported, map[string]any{
-				"rcode":     "NOERROR",
-				"quorum":    quorumSplit(),
-				"a_outcome": "a_present",
-				"a_address": "192.0.2.10",
+			"dns_aaaa_base": fxRes(checker.StatusUnsupported, &checker.AAAADetail{
+				Rcode:    "NOERROR",
+				Quorum:   quorumSplit(),
+				AOutcome: "a_present",
+				AAddress: "192.0.2.10",
 			}, 130*time.Millisecond),
-			"dns_aaaa_www": fxRes(checker.StatusUnsupported, map[string]any{
-				"rcode":     "NOERROR",
-				"quorum":    quorumSplit(),
-				"a_outcome": "a_absent",
+			"dns_aaaa_www": fxRes(checker.StatusUnsupported, &checker.AAAADetail{
+				Rcode:    "NOERROR",
+				Quorum:   quorumSplit(),
+				AOutcome: "a_absent",
 			}, 125*time.Millisecond),
-			"dns_ns_ipv6": fxRes(checker.StatusUnsupported, map[string]any{
-				"nameservers": map[string]any{
-					"ns1.legacy.no.": map[string]any{"has_ipv6": false, "addresses": []string{}},
-					"ns2.legacy.no.": map[string]any{"has_ipv6": false, "addresses": []string{}},
+			"dns_ns_ipv6": fxRes(checker.StatusUnsupported, &checker.NSDetail{
+				Nameservers: map[string]checker.NSHost{
+					"ns1.legacy.no.": {HasIPv6: false, Addresses: []string{}},
+					"ns2.legacy.no.": {HasIPv6: false, Addresses: []string{}},
 				},
-				"total":      2,
-				"checked":    2,
-				"ipv6_count": 0,
+				Total:     2,
+				Checked:   2,
+				IPv6Count: fxPtr(0),
 			}, 190*time.Millisecond),
-			"dns_mx_ipv6": fxRes(checker.StatusSupported, map[string]any{
-				"reason":    "implicit MX fallback (RFC 5321 §5.1)",
-				"addresses": []string{"2a02:c0::99"},
+			"dns_mx_ipv6": fxRes(checker.StatusSupported, &checker.MXDetail{
+				CommonDetail: checker.CommonDetail{Reason: "implicit MX fallback (RFC 5321 §5.1)"},
+				Addresses:    []string{"2a02:c0::99"},
 			}, 100*time.Millisecond),
-			"dns_dnssec":           fxRes(checker.StatusUnsupported, map[string]any{"signed": false}, 70*time.Millisecond),
+			"dns_dnssec":           fxRes(checker.StatusUnsupported, &checker.DNSSECDetail{Signed: false}, 70*time.Millisecond),
 			"http_ipv6":            skip(fxSkipNoAAAA),
 			"https_ipv6":           skip(fxSkipNoAAAA),
 			"tls_ipv6":             skip(fxSkipNoAAAA),
@@ -309,7 +362,7 @@ func fixtureV4Only(ts time.Time) checker.ScanResult {
 			"http_response_parity": skip(fxSkipNoAAAA),
 			"dns_ptr_ipv6":         skip(fxSkipNoAAAA),
 			"smtp_ipv6":            skip("no MX with AAAA record"),
-			"spf_ipv6":             fxRes(checker.StatusNotApplicable, map[string]any{"reason": "no SPF record"}, 60*time.Millisecond),
+			"spf_ipv6":             fxRes(checker.StatusNotApplicable, &checker.SPFDetail{CommonDetail: checker.CommonDetail{Reason: "no SPF record"}}, 60*time.Millisecond),
 		},
 	}
 }
@@ -324,81 +377,81 @@ func fixtureErrorPaths(ts time.Time) checker.ScanResult {
 		ScannedAt: ts,
 		Duration:  61 * time.Second,
 		Results: map[string]checker.Result{
-			"dns_aaaa_base": fxRes(checker.StatusError, map[string]any{
-				"rcode":        "",
-				"quorum":       quorumSplit(),
-				"inconsistent": true,
+			"dns_aaaa_base": fxRes(checker.StatusError, &checker.AAAADetail{
+				Rcode:        "",
+				Quorum:       quorumSplit(),
+				Inconsistent: true,
 			}, 140*time.Millisecond),
-			"dns_aaaa_www": fxRes(checker.StatusError, map[string]any{
-				"rcode":      "SERVFAIL",
-				"cd_outcome": "cd_fail",
-				"error":      "all resolvers failed",
+			"dns_aaaa_www": fxRes(checker.StatusError, &checker.AAAADetail{
+				CommonDetail: checker.CommonDetail{Error: "all resolvers failed"},
+				Rcode:        "SERVFAIL",
+				CDOutcome:    "cd_fail",
 			}, 135*time.Millisecond),
-			"dns_ns_ipv6": fxRes(checker.StatusError, map[string]any{
-				"error": fxErrNoNS,
+			"dns_ns_ipv6": fxRes(checker.StatusError, &checker.NSDetail{
+				CommonDetail: checker.CommonDetail{Error: fxErrNoNS},
 			}, 90*time.Millisecond),
-			"dns_mx_ipv6": fxRes(checker.StatusNotApplicable, map[string]any{
-				"reason": "null MX record",
+			"dns_mx_ipv6": fxRes(checker.StatusNotApplicable, &checker.MXDetail{
+				CommonDetail: checker.CommonDetail{Reason: "null MX record"},
 			}, 85*time.Millisecond),
-			"dns_dnssec": fxRes(checker.StatusError, map[string]any{
-				"signed": true,
-				"ds_records": []map[string]any{
-					{"key_tag": uint16(777), "algorithm": "RSASHA256", "digest_type": uint8(2)},
+			"dns_dnssec": fxRes(checker.StatusError, &checker.DNSSECDetail{
+				CommonDetail: checker.CommonDetail{Error: "AD flag check failed: could not query domain for AD flag validation"},
+				Signed:       true,
+				DSRecords: []checker.DSRecord{
+					{KeyTag: 777, Algorithm: "RSASHA256", DigestType: 2},
 				},
-				"error":          "AD flag check failed: could not query domain for AD flag validation",
-				"chain_complete": false,
+				ChainComplete: fxPtr(false),
 			}, 95*time.Millisecond),
-			"http_ipv6": fxRes(checker.StatusError, map[string]any{
-				"error":      "context deadline exceeded",
-				"error_type": "timeout",
+			"http_ipv6": fxRes(checker.StatusError, &checker.HTTPDetail{
+				CommonDetail: checker.CommonDetail{Error: "context deadline exceeded"},
+				ErrorType:    "timeout",
 			}, 10*time.Second),
-			"https_ipv6": fxRes(checker.StatusUnsupported, map[string]any{
-				"error":      "tls: failed to verify certificate: x509: certificate signed by unknown authority",
-				"error_type": "certificate_error",
+			"https_ipv6": fxRes(checker.StatusUnsupported, &checker.HTTPDetail{
+				CommonDetail: checker.CommonDetail{Error: "tls: failed to verify certificate: x509: certificate signed by unknown authority"},
+				ErrorType:    "certificate_error",
 			}, 900*time.Millisecond),
-			"tls_ipv6": fxRes(checker.StatusUnsupported, map[string]any{
-				"address": "2a02:c0::b",
-				"error":   "TLS handshake failed: EOF",
-				"valid":   false,
+			"tls_ipv6": fxRes(checker.StatusUnsupported, &checker.TLSDetail{
+				CommonDetail: checker.CommonDetail{Error: "TLS handshake failed: EOF"},
+				Address:      "2a02:c0::b",
+				Valid:        fxPtr(false),
 			}, 800*time.Millisecond),
-			"http_response_parity": fxRes(checker.StatusUnsupported, map[string]any{
-				"ipv4": map[string]any{
-					"address": "192.0.2.20", "status_code": 200, "content_type": "text/html",
-					"content_length": int64(10000), "response_time_ms": int64(120),
+			"http_response_parity": fxRes(checker.StatusUnsupported, &checker.ParityDetail{
+				IPv4: &checker.ParityFetch{
+					Address: "192.0.2.20", StatusCode: 200, ContentType: "text/html",
+					ContentLength: 10000, ResponseTimeMS: 120,
 				},
-				"ipv6": map[string]any{
-					"address": "2a02:c0::b", "status_code": 503, "content_type": "text/html",
-					"content_length": int64(4730), "response_time_ms": int64(300),
+				IPv6: &checker.ParityFetch{
+					Address: "2a02:c0::b", StatusCode: 503, ContentType: "text/html",
+					ContentLength: 4730, ResponseTimeMS: 300,
 				},
-				"status_match":            false,
-				"content_type_match":      true,
-				"content_length_diff_pct": 52.7,
+				StatusMatch:          fxPtr(false),
+				ContentTypeMatch:     fxPtr(true),
+				ContentLengthDiffPct: fxPtr(52.7),
 			}, 700*time.Millisecond),
-			"smtp_ipv6": fxRes(checker.StatusUnsupported, map[string]any{
-				"mx_host":       "mx.broken.no.",
-				"mx_preference": uint16(5),
-				"address":       "2a02:c0:4::25",
-				"banner":        "554 not accepting mail",
-				"error":         "unexpected banner",
+			"smtp_ipv6": fxRes(checker.StatusUnsupported, &checker.SMTPDetail{
+				CommonDetail: checker.CommonDetail{Error: "unexpected banner"},
+				MXHost:       "mx.broken.no.",
+				MXPreference: fxPtr(uint16(5)),
+				Address:      "2a02:c0:4::25",
+				Banner:       "554 not accepting mail",
 			}, 450*time.Millisecond),
-			"spf_ipv6": fxRes(checker.StatusError, map[string]any{
-				"error": "multiple SPF records found",
+			"spf_ipv6": fxRes(checker.StatusError, &checker.SPFDetail{
+				CommonDetail: checker.CommonDetail{Error: "multiple SPF records found"},
 			}, 55*time.Millisecond),
-			"dns_ptr_ipv6": fxRes(checker.StatusPartial, map[string]any{
-				fxKeyChecks: []map[string]any{
-					{"address": "2a02:c0::b", "ptr_name": "", "forward_confirmed": false},
-					{"address": "2a02:c0::c", "ptr_name": "host.broken.no.", "forward_confirmed": true},
+			"dns_ptr_ipv6": fxRes(checker.StatusPartial, &checker.PTRDetail{
+				Checks: []checker.PTRCheck{
+					{Address: "2a02:c0::b", PTRName: "", ForwardConfirmed: false},
+					{Address: "2a02:c0::c", PTRName: "host.broken.no.", ForwardConfirmed: true},
 				},
-				"all_confirmed": false,
+				AllConfirmed: fxPtr(false),
 			}, 210*time.Millisecond),
-			"latency_ipv4": fxRes(checker.StatusError, map[string]any{
-				"error": "all measurements failed", "address": "192.0.2.20",
+			"latency_ipv4": fxRes(checker.StatusError, &checker.LatencyDetail{
+				CommonDetail: checker.CommonDetail{Error: "all measurements failed"}, Address: "192.0.2.20",
 			}, 30*time.Second),
-			"latency_ipv6": fxRes(checker.StatusError, map[string]any{
-				"error": "address in blocked range",
+			"latency_ipv6": fxRes(checker.StatusError, &checker.LatencyDetail{
+				CommonDetail: checker.CommonDetail{Error: "address in blocked range"},
 			}, 5*time.Millisecond),
-			"resource_discovery": fxRes(checker.StatusSupported, map[string]any{
-				"hosts": []string{}, "total_hosts": 0,
+			"resource_discovery": fxRes(checker.StatusSupported, &checker.ResourceDiscoveryDetail{
+				Hosts: []string{}, TotalHosts: fxPtr(0),
 			}, 300*time.Millisecond),
 		},
 	}

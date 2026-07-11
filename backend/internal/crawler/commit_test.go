@@ -406,26 +406,28 @@ func TestCommitAttributionDeferred(t *testing.T) {
 
 // TestUnresolvable covers the 03 §4 dead-signal branches.
 func TestUnresolvable(t *testing.T) {
-	mk := func(baseDetails map[string]any, nsResult checker.Result) checker.ScanResult {
+	mk := func(base *checker.AAAADetail, nsResult checker.Result) checker.ScanResult {
 		return checker.ScanResult{Results: map[string]checker.Result{
-			"dns_aaaa_base": {Status: checker.StatusNotApplicable, Details: baseDetails},
+			"dns_aaaa_base": {Status: checker.StatusNotApplicable, Detail: base},
 			"dns_ns_ipv6":   nsResult,
 		}}
 	}
-	noZone := checker.Result{Status: checker.StatusError, Details: map[string]any{"error": "no NS records found"}}
-	zoneAbove := checker.Result{Status: checker.StatusError, Details: map[string]any{"error": "x", "zone": "parent.example"}}
-	nsOK := checker.Result{Status: checker.StatusSupported, Details: map[string]any{}}
+	noZone := checker.Result{Status: checker.StatusError,
+		Detail: &checker.NSDetail{CommonDetail: checker.CommonDetail{Error: "no NS records found"}}}
+	zoneAbove := checker.Result{Status: checker.StatusError,
+		Detail: &checker.NSDetail{CommonDetail: checker.CommonDetail{Error: "x"}, Zone: "parent.example"}}
+	nsOK := checker.Result{Status: checker.StatusSupported, Detail: &checker.NSDetail{}}
 
-	if !Unresolvable(mk(map[string]any{"rcode": "NXDOMAIN"}, noZone)) {
+	if !Unresolvable(mk(&checker.AAAADetail{Rcode: "NXDOMAIN"}, noZone)) {
 		t.Error("branch (a): NXDOMAIN + no zone must be unresolvable")
 	}
-	if Unresolvable(mk(map[string]any{"rcode": "NXDOMAIN"}, zoneAbove)) {
+	if Unresolvable(mk(&checker.AAAADetail{Rcode: "NXDOMAIN"}, zoneAbove)) {
 		t.Error("zone found above the host must not be unresolvable")
 	}
-	if Unresolvable(mk(map[string]any{"rcode": "NXDOMAIN"}, nsOK)) {
+	if Unresolvable(mk(&checker.AAAADetail{Rcode: "NXDOMAIN"}, nsOK)) {
 		t.Error("NS at host must not be unresolvable")
 	}
-	if Unresolvable(mk(map[string]any{"rcode": "NOERROR"}, noZone)) {
+	if Unresolvable(mk(&checker.AAAADetail{Rcode: "NOERROR"}, noZone)) {
 		t.Error("NOERROR-empty is a live zone, never unresolvable")
 	}
 
@@ -433,23 +435,23 @@ func TestUnresolvable(t *testing.T) {
 		return &checker.QuorumInfo{Rcodes: map[string]string{"cloudflare": rc1, "google": rc2, "quad9": rc3}}
 	}
 	// Branch (b): all-SERVFAIL + cd_fail.
-	if !Unresolvable(mk(map[string]any{"rcode": "", "cd_outcome": "cd_fail",
-		"quorum": qi("SERVFAIL", "SERVFAIL", "REFUSED")}, nsOK)) {
+	if !Unresolvable(mk(&checker.AAAADetail{CDOutcome: "cd_fail",
+		Quorum: qi("SERVFAIL", "SERVFAIL", "REFUSED")}, nsOK)) {
 		t.Error("branch (b): all-SERVFAIL/REFUSED + cd_fail must be unresolvable")
 	}
 	// cd_present rescues: never unresolvable.
-	if Unresolvable(mk(map[string]any{"rcode": "NOERROR", "cd_outcome": "cd_present",
-		"quorum": qi("SERVFAIL", "SERVFAIL", "SERVFAIL")}, nsOK)) {
+	if Unresolvable(mk(&checker.AAAADetail{Rcode: "NOERROR", CDOutcome: "cd_present",
+		Quorum: qi("SERVFAIL", "SERVFAIL", "SERVFAIL")}, nsOK)) {
 		t.Error("cd_present must not be unresolvable")
 	}
 	// Timeouts never count.
-	if Unresolvable(mk(map[string]any{"rcode": "", "cd_outcome": "cd_fail",
-		"quorum": qi("SERVFAIL", "", "SERVFAIL")}, nsOK)) {
+	if Unresolvable(mk(&checker.AAAADetail{CDOutcome: "cd_fail",
+		Quorum: qi("SERVFAIL", "", "SERVFAIL")}, nsOK)) {
 		t.Error("a timeout non-answer disqualifies branch (b)")
 	}
 	// Degraded 2-of-2 fan-out can never satisfy branch (b).
-	if Unresolvable(mk(map[string]any{"rcode": "", "cd_outcome": "cd_fail",
-		"quorum": &checker.QuorumInfo{Rcodes: map[string]string{"cloudflare": "SERVFAIL", "google": "SERVFAIL"}}}, nsOK)) {
+	if Unresolvable(mk(&checker.AAAADetail{CDOutcome: "cd_fail",
+		Quorum: &checker.QuorumInfo{Rcodes: map[string]string{"cloudflare": "SERVFAIL", "google": "SERVFAIL"}}}, nsOK)) {
 		t.Error("2-of-2 degraded mode must not mark dead")
 	}
 }

@@ -20,20 +20,21 @@ func NewHTTPSIPv6(dialer *SafeDialer) *HTTPSIPv6 {
 	return &HTTPSIPv6{dialer: dialer}
 }
 
-func (c *HTTPSIPv6) Name() string { return "https_ipv6" }
+func (c *HTTPSIPv6) Name() string { return NameHTTPS }
 func (c *HTTPSIPv6) Check(ctx context.Context, domain string, kind Kind) (Result, error) {
 	start := time.Now()
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
-	details := map[string]any{}
+	d := &HTTPDetail{}
 
 	// Resolve AAAA records.
 	ips, _, _, _, err := c.dialer.Resolver().LookupAAAA(ctx, domain)
 	if err != nil || len(ips) == 0 {
+		d.Reason = errNoAAAARecord
 		return Result{
 			Status:  StatusUnsupported,
-			Details: map[string]any{"reason": errNoAAAARecord},
+			Detail:  d,
 			Latency: time.Since(start),
 		}, nil
 	}
@@ -44,10 +45,10 @@ func (c *HTTPSIPv6) Check(ctx context.Context, domain string, kind Kind) (Result
 	for i := 0; i < maxAttempts; i++ {
 		ip := ips[i]
 		if err := c.dialer.ValidateIP(ip); err != nil {
-			details["error"] = errAddrBlocked
+			d.Error = errAddrBlocked
 			return Result{
 				Status:  StatusError,
-				Details: details,
+				Detail:  d,
 				Latency: time.Since(start),
 			}, nil
 		}
@@ -65,40 +66,40 @@ func (c *HTTPSIPv6) Check(ctx context.Context, domain string, kind Kind) (Result
 	}
 
 	if isConnRefused(lastErr) {
-		details["error"] = errConnRefused
-		details["error_type"] = "connection_refused"
+		d.Error = errConnRefused
+		d.ErrorType = "connection_refused"
 		return Result{
 			Status:  StatusUnsupported,
-			Details: details,
+			Detail:  d,
 			Latency: time.Since(start),
 		}, nil
 	}
 
 	if isTimeout(lastErr) {
-		details["error"] = lastErr.Error()
-		details["error_type"] = "timeout"
+		d.Error = lastErr.Error()
+		d.ErrorType = "timeout"
 		return Result{
 			Status:  StatusError,
-			Details: details,
+			Detail:  d,
 			Latency: time.Since(start),
 		}, nil
 	}
 
 	if isTLSError(lastErr) {
-		details["error"] = lastErr.Error()
-		details["error_type"] = "certificate_error"
+		d.Error = lastErr.Error()
+		d.ErrorType = "certificate_error"
 		return Result{
 			Status:  StatusUnsupported,
-			Details: details,
+			Detail:  d,
 			Latency: time.Since(start),
 		}, nil
 	}
 
-	details["error"] = lastErr.Error()
-	details["error_type"] = "unknown"
+	d.Error = lastErr.Error()
+	d.ErrorType = "unknown"
 	return Result{
 		Status:  StatusError,
-		Details: details,
+		Detail:  d,
 		Latency: time.Since(start),
 	}, nil
 }
@@ -170,23 +171,21 @@ func (c *HTTPSIPv6) tryHTTPS(ctx context.Context, domain string, ip net.IP) (Res
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	responseTime := time.Since(reqStart)
+	rt := time.Since(reqStart).Milliseconds()
 
-	details := map[string]any{
-		"address":          ip.String(),
-		"status_code":      resp.StatusCode,
-		"response_time_ms": responseTime.Milliseconds(),
-	}
-	if server := resp.Header.Get("Server"); server != "" {
-		details["server"] = server
+	d := &HTTPDetail{
+		Address:        ip.String(),
+		StatusCode:     resp.StatusCode,
+		ResponseTimeMS: &rt,
+		Server:         resp.Header.Get("Server"),
 	}
 	if resp.TLS != nil {
-		details["tls_version"] = tlsVersionString(resp.TLS.Version)
+		d.TLSVersion = tlsVersionString(resp.TLS.Version)
 	}
 
 	return Result{
-		Status:  StatusSupported,
-		Details: details,
+		Status: StatusSupported,
+		Detail: d,
 	}, nil
 }
 

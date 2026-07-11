@@ -22,15 +22,13 @@ func NewDNSSEC(dialer *SafeDialer) *DNSSEC {
 	return &DNSSEC{dialer: dialer}
 }
 
-func (c *DNSSEC) Name() string { return "dns_dnssec" }
+func (c *DNSSEC) Name() string { return NameDNSSEC }
 func (c *DNSSEC) Check(ctx context.Context, domain string, kind Kind) (Result, error) {
 	start := time.Now()
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
 
-	details := map[string]any{
-		"signed": false,
-	}
+	d := &DNSSECDetail{}
 
 	fqdn := dns.Fqdn(domain)
 	resolver := c.dialer.Resolver()
@@ -39,10 +37,10 @@ func (c *DNSSEC) Check(ctx context.Context, domain string, kind Kind) (Result, e
 	parentZone := parentZoneOf(fqdn)
 	dsRecords, err := c.queryDS(ctx, resolver, fqdn, parentZone)
 	if err != nil {
-		details["error"] = fmt.Sprintf("DS lookup failed: %v", err)
+		d.Error = fmt.Sprintf("DS lookup failed: %v", err)
 		return Result{
 			Status:  StatusError,
-			Details: details,
+			Detail:  d,
 			Latency: time.Since(start),
 		}, nil
 	}
@@ -51,21 +49,21 @@ func (c *DNSSEC) Check(ctx context.Context, domain string, kind Kind) (Result, e
 		// No DS record in parent zone — domain is not signed.
 		return Result{
 			Status:  StatusUnsupported,
-			Details: details,
+			Detail:  d,
 			Latency: time.Since(start),
 		}, nil
 	}
 
-	details["signed"] = true
-	dsInfo := make([]map[string]any, len(dsRecords))
+	d.Signed = true
+	dsInfo := make([]DSRecord, len(dsRecords))
 	for i, ds := range dsRecords {
-		dsInfo[i] = map[string]any{
-			"key_tag":     ds.KeyTag,
-			"algorithm":   dns.AlgorithmToString[ds.Algorithm],
-			"digest_type": ds.DigestType,
+		dsInfo[i] = DSRecord{
+			KeyTag:     ds.KeyTag,
+			Algorithm:  dns.AlgorithmToString[ds.Algorithm],
+			DigestType: ds.DigestType,
 		}
 	}
-	details["ds_records"] = dsInfo
+	d.DSRecords = dsInfo
 
 	// Step 2: Query with RD=1, CD=0 and check AD flag.
 	// The validating resolver performs full chain-of-trust verification
@@ -73,30 +71,31 @@ func (c *DNSSEC) Check(ctx context.Context, domain string, kind Kind) (Result, e
 	// only if everything validates correctly.
 	adValid, err := c.checkADFlag(ctx, resolver, fqdn)
 	if err != nil {
-		details["error"] = fmt.Sprintf("AD flag check failed: %v", err)
-		details["chain_complete"] = false
+		d.Error = fmt.Sprintf("AD flag check failed: %v", err)
+		chain := false
+		d.ChainComplete = &chain
 		return Result{
 			Status:  StatusError,
-			Details: details,
+			Detail:  d,
 			Latency: time.Since(start),
 		}, nil
 	}
 
-	details["chain_complete"] = adValid
-	details["ad_flag"] = adValid
+	d.ChainComplete = &adValid
+	d.ADFlag = &adValid
 
 	if !adValid {
-		details["error"] = "DNSSEC signed but validation failed (AD=0)"
+		d.Error = "DNSSEC signed but validation failed (AD=0)"
 		return Result{
 			Status:  StatusError,
-			Details: details,
+			Detail:  d,
 			Latency: time.Since(start),
 		}, nil
 	}
 
 	return Result{
 		Status:  StatusSupported,
-		Details: details,
+		Detail:  d,
 		Latency: time.Since(start),
 	}, nil
 }

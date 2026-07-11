@@ -480,27 +480,24 @@ const (
 // SERVFAIL/REFUSED with the CD=1 re-query also failing (cd_fail). Timeouts
 // never count; a 2-of-2 degraded fan-out can never satisfy branch (b).
 func Unresolvable(sr checker.ScanResult) bool {
-	base, ok := sr.Results["dns_aaaa_base"]
+	_, base, ok := sr.AAAABase()
 	if !ok {
 		return false
 	}
-	rcode, _ := base.Details["rcode"].(string)
 
 	// Branch (a): NXDOMAIN + no delegated zone for the host.
-	if rcode == rcodeNXDomain && !nsZoneFound(sr) {
+	if base.Rcode == rcodeNXDomain && !nsZoneFound(sr) {
 		return true
 	}
 
 	// Branch (b): explicit all-SERVFAIL/REFUSED + cd_fail.
-	cd, _ := base.Details["cd_outcome"].(string)
-	if cd != cdFail {
+	if base.CDOutcome != cdFail {
 		return false
 	}
-	qi, _ := base.Details["quorum"].(*checker.QuorumInfo)
-	if qi == nil || len(qi.Rcodes) != 3 {
+	if base.Quorum == nil || len(base.Quorum.Rcodes) != 3 {
 		return false // degraded 2-of-2: dead detection requires all 3
 	}
-	for _, rc := range qi.Rcodes {
+	for _, rc := range base.Quorum.Rcodes {
 		if rc != rcServfail && rc != rcRefused {
 			return false // a timeout/transport non-answer disqualifies
 		}
@@ -514,16 +511,15 @@ func Unresolvable(sr checker.ScanResult) bool {
 // explicit "no NS records found" outcome counts as no-zone; other errors
 // (resolver trouble) are treated conservatively as zone-found.
 func nsZoneFound(sr checker.ScanResult) bool {
-	ns, ok := sr.Results["dns_ns_ipv6"]
+	st, ns, ok := sr.NS()
 	if !ok {
 		return true // conservative
 	}
-	if z, _ := ns.Details["zone"].(string); z != "" {
+	if ns.Zone != "" {
 		return true
 	}
-	if ns.Status != checker.StatusError {
+	if st != checker.StatusError {
 		return true // NS found at the input host itself
 	}
-	msg, _ := ns.Details["error"].(string)
-	return msg != "no NS records found"
+	return ns.Error != "no NS records found"
 }

@@ -32,7 +32,7 @@ func NewResourceDiscovery(dialer *SafeDialer) *ResourceDiscovery {
 	return &ResourceDiscovery{dialer: dialer}
 }
 
-func (c *ResourceDiscovery) Name() string { return "resource_discovery" }
+func (c *ResourceDiscovery) Name() string { return NameResourceDiscovery }
 
 func (c *ResourceDiscovery) Check(ctx context.Context, domain string, _ Kind) (Result, error) {
 	start := time.Now()
@@ -44,7 +44,7 @@ func (c *ResourceDiscovery) Check(ctx context.Context, domain string, _ Kind) (R
 	if err != nil || len(ips) == 0 {
 		return Result{
 			Status:  StatusNotApplicable,
-			Details: map[string]any{"reason": errNoAAAARecord},
+			Detail:  &ResourceDiscoveryDetail{CommonDetail: CommonDetail{Reason: errNoAAAARecord}},
 			Latency: time.Since(start),
 		}, nil
 	}
@@ -53,7 +53,7 @@ func (c *ResourceDiscovery) Check(ctx context.Context, domain string, _ Kind) (R
 	if err := c.dialer.ValidateIP(ip); err != nil {
 		return Result{
 			Status:  StatusError,
-			Details: map[string]any{"error": errAddrBlocked},
+			Detail:  &ResourceDiscoveryDetail{CommonDetail: CommonDetail{Error: errAddrBlocked}},
 			Latency: time.Since(start),
 		}, nil
 	}
@@ -63,7 +63,7 @@ func (c *ResourceDiscovery) Check(ctx context.Context, domain string, _ Kind) (R
 	if err != nil {
 		return Result{
 			Status:  StatusError,
-			Details: map[string]any{"error": fmt.Sprintf("fetch failed: %v", err)},
+			Detail:  &ResourceDiscoveryDetail{CommonDetail: CommonDetail{Error: fmt.Sprintf("fetch failed: %v", err)}},
 			Latency: time.Since(start),
 		}, nil
 	}
@@ -80,9 +80,10 @@ func (c *ResourceDiscovery) Check(ctx context.Context, domain string, _ Kind) (R
 		hosts = []string{}
 	}
 
+	total := len(hosts)
 	return Result{
 		Status:  StatusSupported, // "discovery succeeded"; never maps to a public dimension
-		Details: map[string]any{"hosts": hosts, "total_hosts": len(hosts)},
+		Detail:  &ResourceDiscoveryDetail{Hosts: hosts, TotalHosts: &total},
 		Latency: time.Since(start),
 	}, nil
 }

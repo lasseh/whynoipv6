@@ -20,17 +20,18 @@ func scan(overrides map[string]checker.Result) checker.ScanResult {
 		"http_ipv6", "https_ipv6", "tls_ipv6", "http_response_parity",
 		"smtp_ipv6", "spf_ipv6", "dns_ptr_ipv6", "latency_ipv4", "latency_ipv6",
 	} {
-		results[name] = checker.Result{Status: checker.StatusNotApplicable, Details: map[string]any{}}
+		results[name] = checker.Result{Status: checker.StatusNotApplicable}
 	}
 	maps.Copy(results, overrides)
 	return checker.ScanResult{Domain: "t.example", Results: results}
 }
 
-func res(status checker.CheckStatus, details map[string]any) checker.Result {
-	if details == nil {
-		details = map[string]any{}
-	}
-	return checker.Result{Status: status, Details: details}
+func res(status checker.CheckStatus, d checker.Detail) checker.Result {
+	return checker.Result{Status: status, Detail: d}
+}
+
+func aOut(status checker.CheckStatus, outcome string) checker.Result {
+	return res(status, &checker.AAAADetail{AOutcome: outcome})
 }
 
 func mapOne(t *testing.T, kind domain.Kind, overrides map[string]checker.Result) Observations {
@@ -47,12 +48,12 @@ func TestMapObservations(t *testing.T) {
 		want domain.Observation
 	}{
 		{"base_exists", res(checker.StatusSupported, nil), domain.ObsSupported},
-		{"base_empty_apresent", res(checker.StatusUnsupported, map[string]any{"a_outcome": "a_present"}), domain.ObsUnsupported},
-		{"base_empty_aabsent", res(checker.StatusUnsupported, map[string]any{"a_outcome": "a_absent"}), domain.ObsNoRecord},
-		{"base_empty_aerror", res(checker.StatusUnsupported, map[string]any{"a_outcome": "a_error"}), domain.ObsError},
+		{"base_empty_apresent", aOut(checker.StatusUnsupported, "a_present"), domain.ObsUnsupported},
+		{"base_empty_aabsent", aOut(checker.StatusUnsupported, "a_absent"), domain.ObsNoRecord},
+		{"base_empty_aerror", aOut(checker.StatusUnsupported, "a_error"), domain.ObsError},
 		{"base_nxdomain", res(checker.StatusNotApplicable, nil), domain.ObsNoRecord},
 		{"base_error", res(checker.StatusError, nil), domain.ObsError},
-		{"base_inconsistent", res(checker.StatusError, map[string]any{"inconsistent": true}), domain.ObsInconsistent},
+		{"base_inconsistent", res(checker.StatusError, &checker.AAAADetail{Inconsistent: true}), domain.ObsInconsistent},
 	}
 	for _, tc := range baseRows {
 		t.Run(tc.name, func(t *testing.T) {
@@ -78,12 +79,12 @@ func TestMapObservations(t *testing.T) {
 		want domain.Observation
 	}{
 		{"www_exists", res(checker.StatusSupported, nil), domain.ObsSupported},
-		{"www_empty_apresent", res(checker.StatusUnsupported, map[string]any{"a_outcome": "a_present"}), domain.ObsUnsupported},
-		{"www_empty_aabsent", res(checker.StatusUnsupported, map[string]any{"a_outcome": "a_absent"}), domain.ObsNotApplicable},
-		{"www_empty_aerror", res(checker.StatusUnsupported, map[string]any{"a_outcome": "a_error"}), domain.ObsError},
+		{"www_empty_apresent", aOut(checker.StatusUnsupported, "a_present"), domain.ObsUnsupported},
+		{"www_empty_aabsent", aOut(checker.StatusUnsupported, "a_absent"), domain.ObsNotApplicable},
+		{"www_empty_aerror", aOut(checker.StatusUnsupported, "a_error"), domain.ObsError},
 		{"www_nxdomain", res(checker.StatusNotApplicable, nil), domain.ObsNotApplicable},
 		{"www_error", res(checker.StatusError, nil), domain.ObsError},
-		{"www_inconsistent", res(checker.StatusError, map[string]any{"inconsistent": true}), domain.ObsInconsistent},
+		{"www_inconsistent", res(checker.StatusError, &checker.AAAADetail{Inconsistent: true}), domain.ObsInconsistent},
 	}
 	for _, tc := range wwwRows {
 		t.Run(tc.name, func(t *testing.T) {
@@ -109,11 +110,7 @@ func TestMapObservations(t *testing.T) {
 		outcomes := []string{"", "a_present", "a_absent", "a_error"}
 		for _, st := range statuses {
 			for _, ao := range outcomes {
-				d := map[string]any{}
-				if ao != "" {
-					d["a_outcome"] = ao
-				}
-				o := mapOne(t, domain.KindApex, map[string]checker.Result{"dns_aaaa_www": res(st, d)})
+				o := mapOne(t, domain.KindApex, map[string]checker.Result{"dns_aaaa_www": aOut(st, ao)})
 				if o.WWW == domain.ObsNoRecord {
 					t.Fatalf("www produced no_record for status=%s a_outcome=%s", st, ao)
 				}
@@ -173,7 +170,7 @@ func TestMapObservations(t *testing.T) {
 	// Latency hoist.
 	t.Run("latency_avg_ms", func(t *testing.T) {
 		o := mapOne(t, domain.KindApex, map[string]checker.Result{
-			"latency_ipv6": res(checker.StatusSupported, map[string]any{"avg_ms": int64(42)}),
+			"latency_ipv6": res(checker.StatusSupported, &checker.LatencyDetail{AvgMS: ptr(int64(42))}),
 			"latency_ipv4": res(checker.StatusError, nil),
 		})
 		if o.LatencyV6Ms == nil || *o.LatencyV6Ms != 42 {
@@ -201,25 +198,25 @@ func TestConnComposition(t *testing.T) {
 		httpOnly  bool
 	}{
 		{"conn_https_ok", res(checker.StatusSupported, nil), res(checker.StatusError, nil), fresh, domain.ObsSupported, "https", false},
-		{"conn_http_fallback", res(checker.StatusUnsupported, map[string]any{"error_type": "connection_refused"}),
+		{"conn_http_fallback", res(checker.StatusUnsupported, &checker.HTTPDetail{ErrorType: "connection_refused"}),
 			res(checker.StatusSupported, nil), fresh, domain.ObsSupported, "http", true},
-		{"conn_cert_error", res(checker.StatusUnsupported, map[string]any{"error_type": "certificate_error"}),
+		{"conn_cert_error", res(checker.StatusUnsupported, &checker.HTTPDetail{ErrorType: "certificate_error"}),
 			res(checker.StatusSupported, nil), fresh, domain.ObsUnsupported, "", false},
-		{"conn_refused_no_http", res(checker.StatusUnsupported, map[string]any{"error_type": "connection_refused"}),
+		{"conn_refused_no_http", res(checker.StatusUnsupported, &checker.HTTPDetail{ErrorType: "connection_refused"}),
 			res(checker.StatusUnsupported, nil), fresh, domain.ObsUnsupported, "", false},
 		{"conn_no_aaaa_on_host", res(checker.StatusUnsupported, nil),
 			res(checker.StatusSupported, nil), fresh, domain.ObsUnsupported, "", false},
-		{"conn_timeout_preflight_fresh", res(checker.StatusError, map[string]any{"error_type": "timeout"}),
+		{"conn_timeout_preflight_fresh", res(checker.StatusError, &checker.HTTPDetail{ErrorType: "timeout"}),
 			res(checker.StatusSupported, nil), fresh, domain.ObsUnsupported, "", false},
-		{"conn_timeout_preflight_stale", res(checker.StatusError, map[string]any{"error_type": "timeout"}),
+		{"conn_timeout_preflight_stale", res(checker.StatusError, &checker.HTTPDetail{ErrorType: "timeout"}),
 			res(checker.StatusSupported, nil), stale, domain.ObsError, "", false},
-		{"conn_error_other", res(checker.StatusError, map[string]any{"error_type": "unknown"}),
+		{"conn_error_other", res(checker.StatusError, &checker.HTTPDetail{ErrorType: "unknown"}),
 			res(checker.StatusSupported, nil), fresh, domain.ObsError, "", false},
 		{"conn_phase2_skipped", res(checker.StatusNotApplicable, nil),
 			res(checker.StatusNotApplicable, nil), fresh, domain.ObsNotApplicable, "", false},
-		{"guard_cert_stale_downgrade", res(checker.StatusUnsupported, map[string]any{"error_type": "certificate_error"}),
+		{"guard_cert_stale_downgrade", res(checker.StatusUnsupported, &checker.HTTPDetail{ErrorType: "certificate_error"}),
 			res(checker.StatusSupported, nil), stale, domain.ObsError, "", false},
-		{"guard_refused_stale_downgrade", res(checker.StatusUnsupported, map[string]any{"error_type": "connection_refused"}),
+		{"guard_refused_stale_downgrade", res(checker.StatusUnsupported, &checker.HTTPDetail{ErrorType: "connection_refused"}),
 			res(checker.StatusUnsupported, nil), stale, domain.ObsError, "", false},
 	}
 	for _, tc := range rows {

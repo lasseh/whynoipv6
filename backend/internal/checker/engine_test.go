@@ -101,8 +101,8 @@ func TestRunnerNoAAAA(t *testing.T) {
 		if got.Status != StatusNotApplicable {
 			t.Errorf("%s = %s, want not_applicable", name, got.Status)
 		}
-		if reason := got.Details["reason"]; reason != wantReason {
-			t.Errorf("%s reason = %v, want %q", name, reason, wantReason)
+		if got.Detail == nil || got.Detail.common().Reason != wantReason {
+			t.Errorf("%s reason = %v, want %q", name, got.Detail, wantReason)
 		}
 		if got.Latency != 0 {
 			t.Errorf("%s latency = %v, want 0 (skipped, no I/O)", name, got.Latency)
@@ -127,8 +127,8 @@ func TestRunnerSubdomain(t *testing.T) {
 	if www.Status != StatusNotApplicable {
 		t.Errorf("www = %s, want not_applicable", www.Status)
 	}
-	if got := www.Details["reason"]; got != "subdomain entity: www check not applicable" {
-		t.Errorf("www reason = %v", got)
+	if www.Detail == nil || www.Detail.common().Reason != "subdomain entity: www check not applicable" {
+		t.Errorf("www reason = %v", www.Detail)
 	}
 	if n := seam.callCount("www.api.dnb.no"); n != 0 {
 		t.Errorf("www AAAA queried %d times, want 0", n)
@@ -138,8 +138,8 @@ func TestRunnerSubdomain(t *testing.T) {
 	if mx.Status != StatusNotApplicable {
 		t.Errorf("mx = %s, want not_applicable", mx.Status)
 	}
-	if got := mx.Details["reason"]; got != "no explicit MX records (subdomain entity)" {
-		t.Errorf("mx reason = %v (implicit-MX fallback must be skipped)", got)
+	if _, mxD, ok := res.MX(); !ok || mxD.Reason != "no explicit MX records (subdomain entity)" {
+		t.Errorf("mx reason = %v (implicit-MX fallback must be skipped)", mxD)
 	}
 }
 
@@ -163,8 +163,8 @@ func TestCheckPanicIsolation(t *testing.T) {
 	if p.Status != StatusError {
 		t.Fatalf("panic check = %s, want error", p.Status)
 	}
-	if msg, _ := p.Details["error"].(string); !strings.Contains(msg, "internal error: boom") {
-		t.Errorf("panic detail = %v", p.Details)
+	if p.Detail == nil || !strings.Contains(p.Detail.common().Error, "internal error: boom") {
+		t.Errorf("panic detail = %v", p.Detail)
 	}
 	if res.Results["dns_aaaa_base"].Status != StatusUnsupported {
 		t.Errorf("sibling check affected by panic: %v", res.Results["dns_aaaa_base"])

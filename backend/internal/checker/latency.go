@@ -25,7 +25,7 @@ func NewLatencyIPv4(dialer *SafeDialer) *LatencyIPv4 {
 	return &LatencyIPv4{dialer: dialer}
 }
 
-func (c *LatencyIPv4) Name() string { return "latency_ipv4" }
+func (c *LatencyIPv4) Name() string { return NameLatencyV4 }
 func (c *LatencyIPv4) Check(ctx context.Context, domain string, kind Kind) (Result, error) {
 	start := time.Now()
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
@@ -35,7 +35,7 @@ func (c *LatencyIPv4) Check(ctx context.Context, domain string, kind Kind) (Resu
 	if err != nil || len(ips) == 0 {
 		return Result{
 			Status:  StatusNotApplicable,
-			Details: map[string]any{"reason": "no A record"},
+			Detail:  &LatencyDetail{CommonDetail: CommonDetail{Reason: "no A record"}},
 			Latency: time.Since(start),
 		}, nil
 	}
@@ -44,7 +44,7 @@ func (c *LatencyIPv4) Check(ctx context.Context, domain string, kind Kind) (Resu
 	if err := c.dialer.ValidateIP(ip); err != nil {
 		return Result{
 			Status:  StatusError,
-			Details: map[string]any{"error": "address in blocked range"},
+			Detail:  &LatencyDetail{CommonDetail: CommonDetail{Error: errAddrBlocked}},
 			Latency: time.Since(start),
 		}, nil
 	}
@@ -62,7 +62,7 @@ func NewLatencyIPv6(dialer *SafeDialer) *LatencyIPv6 {
 	return &LatencyIPv6{dialer: dialer}
 }
 
-func (c *LatencyIPv6) Name() string { return "latency_ipv6" }
+func (c *LatencyIPv6) Name() string { return NameLatencyV6 }
 func (c *LatencyIPv6) Check(ctx context.Context, domain string, kind Kind) (Result, error) {
 	start := time.Now()
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
@@ -72,7 +72,7 @@ func (c *LatencyIPv6) Check(ctx context.Context, domain string, kind Kind) (Resu
 	if err != nil || len(ips) == 0 {
 		return Result{
 			Status:  StatusNotApplicable,
-			Details: map[string]any{"reason": "no AAAA record"},
+			Detail:  &LatencyDetail{CommonDetail: CommonDetail{Reason: "no AAAA record"}},
 			Latency: time.Since(start),
 		}, nil
 	}
@@ -81,7 +81,7 @@ func (c *LatencyIPv6) Check(ctx context.Context, domain string, kind Kind) (Resu
 	if err := c.dialer.ValidateIP(ip); err != nil {
 		return Result{
 			Status:  StatusError,
-			Details: map[string]any{"error": "address in blocked range"},
+			Detail:  &LatencyDetail{CommonDetail: CommonDetail{Error: errAddrBlocked}},
 			Latency: time.Since(start),
 		}, nil
 	}
@@ -105,7 +105,7 @@ func measureLatency(ctx context.Context, d *SafeDialer, domain string, ip net.IP
 			if len(measurements) == 0 {
 				return Result{
 					Status:  StatusError,
-					Details: map[string]any{"error": err.Error(), "address": ip.String()},
+					Detail:  &LatencyDetail{CommonDetail: CommonDetail{Error: err.Error()}, Address: ip.String()},
 					Latency: time.Since(start),
 				}, nil
 			}
@@ -117,7 +117,7 @@ func measureLatency(ctx context.Context, d *SafeDialer, domain string, ip net.IP
 	if len(measurements) == 0 {
 		return Result{
 			Status:  StatusError,
-			Details: map[string]any{"error": "all measurements failed", "address": ip.String()},
+			Detail:  &LatencyDetail{CommonDetail: CommonDetail{Error: "all measurements failed"}, Address: ip.String()},
 			Latency: time.Since(start),
 		}, nil
 	}
@@ -137,16 +137,14 @@ func measureLatency(ctx context.Context, d *SafeDialer, domain string, ip net.IP
 		avgMS = measurements[0]
 	}
 
-	details := map[string]any{
-		"address":      ip.String(),
-		"ttfb_ms":      avgMS,
-		"measurements": measurements,
-		"avg_ms":       avgMS,
-	}
-
 	return Result{
-		Status:  StatusSupported,
-		Details: details,
+		Status: StatusSupported,
+		Detail: &LatencyDetail{
+			Address:      ip.String(),
+			TTFBMS:       &avgMS,
+			Measurements: measurements,
+			AvgMS:        &avgMS,
+		},
 		Latency: time.Since(start),
 	}, nil
 }

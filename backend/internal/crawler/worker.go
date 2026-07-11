@@ -72,9 +72,9 @@ func (w *Worker) Process(ctx context.Context, d ClaimedDomain) { //nolint:gocrit
 		T:            t,
 	}
 	if w.ResourcesEnabled {
-		if r, ok := sr.Results["resource_discovery"]; ok && r.Status == checker.StatusSupported {
+		if st, _, ok := sr.ResourceDiscovery(); ok && st == checker.StatusSupported {
 			in.DiscoveryOK = true
-			in.Discovered = discoveredHosts(r)
+			in.Discovered = discoveredHosts(sr)
 		}
 	}
 
@@ -138,17 +138,17 @@ func (w *Worker) attribution(ctx context.Context, d *ClaimedDomain, sr checker.S
 // the first recorded AAAA wins; else the conditional-A address; else zero.
 func attributionIP(sr checker.ScanResult) netip.Addr {
 	var zero netip.Addr
-	base, ok := sr.Results["dns_aaaa_base"]
+	_, base, ok := sr.AAAABase()
 	if !ok {
 		return zero
 	}
-	if addrs, ok := base.Details["addresses"].([]string); ok && len(addrs) > 0 {
-		if a, err := netip.ParseAddr(addrs[0]); err == nil {
+	if len(base.Addresses) > 0 {
+		if a, err := netip.ParseAddr(base.Addresses[0]); err == nil {
 			return a
 		}
 	}
-	if s, ok := base.Details["a_address"].(string); ok {
-		if a, err := netip.ParseAddr(s); err == nil {
+	if base.AAddress != "" {
+		if a, err := netip.ParseAddr(base.AAddress); err == nil {
 			return a
 		}
 	}
@@ -172,9 +172,9 @@ func (w *Worker) ensureASN(ctx context.Context, number int64, org string) (int32
 // idempotent, self-healing next scan. (03 §12.1's pinned fenced UPDATE does
 // not carry these columns, so they ride separate pivot-only statements.)
 func (w *Worker) stampPivots(ctx context.Context, d *ClaimedDomain, sr checker.ScanResult) {
-	base := sr.Results["dns_aaaa_base"]
-	definitive := base.Status == checker.StatusSupported ||
-		base.Status == checker.StatusUnsupported || base.Status == checker.StatusNotApplicable
+	baseSt, _, _ := sr.AAAABase()
+	definitive := baseSt == checker.StatusSupported ||
+		baseSt == checker.StatusUnsupported || baseSt == checker.StatusNotApplicable
 	if !definitive {
 		return // deferred scans never touch the pivots (06 §6.6)
 	}
@@ -188,9 +188,8 @@ func (w *Worker) stampPivots(ctx context.Context, d *ClaimedDomain, sr checker.S
 
 	// Hosting tag: CNAME-CDN detection from the www check + the resolved
 	// input IP's ASN (already looked up — no new queries).
-	www := sr.Results["dns_aaaa_www"]
-	cdnDetected, _ := www.Details["cdn_detected"].(bool)
-	chain, _ := www.Details["cname_chain"].([]string)
+	_, www, _ := sr.AAAAWWW()
+	cdnDetected, chain := www.CDNDetected, www.CNAMEChain
 	var asn uint
 	if w.Attr != nil {
 		if ip := attributionIP(sr); ip.IsValid() {
@@ -207,16 +206,12 @@ func (w *Worker) stampPivots(ctx context.Context, d *ClaimedDomain, sr checker.S
 // nsHosts extracts the observed nameserver-host set from the NS check
 // (06 §6.10 step 1).
 func nsHosts(sr checker.ScanResult) []string {
-	ns, ok := sr.Results["dns_ns_ipv6"]
-	if !ok {
+	_, ns, ok := sr.NS()
+	if !ok || len(ns.Nameservers) == 0 {
 		return nil
 	}
-	detail, ok := ns.Details["nameservers"].(map[string]any)
-	if !ok {
-		return nil
-	}
-	hosts := make([]string, 0, len(detail))
-	for h := range detail {
+	hosts := make([]string, 0, len(ns.Nameservers))
+	for h := range ns.Nameservers {
 		hosts = append(hosts, h)
 	}
 	return hosts
@@ -224,13 +219,13 @@ func nsHosts(sr checker.ScanResult) []string {
 
 // discoveredHosts canonicalizes the resource_discovery host list
 // (canonicalization failures are skipped — 06 §1 call-site table).
-func discoveredHosts(r checker.Result) []string {
-	raw, ok := r.Details["hosts"].([]string)
+func discoveredHosts(sr checker.ScanResult) []string {
+	_, d, ok := sr.ResourceDiscovery()
 	if !ok {
 		return nil
 	}
-	out := make([]string, 0, len(raw))
-	for _, h := range raw {
+	out := make([]string, 0, len(d.Hosts))
+	for _, h := range d.Hosts {
 		if canonical, err := domain.Canonicalize(h); err == nil {
 			out = append(out, canonical)
 		}

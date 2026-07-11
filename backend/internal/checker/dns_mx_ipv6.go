@@ -18,20 +18,20 @@ func NewDNSMXIPv6(dialer *SafeDialer, maxLookups int) *DNSMXIPv6 {
 	return &DNSMXIPv6{dialer: dialer, maxLookups: maxLookups}
 }
 
-func (c *DNSMXIPv6) Name() string { return "dns_mx_ipv6" }
+func (c *DNSMXIPv6) Name() string { return NameDNSMX }
 func (c *DNSMXIPv6) Check(ctx context.Context, domain string, kind Kind) (Result, error) {
 	start := time.Now()
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
-	details := map[string]any{}
+	d := &MXDetail{}
 
 	mxRecords, _, err := c.dialer.Resolver().LookupMX(ctx, domain)
 	if err != nil {
-		details["error"] = err.Error()
+		d.Error = err.Error()
 		return Result{
 			Status:  StatusError,
-			Details: details,
+			Detail:  d,
 			Latency: time.Since(start),
 		}, nil
 	}
@@ -40,9 +40,10 @@ func (c *DNSMXIPv6) Check(ctx context.Context, domain string, kind Kind) (Result
 		// Kind-aware skip (01-engine.md §11.4): "the AAAA accepts mail" is
 		// not evidence for a subdomain entity — no implicit-MX fallback.
 		if kind == KindSubdomain {
+			d.Reason = "no explicit MX records (subdomain entity)"
 			return Result{
 				Status:  StatusNotApplicable,
-				Details: map[string]any{"reason": "no explicit MX records (subdomain entity)"},
+				Detail:  d,
 				Latency: time.Since(start),
 			}, nil
 		}
@@ -50,9 +51,10 @@ func (c *DNSMXIPv6) Check(ctx context.Context, domain string, kind Kind) (Result
 		// itself as an implicit MX. Check if the domain has AAAA records.
 		ips, _, _, _, lookupErr := c.dialer.Resolver().LookupAAAA(ctx, domain)
 		if lookupErr != nil || len(ips) == 0 {
+			d.Reason = "no MX records and no implicit AAAA fallback"
 			return Result{
 				Status:  StatusNotApplicable,
-				Details: map[string]any{"reason": "no MX records and no implicit AAAA fallback"},
+				Detail:  d,
 				Latency: time.Since(start),
 			}, nil
 		}
@@ -60,21 +62,21 @@ func (c *DNSMXIPv6) Check(ctx context.Context, domain string, kind Kind) (Result
 		for i, ip := range ips {
 			addrs[i] = ip.String()
 		}
+		d.Reason = "implicit MX fallback (RFC 5321 §5.1)"
+		d.Addresses = addrs
 		return Result{
-			Status: StatusSupported,
-			Details: map[string]any{
-				"reason":    "implicit MX fallback (RFC 5321 §5.1)",
-				"addresses": addrs,
-			},
+			Status:  StatusSupported,
+			Detail:  d,
 			Latency: time.Since(start),
 		}, nil
 	}
 
 	// Check for null MX (RFC 7505).
 	if len(mxRecords) == 1 && mxRecords[0].Mx == "." && mxRecords[0].Preference == 0 {
+		d.Reason = "null MX record"
 		return Result{
 			Status:  StatusNotApplicable,
-			Details: map[string]any{"reason": "null MX record"},
+			Detail:  d,
 			Latency: time.Since(start),
 		}, nil
 	}
@@ -87,17 +89,13 @@ func (c *DNSMXIPv6) Check(ctx context.Context, domain string, kind Kind) (Result
 		mxRecords = mxRecords[:c.maxLookups]
 	}
 
-	mxResults := map[string]any{}
+	mxResults := map[string]MXHost{}
 	ipv6Count := 0
 	total := len(mxRecords)
 
 	for _, mx := range mxRecords {
 		hostname := mx.Mx
-		mxInfo := map[string]any{
-			"preference": mx.Preference,
-			"has_ipv6":   false,
-			"addresses":  []string{},
-		}
+		mxInfo := MXHost{Preference: mx.Preference, Addresses: []string{}}
 
 		// Skip if MX points to an IP address (non-standard).
 		if isIPAddress(hostname) {
@@ -107,20 +105,20 @@ func (c *DNSMXIPv6) Check(ctx context.Context, domain string, kind Kind) (Result
 
 		ips, _, _, _, lookupErr := c.dialer.Resolver().LookupAAAA(ctx, hostname)
 		if lookupErr == nil && len(ips) > 0 {
-			mxInfo["has_ipv6"] = true
+			mxInfo.HasIPv6 = true
 			addrs := make([]string, len(ips))
 			for i, ip := range ips {
 				addrs[i] = ip.String()
 			}
-			mxInfo["addresses"] = addrs
+			mxInfo.Addresses = addrs
 			ipv6Count++
 		}
 		mxResults[hostname] = mxInfo
 	}
 
-	details["mx_records"] = mxResults
-	details["total"] = total
-	details["ipv6_count"] = ipv6Count
+	d.MXRecords = mxResults
+	d.Total = total
+	d.IPv6Count = &ipv6Count
 
 	var status CheckStatus
 	switch {
@@ -134,7 +132,7 @@ func (c *DNSMXIPv6) Check(ctx context.Context, domain string, kind Kind) (Result
 
 	return Result{
 		Status:  status,
-		Details: details,
+		Detail:  d,
 		Latency: time.Since(start),
 	}, nil
 }

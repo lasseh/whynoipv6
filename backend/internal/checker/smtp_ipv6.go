@@ -22,25 +22,26 @@ func NewSMTPIPv6(dialer *SafeDialer) *SMTPIPv6 {
 	return &SMTPIPv6{dialer: dialer}
 }
 
-func (c *SMTPIPv6) Name() string { return "smtp_ipv6" }
+func (c *SMTPIPv6) Name() string { return NameSMTP }
 func (c *SMTPIPv6) Check(ctx context.Context, domain string, kind Kind) (Result, error) {
 	start := time.Now()
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 
-	details := map[string]any{}
+	d := &SMTPDetail{}
 
 	// Lookup MX records.
 	mxRecords, _, err := c.dialer.Resolver().LookupMX(ctx, domain)
 	if err != nil {
-		details["error"] = err.Error()
-		return Result{Status: StatusError, Details: details, Latency: time.Since(start)}, nil
+		d.Error = err.Error()
+		return Result{Status: StatusError, Detail: d, Latency: time.Since(start)}, nil
 	}
 
 	if len(mxRecords) == 0 {
+		d.Reason = "no MX records"
 		return Result{
 			Status:  StatusNotApplicable,
-			Details: map[string]any{"reason": "no MX records"},
+			Detail:  d,
 			Latency: time.Since(start),
 		}, nil
 	}
@@ -68,15 +69,15 @@ func (c *SMTPIPv6) Check(ctx context.Context, domain string, kind Kind) (Result,
 
 	if lastErr != nil {
 		if isConnRefused(lastErr) {
-			details["error"] = errConnRefused
-			return Result{Status: StatusUnsupported, Details: details, Latency: time.Since(start)}, nil
+			d.Error = errConnRefused
+			return Result{Status: StatusUnsupported, Detail: d, Latency: time.Since(start)}, nil
 		}
-		details["error"] = lastErr.Error()
+		d.Error = lastErr.Error()
 	}
 
 	return Result{
 		Status:  StatusUnsupported,
-		Details: details,
+		Detail:  d,
 		Latency: time.Since(start),
 	}, nil
 }
@@ -114,23 +115,23 @@ func (c *SMTPIPv6) tryMX(ctx context.Context, mxHost string, preference uint16) 
 	}
 	banner = strings.TrimSpace(banner)
 
-	details := map[string]any{
-		"mx_host":       mxHost,
-		"mx_preference": preference,
-		"address":       ip.String(),
-		"banner":        banner,
+	d := &SMTPDetail{
+		MXHost:       mxHost,
+		MXPreference: &preference,
+		Address:      ip.String(),
+		Banner:       banner,
 	}
 
 	if !strings.HasPrefix(banner, "220") {
-		details["error"] = "unexpected banner"
-		return Result{Status: StatusUnsupported, Details: details}, nil
+		d.Error = "unexpected banner"
+		return Result{Status: StatusUnsupported, Detail: d}, nil
 	}
 
 	// Send EHLO.
 	_, err = fmt.Fprintf(conn, "EHLO whynoipv6.com\r\n")
 	if err != nil {
-		details["error"] = fmt.Sprintf("EHLO write failed: %v", err)
-		return Result{Status: StatusPartial, Details: details}, nil
+		d.Error = fmt.Sprintf("EHLO write failed: %v", err)
+		return Result{Status: StatusPartial, Detail: d}, nil
 	}
 
 	// Read EHLO response (multi-line: 250-... until 250 ...).
@@ -151,14 +152,15 @@ func (c *SMTPIPv6) tryMX(ctx context.Context, mxHost string, preference uint16) 
 	}
 
 	ehloResponse := strings.Join(ehloLines, "\n")
-	details["ehlo_response"] = ehloResponse
-	details["starttls_offered"] = strings.Contains(strings.ToUpper(ehloResponse), "STARTTLS")
+	d.EHLOResponse = ehloResponse
+	starttls := strings.Contains(strings.ToUpper(ehloResponse), "STARTTLS")
+	d.STARTTLSOffered = &starttls
 
 	// Send QUIT.
 	_, _ = fmt.Fprintf(conn, "QUIT\r\n")
 
 	return Result{
-		Status:  StatusSupported,
-		Details: details,
+		Status: StatusSupported,
+		Detail: d,
 	}, nil
 }

@@ -18,13 +18,13 @@ func NewDNSNSIPv6(dialer *SafeDialer, maxLookups int) *DNSNSIPv6 {
 	return &DNSNSIPv6{dialer: dialer, maxLookups: maxLookups}
 }
 
-func (c *DNSNSIPv6) Name() string { return "dns_ns_ipv6" }
+func (c *DNSNSIPv6) Name() string { return NameDNSNS }
 func (c *DNSNSIPv6) Check(ctx context.Context, domain string, kind Kind) (Result, error) {
 	start := time.Now()
 	ctx, cancel := context.WithTimeout(ctx, 25*time.Second)
 	defer cancel()
 
-	details := map[string]any{}
+	d := &NSDetail{}
 
 	// Walk up domain labels to find the zone with NS records.
 	// Subdomains (e.g. blog.example.com) typically don't have their own NS
@@ -54,25 +54,25 @@ func (c *DNSNSIPv6) Check(ctx context.Context, domain string, kind Kind) (Result
 	}
 
 	if nsErr != nil && len(nameservers) == 0 {
-		details["error"] = nsErr.Error()
+		d.Error = nsErr.Error()
 		return Result{
 			Status:  StatusError,
-			Details: details,
+			Detail:  d,
 			Latency: time.Since(start),
 		}, nil
 	}
 
 	if len(nameservers) == 0 {
-		details["error"] = "no NS records found"
+		d.Error = "no NS records found"
 		return Result{
 			Status:  StatusError,
-			Details: details,
+			Detail:  d,
 			Latency: time.Since(start),
 		}, nil
 	}
 
 	if qname != domain {
-		details["zone"] = qname
+		d.Zone = qname
 	}
 
 	total := len(nameservers)
@@ -85,31 +85,28 @@ func (c *DNSNSIPv6) Check(ctx context.Context, domain string, kind Kind) (Result
 		checked = checked[:c.maxLookups]
 	}
 
-	nsResults := map[string]any{}
+	nsResults := map[string]NSHost{}
 	ipv6Count := 0
 
 	for _, ns := range checked {
 		ips, _, _, _, lookupErr := c.dialer.Resolver().LookupAAAA(ctx, ns)
-		nsInfo := map[string]any{
-			"has_ipv6":  false,
-			"addresses": []string{},
-		}
+		nsInfo := NSHost{Addresses: []string{}}
 		if lookupErr == nil && len(ips) > 0 {
-			nsInfo["has_ipv6"] = true
+			nsInfo.HasIPv6 = true
 			addrs := make([]string, len(ips))
 			for i, ip := range ips {
 				addrs[i] = ip.String()
 			}
-			nsInfo["addresses"] = addrs
+			nsInfo.Addresses = addrs
 			ipv6Count++
 		}
 		nsResults[ns] = nsInfo
 	}
 
-	details["nameservers"] = nsResults
-	details["total"] = total
-	details["checked"] = len(checked)
-	details["ipv6_count"] = ipv6Count
+	d.Nameservers = nsResults
+	d.Total = total
+	d.Checked = len(checked)
+	d.IPv6Count = &ipv6Count
 
 	var status CheckStatus
 	switch {
@@ -123,7 +120,7 @@ func (c *DNSNSIPv6) Check(ctx context.Context, domain string, kind Kind) (Result
 
 	return Result{
 		Status:  status,
-		Details: details,
+		Detail:  d,
 		Latency: time.Since(start),
 	}, nil
 }
