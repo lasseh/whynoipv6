@@ -11,7 +11,7 @@ _Status: Draft 1.0 — authored from a full inventory of the live frontend (`why
 
 **Companion files:** 07-api.md (every endpoint, envelope, cursor, and error shape consumed here), 00-overview.md §4 (monorepo layout — `frontend/` is a sibling of `backend/`, never compiled by the backend workflow), 08-migration-cutover.md (cutover is a DNS flip; this app ships to the same origin).
 
-**Reference repos (read-only inputs, never imported):** `../whynoipv6-web` — the visual source of truth; `../whynoipv6-web2` — scaffold reference for tooling (strict tsconfig, ESLint 9 flat config, vitest setup, router-meta SEO guard). web2's cautionary lesson is normative: under Tailwind v4 its config files were dead (`@import 'tailwindcss'` with no `@theme`/`@config`), so the site silently fell back to stock Tailwind palettes. **The token port in §2.2 is what prevents that drift; it is a build gate, not a nice-to-have.**
+**Reference repos (read-only inputs, never imported):** `../whynoipv6-web` — the visual source of truth; `../whynoipv6-web2` — scaffold reference for tooling (strict tsconfig, ESLint 9 flat config, vitest setup, router-meta SEO guard); `../taillight/frontend` — the **structural** reference: its conventions (thin typed fetch layer, CSS-first `@theme` token design system, generic factories for repeated list plumbing, colocated `__tests__/`, type-check-as-blocking-gate) are adopted where they fit (§3.1); its product machinery (SSE streams, theming, feature flags, Pinia stores) is not. web2's cautionary lesson is normative: under Tailwind v4 its config files were dead (`@import 'tailwindcss'` with no `@theme`/`@config`), so the site silently fell back to stock Tailwind palettes. **The token port in §2.2 is what prevents that drift; it is a build gate, not a nice-to-have.**
 
 ---
 
@@ -87,16 +87,25 @@ The old v3 `theme.extend` **overrode** stock palettes; classes like `border-gray
 | Framework | Vue **3.5** + TS, `<script setup lang="ts">` in **every** SFC | Options API stragglers (web2 has 3) |
 | Build | **Vite** (current major) + `vue-tsc` type-check in `build` | — |
 | CSS | **Tailwind v4 via `@tailwindcss/vite`**, tokens in `@theme` (§2.2) | v4-via-PostCSS (web2's setup — works, but the Vite plugin is the first-party path); v3 |
-| Router | vue-router 4, `createWebHistory`, lazy route imports | — |
-| HTTP + types | **openapi-fetch** + the committed **openapi-typescript** output (§6) | axios (both old apps: per-call instances, zero generics — the type gap this rebuild deletes); Orval/Hey-API (07 §7 already rejected) |
-| State | **No store library.** URL query is the source of truth for every list/tab/pagination state; component-local `ref`/`computed` for the rest; shared logic in small composables | Pinia (nothing here is cross-page client state; a read-only site whose canonical state is the URL doesn't need a store — add it later if a real one appears) |
-| Lint/format | ESLint 9 flat config (web2's: `@eslint/js` + `eslint-plugin-vue` flat/recommended + typescript-eslint + Prettier-compat); Prettier with a normal `printWidth` (100) | the old repo's `printWidth: 1200` one-liner format; lint script with no config |
-| tsconfig | web2's strict set: `strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `noUnusedLocals/Parameters`, `noImplicitReturns`; `@` → `./src` | — |
+| Router | vue-router (current major — v5 at time of writing), `createWebHistory`, lazy route imports | pinning v4 |
+| HTTP + types | **openapi-fetch** + the committed **openapi-typescript** output (§6) | axios (both old apps: per-call instances, zero generics — the type gap this rebuild deletes); Orval/Hey-API (07 §7 already rejected); a hand-written fetch wrapper (taillight's pattern — right instinct, but the generated schema gives the same thin-typed-fetch shape *plus* the CI contract lock for free) |
+| State | **No store library.** URL query is the source of truth for every list/tab/pagination state; component-local `ref`/`computed` for the rest; shared logic in small composables — with the repeated list plumbing unified in one generic composable (§9.1), taillight's factory discipline applied at composable altitude | Pinia (nothing here is cross-page client state; a read-only site whose canonical state is the URL doesn't need a store — add it later if a real one appears) |
+| Lint/format | ESLint (current major) flat config: `@eslint/js` + `eslint-plugin-vue` flat/recommended + typescript-eslint + Prettier-compat; Prettier with a normal `printWidth` (100). **`vue-tsc` type-check is the blocking gate; ESLint errors block, warnings are advisory** (`--quiet` in the gate, full run in `make frontend-check`) | the old repo's `printWidth: 1200` one-liner format; lint script with no config |
+| tsconfig | strict-plus: `strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `noUnusedLocals/Parameters`, `noImplicitReturns`, `verbatimModuleSyntax`; **project-references split** (`tsconfig.app.json` browser/DOM + `@/*` alias, `tsconfig.node.json` vite config only); `@` → `./src` | one flat tsconfig mixing node + browser worlds |
 | Tests | **Vitest** + `@vue/test-utils` + jsdom (§11) | — |
 | SSR/SSG | **None** — SPA, as today. The API is CDN-cached public data; SEO is served by static meta + sitemap + per-route titles as today | Nuxt (a rebuild-the-world move; violates "modernize, don't redesign") |
 | Rendering-time deps | `aos` (§2.1). Nothing else — no UI kit, no chart lib (all bars/trackers stay hand-built divs, exactly the current look) | headlessui/chart.js |
 
 Node tooling roots at `frontend/` (own `package.json`); the root `Makefile` gains `frontend-dev`, `frontend-build`, `frontend-test`, `frontend-lint` targets that `cd frontend && …`, keeping Make the universal interface.
+
+### 3.1 Code conventions (adopted from taillight)
+
+- **Component idioms:** type-only `defineProps<{…}>()` with `withDefaults` for optionals; type-only tuple `defineEmits<{ select: [value: string] }>()`; `defineModel<T>()` for two-way binding (no manual `modelValue`/`update:` plumbing); SFC block order `<script setup lang="ts">` → `<template>` → optional `<style scoped>` (scoped CSS for transitions/keyframes only — everything else is utility classes).
+- **Naming:** PascalCase SFCs; pages suffixed by role (this repo keeps the existing page names); shared primitives stay small and flat (`StatusIcon`, `RatingBadge`, `LoadingSpinner`) — no formal `ui/` kit until duplication demands one.
+- **Status→class maps are centralized**, never inline ternaries scattered across templates: the §7.2 table lives in one module (`utils/status.ts`) exporting `statusIcon(value)` / `statusTextClass(value)` / `statusBorderClass(value)`; the rating thresholds live in `utils/rating.ts`. One place to audit visual-contract compliance.
+- **Typed route meta:** `env.d.ts` augments vue-router's `RouteMeta` with the `title`/`description` fields the §9.6 guard consumes.
+- **A11y baseline:** `role`/`aria-*` on interactive elements (toggles, accordion, pagination), `prefers-reduced-motion` respected globally (AOS already honors it via its disable hook; the `.pulse` keyframe gets a media-query guard). Non-visual, so fidelity-safe.
+- **Flat type-based folders (§4) are a deliberate fit, not a default:** at this app's size (~60–70 files) prefix naming carries structure; feature folders are the escape hatch if it ever grows past taillight scale (~130 files), not a day-1 abstraction.
 
 ---
 
@@ -116,7 +125,7 @@ frontend/
     │   ├── problem.ts         # RFC 9457 parsing → typed ApiProblem (§6.3)
     │   └── index.ts           # narrow per-resource call helpers (§6.2)
     ├── composables/
-    │   ├── useCursorPager.ts  # §9.1
+    │   ├── useCursorList.ts   # §9.1 — the one generic list-page engine
     │   ├── usePageMeta.ts     # route-meta titles (§9.6)
     │   └── useVisitorIp.ts    # GET /ip (§9.5)
     ├── components/            # DomainTable, ChangelogTable, Pagination, Tracker,
@@ -127,6 +136,7 @@ frontend/
     │                          # PageIllustration (hex), icons/
     ├── pages/                 # one SFC per §5 route
     ├── utils/
+    │   ├── status.ts          # §7.2 status→icon/class maps (single source, §3.1)
     │   ├── rating.ts          # percent → badge/gradient classes (§2.1 thresholds)
     │   ├── date.ts            # Intl.DateTimeFormat en-GB "DD Month YYYY HH:MM"
     │   └── changelog.ts       # (field, old, new) → message + color (§7.4)
@@ -134,6 +144,8 @@ frontend/
         ├── style.css          # @import 'tailwindcss' + @theme + @layer components (§2.2)
         └── theme.css          # hamburger/pulse/AOS extras
 ```
+
+Tests are **colocated** in per-folder `__tests__/` directories (`components/__tests__/`, `composables/__tests__/`, `utils/__tests__/`, …) — never a top-level `test/` tree (taillight convention; keeps a unit next to what it locks).
 
 Deleted relative to the old repos (never ported): the axios `services/` layer, `types/` namespaces (replaced by generated types), web2's speculative composables (`useCache`, `useCachedApi`, `useAsyncData`, `usePagination`, `useSearch`, `useToggle`, `useErrorHandler` — the browser HTTP cache plus §6 replaces all of them), Alpine remnants (`x-data`, `[x-cloak]`), `ensureTrailingSlash` (§5), unused `HomeMetric.vue`/wave `PageIllustration.vue`/`Dropdown.vue`, `range-slider.css`/`toggle-switch.css`, the stray `import { off } from "process"`.
 
@@ -173,13 +185,15 @@ Route conventions (from web2, kept): per-route `meta: { title, description }` co
 
 Environments: `.env.development` → `http://localhost:8080` (the API's dev bind, 07 §1.1); `.env.production` → `https://api.whynoipv6.com`. The client sends no auth, no custom headers; conditional-request/ETag revalidation is left entirely to the browser HTTP cache (the API's `Cache-Control`/`ETag` design, 07 §6.1, makes a client-side cache layer redundant — this deletes web2's `useCache` machinery).
 
+Request discipline (taillight's fetch-layer conventions, applied to the openapi-fetch client via its middleware/init hooks): every request carries `AbortSignal.timeout(15_000)` by default; list helpers accept an external `signal` so `useCursorList` (§9.1) can cancel a superseded page fetch instead of racing it. No retry layer and no client cache — the CDN and browser cache are the resilience story. *Rejected — runtime config injection (`window.__CONFIG__`)*: build-once-run-anywhere is the right call for a multi-environment Docker fleet (taillight), but this site ships as one static bundle to one origin; build-time `VITE_API_URL` is simpler and sufficient. Revisit only if containerized multi-env deploys appear.
+
 ### 6.2 Call helpers
 
 `src/api/index.ts` exports narrow, typed helpers per resource (`getDomain(host)`, `listTier(tier, params)`, `getOverviewStats()`, …) — thin wrappers over the client so pages never build paths inline and tests can stub one seam. Envelope handling is uniform (07 §2.4): item collections are `{ items, page, meta }`, time series are `{ points, meta }`, single resources carry sibling `meta`. Helpers return the typed body; `error` results are converted via §6.3.
 
 ### 6.3 Errors — RFC 9457
 
-Every non-2xx is `application/problem+json` (07 §2.5). `problem.ts` parses it into `ApiProblem { type, title, status, detail }` keyed by the type-URI tail (`not-found`, `rate-limited`, …). Page policy:
+Every non-2xx is `application/problem+json` (07 §2.5). `problem.ts` parses it into a typed **`ApiProblem extends Error`** class (taillight's `ApiError` shape) carrying `{ type, title, status, detail }`, keyed by the type-URI tail (`not-found`, `rate-limited`, …) so call sites discriminate with `instanceof` + a string enum, never by re-parsing bodies. Page policy:
 
 - `not-found` on a detail route → redirect to the sibling `…/not-found` page (domain/campaign-domain) or render the inline empty state (country/campaign).
 - Zero-result lists are `200` with empty `items` (07 §2.6) — rendered as the existing empty states ("No domains found", "No changes yet"), **never** treated as errors.
@@ -269,9 +283,27 @@ Every page keeps its current copy, section order, and AOS attributes. Only data 
 
 ## 9. Cross-cutting behaviors
 
-### 9.1 Cursor pagination (`useCursorPager` + `Pagination`)
+### 9.1 The generic list engine (`useCursorList<T>` + `Pagination`)
 
-The visible control is unchanged: Previous/Next buttons. The mechanics map 1:1 onto the API's page block (07 §2.4): Next → `page.next_cursor`, enabled iff `has_more`; Previous → `page.prev_cursor`, enabled iff non-null. The active cursor lives in `?cursor=` (URL = source of truth; back/forward and reload just work). A `400 invalid-parameter` on a stale/foreign cursor (07 §3.2) resets to page 1 silently. `meta.count_estimate` is available to the pager but unused in phase 1 (no count is displayed today).
+Five pages repeat the same plumbing (domain list, country detail, campaign detail, changelog, search): fetch a cursor-paged collection, sync cursor + filter state with the URL, expose loading/empty/error, cancel superseded fetches. Taillight's core lesson — **one deep, tested generic instead of N drifting copies** (its `createEventStore`/`createFilterStore` factories) — applies here at composable altitude:
+
+```ts
+function useCursorList<T>(opts: {
+  fetch: (params: { cursor?: string; [k: string]: string | undefined },
+          signal: AbortSignal) => Promise<ItemCollection<T>>,
+  filterKeys?: string[],          // e.g. ['filter'] — synced to URL query alongside cursor
+}): { items, page, meta, loading, error, next(), prev(), setFilter(k, v) }
+```
+
+Behavior contract:
+
+- **URL is the source of truth.** `?cursor=` and each `filterKeys` entry two-way-sync with `route.query` (watch query→state and state→`router.replace`, with a sync guard against the feedback loop — taillight's filter-store pattern). Back/forward and reload just work; changing a filter clears the cursor.
+- **Pagination maps 1:1 onto the API page block** (07 §2.4): Next → `page.next_cursor`, enabled iff `has_more`; Previous → `page.prev_cursor`, enabled iff non-null. The visible control is unchanged (Previous/Next buttons).
+- **Superseded fetches are aborted** via `AbortController` (§6.1), never raced.
+- A `400 invalid-parameter` on a stale/foreign cursor (07 §3.2) resets to page 1 silently.
+- `meta.count_estimate` is exposed but unused in phase 1 (no count is displayed today).
+
+This is the one genuinely deep frontend module; it gets the densest test coverage (§11) and every list page becomes ~10 lines of config over it.
 
 ### 9.2 Loading / empty / error states
 
@@ -311,15 +343,16 @@ Same visual language (§2), each independently shippable; none block the DNS fli
 
 ## 11. Testing
 
-Vitest + `@vue/test-utils` + jsdom; API stubbed at the §6.2 helper seam (no live network). Priority coverage — the mapping layer, where regressions are silent:
+Vitest + `@vue/test-utils`; API stubbed at the §6.2 helper seam (no live network, no MSW — the helpers are the injection seam, taillight-style). **Test environment is `node` by default for speed; DOM tests opt in per file with `// @vitest-environment jsdom`.** Tests live colocated per §4. Priority coverage — the mapping layer, where regressions are silent:
 
-1. `StatusIcon`: all five §7.2 states → icon/class/tooltip.
+1. `utils/status.ts` + `StatusIcon`: all five §7.2 states → icon/class/tooltip.
 2. `utils/changelog.ts`: message + color table (§7.4) — golden table-driven cases per (field, new_value).
-3. `useCursorPager`: next/prev enablement from `page`, URL sync, stale-cursor reset.
+3. `useCursorList`: next/prev enablement from `page`, URL two-way sync + loop guard, filter-change cursor reset, stale-cursor reset, superseded-fetch abort.
 4. `utils/rating.ts`: threshold boundaries (0/40/60, zero-total Unknown).
 5. `RatingStars`: star count across enum combinations (incl. `not_applicable` scoring 0).
 6. `Tracker`: day-block coloring from history points; empty-history rendering.
 7. One mount smoke test per page with stubbed helpers (renders, no console errors).
+8. **Cross-language contract goldens** (taillight's strongest test idea, cheap in this monorepo): a `__tests__` file imports the backend's committed golden JSON fixtures by relative path and (a) assigns them to the generated `schema.ts` wire types — drift fails `vue-tsc`; (b) runtime-asserts no undeclared keys. This locks the *actual handler output* to the frontend types, complementing the spec-level drift gate (07 §7) which only locks both sides to `openapi.yaml`.
 
 Type safety is itself a gate: `vue-tsc` runs in `build`, and the generated `schema.ts` types make backend contract drift a compile error — that replaces the old world's absent API tests.
 
@@ -330,7 +363,7 @@ Type safety is itself a gate: `vue-tsc` runs in `build`, and the generated `sche
 - **Envs:** `VITE_API_URL` — development `http://localhost:8080`, production `https://api.whynoipv6.com`. No other runtime config.
 - **Build:** `vite build` (with `vue-tsc`) → static `dist/`. Sensible default chunking; revisit web2's manualChunks only if bundle analysis shows a need.
 - **Serve:** static nginx vhost for `whynoipv6.com` (deploy/nginx, 09-ops.md): SPA fallback `try_files $uri $uri/ /index.html`, gzip/brotli, long-cache hashed assets. Cutover remains a DNS flip (08-migration-cutover.md).
-- **Make targets (root):** `frontend-dev`, `frontend-build`, `frontend-test`, `frontend-lint`; `make generate` already regenerates `openapi/schema.ts`, which CI drift-gates (07 §7).
+- **Make targets (root):** `frontend-dev`, `frontend-build`, `frontend-test`, `frontend-lint`, `frontend-check`; `make generate` already regenerates `openapi/schema.ts`, which CI drift-gates (07 §7). `frontend-lint` is the **blocking gate** = `vue-tsc` type-check + `eslint --quiet` (errors only) + `prettier --check`; `frontend-check` is the advisory full-warning ESLint run (taillight's gate split, §3).
 
 ---
 
