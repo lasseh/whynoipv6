@@ -36,6 +36,7 @@ CROSS JOIN LATERAL (
   SELECT cl.ts, cl.domain_id, cl.field, cl.old_value, cl.new_value
   FROM changelog cl
   WHERE cl.domain_id = m.domain_id
+    AND cl.ts >= now() - INTERVAL '90 days'
   ORDER BY cl.ts DESC, cl.field DESC
   LIMIT 50
 ) sub
@@ -87,6 +88,7 @@ SELECT cl.ts, d.host, cl.field, cl.old_value, cl.new_value
 FROM changelog cl
 JOIN domain d ON d.id = cl.domain_id
 JOIN campaign_domain cd ON cd.domain_id = cl.domain_id AND cd.campaign_id = $1
+WHERE cl.ts >= now() - INTERVAL '90 days'
 ORDER BY cl.ts DESC, cl.domain_id DESC, cl.field DESC
 LIMIT 50
 `
@@ -130,6 +132,7 @@ const ChangelogByCountry = `-- name: ChangelogByCountry :many
 SELECT cl.ts, d.host, cl.field, cl.old_value, cl.new_value
 FROM changelog cl JOIN domain d ON d.id = cl.domain_id
 WHERE d.country_id = $1
+  AND cl.ts >= now() - INTERVAL '90 days'
 ORDER BY cl.ts DESC, cl.domain_id DESC, cl.field DESC
 LIMIT 50
 `
@@ -146,7 +149,9 @@ type ChangelogByCountryRow struct {
 // feeds are builder-built in internal/postgres/changeloglist.go (05-schema
 // §10.2 — one seek builder derives both walk directions); the scoped
 // country/campaign feeds below are capped to the latest-50 recent window
-// (OPEN-15 guardrail) and stay sqlc.
+// (OPEN-15 guardrail) and stay sqlc. The 90-day ts floor makes the window
+// real: without it a sparse scope walks past the 60d columnstore boundary
+// (no btree there) and can decompress the whole forever-retained table.
 func (q *Queries) ChangelogByCountry(ctx context.Context, countryID int32) ([]ChangelogByCountryRow, error) {
 	rows, err := q.db.Query(ctx, ChangelogByCountry, countryID)
 	if err != nil {

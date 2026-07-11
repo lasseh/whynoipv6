@@ -602,9 +602,13 @@ CALL add_columnstore_policy('scan_detail', after => INTERVAL '3 days');
 SELECT add_retention_policy('scan_detail', drop_after => INTERVAL '90 days');
 
 -- changelog: ~1-3k rows/day, kept FOREVER — no retention policy.
+-- orderby leads with domain_id: the compressed-chunk readers are per-domain
+-- (§4.9 replay, scoped lateral feeds), so batches must co-locate a domain's
+-- rows for minmax pruning. The global latest-50 feed never needs compressed
+-- chunks — it lives in the 60d uncompressed window via idx_changelog_ts.
 SELECT create_hypertable('changelog', by_range('ts', INTERVAL '30 days'));
 ALTER TABLE changelog SET (timescaledb.enable_columnstore,
-                           timescaledb.orderby = 'ts DESC, domain_id');
+                           timescaledb.orderby = 'domain_id, ts DESC');
 CALL add_columnstore_policy('changelog', after => INTERVAL '60 days');
 
 -- crawler_metrics: Grafana-only checkpoints; no columnstore (tiny), 90d retention.
@@ -646,9 +650,11 @@ SELECT add_continuous_aggregate_policy('scan_daily_adoption',
   start_offset      => INTERVAL '3 days',
   end_offset        => INTERVAL '1 hour',
   schedule_interval => INTERVAL '1 hour');
+-- country_id leads the orderby (too sparse for segmentby — ~1 row/country/day):
+-- each country's series compresses contiguously and per-country reads prune.
 ALTER MATERIALIZED VIEW scan_daily_adoption
   SET (timescaledb.enable_columnstore,
-       timescaledb.orderby = 'day DESC, country_id');
+       timescaledb.orderby = 'country_id, day DESC');
 CALL add_columnstore_policy('scan_daily_adoption', after => INTERVAL '90 days');
 ```
 
