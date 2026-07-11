@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	sq "github.com/Masterminds/squirrel"
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -52,22 +51,7 @@ func ListASNLeaderboard(ctx context.Context, pool *pgxpool.Pool, nameQuery strin
 		q = q.Where(fmt.Sprintf("(%s, number) %s (?, ?)", col, cmp), seek.Count, seek.Number)
 	}
 
-	sqlText, args, err := q.
-		OrderBy(fmt.Sprintf("%s %s, number %s", col, dir, dir)).
-		Limit(uint64(limit + 1)).ToSql()
-	if err != nil {
-		return nil, fmt.Errorf("build asn leaderboard: %w", err)
-	}
-	rows, err := pool.Query(ctx, sqlText, args...)
-	if err != nil {
-		return nil, fmt.Errorf("asn leaderboard: %w", err)
-	}
-	out, err := pgx.CollectRows(rows, pgx.RowToStructByName[ASNRow])
-	if err != nil {
-		return nil, fmt.Errorf("asn leaderboard scan: %w", err)
-	}
-	if backward { // ASC fetch → re-reverse into leaderboard order
-		reverseRows(out)
-	}
-	return out, nil
+	return collectKeysetRows[ASNRow](ctx, pool,
+		q.OrderBy(fmt.Sprintf("%s %s, number %s", col, dir, dir)).Limit(uint64(limit+1)),
+		backward, "asn leaderboard")
 }

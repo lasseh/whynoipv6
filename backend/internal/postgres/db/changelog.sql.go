@@ -29,6 +29,59 @@ func (q *Queries) CampaignHasMember(ctx context.Context, arg CampaignHasMemberPa
 	return column_1, err
 }
 
+const ChangelogAnyCampaign = `-- name: ChangelogAnyCampaign :many
+SELECT sub.ts, d.host, sub.field, sub.old_value, sub.new_value
+FROM (SELECT DISTINCT domain_id FROM campaign_domain) m
+CROSS JOIN LATERAL (
+  SELECT cl.ts, cl.domain_id, cl.field, cl.old_value, cl.new_value
+  FROM changelog cl
+  WHERE cl.domain_id = m.domain_id
+  ORDER BY cl.ts DESC, cl.field DESC
+  LIMIT 50
+) sub
+JOIN domain d ON d.id = sub.domain_id
+ORDER BY sub.ts DESC, sub.domain_id DESC, sub.field DESC
+LIMIT 50
+`
+
+type ChangelogAnyCampaignRow struct {
+	Ts       pgtype.Timestamptz `json:"ts"`
+	Host     string             `json:"host"`
+	Field    string             `json:"field"`
+	OldValue Ipv6Status         `json:"old_value"`
+	NewValue Ipv6Status         `json:"new_value"`
+}
+
+// The ?scope=campaign global feed (07 §4.8): transitions of domains in ANY
+// campaign. Driven from the bounded campaign_domain set via a lateral read
+// of the (domain_id, ts, field) PK — never a sparse probe of the global ts
+// index. Same latest-50 recent-window cap as the other scoped feeds.
+func (q *Queries) ChangelogAnyCampaign(ctx context.Context) ([]ChangelogAnyCampaignRow, error) {
+	rows, err := q.db.Query(ctx, ChangelogAnyCampaign)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ChangelogAnyCampaignRow{}
+	for rows.Next() {
+		var i ChangelogAnyCampaignRow
+		if err := rows.Scan(
+			&i.Ts,
+			&i.Host,
+			&i.Field,
+			&i.OldValue,
+			&i.NewValue,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const ChangelogByCampaign = `-- name: ChangelogByCampaign :many
 SELECT cl.ts, d.host, cl.field, cl.old_value, cl.new_value
 FROM changelog cl
@@ -103,59 +156,6 @@ func (q *Queries) ChangelogByCountry(ctx context.Context, countryID int32) ([]Ch
 	items := []ChangelogByCountryRow{}
 	for rows.Next() {
 		var i ChangelogByCountryRow
-		if err := rows.Scan(
-			&i.Ts,
-			&i.Host,
-			&i.Field,
-			&i.OldValue,
-			&i.NewValue,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const ChangelogCampaignScope = `-- name: ChangelogCampaignScope :many
-SELECT sub.ts, d.host, sub.field, sub.old_value, sub.new_value
-FROM (SELECT DISTINCT domain_id FROM campaign_domain) m
-CROSS JOIN LATERAL (
-  SELECT cl.ts, cl.domain_id, cl.field, cl.old_value, cl.new_value
-  FROM changelog cl
-  WHERE cl.domain_id = m.domain_id
-  ORDER BY cl.ts DESC, cl.field DESC
-  LIMIT 50
-) sub
-JOIN domain d ON d.id = sub.domain_id
-ORDER BY sub.ts DESC, sub.domain_id DESC, sub.field DESC
-LIMIT 50
-`
-
-type ChangelogCampaignScopeRow struct {
-	Ts       pgtype.Timestamptz `json:"ts"`
-	Host     string             `json:"host"`
-	Field    string             `json:"field"`
-	OldValue Ipv6Status         `json:"old_value"`
-	NewValue Ipv6Status         `json:"new_value"`
-}
-
-// The ?scope=campaign global feed (07 §4.8): transitions of domains in ANY
-// campaign. Driven from the bounded campaign_domain set via a lateral read
-// of the (domain_id, ts, field) PK — never a sparse probe of the global ts
-// index. Same latest-50 recent-window cap as the other scoped feeds.
-func (q *Queries) ChangelogCampaignScope(ctx context.Context) ([]ChangelogCampaignScopeRow, error) {
-	rows, err := q.db.Query(ctx, ChangelogCampaignScope)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ChangelogCampaignScopeRow{}
-	for rows.Next() {
-		var i ChangelogCampaignScopeRow
 		if err := rows.Scan(
 			&i.Ts,
 			&i.Host,

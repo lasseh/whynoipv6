@@ -220,9 +220,11 @@ type ResourceDiscoveryDetail struct {
 	TotalHosts *int     `json:"total_hosts,omitempty"`
 }
 
-// newDetail returns the empty detail struct for a check name — the dispatch
-// table shared by ScanResult.UnmarshalJSON and the runner's synthesized
-// results. Unknown names fall back to the bare CommonDetail.
+// newDetail returns the empty detail struct for a check name — the
+// UnmarshalJSON re-typing dispatch. Unknown names fall back to the bare
+// CommonDetail. The name↔type pairing lives here AND in each accessor's
+// type argument below; detailOf reports drift between the two as a missing
+// detail (ok=false) instead of a silent zero value.
 func newDetail(name string) Detail {
 	switch name {
 	case NameDNSAAAABase, NameDNSAAAAWWW:
@@ -295,18 +297,23 @@ func (sr *ScanResult) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-// detailOf is the one place the name↔type pairing and the assertion live.
-// A missing check reports (StatusError, zero, false) — the §7.3 rule-7
+// detailOf pairs a check name with its detail type for the accessors. A
+// missing check reports (StatusError, zero, false) — the §7.3 rule-7
 // defensive default. A runner-synthesized result (skip/panic/cancel)
 // carries a bare *CommonDetail; it is folded into the check's own struct so
-// callers see one type on every path.
+// callers see one type on every path. Any OTHER concrete type means the
+// accessor's type argument and newDetail's dispatch have drifted — reported
+// as ok=false, never a silent zero detail.
 func detailOf[D any](sr ScanResult, name string) (CheckStatus, D, bool) {
 	var zero D
 	r, ok := sr.Results[name]
 	if !ok {
 		return StatusError, zero, false
 	}
-	if d, ok := any(r.Detail).(*D); ok && d != nil {
+	if r.Detail == nil {
+		return r.Status, zero, true
+	}
+	if d, ok := any(r.Detail).(*D); ok {
 		return r.Status, *d, true
 	}
 	if cd, ok := any(r.Detail).(*CommonDetail); ok {
@@ -315,7 +322,7 @@ func detailOf[D any](sr ScanResult, name string) (CheckStatus, D, bool) {
 		}
 		return r.Status, zero, true
 	}
-	return r.Status, zero, true
+	return r.Status, zero, false
 }
 
 // AAAABase returns the dns_aaaa_base result.

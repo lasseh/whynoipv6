@@ -156,11 +156,9 @@ func (r *Runner) Run(ctx context.Context, host string, kind Kind) ScanResult {
 
 	// Record skipped checks.
 	for name, reason := range skipReasons {
-		d := newDetail(name)
-		d.common().Reason = reason
 		results.Store(name, Result{
 			Status: StatusNotApplicable,
-			Detail: d,
+			Detail: &CommonDetail{Reason: reason},
 		})
 	}
 
@@ -207,22 +205,18 @@ func (r *Runner) runCheck(ctx context.Context, host string, kind Kind, c Checker
 				"check", c.Name(),
 				"panic", fmt.Sprintf("%v", rec),
 			)
-			d := newDetail(c.Name())
-			d.common().Error = fmt.Sprintf("internal error: %v", rec)
 			results.Store(c.Name(), Result{
 				Status:  StatusError,
-				Detail:  d,
+				Detail:  &CommonDetail{Error: fmt.Sprintf("internal error: %v", rec)},
 				Latency: time.Since(start),
 			})
 		}
 	}()
 
 	if ctx.Err() != nil {
-		d := newDetail(c.Name())
-		d.common().Error = "scan cancelled"
 		results.Store(c.Name(), Result{
 			Status: StatusError,
-			Detail: d,
+			Detail: &CommonDetail{Error: "scan cancelled"},
 		})
 		return
 	}
@@ -235,11 +229,9 @@ func (r *Runner) runCheck(ctx context.Context, host string, kind Kind, c Checker
 			"error", err,
 			"duration", time.Since(start),
 		)
-		d := newDetail(c.Name())
-		d.common().Error = err.Error()
 		results.Store(c.Name(), Result{
 			Status:  StatusError,
-			Detail:  d,
+			Detail:  &CommonDetail{Error: err.Error()},
 			Latency: time.Since(start),
 		})
 		return

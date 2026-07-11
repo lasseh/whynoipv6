@@ -250,7 +250,7 @@ func (s *Server) countryFeedScope(w http.ResponseWriter, r *http.Request) (*feed
 	return &feedScope{
 		Title:   "WhyNoIPv6 — " + c.Name,
 		ListURL: s.opts.PublicBaseURL + "/countries/" + strings.TrimSpace(c.Code) + "/changelog",
-		Items:   changelogWindowItems(rows),
+		Items:   scopedFeedItems(rows),
 	}, true
 }
 
@@ -267,7 +267,7 @@ func (s *Server) campaignFeedScope(w http.ResponseWriter, r *http.Request) (*fee
 	return &feedScope{
 		Title:   "WhyNoIPv6 — " + row.Name,
 		ListURL: s.opts.PublicBaseURL + "/campaigns/" + chi.URLParam(r, "uuid") + "/changelog",
-		Items:   changelogCampaignItems(rows),
+		Items:   scopedFeedItems(rows),
 	}, true
 }
 

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -100,8 +101,13 @@ func DecodeCursor(token, wantSort, wantFingerprint string, currentG int32) (*Cur
 	if err != nil {
 		return nil, fmt.Errorf("%w: not base64url", ErrCursorInvalid)
 	}
+	// UseNumber: the changelog seek carries ts.UnixNano() (~1.8e18), which
+	// float64 decoding would round to 256 ns — repeating or skipping rows at
+	// the page boundary. json.Number keeps the tuple exact.
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.UseNumber()
 	var c Cursor
-	if err := json.Unmarshal(raw, &c); err != nil || c.V != 1 {
+	if err := dec.Decode(&c); err != nil || c.V != 1 {
 		return nil, fmt.Errorf("%w: malformed token", ErrCursorInvalid)
 	}
 	if c.S != wantSort {
@@ -337,6 +343,9 @@ func trimWindow[T any](rows []T, limit int, backward, positioned bool) (trimmed 
 
 func jsonInt32(v any) (int32, bool) {
 	switch n := v.(type) {
+	case json.Number:
+		i, err := n.Int64()
+		return int32(i), err == nil
 	case float64:
 		return int32(n), true
 	case int32:
@@ -352,6 +361,9 @@ func jsonInt32(v any) (int32, bool) {
 
 func jsonInt64(v any) (int64, bool) {
 	switch n := v.(type) {
+	case json.Number:
+		i, err := n.Int64()
+		return i, err == nil
 	case float64:
 		return int64(n), true
 	case int64:

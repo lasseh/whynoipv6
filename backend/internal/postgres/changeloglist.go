@@ -6,7 +6,6 @@ import (
 	"time"
 
 	sq "github.com/Masterminds/squirrel"
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -70,20 +69,6 @@ func ListChangelog(ctx context.Context, pool *pgxpool.Pool, f *ChangelogFilter,
 			seek.TS, seek.Domain, seek.Field)
 	}
 
-	sqlText, args, err := q.OrderBy(order).Limit(uint64(limit + 1)).ToSql()
-	if err != nil {
-		return nil, fmt.Errorf("build changelog list: %w", err)
-	}
-	rows, err := pool.Query(ctx, sqlText, args...)
-	if err != nil {
-		return nil, fmt.Errorf("changelog list: %w", err)
-	}
-	out, err := pgx.CollectRows(rows, pgx.RowToStructByName[ChangelogRow])
-	if err != nil {
-		return nil, fmt.Errorf("changelog list scan: %w", err)
-	}
-	if backward { // ASC fetch → re-reverse into the ts-DESC feed order
-		reverseRows(out)
-	}
-	return out, nil
+	return collectKeysetRows[ChangelogRow](ctx, pool,
+		q.OrderBy(order).Limit(uint64(limit+1)), backward, "changelog list")
 }

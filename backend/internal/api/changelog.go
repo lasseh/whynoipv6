@@ -83,12 +83,14 @@ func (s *Server) listChangelog(w http.ResponseWriter, r *http.Request) {
 	case "":
 		s.serveChangelogFeed(w, r, nil)
 	case "campaign":
-		rows, err := s.q.ChangelogCampaignScope(r.Context())
+		// A fixed recent window like the scoped feeds: field/from/to/limit/
+		// format are ignored (documented on the OpenAPI scope param).
+		rows, err := s.q.ChangelogAnyCampaign(r.Context())
 		if err != nil {
 			InternalError(w, r, err)
 			return
 		}
-		s.writeRecentWindow(w, r, changelogScopeItems(rows))
+		s.writeRecentWindow(w, r, scopedFeedItems(rows))
 	default:
 		ValidationError(w, r, []FieldError{{Field: "scope", Reason: "must be campaign"}})
 	}
@@ -227,7 +229,7 @@ func (s *Server) listCountryChangelog(w http.ResponseWriter, r *http.Request) {
 		InternalError(w, r, err)
 		return
 	}
-	s.writeRecentWindow(w, r, changelogWindowItems(rows))
+	s.writeRecentWindow(w, r, scopedFeedItems(rows))
 }
 
 // listCampaignChangelog is GET /campaigns/{uuid}/changelog — same recent
@@ -242,7 +244,7 @@ func (s *Server) listCampaignChangelog(w http.ResponseWriter, r *http.Request) {
 		InternalError(w, r, err)
 		return
 	}
-	s.writeRecentWindow(w, r, changelogCampaignItems(rows))
+	s.writeRecentWindow(w, r, scopedFeedItems(rows))
 }
 
 // listCampaignDomainChangelog is GET /campaigns/{uuid}/domains/{host}/
@@ -298,34 +300,16 @@ func (s *Server) writeRecentWindow(w http.ResponseWriter, r *http.Request, items
 	WriteJSON(w, http.StatusOK, ListEnvelope{Items: items, Page: Page{}, Meta: NewMeta(asOf, generation)})
 }
 
-func changelogWindowItems(rows []db.ChangelogByCountryRow) []ChangelogItem {
+// scopedFeedItems maps a scoped recent-window result — the country,
+// per-campaign, and any-campaign row types are field-identical — into wire
+// items via one struct conversion.
+func scopedFeedItems[R db.ChangelogByCountryRow | db.ChangelogByCampaignRow | db.ChangelogAnyCampaignRow](rows []R) []ChangelogItem {
 	items := make([]ChangelogItem, len(rows))
 	for i := range rows {
+		row := db.ChangelogByCountryRow(rows[i])
 		items[i] = ChangelogItem{
-			TS: rows[i].Ts.Time.UTC(), Host: rows[i].Host, Field: rows[i].Field,
-			OldValue: string(rows[i].OldValue), NewValue: string(rows[i].NewValue),
-		}
-	}
-	return items
-}
-
-func changelogCampaignItems(rows []db.ChangelogByCampaignRow) []ChangelogItem {
-	items := make([]ChangelogItem, len(rows))
-	for i := range rows {
-		items[i] = ChangelogItem{
-			TS: rows[i].Ts.Time.UTC(), Host: rows[i].Host, Field: rows[i].Field,
-			OldValue: string(rows[i].OldValue), NewValue: string(rows[i].NewValue),
-		}
-	}
-	return items
-}
-
-func changelogScopeItems(rows []db.ChangelogCampaignScopeRow) []ChangelogItem {
-	items := make([]ChangelogItem, len(rows))
-	for i := range rows {
-		items[i] = ChangelogItem{
-			TS: rows[i].Ts.Time.UTC(), Host: rows[i].Host, Field: rows[i].Field,
-			OldValue: string(rows[i].OldValue), NewValue: string(rows[i].NewValue),
+			TS: row.Ts.Time.UTC(), Host: row.Host, Field: row.Field,
+			OldValue: string(row.OldValue), NewValue: string(row.NewValue),
 		}
 	}
 	return items

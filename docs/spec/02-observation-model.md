@@ -8,7 +8,7 @@ _Status: Round 3.0 — API redesign folded in (docs/api-design-research.md, deci
 
 - `internal/consensus` — the multi-resolver quorum wrapper implementing the `checker.AAAAResolver` seam: provider fan-out, symbol reduction, quorum, conditional A lookup, per-provider token buckets, fast-lane breaker, provider breaker + canary.
 - `internal/checker` seam types consumed by `internal/consensus`: `AAAAAnswer`, `QuorumInfo`, `ErrQuorumInconsistent`, `AAAAResolver` (the types live in package `checker`; their implementation lives in `consensus`).
-- `internal/crawler/observe.go` — the Result→observation mapper (`MapObservations`), including the `conn` composition function and the `resources` roll-up.
+- `internal/observe` — the Result→observation mapper (`MapObservations`), including the `conn` composition function and the `resources` roll-up.
 - `internal/domain/observation.go` — the Go `Observation` enum and its helper predicates (pure, zero deps).
 
 **Companion files:** 01-engine.md (engine lift, adapted check internals, self-preflight, `resource_discovery`), 03-state-machine.md (what happens to an observation: confirm/pending commit, dead signal, classification, scan/scan_detail assembly), 04-lifecycle-scheduling.md (recheck pull-ins consuming `inconsistent`/`error` and the fast-lane breaker state), 05-schema.md (all DDL: `observation`/`ipv6_status` enums, `domain`, `scan`, `resource_host`, `domain_resource`), 09-ops.md (config-key registry), 00-overview.md (sizing constants), 10-testing.md (fixtures and acceptance tests).
@@ -527,7 +527,7 @@ The observation then enters the commit machinery unchanged (N=3; 03-state-machin
 
 ---
 
-## 7. The Result→observation mapper — `internal/crawler/observe.go`
+## 7. The Result→observation mapper — `internal/observe`
 
 The mapper is the only code that converts `checker.ScanResult` (engine vocabulary) into `domain.Observation` values (observation vocabulary). It is a pure function of its inputs; it performs no I/O except that its `resources` input set is produced by the read-only, pre-commit roll-up query (§6) executed by the caller before the commit batch is built.
 

@@ -43,6 +43,11 @@ type Querier interface {
 	CampaignRemoveMembersNotIn(ctx context.Context, arg CampaignRemoveMembersNotInParams) (int64, error)
 	CampaignUUIDBySourceFile(ctx context.Context, sourceFile *string) (pgtype.UUID, error)
 	CampaignUpdateFromFile(ctx context.Context, arg CampaignUpdateFromFileParams) (int32, error)
+	// The ?scope=campaign global feed (07 §4.8): transitions of domains in ANY
+	// campaign. Driven from the bounded campaign_domain set via a lateral read
+	// of the (domain_id, ts, field) PK — never a sparse probe of the global ts
+	// index. Same latest-50 recent-window cap as the other scoped feeds.
+	ChangelogAnyCampaign(ctx context.Context) ([]ChangelogAnyCampaignRow, error)
 	ChangelogByCampaign(ctx context.Context, campaignID int32) ([]ChangelogByCampaignRow, error)
 	// Changelog read surface (07 §4.8). The paginating global + per-domain
 	// feeds are builder-built in internal/postgres/changeloglist.go (05-schema
@@ -50,11 +55,6 @@ type Querier interface {
 	// country/campaign feeds below are capped to the latest-50 recent window
 	// (OPEN-15 guardrail) and stay sqlc.
 	ChangelogByCountry(ctx context.Context, countryID int32) ([]ChangelogByCountryRow, error)
-	// The ?scope=campaign global feed (07 §4.8): transitions of domains in ANY
-	// campaign. Driven from the bounded campaign_domain set via a lateral read
-	// of the (domain_id, ts, field) PK — never a sparse probe of the global ts
-	// index. Same latest-50 recent-window cap as the other scoped feeds.
-	ChangelogCampaignScope(ctx context.Context) ([]ChangelogCampaignScopeRow, error)
 	ChangelogMaxTS(ctx context.Context) (pgtype.Timestamptz, error)
 	// The §4.9 confirmed-trajectory replay: the full transition history of one
 	// domain, ascending, reconstructed API-side (never raw scan observations).

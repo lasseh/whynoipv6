@@ -23,7 +23,7 @@ LIMIT 50;
 -- campaign. Driven from the bounded campaign_domain set via a lateral read
 -- of the (domain_id, ts, field) PK — never a sparse probe of the global ts
 -- index. Same latest-50 recent-window cap as the other scoped feeds.
--- name: ChangelogCampaignScope :many
+-- name: ChangelogAnyCampaign :many
 SELECT sub.ts, d.host, sub.field, sub.old_value, sub.new_value
 FROM (SELECT DISTINCT domain_id FROM campaign_domain) m
 CROSS JOIN LATERAL (

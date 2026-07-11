@@ -271,3 +271,23 @@ func TestMintPage(t *testing.T) {
 		t.Errorf("an empty window must not mint cursors: %+v", page)
 	}
 }
+
+// TestCursorInt64Precision pins the json.Number decode path: the changelog
+// seek carries ts.UnixNano() (~1.8e18), which float64 decoding would round
+// to a 256 ns grid — repeating or skipping same-ts siblings at the page
+// boundary.
+func TestCursorInt64Precision(t *testing.T) {
+	ts := int64(1780000000123456789) // not representable in float64
+	tok := EncodeCursor(ksGen, SortChangelog, FilterFingerprint(nil), []any{ts, int64(7), "base"})
+	c, err := DecodeCursor(tok, SortChangelog, FilterFingerprint(nil), ksGen)
+	if err != nil {
+		t.Fatal(err)
+	}
+	st, err := c.SeekTuple()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.TS != ts {
+		t.Errorf("seek ts = %d, want %d (lost %d ns to float64)", st.TS, ts, st.TS-ts)
+	}
+}
