@@ -35,11 +35,18 @@ WHERE NOT disabled AND uuid <> ALL($1::uuid[])
 RETURNING uuid, name;
 
 -- The public campaign surface (07 §4.7): exact member counts (bounded sets),
--- ?tag= via the GIN-indexed tags array.
+-- ?tag= via the GIN-indexed tags array. Each row carries the same adoption
+-- pair as the detail via a lateral read of the latest stats_campaign_daily
+-- row (the set is tens of rows, so the per-row join is trivially cheap).
 -- name: CampaignPublicList :many
 SELECT c.uuid, c.name, c.description, c.source_file, c.tags,
-       (SELECT count(*) FROM campaign_domain cd WHERE cd.campaign_id = c.id) AS domain_count
+       (SELECT count(*) FROM campaign_domain cd WHERE cd.campaign_id = c.id) AS domain_count,
+       s.day AS adoption_day, s.domains AS adoption_domains, s.v6_ready AS adoption_v6_ready
 FROM campaign c
+LEFT JOIN LATERAL (
+    SELECT day, domains, v6_ready FROM stats_campaign_daily scd
+    WHERE scd.campaign_id = c.id ORDER BY day DESC LIMIT 1
+) s ON true
 WHERE NOT c.disabled AND (@tag::TEXT = '' OR @tag = ANY(c.tags))
 ORDER BY c.name, c.id;
 

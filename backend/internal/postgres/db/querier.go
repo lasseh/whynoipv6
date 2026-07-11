@@ -36,7 +36,9 @@ type Querier interface {
 	CampaignMembers(ctx context.Context, campaignID int32) ([]int64, error)
 	CampaignPublicDetail(ctx context.Context, uuid pgtype.UUID) (CampaignPublicDetailRow, error)
 	// The public campaign surface (07 §4.7): exact member counts (bounded sets),
-	// ?tag= via the GIN-indexed tags array.
+	// ?tag= via the GIN-indexed tags array. Each row carries the same adoption
+	// pair as the detail via a lateral read of the latest stats_campaign_daily
+	// row (the set is tens of rows, so the per-row join is trivially cheap).
 	CampaignPublicList(ctx context.Context, tag string) ([]CampaignPublicListRow, error)
 	CampaignRemoveMembersNotIn(ctx context.Context, arg CampaignRemoveMembersNotInParams) (int64, error)
 	CampaignUUIDBySourceFile(ctx context.Context, sourceFile *string) (pgtype.UUID, error)

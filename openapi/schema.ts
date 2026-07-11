@@ -1079,6 +1079,7 @@ export interface components {
             tags: string[];
             /** Format: int64 */
             domain_count: number;
+            adoption: components["schemas"]["CampaignAdoption"] | null;
         };
         CampaignList: {
             items: components["schemas"]["CampaignListItem"][];

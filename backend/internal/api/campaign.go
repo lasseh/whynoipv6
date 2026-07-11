@@ -14,20 +14,36 @@ import (
 	db "github.com/lasseh/whynoipv6/internal/postgres/db"
 )
 
-// CampaignListItem is the /campaigns index row (07 §4.7).
+// CampaignListItem is the /campaigns index row (07 §4.7). Each row carries the
+// same adoption block as the detail (null before the first stats tick).
 type CampaignListItem struct {
-	UUID        string   `json:"uuid"`
-	Name        string   `json:"name"`
-	Description string   `json:"description"`
-	SourceFile  *string  `json:"source_file"`
-	Tags        []string `json:"tags"`
-	DomainCount int64    `json:"domain_count"`
+	UUID        string            `json:"uuid"`
+	Name        string            `json:"name"`
+	Description string            `json:"description"`
+	SourceFile  *string           `json:"source_file"`
+	Tags        []string          `json:"tags"`
+	DomainCount int64             `json:"domain_count"`
+	Adoption    *CampaignAdoption `json:"adoption"`
 }
 
 // CampaignAdoption is the stats-derived adoption block, null pre-first-rollup.
 type CampaignAdoption struct {
 	V6ReadyPercent float64 `json:"v6_ready_percent"`
 	Day            string  `json:"day"`
+}
+
+// campaignAdoption builds the §4.7 adoption block from a latest
+// stats_campaign_daily row; nil before the first stats tick (no row, zero
+// domains, or a NULL v6_ready). Shared by the list and detail handlers.
+func campaignAdoption(day pgtype.Date, domains, v6Ready *int32) *CampaignAdoption {
+	if !day.Valid || domains == nil || *domains <= 0 || v6Ready == nil {
+		return nil
+	}
+	pct := float64(*v6Ready) * 100 / float64(*domains)
+	return &CampaignAdoption{
+		V6ReadyPercent: math.Round(pct*10) / 10,
+		Day:            day.Time.Format("2006-01-02"),
+	}
 }
 
 // CampaignDetail is the §4.7 composite: metadata + paged members + adoption.
@@ -80,6 +96,7 @@ func (s *Server) serveCampaignList(w http.ResponseWriter, r *http.Request, tag s
 			SourceFile:  rows[i].SourceFile,
 			Tags:        tags,
 			DomainCount: rows[i].DomainCount,
+			Adoption:    campaignAdoption(rows[i].AdoptionDay, rows[i].AdoptionDomains, rows[i].AdoptionV6Ready),
 		}
 	}
 	count := int64(len(items))
@@ -149,13 +166,8 @@ func (s *Server) getCampaign(w http.ResponseWriter, r *http.Request) {
 	if d.Tags == nil {
 		d.Tags = []string{}
 	}
-	if adoption, err := s.q.CampaignAdoption(r.Context(), row.ID); err == nil &&
-		adoption.Domains != nil && *adoption.Domains > 0 && adoption.V6Ready != nil {
-		pct := float64(*adoption.V6Ready) * 100 / float64(*adoption.Domains)
-		d.Adoption = &CampaignAdoption{
-			V6ReadyPercent: math.Round(pct*10) / 10,
-			Day:            adoption.Day.Time.Format("2006-01-02"),
-		}
+	if adoption, err := s.q.CampaignAdoption(r.Context(), row.ID); err == nil {
+		d.Adoption = campaignAdoption(adoption.Day, adoption.Domains, adoption.V6Ready)
 	}
 	d.Domains.Items = members
 	d.Domains.Page = page

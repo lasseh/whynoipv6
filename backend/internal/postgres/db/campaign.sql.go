@@ -191,23 +191,33 @@ func (q *Queries) CampaignPublicDetail(ctx context.Context, uuid pgtype.UUID) (C
 
 const CampaignPublicList = `-- name: CampaignPublicList :many
 SELECT c.uuid, c.name, c.description, c.source_file, c.tags,
-       (SELECT count(*) FROM campaign_domain cd WHERE cd.campaign_id = c.id) AS domain_count
+       (SELECT count(*) FROM campaign_domain cd WHERE cd.campaign_id = c.id) AS domain_count,
+       s.day AS adoption_day, s.domains AS adoption_domains, s.v6_ready AS adoption_v6_ready
 FROM campaign c
+LEFT JOIN LATERAL (
+    SELECT day, domains, v6_ready FROM stats_campaign_daily scd
+    WHERE scd.campaign_id = c.id ORDER BY day DESC LIMIT 1
+) s ON true
 WHERE NOT c.disabled AND ($1::TEXT = '' OR $1 = ANY(c.tags))
 ORDER BY c.name, c.id
 `
 
 type CampaignPublicListRow struct {
-	Uuid        pgtype.UUID `json:"uuid"`
-	Name        string      `json:"name"`
-	Description string      `json:"description"`
-	SourceFile  *string     `json:"source_file"`
-	Tags        []string    `json:"tags"`
-	DomainCount int64       `json:"domain_count"`
+	Uuid            pgtype.UUID `json:"uuid"`
+	Name            string      `json:"name"`
+	Description     string      `json:"description"`
+	SourceFile      *string     `json:"source_file"`
+	Tags            []string    `json:"tags"`
+	DomainCount     int64       `json:"domain_count"`
+	AdoptionDay     pgtype.Date `json:"adoption_day"`
+	AdoptionDomains *int32      `json:"adoption_domains"`
+	AdoptionV6Ready *int32      `json:"adoption_v6_ready"`
 }
 
 // The public campaign surface (07 §4.7): exact member counts (bounded sets),
-// ?tag= via the GIN-indexed tags array.
+// ?tag= via the GIN-indexed tags array. Each row carries the same adoption
+// pair as the detail via a lateral read of the latest stats_campaign_daily
+// row (the set is tens of rows, so the per-row join is trivially cheap).
 func (q *Queries) CampaignPublicList(ctx context.Context, tag string) ([]CampaignPublicListRow, error) {
 	rows, err := q.db.Query(ctx, CampaignPublicList, tag)
 	if err != nil {
@@ -224,6 +234,9 @@ func (q *Queries) CampaignPublicList(ctx context.Context, tag string) ([]Campaig
 			&i.SourceFile,
 			&i.Tags,
 			&i.DomainCount,
+			&i.AdoptionDay,
+			&i.AdoptionDomains,
+			&i.AdoptionV6Ready,
 		); err != nil {
 			return nil, err
 		}

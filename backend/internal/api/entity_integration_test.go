@@ -224,12 +224,50 @@ func TestProviders(t *testing.T) {
 // TestCampaigns (07 §4.7): ?tag= filter, composite detail with adoption and
 // host-ordered members (rank-NULL visible), exact count.
 func TestCampaigns(t *testing.T) {
-	srv := newEntityAPI(t)
-	var env envelope
-	getJSON(t, srv.URL+"/campaigns", &env)
-	if env.Meta.Count == nil || *env.Meta.Count != 1 {
-		t.Fatalf("campaigns count = %v", env.Meta.Count)
+	srv, pool := newAPI(t)
+	seedEntities(t, pool)
+
+	// A second campaign with no stats_campaign_daily row: its list-row
+	// adoption must be JSON null (pre-first-rollup).
+	const bareUUID = "22222222-2222-2222-2222-222222222222"
+	if _, err := pool.Exec(context.Background(),
+		`INSERT INTO campaign (uuid, name, description, source_file, tags)
+		 VALUES ($1, 'Fresh Campaign', 'no stats yet', 'campaigns/fresh.yaml', '{sector-tech}')`,
+		bareUUID); err != nil {
+		t.Fatalf("seed bare campaign: %v", err)
 	}
+
+	// The list rows carry the same adoption block as the detail (07 §4.7).
+	var list struct {
+		Items []struct {
+			UUID     string `json:"uuid"`
+			Adoption *struct {
+				V6ReadyPercent float64 `json:"v6_ready_percent"`
+				Day            string  `json:"day"`
+			} `json:"adoption"`
+		} `json:"items"`
+		Meta struct {
+			Count *int64 `json:"count"`
+		} `json:"meta"`
+	}
+	getJSON(t, srv.URL+"/campaigns", &list)
+	if list.Meta.Count == nil || *list.Meta.Count != 2 {
+		t.Fatalf("campaigns count = %v, want 2", list.Meta.Count)
+	}
+	adoptionByUUID := map[string]*struct {
+		V6ReadyPercent float64 `json:"v6_ready_percent"`
+		Day            string  `json:"day"`
+	}{}
+	for _, it := range list.Items {
+		adoptionByUUID[it.UUID] = it.Adoption
+	}
+	if a := adoptionByUUID[campaignUUID]; a == nil || a.V6ReadyPercent != 50.0 || a.Day == "" {
+		t.Errorf("list adoption for seeded campaign = %+v, want 50.0 with a day", a)
+	}
+	if a, ok := adoptionByUUID[bareUUID]; !ok || a != nil {
+		t.Errorf("list adoption for stats-less campaign = %+v, want JSON null", a)
+	}
+
 	var tagged envelope
 	getJSON(t, srv.URL+"/campaigns?tag=mandate", &tagged)
 	if len(tagged.Items) != 1 {
