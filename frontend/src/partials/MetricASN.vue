@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, reactive, ref, toRefs } from 'vue'
+import { computed, onMounted, reactive, ref, toRefs } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { listASNs } from '@/api'
@@ -95,11 +95,6 @@ onMounted(() => {
   } else {
     void getAsnData(orderBy.value)
   }
-})
-
-onUnmounted(() => {
-  // reset the query parameter for sort
-  router.push({ query: { ...router.currentRoute.value.query, sort: undefined } }).catch(() => {})
 })
 </script>
 

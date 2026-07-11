@@ -17,7 +17,8 @@ const queryFilter = computed(() =>
 )
 
 const applyFilterAndUpdateRoute = (filterType: string) => {
-  void router.push({ query: { t: filterType } })
+  // Preserve the rest of the query (§5 lists sort/q as retained state).
+  void router.push({ query: { ...route.query, t: filterType } })
 }
 
 const tabClass = (filterType: string): string[] => {
