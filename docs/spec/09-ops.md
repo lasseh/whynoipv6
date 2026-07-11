@@ -230,6 +230,8 @@ Provider names/addresses (`1.1.1.1`, `8.8.8.8`, `9.9.9.9` + their v6 forms), the
 | `ops.healthcheck_url` | `OPS_HEALTHCHECK_URL` | string (URL) | `""` (disabled) | crawler | 04,12 | **This process's** healthchecks.io ping URL (one per crawler instance). Empty = disabled. |
 | `ops.healthcheck_tick_url` | `OPS_HEALTHCHECK_TICK_URL` | string (URL) | `""` (disabled) | crawler | 04,12 | Daily-tick healthchecks.io check (coordinator only). |
 | `ops.healthcheck_min_interval` | `OPS_HEALTHCHECK_MIN_INTERVAL` | duration | `60s` | crawler | 04,12 | Minimum spacing between per-process heartbeat pings. |
+| `taillight.url` | `TAILLIGHT_URL` | string (URL) | `""` (disabled) | all | 09 §13 | Taillight applog ingest endpoint (`…/api/v1/applog/ingest`). When set, slog records fan out to Taillight via the `logshipper` handler (§13). Empty = local JSON only. |
+| `taillight.api_key` | `TAILLIGHT_API_KEY` | string (secret) | `""` | all | 09 §13 | Taillight API key with `ingest` scope. Redacted in the startup summary. |
 
 ### 2.9 Unbound stats (v6ctl on the Unbound host)
 
@@ -983,8 +985,18 @@ files, no rotation logic in the binaries). **`v6ctl` writes slog to `os.Stderr`*
 command output on stdout stays pipeable. JSON always — no format knob. `lvl` comes from
 `LOG_LEVEL` (§2.1).
 
+**Taillight shipping (optional).** When `taillight.url` is set (§2.8), the installed
+handler is a `logshipper.MultiHandler` fanning out to the local JSON handler **and** a
+[Taillight](https://github.com/lasseh/taillight) shipper (`pkg/logshipper`): service
+`whynoipv6`, component = binary name, `MinLevel` = `LOG_LEVEL`, batching defaults.
+The shipper is non-blocking (drops on overflow rather than stalling the process).
+Each binary drains it on shutdown via the flush func returned by `InstallLogger`;
+a malformed `taillight.url` is a fatal startup error like any other misconfiguration.
+
 **Standard attribute keys (exact names):**
-- `component` — binary name (`api`|`crawler`|`v6ctl`), stamped once on the root logger via `.With()`.
+- `component` — binary name (`api`|`crawler`|`v6ctl`), stamped once on the local JSON
+  handler via `WithAttrs` (the Taillight shipper carries it as its first-class
+  `component` field instead, so it is not duplicated into `attrs`).
 - `run_id` — the crawler run UUID, identical to `crawler_metrics.run_id`; stamped on a per-run child logger.
 - `worker` — worker identity string, identical to `crawler_metrics.worker`.
 - `domain` — the eTLD+1 (or registry host) on any per-domain/per-host line.

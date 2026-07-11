@@ -31,7 +31,11 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	log := cfg.InstallLogger()
+	log, flushLogs, err := cfg.InstallLogger()
+	if err != nil {
+		return err
+	}
+	defer flushLogs()
 	cfg.LogSummary(log)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

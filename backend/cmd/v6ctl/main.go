@@ -19,6 +19,7 @@ func cfgFromCmd(cmd *cobra.Command) *config.Config {
 }
 
 func main() {
+	flushLogs := func() {}
 	root := &cobra.Command{
 		Use:           "v6ctl",
 		Short:         "WhyNoIPv6 operator CLI",
@@ -29,7 +30,11 @@ func main() {
 			if err != nil {
 				return err
 			}
-			log := cfg.InstallLogger()
+			log, flush, err := cfg.InstallLogger()
+			if err != nil {
+				return err
+			}
+			flushLogs = flush
 			cfg.LogSummary(log)
 			cmd.SetContext(context.WithValue(cmd.Context(), ctxKey{}, cfg))
 			return nil
@@ -49,7 +54,9 @@ func main() {
 	root.AddCommand(exportCmd())
 	root.AddCommand(resourceCmd())
 
-	if err := root.Execute(); err != nil {
+	err := root.Execute()
+	flushLogs() // drain the Taillight shipper regardless of command outcome
+	if err != nil {
 		fmt.Fprintln(os.Stderr, "v6ctl: "+err.Error())
 		os.Exit(1)
 	}

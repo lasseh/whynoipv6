@@ -5,6 +5,7 @@
 package config
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -14,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/lasseh/taillight/pkg/logshipper"
 	"github.com/spf13/viper"
 )
 
@@ -22,6 +24,7 @@ var secretKeys = map[string]bool{
 	"ops.webhook_url":          true,
 	"ops.healthcheck_url":      true,
 	"ops.healthcheck_tick_url": true,
+	"taillight.api_key":        true,
 }
 
 // Config is the resolved configuration of one binary. Global deployment keys
@@ -135,16 +138,49 @@ func (c *Config) Keys() []string {
 
 // InstallLogger installs the process-wide slog default per 09-ops.md §13:
 // JSON handler, stdout for api/crawler, stderr for v6ctl, component attr
-// stamped on the root logger.
-func (c *Config) InstallLogger() *slog.Logger {
+// stamped on the local handler. When taillight.url is set, records also fan
+// out to a Taillight log shipper; the returned flush drains its buffer and
+// must be called on shutdown (no-op when shipping is off). A malformed
+// taillight.url is fatal, like every other misconfiguration.
+func (c *Config) InstallLogger() (*slog.Logger, func(), error) {
 	w := os.Stdout
 	if c.Binary == "v6ctl" {
 		w = os.Stderr
 	}
-	log := slog.New(slog.NewJSONHandler(w, &slog.HandlerOptions{Level: c.LogLevel})).
-		With("component", c.Binary)
+	// component goes on the handler, not the logger, so the shipper carries
+	// it as its first-class field instead of a duplicated attr.
+	local := slog.NewJSONHandler(w, &slog.HandlerOptions{Level: c.LogLevel}).
+		WithAttrs([]slog.Attr{slog.String("component", c.Binary)})
+
+	handler := local
+	flush := func() {}
+	if endpoint := c.String("taillight.url"); endpoint != "" {
+		shipper, err := logshipper.New(logshipper.Config{
+			Endpoint:     endpoint,
+			APIKey:       logshipper.Secret(c.String("taillight.api_key")),
+			Service:      "whynoipv6",
+			Component:    c.Binary,
+			MinLevel:     c.LogLevel,
+			MaxAttrBytes: 16384,
+		})
+		if err != nil {
+			return nil, nil, fmt.Errorf("taillight.url: %w", err)
+		}
+		handler = logshipper.MultiHandler(local, shipper)
+		flush = func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			if err := shipper.Shutdown(ctx); err != nil {
+				slog.New(local).Warn("taillight flush failed", "err", err.Error())
+			}
+			if n := shipper.Dropped(); n > 0 {
+				slog.New(local).Warn("taillight entries dropped (buffer full)", "count", n)
+			}
+		}
+	}
+	log := slog.New(handler)
 	slog.SetDefault(log)
-	return log
+	return log, flush, nil
 }
 
 // LogSummary emits the info-level startup config summary: every registry key

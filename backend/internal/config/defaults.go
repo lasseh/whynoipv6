@@ -82,6 +82,8 @@ func registryDefaults(binary string) map[string]any {
 		"ops.healthcheck_url":          "",
 		"ops.healthcheck_tick_url":     "",
 		"ops.healthcheck_min_interval": "60s",
+		"taillight.url":                "",
+		"taillight.api_key":            "",
 
 		// §2.9 Unbound stats.
 		"unbound_stats.control": "unbound-control",

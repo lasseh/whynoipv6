@@ -2,8 +2,12 @@ package config
 
 import (
 	"bytes"
+	"io"
 	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -58,6 +62,82 @@ func TestConfigRequiredDatabaseURL(t *testing.T) {
 	t.Setenv("DATABASE_URL", "")
 	if _, err := Load("api"); err == nil {
 		t.Fatal("Load with empty DATABASE_URL: want error, got nil")
+	}
+}
+
+// TestInstallLoggerShipsToTaillight exercises the full fan-out path: a record
+// logged through the installed logger reaches the Taillight ingest endpoint
+// with the right service/component/auth, and flush drains the batch.
+func TestInstallLoggerShipsToTaillight(t *testing.T) {
+	var (
+		mu   sync.Mutex
+		body []byte
+		auth string
+	)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		mu.Lock()
+		body = append(body, b...)
+		auth = r.Header.Get("Authorization")
+		mu.Unlock()
+		w.WriteHeader(http.StatusAccepted)
+		_, _ = w.Write([]byte(`{"accepted":1}`))
+	}))
+	defer srv.Close()
+
+	t.Setenv("DATABASE_URL", "postgres://u:pw@dbhost:5432/whynoipv6")
+	t.Setenv("TAILLIGHT_URL", srv.URL+"/api/v1/applog/ingest")
+	t.Setenv("TAILLIGHT_API_KEY", "test-key")
+
+	cfg, err := Load("crawler")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	prev := slog.Default()
+	t.Cleanup(func() { slog.SetDefault(prev) })
+
+	log, flush, err := cfg.InstallLogger()
+	if err != nil {
+		t.Fatalf("InstallLogger: %v", err)
+	}
+	log.Info("taillight integration probe", "domain", "example.com")
+	flush()
+
+	mu.Lock()
+	out, gotAuth := string(body), auth
+	mu.Unlock()
+	for _, want := range []string{
+		`"logs":[`,
+		`"service":"whynoipv6"`,
+		`"component":"crawler"`,
+		`"level":"INFO"`,
+		`"msg":"taillight integration probe"`,
+		`"domain":"example.com"`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("shipped payload missing %s: %s", want, out)
+		}
+	}
+	if gotAuth != "Bearer test-key" {
+		t.Errorf("Authorization = %q, want Bearer test-key", gotAuth)
+	}
+}
+
+// TestInstallLoggerBadTaillightURL: a malformed endpoint is a fatal startup
+// error, consistent with every other misconfiguration.
+func TestInstallLoggerBadTaillightURL(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://u:pw@dbhost:5432/whynoipv6")
+	t.Setenv("TAILLIGHT_URL", "not-a-url")
+
+	cfg, err := Load("api")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	prev := slog.Default()
+	t.Cleanup(func() { slog.SetDefault(prev) })
+
+	if _, _, err := cfg.InstallLogger(); err == nil {
+		t.Fatal("InstallLogger with malformed taillight.url: want error, got nil")
 	}
 }
 
