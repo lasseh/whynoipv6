@@ -42,6 +42,23 @@ export function statusBorderClass(value: StatusValue): string {
   }
 }
 
+/** Tracker day-block fill — the old timeline shades; null days stay neutral. */
+export function statusBlockClass(value: StatusValue): string {
+  switch (value) {
+    case 'supported':
+      return 'bg-emerald-600'
+    case 'unsupported':
+      return 'bg-pink-600'
+    case 'no_record':
+      return 'bg-amber-500'
+    case 'not_applicable':
+      return 'bg-zinc-600'
+    default:
+      // Never confirmed / before the dimension's `since` — neutral.
+      return 'bg-gray-800'
+  }
+}
+
 export function statusLabel(value: StatusValue): string {
   switch (value) {
     case 'supported':
@@ -57,9 +74,18 @@ export function statusLabel(value: StatusValue): string {
   }
 }
 
-/** Tooltip for the two muted states; null for the legacy three. */
-export function statusTooltip(value: StatusValue): string | null {
-  if (value === 'not_applicable') return 'Not applicable'
-  if (value === null) return 'Not yet checked'
-  return null
+/** Hover tooltip on status icons — the old wording for the legacy three states. */
+export function statusTooltip(value: StatusValue): string {
+  switch (value) {
+    case 'supported':
+      return 'Supported'
+    case 'unsupported':
+      return 'Missing'
+    case 'no_record':
+      return 'No Records'
+    case 'not_applicable':
+      return 'Not applicable'
+    default:
+      return 'Not yet checked'
+  }
 }

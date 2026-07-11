@@ -14,3 +14,8 @@ export function formatDateTime(datetime: Date | string): string {
   const date = new Date(datetime)
   return `${dateFormatter.format(date)} ${timeFormatter.format(date)}`
 }
+
+/** "1 January 2022" — for date-only fields (history `day` values). */
+export function formatDate(day: Date | string): string {
+  return dateFormatter.format(new Date(day))
+}

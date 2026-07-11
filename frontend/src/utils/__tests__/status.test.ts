@@ -16,7 +16,7 @@ describe('status maps', () => {
       text: 'text-emerald-500',
       border: 'border-emerald-500',
       label: 'Success',
-      tooltip: null,
+      tooltip: 'Supported',
     },
     {
       value: 'unsupported',
@@ -24,7 +24,7 @@ describe('status maps', () => {
       text: 'text-pink-500',
       border: 'border-pink-500',
       label: 'Missing',
-      tooltip: null,
+      tooltip: 'Missing',
     },
     {
       value: 'no_record',
@@ -32,7 +32,7 @@ describe('status maps', () => {
       text: 'text-amber-500',
       border: 'border-amber-500',
       label: 'No Record',
-      tooltip: null,
+      tooltip: 'No Records',
     },
     {
       value: 'not_applicable',

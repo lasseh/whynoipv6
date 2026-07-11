@@ -34,8 +34,8 @@ export default tseslint.config(
     languageOptions: { globals: { ...globals.node } },
   },
   {
-    // Page SFCs keep the site's established single-word names (Home, Search, …).
-    files: ['src/pages/*.vue'],
+    // The site's established SFC names are single-word (Home, Header, Tracker, …).
+    files: ['src/pages/*.vue', 'src/partials/**/*.vue', 'src/components/*.vue'],
     rules: { 'vue/multi-word-component-names': 'off' },
   },
   configPrettier,
