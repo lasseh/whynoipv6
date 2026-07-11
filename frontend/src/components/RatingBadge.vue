@@ -5,10 +5,12 @@ import { calculateRating } from '@/utils/rating'
 const props = withDefaults(
   defineProps<{
     percent: number | null
-    total?: number
+    total?: number | undefined
     prefix?: string
+    /** Card grids use text-sm (default); detail headers use text-base. */
+    size?: string
   }>(),
-  { prefix: 'Rating: ' },
+  { prefix: 'Rating: ', size: 'text-sm' },
 )
 
 const rating = computed(() => calculateRating(props.percent, props.total))
@@ -16,8 +18,8 @@ const rating = computed(() => calculateRating(props.percent, props.total))
 
 <template>
   <div
-    class="text-sm inline-flex font-medium rounded-md text-center px-2.5 py-1 ring-1 ring-inset"
-    :class="rating.colorClass"
+    class="inline-flex font-medium rounded-md text-center px-2.5 py-1 ring-1 ring-inset"
+    :class="[size, rating.colorClass]"
   >
     {{ prefix }}{{ rating.rating }}
   </div>

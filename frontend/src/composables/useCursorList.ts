@@ -102,5 +102,10 @@ export function useCursorList<T>(opts: CursorListOptions<T>) {
     void router.push({ query })
   }
 
-  return { items, page, meta, loading, error, next, prev, setFilter }
+  /** Re-run the current fetch in place (e.g. the changelog's 30 s auto-refresh). */
+  function reload(): void {
+    void load()
+  }
+
+  return { items, page, meta, loading, error, next, prev, setFilter, reload }
 }

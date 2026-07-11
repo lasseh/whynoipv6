@@ -14,8 +14,12 @@ export type GetPath = {
   [P in keyof paths]: SuccessJson<GetOp<P>> extends never ? never : P
 }[keyof paths]
 
+// Query members accept explicit `undefined` (buildURL strips them at runtime)
+// so exactOptionalPropertyTypes callers can pass `{ cursor: params.cursor }`.
+type WithUndefined<Q> = { [K in keyof Q]?: Q[K] | undefined }
+
 export type GetQuery<P extends GetPath> =
-  GetOp<P> extends { parameters: { query?: infer Q } } ? NonNullable<Q> : never
+  GetOp<P> extends { parameters: { query?: infer Q } } ? WithUndefined<NonNullable<Q>> : never
 
 type PathParamsOf<O> = O extends { parameters: { path: infer PP extends object } } ? PP : never
 
@@ -23,7 +27,7 @@ type GetOptions<O> = { signal?: AbortSignal | undefined } & (PathParamsOf<O> ext
   ? { path?: undefined }
   : { path: PathParamsOf<O> }) &
   (O extends { parameters: { query?: infer Q } }
-    ? { query?: NonNullable<Q> | undefined }
+    ? { query?: WithUndefined<NonNullable<Q>> | undefined }
     : { query?: undefined })
 
 const BASE = import.meta.env.VITE_API_URL ?? ''
