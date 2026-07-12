@@ -226,7 +226,7 @@ The visual output of each component is unchanged; only its input changes. This s
 
 ### 7.1 Domain status dimensions
 
-Old: 4 fields (`base_domain`, `www_domain`, `nameserver`, `mx_record`), 3-value strings. New: 6 status objects (07 §4.1), 4-value enum + `null`. **Phase 1 renders the same four dimensions** — table columns Apex/WWW/E-Mail/Nameserver and the 4-row detail accordion map to `status.base/www/mx/ns.value`. `conn` and `resources` stay off-screen until phase 2 (§10.3).
+Old: 4 fields (`base_domain`, `www_domain`, `nameserver`, `mx_record`), 3-value strings. New: 6 status objects (07 §4.1), 4-value enum + `null`. Table columns are **Rank / Domain / Apex / WWW / E-Mail / Nameserver / IPv6 Only** — the first four status columns map to `status.base/www/mx/ns.value`; **IPv6 Only** renders the derived `ipv6_only` field (07 §4.2 — the conn+resources fold, ADR), through the same `StatusIcon` vocabulary (`null` = "Not yet checked" minus, strict until both dimensions confirm). The raw `conn`/`resources` objects stay off the table; the 4-row detail accordion is unchanged until phase 2 (§10.3).
 
 ### 7.2 Status → icon/color (component `StatusIcon`)
 
@@ -267,7 +267,7 @@ The two muted states are the **only** new pixels in phase 1 — deliberately qui
 
 ### 7.4 Changelog rendering (`utils/changelog.ts`)
 
-Old rows carried a server-rendered `message` + `domain_url`. New rows are structured `{ts, host, field, old_value, new_value}` (07 §4.8); the frontend derives the message. **The template is keyed on `(field, old_value, new_value)` — `old_value` matters** (a host going `not_applicable → unsupported` never *had* IPv6 to lose; phrasing it "lost IPv6" would be false). Normative table:
+Old rows carried a server-rendered `message` + `domain_url`. New rows are structured `{ts, host, field, old_value, new_value}` (07 §4.8); the frontend derives the message. **The template is keyed on `(field, old_value, new_value)` — `old_value` matters** (a host going `not_applicable → unsupported` never *had* IPv6 to lose; phrasing it "lost IPv6" would be false). Normative table for `base`/`www`/`ns`/`mx`:
 
 | `new_value` | `old_value` | Message | Color |
 |---|---|---|---|
@@ -277,6 +277,18 @@ Old rows carried a server-rendered `message` + `domain_url`. New rows are struct
 | `no_record` | `not_applicable` | `"{host} started publishing {field_label} — without IPv6 records"` | amber |
 | `no_record` | other | `"{host} no longer publishes records for {field_label}"` | amber |
 | `not_applicable` | any | `"{host} no longer uses {field_label}"` | muted zinc |
+
+**`conn` and `resources` are derived dimensions with bespoke wording** — the generic "{host} verb {field_label}" template misdescribes them ("no longer uses connectivity" says nothing). Normative table (the `not_applicable` rows are defensive-only: the commit machine never writes them — 03 §7):
+
+| Field | `new_value` | `old_value` | Message | Color |
+|---|---|---|---|---|
+| `conn` | `supported` | any | `"{host} is now reachable over IPv6"` | emerald |
+| `conn` | `unsupported` | `not_applicable` | `"{host} published IPv6 addresses — but connections fail"` | pink |
+| `conn` | `unsupported` | other | `"{host} is no longer reachable over IPv6"` | pink |
+| `conn` | `not_applicable` | any | `"{host} has no IPv6 addresses left to test"` | muted zinc |
+| `resources` | `supported` | any | `"{host} now loads all page resources over IPv6"` | emerald |
+| `resources` | `unsupported` | any | `"{host} loads some page resources without IPv6"` | pink |
+| `resources` | `not_applicable` | any | `"{host} no longer has its page resources checked"` | muted zinc |
 
 This is the same `(field, old, new)` key the server's feed serializer renders from (07 §5.4); the §11 goldens pin both wordings so they don't drift apart. The changelog page renders **all six fields** — `conn`/`resources` transitions appear here even though the phase-1 detail accordion shows only four dimensions (deliberate asymmetry: the changelog is the trust surface, not a detail view).
 

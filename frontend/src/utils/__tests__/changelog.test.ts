@@ -50,16 +50,44 @@ describe('changelogMessage', () => {
     {
       field: 'conn',
       old_value: 'unsupported',
+      new_value: 'supported',
+      message: 'example.com is now reachable over IPv6',
+      colorClass: 'text-emerald-600',
+    },
+    {
+      field: 'conn',
+      old_value: 'supported',
+      new_value: 'unsupported',
+      message: 'example.com is no longer reachable over IPv6',
+      colorClass: 'text-pink-600',
+    },
+    {
+      field: 'conn',
+      old_value: 'not_applicable',
+      new_value: 'unsupported',
+      message: 'example.com published IPv6 addresses — but connections fail',
+      colorClass: 'text-pink-600',
+    },
+    {
+      field: 'conn',
+      old_value: 'unsupported',
       new_value: 'not_applicable',
-      message: 'example.com no longer uses connectivity',
+      message: 'example.com has no IPv6 addresses left to test',
       colorClass: 'text-zinc-600',
     },
     {
       field: 'resources',
-      old_value: 'no_record',
+      old_value: 'unsupported',
       new_value: 'supported',
-      message: 'example.com now supports IPv6 on page resources',
+      message: 'example.com now loads all page resources over IPv6',
       colorClass: 'text-emerald-600',
+    },
+    {
+      field: 'resources',
+      old_value: 'supported',
+      new_value: 'unsupported',
+      message: 'example.com loads some page resources without IPv6',
+      colorClass: 'text-pink-600',
     },
   ] as const
 

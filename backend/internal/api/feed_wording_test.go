@@ -1,0 +1,34 @@
+package api
+
+import "testing"
+
+// TestFeedItemTitleGoldens pins the §7.4 wording table. The frontend's
+// utils/changelog.ts renders the identical sentences (its goldens live in
+// frontend/src/utils/__tests__/changelog.test.ts) — change them together
+// or the two trust surfaces drift.
+func TestFeedItemTitleGoldens(t *testing.T) {
+	goldens := []struct {
+		field, oldV, newV, want string
+	}{
+		{"base", "unsupported", "supported", "example.com now supports IPv6 on the base domain"},
+		{"www", "not_applicable", "supported", "example.com now supports IPv6 on www"},
+		{"www", "not_applicable", "unsupported", "example.com started using www — without IPv6"},
+		{"ns", "supported", "unsupported", "example.com lost IPv6 on nameservers"},
+		{"mx", "not_applicable", "no_record", "example.com started publishing e-mail — without IPv6 records"},
+		{"mx", "supported", "no_record", "example.com no longer publishes records for e-mail"},
+		{"www", "supported", "not_applicable", "example.com no longer uses www"},
+		{"conn", "unsupported", "supported", "example.com is now reachable over IPv6"},
+		{"conn", "supported", "unsupported", "example.com is no longer reachable over IPv6"},
+		{"conn", "not_applicable", "unsupported", "example.com published IPv6 addresses — but connections fail"},
+		{"conn", "unsupported", "not_applicable", "example.com has no IPv6 addresses left to test"},
+		{"resources", "unsupported", "supported", "example.com now loads all page resources over IPv6"},
+		{"resources", "supported", "unsupported", "example.com loads some page resources without IPv6"},
+		{"resources", "supported", "not_applicable", "example.com no longer has its page resources checked"},
+	}
+	for _, g := range goldens {
+		it := &ChangelogItem{Host: "example.com", Field: g.field, OldValue: g.oldV, NewValue: g.newV}
+		if got := feedItemTitle(it); got != g.want {
+			t.Errorf("feedItemTitle(%s %s→%s) = %q, want %q", g.field, g.oldV, g.newV, got, g.want)
+		}
+	}
+}

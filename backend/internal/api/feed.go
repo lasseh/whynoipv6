@@ -72,25 +72,58 @@ type jsonFeedItem struct {
 	DatePublished string `json:"date_published"`
 }
 
-// dimLabel is the human dimension name used in rendered feed copy.
+// dimLabel is the human dimension name used in rendered feed copy — the
+// exact §7.4 labels; the frontend's utils/changelog.ts renders from the
+// same table and the goldens on both sides pin them together.
 var dimLabel = map[string]string{
-	"base": "the apex", "www": "www", "ns": "nameservers",
-	"mx": "mail", "conn": "connectivity", "resources": "page resources",
+	"base": "the base domain", "www": "www", "ns": "nameservers", "mx": "e-mail",
 }
 
 // feedItemTitle derives the human title server-side at render time from
-// (field, old_value, new_value) — never from a frozen message table.
+// (field, old_value, new_value) — never from a frozen message table. conn
+// and resources get bespoke reachability wording (§7.4): the generic
+// "{host} verb {label}" template misdescribes derived dimensions.
 func feedItemTitle(it *ChangelogItem) string {
+	fromNA := it.OldValue == "not_applicable"
+	switch it.Field {
+	case "conn":
+		switch it.NewValue {
+		case "supported":
+			return it.Host + " is now reachable over IPv6"
+		case "unsupported":
+			if fromNA {
+				return it.Host + " published IPv6 addresses — but connections fail"
+			}
+			return it.Host + " is no longer reachable over IPv6"
+		default: // not_applicable — suppressed at write (03 §11); defensive only
+			return it.Host + " has no IPv6 addresses left to test"
+		}
+	case "resources":
+		switch it.NewValue {
+		case "supported":
+			return it.Host + " now loads all page resources over IPv6"
+		case "unsupported":
+			return it.Host + " loads some page resources without IPv6"
+		default: // not_applicable — suppressed at write (03 §11); defensive only
+			return it.Host + " no longer has its page resources checked"
+		}
+	}
 	label := dimLabel[it.Field]
 	switch it.NewValue {
 	case "supported":
 		return fmt.Sprintf("%s now supports IPv6 on %s", it.Host, label)
 	case "unsupported":
-		return fmt.Sprintf("%s no longer supports IPv6 on %s", it.Host, label)
+		if fromNA {
+			return fmt.Sprintf("%s started using %s — without IPv6", it.Host, label)
+		}
+		return fmt.Sprintf("%s lost IPv6 on %s", it.Host, label)
 	case "no_record":
+		if fromNA {
+			return fmt.Sprintf("%s started publishing %s — without IPv6 records", it.Host, label)
+		}
 		return fmt.Sprintf("%s no longer publishes records for %s", it.Host, label)
 	default: // not_applicable
-		return fmt.Sprintf("%s: %s is no longer applicable", it.Host, label)
+		return fmt.Sprintf("%s no longer uses %s", it.Host, label)
 	}
 }
 
