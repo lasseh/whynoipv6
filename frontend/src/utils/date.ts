@@ -19,3 +19,8 @@ export function formatDateTime(datetime: Date | string): string {
 export function formatDate(day: Date | string): string {
   return dateFormatter.format(new Date(day))
 }
+
+/** "12:30" — for rows already grouped under a day heading. */
+export function formatTime(datetime: Date | string): string {
+  return timeFormatter.format(new Date(datetime))
+}

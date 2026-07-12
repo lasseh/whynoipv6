@@ -37,7 +37,7 @@ describe('Changelog', () => {
     await vi.runOnlyPendingTimersAsync()
     await flushPromises()
     expect(wrapper.text()).toContain('example.com now supports IPv6 on the base domain')
-    expect(wrapper.text()).toContain('Domain Changelogs')
+    expect(wrapper.text()).toContain('Changelog')
     wrapper.unmount()
     expect(clearSpy).toHaveBeenCalled()
   })
