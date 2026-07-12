@@ -36,7 +36,7 @@ func registryDefaults(binary string) map[string]any {
 		"resolver.bulk_upstreams":           []string{"127.0.0.1:53", "127.0.0.1:5353"},
 		"checks.max_ns_lookups":             4,
 		"checks.max_mx_lookups":             5,
-		"crawler.resources.enabled":         false,
+		"crawler.resources.enabled":         true,
 
 		// §2.3 Consensus resolver.
 		"consensus.per_provider_qps":                    15,

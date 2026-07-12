@@ -27,8 +27,8 @@ func TestConfigDefaults(t *testing.T) {
 	if got := cfg.StringSlice("resolver.bulk_upstreams"); len(got) != 2 || got[0] != "127.0.0.1:53" {
 		t.Errorf("resolver.bulk_upstreams default = %v", got)
 	}
-	if cfg.Bool("crawler.resources.enabled") {
-		t.Error("crawler.resources.enabled default = true, want false")
+	if !cfg.Bool("crawler.resources.enabled") {
+		t.Error("crawler.resources.enabled default = false, want true (resources always on)")
 	}
 	if got := cfg.APIListen; got != "[::1]:8080" {
 		t.Errorf("API_LISTEN default = %q, want [::1]:8080", got)
@@ -37,7 +37,7 @@ func TestConfigDefaults(t *testing.T) {
 	// Env overrides with no YAML present (09-ops.md §15.2).
 	t.Setenv("WORKER_SLOTS", "32")
 	t.Setenv("CONSENSUS_PER_PROVIDER_QPS", "7")
-	t.Setenv("CRAWLER_RESOURCES_ENABLED", "true")
+	t.Setenv("CRAWLER_RESOURCES_ENABLED", "false")
 	t.Setenv("RESOLVER_BULK_UPSTREAMS", "10.0.0.1:53,10.0.0.2:5353")
 
 	cfg, err = Load("crawler")
@@ -50,7 +50,7 @@ func TestConfigDefaults(t *testing.T) {
 	if got := cfg.Int("consensus.per_provider_qps"); got != 7 {
 		t.Errorf("CONSENSUS_PER_PROVIDER_QPS override = %d, want 7", got)
 	}
-	if !cfg.Bool("crawler.resources.enabled") {
+	if cfg.Bool("crawler.resources.enabled") {
 		t.Error("CRAWLER_RESOURCES_ENABLED override not applied")
 	}
 	if got := cfg.StringSlice("resolver.bulk_upstreams"); len(got) != 2 || got[1] != "10.0.0.2:5353" {

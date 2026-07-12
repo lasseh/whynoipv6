@@ -102,7 +102,7 @@ func TestEnvOverrides(t *testing.T) {
 	t.Setenv("DATABASE_URL", "postgres://u:p@localhost:5432/whynoipv6")
 	t.Setenv("WORKER_SLOTS", "7")
 	t.Setenv("CONSENSUS_PER_PROVIDER_QPS", "3")
-	t.Setenv("CRAWLER_RESOURCES_ENABLED", "true")
+	t.Setenv("CRAWLER_RESOURCES_ENABLED", "false")
 	t.Setenv("RESOLVER_BULK_UPSTREAMS", "127.0.0.1:5300 127.0.0.1:5301")
 
 	// Run from a directory with no config.yaml.
@@ -123,7 +123,7 @@ func TestEnvOverrides(t *testing.T) {
 	if got := cfg.Int("consensus.per_provider_qps"); got != 3 {
 		t.Errorf("CONSENSUS_PER_PROVIDER_QPS override: %d", got)
 	}
-	if !cfg.Bool("crawler.resources.enabled") {
+	if cfg.Bool("crawler.resources.enabled") {
 		t.Error("CRAWLER_RESOURCES_ENABLED override did not apply")
 	}
 	if got := cfg.StringSlice("resolver.bulk_upstreams"); len(got) != 2 || got[0] != "127.0.0.1:5300" {

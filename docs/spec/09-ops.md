@@ -161,7 +161,7 @@ needs them.
 | `resolver.bulk_upstreams` | `RESOLVER_BULK_UPSTREAMS` | []string `host:port` | `["127.0.0.1:53","127.0.0.1:5353"]` | 01 | Bulk resolver upstreams = the two local Unbound instances (§8). |
 | `checks.max_ns_lookups` | `CHECKS_MAX_NS_LOOKUPS` | int | `4` | 01 | Per-host AAAA detail cap for `dns_ns_ipv6` (≤0 is a config error). |
 | `checks.max_mx_lookups` | `CHECKS_MAX_MX_LOOKUPS` | int | `5` | 01 | Per-host AAAA detail cap for `dns_mx_ipv6`. |
-| `crawler.resources.enabled` | `CRAWLER_RESOURCES_ENABLED` | bool | `false` | 02 | Resource-dependency feature flag; flipped `true` at phase-5. While `false` the crawler skips discovery and writes `resources=not_applicable`. |
+| `crawler.resources.enabled` | `CRAWLER_RESOURCES_ENABLED` | bool | `true` | 02 | Resource-dependency dimension; **on by default** (the `ipv6_only` fold depends on it — ADR). `false` is an emergency ops brake only: the crawler skips discovery and writes `resources=not_applicable`. |
 
 ### 2.3 Consensus resolver (crawler binary)
 
