@@ -158,7 +158,7 @@ Deleted relative to the old repos (never ported): the axios `services/` layer, `
 | Path | Page | Query state | Data (07-api) |
 |---|---|---|---|
 | `/` | Home | — | §8.1 |
-| `/domains` | DomainList | `filter=sinners\|heroes`, `cursor` | `/sinners`, `/heroes` |
+| `/domains` | DomainList | `filter=sinners\|heroes\|saints`, `cursor` | `/sinners`, `/heroes`, `/saints` |
 | `/domains/:domain([^/]+)` | DomainDetail | — | `/domains/{host}`, `/domains/{host}/changelog`, `/domains/{host}/history` |
 | `/domains/:domain([^/]+)/not-found` | DomainNotFound | — | — |
 | `/search` | Search | `q`, `cursor` | `/domains?q=` |
@@ -301,7 +301,7 @@ This is the same `(field, old, new)` key the server's feed serializer renders fr
 Every page keeps its current copy and section order (scroll-animation attributes are stripped, §2.1). Only data plumbing changes.
 
 1. **Home** — HomeSaaS hero ("Shame as a Service" copy verbatim) → Searchbar (GET-form to `/search?q=`) → HomeSinners (curated `/shame` picks + rotating testimonial) → HomeDomains (top-of-`/sinners` preview table) → Notification banner (§9.5).
-2. **DomainList** — title "Unmasking the Top 1M Websites", Sinners/Heroes toggle buttons (`?filter=`), `DomainTable`, `Pagination` (§9.1). Page size 50 (`?limit=50`, the API default).
+2. **DomainList** — title "Unmasking the Top 1M Websites", Sinners/Heroes/Saints toggle buttons (`?filter=`), `DomainTable`, `Pagination` (§9.1). Page size 50 (`?limit=50`, the API default).
 3. **DomainDetail** — breadcrumb, host + Provider/Rank header (rank badge `bg-fuchsia-900`), Domain Status card: `RatingStars` (4 stars, §7.3) + the §7.1 accordion (four dimension rows + the IPv6 Only fold row) each expanding a `Tracker` (§7.3) + "Last checked", then `ChangelogTable` from `/domains/{host}/changelog`. Unknown host → §6.3 not-found redirect.
 4. **CampaignDomain** — DomainDetail variant: campaign breadcrumb, changelog scope `/campaigns/{uuid}/domains/{host}/changelog`.
 5. **Search** — input + single "Domains" result table from `/domains?q=`, cursor-paged via §9.1 (the old page showed one unpaged list; results past 50 are now reachable through the same Previous/Next control — §7.3 covers the campaign-domain fold-in).
@@ -374,12 +374,12 @@ Same visual language (§2), each independently shippable; none block the DNS fli
 **Watch item — prerendering (vite-ssg).** If AI-search/Bing visibility proves to matter beyond what the §9.6 static surface (JSON-LD + `llms.txt` + datasets + API) delivers, the escape hatch is vite-ssg: same Vue/Vite code, hydrates client-side (visual parity untouched), emits static HTML — realistically for the ~14 template/index pages plus a popular-domains slice, with the 1M-URL long tail needing on-demand prerendering at the edge (that long-tail plumbing is the real work, and why this stays a watch item rather than a commitment). Decision trigger: evidence (referrer logs, AI-citation checks) that non-JS crawlers are a meaningful discovery channel for the *pages* rather than the *data*. Nuxt stays rejected regardless.
 
 1. **Live check page** (`/check`) — the flagship new feature: input → `POST /check` → 202 → poll `GET /check/{id}` every 2 s (07 §5.1.2) until `done|failed`; render `result.checks` with §7.2 icons (the raw-observation vocabulary incl. `error`; live results are labelled "live observation", never confirmed state) plus the `confirmed` block when present; handle `429 rate-limited` with `retry_after` countdown; dedupe responses (`cached: true`) get a "checked recently" note.
-2. **Classification & gold surfacing** — classification badge (`RatingBadge` visuals) + `class_flags` chips on DomainDetail; `/gold` and `/almost` as new `?filter=` options on DomainList; gold star affordance on hero rows.
+2. **Classification & saint surfacing** — classification badge (`RatingBadge` visuals) + `class_flags` chips on DomainDetail; `/saints` as a `?filter=` option on DomainList; saint star affordance on hero rows.
 3. **Six-dimension detail** — add `conn` (and, once `crawler.resources.enabled` flips, `resources`) rows to the detail accordion; `informational` block (dnssec/ptr/smtp/parity + latency pair) as a quiet secondary card.
 4. **Badge promo** — an "Embed this badge" snippet on DomainDetail (`![IPv6](https://api.whynoipv6.com/badge/{host}.svg)` + shields endpoint variant).
 5. **Adoption graphs** — `/stats/overview` + country/campaign/asn `/stats` time series as CSS/SVG line-or-bar blocks on Metrics/detail pages (still no chart library unless a real need appears).
 6. **Providers league table** — `/providers` page mirroring the ASN view; `?provider=` filter links.
-7. **Mail track** (`/mail` preset), **resource dependents** ("this v4-only host breaks N sites", once resources ship), **mandates view** (`/campaigns?tag=mandate`), **feeds/datasets/CSV links** in footer/FAQ (`.atom`, `.feed.json`, `?format=csv`, `/datasets`).
+7. **Resource dependents** ("this v4-only host breaks N sites", once resources ship), **mandates view** (`/campaigns?tag=mandate`), **feeds/datasets/CSV links** in footer/FAQ (`.atom`, `.feed.json`, `?format=csv`, `/datasets`).
 
 ---
 

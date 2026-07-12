@@ -7,7 +7,7 @@ _Status: Round 3.0 — API redesign folded in (docs/api-design-research.md, deci
 **Deliverables:**
 
 - `internal/crawler` — the commit unit: dead-signal computation, the per-dimension confirm/pending loop, streak maintenance, scheduling computation, the one-`pgx.Batch`-in-one-`pgx.Tx` write unit, lease-fence handling, and the resource-link persistence statements (files: `commit.go`, `commit_sql.go` or the sqlc-generated equivalents under `internal/postgres` + `db/query/commit.sql`).
-- `internal/domain` — `classify.go`: the pure classification ladder, flags, and gold computation (zero dependencies), plus the `Dimension`, `IPv6Status`, `Observation`, `Classification` Go types mirroring the DB enums.
+- `internal/domain` — `classify.go`: the pure classification ladder, flags, and saint computation (zero dependencies), plus the `Dimension`, `IPv6Status`, `Observation`, `Classification` Go types mirroring the DB enums.
 
 **Companion files:** 02 (observation production: engine adaptation, consensus quorum, conn composition, resources roll-up, and the answer-set order the attribution input IP is drawn from — everything that produces this file's per-dimension inputs), 06-ingest.md (§6 GeoIP/ASN attribution — the sole owner of the ASN + ccTLD attribution algorithm that resolves input `A`), 04 (claim query, lease stamping, frontier — everything that produces the snapshot this file consumes), 05-schema.md (all DDL: `domain`, `scan`, `scan_detail`, `changelog`, `resource_host`, `domain_resource`), 09-ops.md (config-key registry), 00-overview.md (canonical sizing constants), 10-testing.md (fixtures and contract tests for everything asserted here).
 
@@ -132,7 +132,7 @@ if counting AND (exists d in dims with O[d] definitive):
 # else last_counted_at keeps S.last_counted_at
 
 # Step 3 — classification (section 10; pure function over the post-step-2 CONFIRMED values)
-classification, class_flags, gold = domain.Classify({d: d_status for d in
+classification, class_flags, saint = domain.Classify({d: d_status for d in
                                                      [base, www, ns, mx, conn, resources]})
 
 # Step 4 — dead trigger
@@ -169,7 +169,7 @@ latency_v4_ms   = I.latency_v4_ms; latency_v6_ms = I.latency_v6_ms   # NULL when
 
 Notes binding the steps together:
 
-- **Disabled rows still commit.** While a row is disabled (`dead`/`delisted`) its slow-lane scans still commit through this exact machinery — confirmed state stays maintainable; public exposure is handled purely by read-side query filters (the `NOT disabled` predicate; see 06/API spec). Setting `disabled = TRUE` never modifies `classification`, `class_flags`, `gold`, or any confirmed status/`*_since` column; the one state reset is Step R.
+- **Disabled rows still commit.** While a row is disabled (`dead`/`delisted`) its slow-lane scans still commit through this exact machinery — confirmed state stays maintainable; public exposure is handled purely by read-side query filters (the `NOT disabled` predicate; see 06/API spec). Setting `disabled = TRUE` never modifies `classification`, `class_flags`, `saint`, or any confirmed status/`*_since` column; the one state reset is Step R.
 - **Recovery is `dead`-only.** `delisted` rows are re-enabled by Tranco import / campaign sync / the lifecycle sweep, never by this commit. `service`/`manual` rows never reach the commit (they are not claimable; see 04).
 - **An unresolvable scan still runs the loop.** Under branch (a) the base observation is `no_record` (definitive), so `dead_streak` accrues while `base` confirms `no_record` and classification goes `inactive` — both are correct simultaneously. Under branch (b) the base observation is `error` (non-definitive): the loop touches nothing while `dead_streak` accrues.
 
@@ -180,7 +180,7 @@ Executed inside step 1, **before** applying this scan's observations, only for `
 1. `disabled = false`, `disabled_reason = NULL`, `disabled_at = NULL`, `dead_streak = 0`.
 2. For every core dimension `d` (all six, regardless of `crawler.resources.enabled`): `d_status = NULL`, `d_observed = NULL`, `d_pending = NULL`, `d_pending_count = 0`, `d_since = NULL`. (Step 2 then immediately re-populates `d_observed` and bootstrap-commits definitive observations for the in-loop dimensions.)
 3. Informational columns → NULL: `dnssec_observed`, `ptr_observed`, `smtp_observed`, `parity_observed`, `latency_v4_ms`, `latency_v6_ms`. (Step 8 then re-populates them from this scan.)
-4. `classification = 'unknown'`, `class_flags = '{}'`, `gold = false`. (Step 3 recomputes them from the post-step-2 values anyway.)
+4. `classification = 'unknown'`, `class_flags = '{}'`, `saint = false`. (Step 3 recomputes them from the post-step-2 values anyway.)
 5. Keep `asn_id`/`country_id` — refreshed by the scan in step 7.
 6. **NO changelog rows** are written for the reset itself, and none for the first post-reset commits either: the current scan's observations flow through the normal step-2 algorithm against NULL confirmed values, so the first definitive value commits immediately with no changelog row (first-confirmation rule, section 11). A domain returning from the dead reappears with a fresh status and a clean changelog.
 
@@ -225,7 +225,7 @@ backoff(lane, streak):                                   # streak is the post-st
 - **Decision:** all scheduling arithmetic uses `T` as the base (not a fresh `now()`), making the commit unit fully deterministic and testable; T is at most seconds older than wall clock at write time.
 - Rechecks are full scans (`Runner.Run` on the whole domain); there is no partial-scan mode.
 
-## 10. Classification: ladder, flags, gold
+## 10. Classification: ladder, flags, saint
 
 Implemented as a pure function in `internal/domain` (`Classify`), recomputed on every commit (step 3) from the six post-step-2 **confirmed** values. Restated verbatim from the design (normative):
 
@@ -253,13 +253,13 @@ The ladder is deterministic, first match wins, evaluated over **confirmed** valu
 | `mail_missing` | `mx` = `unsupported` |
 | `resources_v4only` | `resources` = `unsupported` |
 
-**Gold rule:** `gold` = classification `hero` AND `resources` ∈ {`supported`, `not_applicable`} (NULL resources → not gold).
+**Saint rule:** `saint` = classification `hero` AND `resources` ∈ {`supported`, `not_applicable`} (NULL resources → not saint).
 
 **`ipv6_only` fold (derived, ADR):** `domain.IPv6Only(conn, resources)` is the classification-ungated conn+resources fold serialized by the API (07 §4.2) — "does the site present the same over an IPv6-only connection". `supported` iff `conn = supported` AND `resources` ∈ {`supported`, `not_applicable`}; `unsupported` iff `conn = unsupported` (first match — broken_v6 wins) or `resources = unsupported`; `not_applicable` iff `conn = not_applicable` (no AAAA to assess); NULL otherwise — **strict**: `conn = supported` with NULL `resources` claims nothing, and the impossible `no_record` inputs claim nothing. It is derived at API render time, never stored.
 
 Notes: (a) A `partial` domain may legitimately carry zero flags — that is the "hero bar unverified" state (conn/ns NULL or `not_applicable`), which is transient by construction: definitive first-scan observations commit immediately (section 5), and the base-N=2 / conn-N=3 asymmetry bounds any confirmed `conn=not_applicable`-with-`base=supported` overlap to the transition window. Do not invent an extra flag for it. (b) `ns` = `not_applicable` is unreachable by construction (the NS walk-up always reaches an authoritative zone); if it ever occurs it blocks hero and sets no flag, per the table. (c) www NXDOMAIN and www with neither A nor AAAA both map to `not_applicable` (02's mapping tables) — a site without a working www can be a Hero. `www` never produces `no_record`; only `base` can, and confirmed `base = no_record` is what feeds the `inactive` tier and the dead/delist lifecycles.
 
-While `crawler.resources.enabled=false`, `resources_status` is NULL for every domain, so `gold` evaluates false everywhere — correct: no gold badges before the resources feature ships. Flags are stored in `domain.class_flags TEXT[]`, sorted in the fixed order `broken_v6, www_missing, ns_missing, mail_missing, resources_v4only` (**Decision:** fixed order makes the column value deterministic and diff-friendly; the API never re-orders).
+While `crawler.resources.enabled=false`, `resources_status` is NULL for every domain, so `saint` evaluates false everywhere — correct: no saint badges before the resources feature ships. Flags are stored in `domain.class_flags TEXT[]`, sorted in the fixed order `broken_v6, www_missing, ns_missing, mail_missing, resources_v4only` (**Decision:** fixed order makes the column value deterministic and diff-friendly; the API never re-orders).
 
 ## 11. Changelog write rules
 
@@ -300,7 +300,7 @@ UPDATE domain SET
   dnssec_observed = @dnssec_observed, ptr_observed = @ptr_observed,
   smtp_observed = @smtp_observed, parity_observed = @parity_observed,
   latency_v4_ms = @latency_v4_ms, latency_v6_ms = @latency_v6_ms,
-  classification = @classification, class_flags = @class_flags, gold = @gold,
+  classification = @classification, class_flags = @class_flags, saint = @saint,
   asn_id = @asn_id, country_id = @country_id,
   disabled = @disabled, disabled_reason = @disabled_reason, disabled_at = @disabled_at,
   dead_streak = @dead_streak, error_streak = @error_streak,
@@ -512,7 +512,7 @@ type Classification string // "unknown" "inactive" "sinner" "partial" "hero"
 func ConfirmN(d Dimension) int16 // base/www/ns/mx → 2; conn/resources → 3
 
 // Classify implements section 10 exactly. nil = never confirmed (NULL).
-// Returned flags are in the fixed order of section 10; gold per the gold rule.
+// Returned flags are in the fixed order of section 10; saint per the saint rule.
 func Classify(confirmed map[Dimension]*IPv6Status) (Classification, []string, bool)
 ```
 
@@ -578,11 +578,11 @@ The state computation (steps 0–8) MUST be factored as a pure function (`Comput
 
 1. A confirmed value never changes on fewer than N(d) definitive observations of the new value, on scans spaced ≥ `anti_flap.min_confirm_spacing` apart — even when 2h fast-lane rechecks produce many more scans in between.
 2. The first definitive observation on a NULL-confirmed dimension commits immediately and writes NO changelog row; the same holds for the first commits after Step R.
-3. `error`/`inconsistent` observations never modify `d_status`, `d_pending`, `d_pending_count`, `d_since`, `classification`, `class_flags`, `gold`, or attribution — yet the scan and scan_detail rows are still written and `d_observed` is updated.
+3. `error`/`inconsistent` observations never modify `d_status`, `d_pending`, `d_pending_count`, `d_since`, `classification`, `class_flags`, `saint`, or attribution — yet the scan and scan_detail rows are still written and `d_observed` is updated.
 4. A lease-lost worker writes NOTHING: no domain state, no changelog, no scan, no scan_detail, no resource links; the `lease_lost` counter increments.
 5. `changelog.old_value`/`new_value` are never NULL and never equal on native rows; `ts` always joins a scan row with the same `(domain_id, ts)`.
 6. Re-running an identical commit unit (same T) after a mid-flight retry produces no duplicate scan/scan_detail rows (ON CONFLICT DO NOTHING) and cannot double-write changelog rows (the fence forbids a second successful domain UPDATE for the same lease).
 7. Seven consecutive unresolvable scans (and never fewer) disable a domain with `disabled_reason='dead'`; a later definitive base observation on that row re-enables it with all confirmed state, informational state, and classification reset, and a clean changelog. A domain that is all-SERVFAIL but whose CD=1 re-query returns AAAA (`cd_present`) is **not** unresolvable — it commits `base=supported`, is never marked dead, and its broken DNSSEC is recorded only as the informational `dnssec` dimension (02-observation-model.md §2.7b).
-8. `Classify` reproduces the section 10 truth table for the full cross-product of confirmed values, including: NULL conn → `partial` with no flag; `www=no_record` counts toward hero; `base=no_record` → `inactive` regardless of other dimensions; gold false whenever `resources` is NULL.
-9. While `crawler.resources.enabled=false`: `scan.resources = 'not_applicable'` on every row, all `domain.resources_*` columns stay NULL, and no domain is gold.
+8. `Classify` reproduces the section 10 truth table for the full cross-product of confirmed values, including: NULL conn → `partial` with no flag; `www=no_record` counts toward hero; `base=no_record` → `inactive` regardless of other dimensions; saint false whenever `resources` is NULL.
+9. While `crawler.resources.enabled=false`: `scan.resources = 'not_applicable'` on every row, all `domain.resources_*` columns stay NULL, and no domain is saint.
 10. `dependent_count` on `resource_host` equals the exact number of `domain_resource` links at all times (+1 only on genuine link insert, −1 only on prune delete).

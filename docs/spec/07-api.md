@@ -2,7 +2,7 @@
 
 _Status: Round 3.0 — API redesign folded in (docs/api-design-research.md, decisions 2026-07-09): clean root API, keyset pagination, RFC 9457, no legacy compat, no history import._
 
-**Purpose:** The complete, self-contained HTTP contract of the public API — a read-only, anonymous, **unversioned** JSON API served at the **root of `api.whynoipv6.com`**. It serves the *real* WhyNoIPv6 data model (the 4-value confirmed `ipv6_status` per dimension, the `classification` enum, `class_flags[]`, `gold`, and the `*_since` provenance timestamps) directly — no projection, no message rendering, no legacy compatibility layer. Every list is a keyset/cursor-paginated collection over an object envelope; every error is RFC 9457 `application/problem+json`; the whole surface is OpenAPI-3.0.3-first. An implementer must be able to build `internal/api` and `openapi/openapi.yaml` from this file alone, using the schema in 05-schema.md and the shared engine mapper in 02-observation-model.md.
+**Purpose:** The complete, self-contained HTTP contract of the public API — a read-only, anonymous, **unversioned** JSON API served at the **root of `api.whynoipv6.com`**. It serves the *real* WhyNoIPv6 data model (the 4-value confirmed `ipv6_status` per dimension, the `classification` enum, `class_flags[]`, `saint`, and the `*_since` provenance timestamps) directly — no projection, no message rendering, no legacy compatibility layer. Every list is a keyset/cursor-paginated collection over an object envelope; every error is RFC 9457 `application/problem+json`; the whole surface is OpenAPI-3.0.3-first. An implementer must be able to build `internal/api` and `openapi/openapi.yaml` from this file alone, using the schema in 05-schema.md and the shared engine mapper in 02-observation-model.md.
 
 **Deliverables:**
 - `internal/api/` — chi router + middleware stack (`router.go`), one handler file per route group (`domain.go`, `country.go`, `asn.go` incl. the DNS-provider `provider.go` league table (+ the hosting-tag `?hosting=` filter, §4.6), `campaign.go`, `changelog.go`, `stats.go`, `resource.go`, `check.go`, `badge.go`, `datasets.go`, `feed.go`, `diff.go`, `mandate.go`, `misc.go`), shared helpers (`cursor.go` — the opaque keyset cursor codec and the three seek orderings; `problem.go` — the RFC 9457 problem writer; `http.go` — envelope/pagination/negotiation helpers), and generated code in `internal/api/gen/` (oapi-codegen chi + strict-server output, committed). There is **no** `legacy.go` and **no** `uuid.go`/shortuuid codec.
@@ -100,9 +100,9 @@ The classification tiers are promoted to their own **short, canonical plural col
 |---|---|
 | `/heroes` | `class=hero` |
 | `/sinners` | `class=sinner` |
-| `/gold` | `gold=true` |
-| `/almost` | `class=partial` (**Decision:** "almost there" and `partial` are the same set — one class, two names; the tier path is a plain alias) |
-| `/mail` | the mail/MX heroes track (`class=hero&mx=supported`) |
+| `/saints` | `saint=true` |
+
+(**Decision, ADR 0003:** the former `/gold` tier is renamed `/saints`, and the `/almost` + `/mail` tier paths are removed — the partial and mail views are spelled `/domains?class=partial` and `/domains?class=hero&mx=supported`. This also retires the "almost there"/`partial` one-class-two-names alias.)
 
 Each shares the exact same keyset/cursor pagination, §4.2 row shape, and `?country=`/`?asn=`/`?tld=`/`?provider=` filter composition as `/domains`, under the §3.3 indexed-scope guardrail. `GET /sinners?country=no` ≡ `GET /domains?class=sinner&country=no`. `GET /domains` remains the **general filterable collection** whose `?class=` param spans every tier (`class=partial`, etc.); the tier paths are short aliases over it, not a second vocabulary.
 
@@ -305,8 +305,8 @@ Filters are plain query params, aligned with response field names, and **constra
 
 | Param | Values | Backed by | Notes |
 |---|---|---|---|
-| `class` | `hero`\|`partial`\|`sinner`\|`inactive`\|`unknown` | `idx_domain_heroes/sinners/partial` | primary filter; presets the `/heroes`,`/sinners`,`/almost`,`/mail` tier paths; predicate spelled `AND rank IS NOT NULL AND NOT disabled` |
-| `gold` | `true` | layered on `idx_domain_heroes` | gold ⊂ hero, cheap without its own index; the `/gold` tier path |
+| `class` | `hero`\|`partial`\|`sinner`\|`inactive`\|`unknown` | `idx_domain_heroes/sinners/partial` | primary filter; presets the `/heroes`,`/sinners` tier paths; predicate spelled `AND rank IS NOT NULL AND NOT disabled` |
+| `saint` | `true` | layered on `idx_domain_heroes` | saint ⊂ hero, cheap without its own index; the `/saints` tier path |
 | `country` | ISO code | `idx_domain_country` | composes with `class` + rank order |
 | `asn` | AS number | `idx_domain_asn` (05-schema.md — `(asn_id, classification, rank)`) | composes with `class` + rank order, same shape as `country` |
 | `tld` | eTLD suffix | `idx_domain_tld` (05-schema.md — domain table) | TLD/ccTLD pivot; scope-required unless combined with an indexed prefilter |
@@ -345,7 +345,7 @@ Filters are plain query params, aligned with response field names, and **constra
 
 ## 4. The resource model
 
-Every representation serves the **real** status/classification/gold/flags model. The canonical building block is the domain row; everything else composes from it.
+Every representation serves the **real** status/classification/saint/flags model. The canonical building block is the domain row; everything else composes from it.
 
 ### 4.1 Domain — the status object convention
 
@@ -376,7 +376,7 @@ The row returned in every `/domains*` collection:
   "parent": null,
   "classification": "partial",
   "class_flags": ["www_missing", "mail_missing"],
-  "gold": false,
+  "saint": false,
   "ipv6_only": null,
   "status": {
     "base":      { "value": "supported",   "since": "2024-11-03T00:00:00Z" },
@@ -395,7 +395,7 @@ The row returned in every `/domains*` collection:
 }
 ```
 
-`rank` is `int` or **JSON `null`** (campaign-only, subdomains, live-check hosts) — never the legacy `0`. `class_flags` is the ordered array (`broken_v6`/`www_missing`/`ns_missing`/`mail_missing`/`resources_v4only`); a `partial` domain may legitimately carry `[]`. `country`/`asn` are **embedded objects**, not display-name strings. `tld` (bare eTLD suffix, `domain.tld`), `dns_provider` (embedded `{id,name}` from the `dns_provider` mapping via `domain.dns_provider_id`, `null` when unmapped), and `hosting_provider` (the normalized `domain.hosting_provider` TEXT tag as a plain string, `null` when unset) are the new per-domain pivots (05-schema.md — domain table; OPEN-4). `?fields=` can trim this to e.g. `host,rank,classification,gold`. `ipv6_only` is the **derived conn+resources fold** (`internal/domain.IPv6Only`, 03 §10): `supported` iff `conn = supported` and `resources ∈ {supported, not_applicable}`; `unsupported` on any definitive negative; `not_applicable` when there is no AAAA to assess; JSON `null` until both dimensions are confirmed (strict — never claimed from `conn` alone). Serialized on both the §4.2 summary and the §4.3 detail, derived at render time from the same confirmed sextet as `status` so the two can never disagree.
+`rank` is `int` or **JSON `null`** (campaign-only, subdomains, live-check hosts) — never the legacy `0`. `class_flags` is the ordered array (`broken_v6`/`www_missing`/`ns_missing`/`mail_missing`/`resources_v4only`); a `partial` domain may legitimately carry `[]`. `country`/`asn` are **embedded objects**, not display-name strings. `tld` (bare eTLD suffix, `domain.tld`), `dns_provider` (embedded `{id,name}` from the `dns_provider` mapping via `domain.dns_provider_id`, `null` when unmapped), and `hosting_provider` (the normalized `domain.hosting_provider` TEXT tag as a plain string, `null` when unset) are the new per-domain pivots (05-schema.md — domain table; OPEN-4). `?fields=` can trim this to e.g. `host,rank,classification,saint`. `ipv6_only` is the **derived conn+resources fold** (`internal/domain.IPv6Only`, 03 §10): `supported` iff `conn = supported` and `resources ∈ {supported, not_applicable}`; `unsupported` on any definitive negative; `not_applicable` when there is no AAAA to assess; JSON `null` until both dimensions are confirmed (strict — never claimed from `conn` alone). Serialized on both the §4.2 summary and the §4.3 detail, derived at render time from the same confirmed sextet as `status` so the two can never disagree.
 
 ### 4.3 Domain detail
 
@@ -409,7 +409,7 @@ The row returned in every `/domains*` collection:
   "parent": null,
   "classification": "partial",
   "class_flags": ["www_missing", "mail_missing"],
-  "gold": false,
+  "saint": false,
   "status": { "...": "six status objects as in §4.1" },
   "informational": {
     "dnssec": "supported",
@@ -446,21 +446,19 @@ A latest observation of `error` or `inconsistent` maps to **`null`** (never leak
 
 ### 4.4 The ranked tier lists
 
-Heroes / sinners / gold / almost / mail are **first-class short collection resources** — each a preset filtered view over the `/domains` leaderboard, returning the §4.2 summary row in the §2.4 collection envelope, sharing the exact same keyset/cursor pagination and `?country=`/`?asn=`/`?tld=`/`?provider=` composition:
+Heroes / sinners / saints are **first-class short collection resources** — each a preset filtered view over the `/domains` leaderboard, returning the §4.2 summary row in the §2.4 collection envelope, sharing the exact same keyset/cursor pagination and `?country=`/`?asn=`/`?tld=`/`?provider=` composition:
 
 ```
 GET /heroes             # preset: class=hero
 GET /sinners            # preset: class=sinner
-GET /gold               # preset: gold=true
-GET /almost             # preset: class=partial (the "almost there" list — same set, §2.2)
-GET /mail               # the mail/MX heroes track (class=hero&mx=supported)
+GET /saints             # preset: saint=true
 ```
 
-`GET /domains` stays the **general filterable collection**; the same views are reachable via `?class=` (`GET /domains?class=hero&sort=rank`, `GET /domains?class=partial`, `GET /domains?class=hero&gold=true`). Tier paths accept the same additional filters, so "sinners in Norway" is `GET /sinners?country=no` (≡ `GET /domains?class=sinner&country=no`, ≡ the scoped `GET /countries/NO/domains?class=sinner`).
+`GET /domains` stays the **general filterable collection**; the same views are reachable via `?class=` (`GET /domains?class=hero&sort=rank`, `GET /domains?class=partial`, `GET /domains?class=hero&saint=true`). Tier paths accept the same additional filters, so "sinners in Norway" is `GET /sinners?country=no` (≡ `GET /domains?class=sinner&country=no`, ≡ the scoped `GET /countries/NO/domains?class=sinner`). The partial and mail views have no tier paths (ADR 0003): `GET /domains?class=partial` and `GET /domains?class=hero&mx=supported` are their canonical spellings.
 
 **The mail track** obeys the §3.3 scope-or-stats guardrail:
 
-- **Mail-heroes** — `GET /mail` is canonical (preset `class=hero&mx=supported`, scoped so `mx=` is indexed via the `class` prefilter).
+- **Mail-heroes** — `GET /domains?class=hero&mx=supported` is canonical (scoped so `mx=` is indexed via the `class` prefilter).
 - **Mail-sinners** — `GET /domains?class=sinner&mx=unsupported` (likewise scoped). A truly *global* mail-sinners count is **not** a live `/domains` scan — that headline number is read from the `mx_supported` daily stats counter (`domains − mx_supported`). The list form is always class/country/asn-scoped.
 
 **The top-shame editorial pick** (hand-curated `top_shame`, distinct from algorithmic `sinner`) is its own resource, returning the envelope:
@@ -621,7 +619,7 @@ The overview point carries the full `stats_global_daily` payload (see 05-schema.
     {
       "day": "2026-07-06",
       "domains": 1003418, "heroes": 41022, "partial": 88310, "sinners": 210144,
-      "inactive": 512900, "unknown": 151042, "gold": 3110, "disabled": 8933,
+      "inactive": 512900, "unknown": 151042, "saints": 3110, "disabled": 8933,
       "base_supported": 260113, "www_supported": 241889, "ns_supported": 402231,
       "mx_supported": 180334, "conn_supported": 251004, "resources_supported": 0,
       "top_heroes": 512, "top_nameserver": 690
@@ -762,7 +760,7 @@ Body: `{"host": "<host>"}`.
 `confirmed` (from the `domain` row; `null` if no row exists or nothing confirmed yet — all six statuses NULL), computed at **read time** on every `GET /check/{id}` and on dedupe responses:
 
 ```json
-{"classification":"partial","class_flags":["mail_missing"],"gold":false,
+{"classification":"partial","class_flags":["mail_missing"],"saint":false,
  "status":{"base":{"value":"supported","since":"..."}, "...": "six §4.1 status objects"},
  "as_of":"2026-07-06T04:12:09.331Z"}
 ```
@@ -837,28 +835,28 @@ Config keys (crawler config; registry: 09-ops.md): `live_check.workers`, `live_c
 - The `.svg` suffix is part of the route pattern, not the `{host}` param; a suffix-less path is a route-miss `404`.
 - **Declared exception to the 404-on-canonicalize-failure rule:** an invalid host (Canonicalize failure or reserved-TLD, §2.8) → `400 invalid-parameter` JSON (a malformed embed is not a legitimate request). A *valid* host is **always `200`** (a `404` renders as a broken image); disabled/unknown → the gray `IPv6: unknown` badge. XML-escape the host label into the SVG to prevent markup injection.
 
-Six precompiled byte-deterministic variants, one per `classification`(+`gold`) input. Copy is **public status vocabulary**, never ladder branding — a README badge never says "sinner"/"hero". The mapping is normative:
+Six precompiled byte-deterministic variants, one per `classification`(+`saint`) input. Copy is **public status vocabulary**, never ladder branding — a README badge never says "sinner"/"hero"/"saint" (which is why the saint variant's label is the neutral `full`, ADR 0003). The mapping is normative:
 
-| `classification` (+ `gold`) | SVG message label | shields color | `isError` (JSON variant) |
+| `classification` (+ `saint`) | SVG message label | shields color | `isError` (JSON variant) |
 |---|---|---|---|
 | `hero` | `IPv6: supported` | `brightgreen` | `false` |
-| `hero` + `gold: true` | `IPv6: gold` | `brightgreen` (gold accent) | `false` |
+| `hero` + `saint: true` | `IPv6: full` | `brightgreen` (gold accent) | `false` |
 | `partial` | `IPv6: partial` | `yellow` | `false` |
 | `sinner` | `IPv6: no IPv6` | `red` | `false` |
 | `inactive` | `IPv6: inactive` | `lightgrey` | `false` |
 | no row / `disabled` / `unknown` | `IPv6: unknown` | `lightgrey` | `true` |
 
-`sinner`'s label is `no IPv6` (not "unsupported" or "no record"). `unknown` sets `isError:true` so shields renders it as a genuine error. First match wins: no row / `disabled` / `unknown` → gray `unknown`; then `hero+gold` → gold; `hero` → supported; `partial` → partial; `sinner` → no IPv6; `inactive` → inactive. The six SVGs are shields.io-flat, label `IPv6`, fixed-geometry `textLength` (byte-deterministic, no font measurement, no dependencies); the exact template and per-label geometry constants are **golden-file fixtures in 10-testing.md** (§7.4 badge goldens, re-scoped to this six-variant table). The copy/color table is ONE Go constant table — the single place to reword.
+`sinner`'s label is `no IPv6` (not "unsupported" or "no record"). `unknown` sets `isError:true` so shields renders it as a genuine error. First match wins: no row / `disabled` / `unknown` → gray `unknown`; then `hero+saint` → full; `hero` → supported; `partial` → partial; `sinner` → no IPv6; `inactive` → inactive. The six SVGs are shields.io-flat, label `IPv6`, fixed-geometry `textLength` (byte-deterministic, no font measurement, no dependencies); the exact template and per-label geometry constants are **golden-file fixtures in 10-testing.md** (§7.4 badge goldens, re-scoped to this six-variant table). The copy/color table is ONE Go constant table — the single place to reword.
 
 **Shields.io endpoint-JSON variant** for users who want shields styling: `GET /badge/{host}.json` → `{"schemaVersion":1,"label":"IPv6","message":"supported","color":"brightgreen","cacheSeconds":86400,"isError":false}`. `message`/`color`/`isError` come from the table above. This JSON deliberately uses shields.io's **camelCase** field names (the one sanctioned camelCase exception, §2.3). Users embed `https://img.shields.io/endpoint?url=https://api.whynoipv6.com/badge/example.com.json`. Documented usage string: `![IPv6](https://api.whynoipv6.com/badge/example.com.svg)`.
 
-**Pre-phase-5 interaction:** `domain.gold` is false for everyone (`crawler.resources.enabled=false`), so heroes render `supported` — correct, no special case.
+**Pre-phase-5 interaction:** `domain.saint` is false for everyone (`crawler.resources.enabled=false`), so heroes render `supported` — correct, no special case.
 
 ### 5.3 Datasets — static bulk + manifest + citation
 
 Bulk data is a **separate static channel**, not the paginated API (keeps scrapers off the pagination path; avoids the BigQuery-only mistake that spawns unofficial mirrors).
 
-- **Served statically by nginx** under `/datasets/` (not the API). Config key `DATASETS_DIR` (string, default `/var/lib/whynoipv6/datasets`; registry: 09-ops.md), shared by the API binary and `v6ctl export`. Nightly `v6ctl export` (owned by 04-lifecycle-scheduling.md, after the stats tick) produces, atomically (tmp-dir `rename(2)`), 3 size tiers (`top100k`, `top1m`, `full`) × formats **CSV.gz + Parquet** (exactly the two formats the manifest `formats` array lists; no JSONL artifact in this build). Columns: `host, rank, kind, parent, classification, class_flags, gold, {6 confirmed statuses}, {6 since-timestamps}, tld, country, asn, dns_provider, hosting_provider, last_checked`. `top100k`/`top1m` use the publicly-ranked predicate; `full` = all non-disabled scannable entities. Dailies retained 90 d, first-of-month forever.
+- **Served statically by nginx** under `/datasets/` (not the API). Config key `DATASETS_DIR` (string, default `/var/lib/whynoipv6/datasets`; registry: 09-ops.md), shared by the API binary and `v6ctl export`. Nightly `v6ctl export` (owned by 04-lifecycle-scheduling.md, after the stats tick) produces, atomically (tmp-dir `rename(2)`), 3 size tiers (`top100k`, `top1m`, `full`) × formats **CSV.gz + Parquet** (exactly the two formats the manifest `formats` array lists; no JSONL artifact in this build). Columns: `host, rank, kind, parent, classification, class_flags, saint, {6 confirmed statuses}, {6 since-timestamps}, tld, country, asn, dns_provider, hosting_provider, last_checked`. `top100k`/`top1m` use the publicly-ranked predicate; `full` = all non-disabled scannable entities. Dailies retained 90 d, first-of-month forever.
 - **Self-describing + verifiable (OPEN-6):** each snapshot ships a Frictionless **`datapackage.json`** — a `resources[]` array with per-file `path`, `bytes`, `hash: "sha256:<digest>"` (always the `sha256:` prefix; a bare hash means MD5 to the spec), and a Table Schema of column names/types — plus a `SHA256SUMS` file and a `DICTIONARY.md`.
 
 On-disk layout:
@@ -972,7 +970,7 @@ Per item: `id`/`guid` = the composite `(host, ts, field)`; `date_published` = `t
 ### 5.6 Methodology, mandates
 
 - **Diff / "who went green"** (OPEN-7, re-resolved: **cut from this build**). A dedicated `GET /diff` endpoint added no information the confirmed-transition surfaces don't already carry — "who went green between A and B" is the `/changelog` list (§4.8) filtered client-side, and "what changed recently" is the change feeds (§5.4). Its response contract was never pinned; rather than invent one, the endpoint is dropped. It can return later as a purely additive endpoint if a real consumer appears.
-- **Methodology** (trust lever): `GET /methodology` returns the deterministic Hero/Partial/Sinner ladder + Gold rule + flag definitions as structured JSON, plus a `criteria_changelog[]` of every rule change (recalibrate Gold in the open). Mostly static content; the `class_flags` vocabulary it documents is the join key the frontend uses to select fix guides.
+- **Methodology** (trust lever): `GET /methodology` returns the deterministic Hero/Partial/Sinner ladder + Saint rule + flag definitions as structured JSON, plus a `criteria_changelog[]` of every rule change (recalibrate Saint in the open). Mostly static content; the `class_flags` vocabulary it documents is the join key the frontend uses to select fix guides.
 - **Government-mandate compliance tracking** (OPEN-12, resolved YES — explicitly wanted): the campaign `tags`/mandate capability (the `campaign.tags` TEXT[] column with GIN index `idx_campaign_tags`, 05-schema.md — campaign table) backs a **`?tag=`** filter on `GET /campaigns` and a **`GET /mandates`** surface. **Decision — the mandate predicate and shape:** a campaign is a mandate iff it carries the literal tag `mandate` (`'mandate' = ANY(tags)`, GIN-served); descriptive companion tags (`eu-2030`, `sector-banking`) are ordinary kebab-case tags per the 06-ingest.md tag grammar (no namespace colons). `GET /mandates` ≡ `GET /campaigns?tag=mandate` — the standard campaign list envelope, nothing bespoke; there is no `citations` field (legal/citation copy is frontend content keyed by campaign `name`/`description`, not API data). The `campaign` resource (§4.7) exposes `tags`.
 - **Contact-discovery / notification toolkit** (OPEN-8, resolved NO) — **not built**; templates remain static.
 - **OG/social cards** — deferred; pairs with the badge renderer (same image pipeline), unverified impact.

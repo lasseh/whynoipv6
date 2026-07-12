@@ -384,7 +384,7 @@ Commit `chore: remove within-file duplicate hosts` in the campaign repo, deletin
 
 ## 5. Resource-host registry
 
-Tables: `resource_host` (globally deduped host registry with confirmed `aaaa_status`) and `domain_resource` (the dependency link) — DDL in 05-schema.md — resource tables. `fonts.googleapis.com` is checked once per day, not once per dependent site. Hosts never write changelog rows (changelog is domain-scoped). Resources affect **Gold only** — hero/partial/sinner and the shame bar never read them.
+Tables: `resource_host` (globally deduped host registry with confirmed `aaaa_status`) and `domain_resource` (the dependency link) — DDL in 05-schema.md — resource tables. `fonts.googleapis.com` is checked once per day, not once per dependent site. Hosts never write changelog rows (changelog is domain-scoped). Resources affect **Saint only** — hero/partial/sinner and the shame bar never read them.
 
 **Phasing:** config key `crawler.resources.enabled` (bool, default `false`; flipped to `true` at phase-5 deploy; registry: 09-ops.md). While `false`: the crawler skips `resource_discovery` entirely, writes `resources = 'not_applicable'` to every `scan` row, excludes the resources dimension from the commit loop (03-state-machine.md owns that behavior), **and — Decision — the sweep worker (§5.3) does not run** (the registry is empty; the goroutine is simply not started when the flag is false at boot; flag changes take effect on restart).
 
@@ -507,7 +507,7 @@ last_checked_at = now()
 next_check_at   = now() + interval '24 hours'
 ```
 
-`last_checked_at` is set only on definitive outcomes (non-definitive "touches nothing"). Hosts never write changelog rows. The deliberate **double hysteresis** (host N=2 stacked under the domain dimension's N=3) gives a worst-case ~5 days for a Gold transition; this is intentional — the domain level also absorbs link-set churn (rotating ad/CDN hosts across fetches), which host-level confirmation cannot.
+`last_checked_at` is set only on definitive outcomes (non-definitive "touches nothing"). Hosts never write changelog rows. The deliberate **double hysteresis** (host N=2 stacked under the domain dimension's N=3) gives a worst-case ~5 days for a Saint transition; this is intentional — the domain level also absorbs link-set churn (rotating ad/CDN hosts across fetches), which host-level confirmation cannot.
 
 ### 5.5 Manual link verbs (operator-only; there is no HTTP admin surface)
 
@@ -525,7 +525,7 @@ next_check_at   = now() + interval '24 hours'
   WHERE id = $2 AND (SELECT inserted FROM up);
   ```
 
-  `--advisory` writes `required = FALSE`: the link is visible on the detail API but excluded from the Gold roll-up. Manual links are never pruned by §5.1 step 3.
+  `--advisory` writes `required = FALSE`: the link is visible on the detail API but excluded from the Saint roll-up. Manual links are never pruned by §5.1 step 3.
 - **`v6ctl resource remove <domain> <host>`** — resolve both (unknown domain/host → exit 1). Delete the link and decrement:
 
   ```sql
@@ -704,7 +704,7 @@ Hardcoded constants (deliberately not config): v6ctl advisory-lock wait 5m; disc
 
 This section owns the SQL query bodies for **daily tick step 2** (product-stats snapshot) and **daily tick step 3** (country/ASN/DNS-provider counter recompute) — the tick step order, advisory lock (`JobDailyTick`), and failure containment are owned by 04-lifecycle-scheduling.md — The daily tick. The same snapshot upserts and counter recomputes are re-run verbatim by `v6ctl stats recalc` (§10.7), which the cutover runbook invokes once at DNS flip to seed the first real snapshot (08-migration-cutover.md — DNS-flip cutover). The columns they populate are read by the `/stats/*`, `/stats/overview`, `/asns`, and `/countries` serializers (07-api.md).
 
-These are snapshots of **confirmed** domain state (the `domain.*_status`, `domain.classification`, `domain.gold` columns), **never** scan-derived: public graphs must match the public lists exactly, and a continuous aggregate over raw observations would wobble with scan timing and include unconfirmed values. All DDL (`stats_global_daily`, `stats_country_daily`, `stats_campaign_daily`, `stats_asn_daily`, and the `country`/`asn` counter columns) lives in 05-schema.md — stats tables and the `country`/`asn` tables.
+These are snapshots of **confirmed** domain state (the `domain.*_status`, `domain.classification`, `domain.saint` columns), **never** scan-derived: public graphs must match the public lists exactly, and a continuous aggregate over raw observations would wobble with scan timing and include unconfirmed values. All DDL (`stats_global_daily`, `stats_country_daily`, `stats_campaign_daily`, `stats_asn_daily`, and the `country`/`asn` counter columns) lives in 05-schema.md — stats tables and the `country`/`asn` tables.
 
 Every statement is independently idempotent — the four snapshots are `INSERT … ON CONFLICT (<pk>) DO UPDATE SET <every counter> = excluded.<col>` (**DO UPDATE, never DO NOTHING**, so a same-day re-run overwrites), and the two recomputes are set-based `UPDATE`s. `day` is `CURRENT_DATE` for the three DATE-keyed tables and `CURRENT_DATE::timestamptz` (UTC midnight; the database runs in UTC) for `stats_asn_daily`. The tick runs them sequentially after the lifecycle sweep (step 1); ordering among the six is irrelevant because none reads another's output.
 
@@ -723,7 +723,7 @@ Population is the ranked set (`WHERE rank IS NOT NULL`); each counter carries it
 
 ```sql
 INSERT INTO stats_global_daily (
-  day, domains, sinners, partial, heroes, gold, inactive, unknown, disabled,
+  day, domains, sinners, partial, heroes, saints, inactive, unknown, disabled,
   base_supported, www_supported, ns_supported, mx_supported, conn_supported,
   resources_supported, top_heroes, top_nameserver, generated_at)
 SELECT
@@ -732,7 +732,7 @@ SELECT
   count(*) FILTER (WHERE NOT disabled AND classification = 'sinner'),
   count(*) FILTER (WHERE NOT disabled AND classification = 'partial'),
   count(*) FILTER (WHERE NOT disabled AND classification = 'hero'),
-  count(*) FILTER (WHERE NOT disabled AND gold),
+  count(*) FILTER (WHERE NOT disabled AND saint),
   count(*) FILTER (WHERE NOT disabled AND classification = 'inactive'),
   count(*) FILTER (WHERE NOT disabled AND classification = 'unknown'),
   count(*) FILTER (WHERE disabled),                                   -- the one exception
@@ -755,7 +755,7 @@ ON CONFLICT (day) DO UPDATE SET
   sinners             = excluded.sinners,
   partial             = excluded.partial,
   heroes              = excluded.heroes,
-  gold                = excluded.gold,
+  saints              = excluded.saints,
   inactive            = excluded.inactive,
   unknown             = excluded.unknown,
   disabled            = excluded.disabled,
@@ -772,7 +772,7 @@ ON CONFLICT (day) DO UPDATE SET
 
 `generated_at = now()` is the crawl-freshness signal 05-schema.md documents on the column and the deterministic source of the envelope `meta.as_of` (07-api.md — §2.4); every rollup (including intraday re-runs via `v6ctl stats recalc`) refreshes it.
 
-While `crawler.resources.enabled = false` (§5), `resources_status` is NULL everywhere, so `resources_supported = 0` and `gold = 0` — correct: no gold badges before the resources feature ships. `domains` is the total publicly-ranked count and thus equals `sinners + partial + heroes + inactive + unknown` (the ladder is total over confirmed `base`; a NULL `base` lands in `unknown`).
+While `crawler.resources.enabled = false` (§5), `resources_status` is NULL everywhere, so `resources_supported = 0` and `saints = 0` — correct: no saints before the resources feature ships. `domains` is the total publicly-ranked count and thus equals `sinners + partial + heroes + inactive + unknown` (the ladder is total over confirmed `base`; a NULL `base` lands in `unknown`).
 
 ### 10.3 `stats_country_daily` snapshot (`db/query/stats.sql`)
 

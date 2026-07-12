@@ -223,7 +223,7 @@ CREATE TABLE domain (
   classification  classification NOT NULL DEFAULT 'unknown',
   class_flags     TEXT[] NOT NULL DEFAULT '{}',   -- broken_v6, www_missing, ns_missing,
                                                   -- mail_missing, resources_v4only
-  gold            BOOLEAN NOT NULL DEFAULT FALSE, -- hero + all resources v6 (badge)
+  saint           BOOLEAN NOT NULL DEFAULT FALSE, -- hero + all resources v6 (badge)
 
   asn_id      INT NOT NULL REFERENCES asn(id),     -- sentinel row when unknown (§6);
   country_id  INT NOT NULL REFERENCES country(id), --   no serializer ever handles NULL
@@ -423,7 +423,7 @@ CREATE UNIQUE INDEX idx_tranco_import_list ON tranco_import (list_id) WHERE NOT 
 
 CREATE TABLE stats_global_daily (
   day DATE PRIMARY KEY,
-  domains INT, sinners INT, partial INT, heroes INT, gold INT, inactive INT,
+  domains INT, sinners INT, partial INT, heroes INT, saints INT, inactive INT,
   unknown INT, disabled INT,
   base_supported INT, www_supported INT, ns_supported INT, mx_supported INT,
   conn_supported INT, resources_supported INT,
@@ -713,7 +713,7 @@ INSERT INTO country (name, code, tld) VALUES
 -- stats_global_daily row and MUST always find one, even on first boot before
 -- the first nightly snapshot.
 INSERT INTO stats_global_daily (
-  day, domains, sinners, partial, heroes, gold, inactive, unknown, disabled,
+  day, domains, sinners, partial, heroes, saints, inactive, unknown, disabled,
   base_supported, www_supported, ns_supported, mx_supported, conn_supported,
   resources_supported, top_heroes, top_nameserver)
 VALUES (CURRENT_DATE, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
@@ -894,7 +894,7 @@ Columns whose existence is mandated by exactly one consumer elsewhere in the spe
 - `domain.last_requested_at` — 7-day live-check frontier linkage (`lifecycle.live_check_linkage`), touched by `POST /check` (07), read by the sweep (06).
 - `domain.claimed_at` — lease fence token; deliberately **unindexed** so lease stamping is HOT (04).
 - `domain.class_flags` — `broken_v6`, `www_missing`, `ns_missing`, `mail_missing`, `resources_v4only`; TEXT[] rather than an enum array so flags can be added without migration (03 owns the truth table).
-- `domain.gold` — badge + stats `gold` counter; false for all domains until `crawler.resources.enabled` flips at phase 5 (registry: 09-ops.md).
+- `domain.saint` — badge + stats `saints` counter; false for all domains until `crawler.resources.enabled` flips at phase 5 (registry: 09-ops.md).
 - `domain.updated_at` / `domain.last_checked_at` — serialized under their own `snake_case` names (`updated_at`, `last_checked_at`); each `*_since` column is the `since` field of its dimension's `{value, since}` status object (07 §4.1) — no `ts_*` renaming, no zero-time encoding.
 - `country.percent NUMERIC(5,2)` — direct serialization for `/countries` (kills production's pgtype ÷10 hack, 07).
 - `asn.count_total` / `asn.count_v6`, `dns_provider.count_total` / `dns_provider.count_v6`, `country.sites` / `country.v6sites` / `country.percent` — recomputed by tick step 3 over the publicly-ranked predicate (06).

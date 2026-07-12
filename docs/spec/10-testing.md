@@ -20,7 +20,7 @@ served natively at `api.whynoipv6.com` root, and the contract is pinned by `open
 - `internal/consensus/*_test.go` — quorum permutation table + breaker sequences (§3).
 - `internal/crawler/observe_test.go` — base/www, conn, ns/mx, resources mapper vectors (§4).
 - `internal/crawler/commit_test.go` — anti-flap / commit-machine sequences (§5).
-- `internal/domain/classify_test.go` — classification truth-table + flags + gold vectors (§6).
+- `internal/domain/classify_test.go` — classification truth-table + flags + saint vectors (§6).
 - `internal/api/*_test.go` — status-object, envelope, keyset cursor codec, RFC 9457, badge/CSV/feed/manifest serializer, and §5.9 reconstruction vectors (§7); native API contract + behavioral fixtures (§8).
 - `internal/api/testdata/badge/**`, `internal/api/testdata/feed/**` — byte-exact SVG golden files and Atom/JSON-Feed golden bodies.
 - `internal/postgres/*_integration_test.go`, `internal/crawler/*_integration_test.go` — testcontainers integration suite (§9, §10), all behind the `integration` build tag.
@@ -471,7 +471,7 @@ Start: `base=supported` at T0.
 | 3 | +72h | inconsistent | same — pending survives |
 | 4 | +96h | unsupported | count=2 → **flip**, changelog old=supported new=unsupported |
 
-Proves `error`/`inconsistent` never modify status/pending/since/classification/flags/gold/
+Proves `error`/`inconsistent` never modify status/pending/since/classification/flags/saint/
 attribution but the scan rows are still written and `d_observed` updates (03 §17 acceptance #3).
 For `conn`, add a companion showing an `error` conn observation does not trigger a `recheck_error`
 pull-in (only base/www drive pull-ins — 04). For `resources`, an `error` roll-up (unswept host
@@ -497,7 +497,7 @@ pre-death confirmed values, `dead_streak=0`.
 
 | step | Δt | base obs | effect |
 |---|---|---|---|
-| 1 | +30d | supported (definitive) | **Step R fires before applying**: clear disabled/reason/at, dead_streak=0, every core `d_status/d_observed/d_pending/d_pending_count/d_since` → NULL, informational cols → NULL, classification=`unknown`, class_flags=`{}`, gold=false — **no changelog for the reset**. Then this scan's `base=supported` flows through the normal loop against NULL → commits immediately, `base_status=supported`, **no changelog** (first-confirmation). |
+| 1 | +30d | supported (definitive) | **Step R fires before applying**: clear disabled/reason/at, dead_streak=0, every core `d_status/d_observed/d_pending/d_pending_count/d_since` → NULL, informational cols → NULL, classification=`unknown`, class_flags=`{}`, saint=false — **no changelog for the reset**. Then this scan's `base=supported` flows through the normal loop against NULL → commits immediately, `base_status=supported`, **no changelog** (first-confirmation). |
 
 Assert: a domain returning from the dead reappears with a fresh status and a *clean* changelog
 (no reset row, no bootstrap row) (03 §17 acceptance #2, #7). Recovery only fires when the base
@@ -534,7 +534,7 @@ increment `lease_lost`". The real two-worker race is the integration test §10.4
 
 Tests `internal/domain/classify.go` `Classify` (03-state-machine.md — §10). Pure function over
 confirmed values; each ∈ `{supported, unsupported, no_record, not_applicable, NULL}`. First
-match wins. Two outputs: `classification` and, independently, the five flags + `gold`.
+match wins. Two outputs: `classification` and, independently, the five flags + `saint`.
 
 ### 6.1 Classification (every truth-table row + edges)
 
@@ -580,19 +580,19 @@ A flag is set **only** when the named dimension is confirmed `unsupported`; NULL
 of classification — assert a `sinner` (base=unsupported) with `conn=unsupported` carries
 `broken_v6`.
 
-### 6.3 Gold
+### 6.3 Saint
 
-| name | classification | resources | gold |
+| name | classification | resources | saint |
 |---|---|---|---|
-| gold_hero_res_supported | hero | supported | **true** |
-| gold_hero_res_na | hero | not_applicable | **true** |
-| gold_hero_res_unsupported | hero | unsupported | false |
-| gold_hero_res_null | hero | NULL | false |
-| gold_partial_res_supported | partial | supported | false |
+| saint_hero_res_supported | hero | supported | **true** |
+| saint_hero_res_na | hero | not_applicable | **true** |
+| saint_hero_res_unsupported | hero | unsupported | false |
+| saint_hero_res_null | hero | NULL | false |
+| saint_partial_res_supported | partial | supported | false |
 
-`gold = classification==hero AND resources ∈ {supported, not_applicable}`; NULL resources →
-not gold (03 §17 acceptance #8). Compose with the phase gate: while `crawler.resources.enabled=false`
-`resources_status` is NULL for everyone, so **no domain is gold** (03 §17 acceptance #9,
+`saint = classification==hero AND resources ∈ {supported, not_applicable}`; NULL resources →
+not saint (03 §17 acceptance #8). Compose with the phase gate: while `crawler.resources.enabled=false`
+`resources_status` is NULL for everyone, so **no domain is saint** (03 §17 acceptance #9,
 integration-verified in §10.2).
 
 ---
@@ -721,7 +721,7 @@ byte-exact legacy error bodies): **no** handler ever emits a `200`-with-error-bo
 `?format=csv` on the list endpoints (`/domains*`, `/countries`, `/asns`, `/changelog`, search).
 `Content-Type: text/csv; charset=utf-8`, `Content-Disposition: attachment`. A defined column
 set per list — for `/domains` the summary-row columns (`host, rank, kind, parent,
-classification, class_flags, gold, base, www, ns, mx, conn, resources, country, asn,
+classification, class_flags, saint, base, www, ns, mx, conn, resources, country, asn,
 last_checked_at`). Golden CSV vector:
 
 | name | row | asserts |
@@ -736,17 +736,18 @@ steered to the static datasets (§7.8 manifest / design report §6.3), not deep 
 
 ### 7.6 Badge renderer golden SVGs — public status vocabulary (design report §6.2)
 
-Six byte-exact golden files `internal/api/testdata/badge/{supported,gold,partial,no-ipv6,inactive,unknown}.svg`,
+Six byte-exact golden files `internal/api/testdata/badge/{supported,full,partial,no-ipv6,inactive,unknown}.svg`,
 one per badge variant. Copy is the **public status vocabulary**, never ladder branding — a
-README badge never says "sinner"/"hero" (design report §6.2). The renderer is a pure
-`(classification, gold, disabled) → []byte`; assert `bytes.Equal` against the golden. The
-`(classification+gold) → message/color` mapping is normative (07-api.md — badge is authoritative
+README badge never says "sinner"/"hero"/"saint" (design report §6.2; the saint variant's label
+is the neutral `full`, ADR 0003). The renderer is a pure
+`(classification, saint, disabled) → []byte`; assert `bytes.Equal` against the golden. The
+`(classification+saint) → message/color` mapping is normative (07-api.md — badge is authoritative
 for exact geometry/hex; the shields color names below are from the report):
 
-| name | input `(classification, gold, disabled)` | SVG message | shields color | `.json` `isError` |
+| name | input `(classification, saint, disabled)` | SVG message | shields color | `.json` `isError` |
 |---|---|---|---|---|
 | badge_supported | hero, false, false | `IPv6: supported` | `brightgreen` | false |
-| badge_gold | hero, **true**, false | `IPv6: gold` | `brightgreen` (gold accent) | false |
+| badge_full | hero, **true**, false | `IPv6: full` | `brightgreen` (gold accent) | false |
 | badge_partial | partial, —, false | `IPv6: partial` | `yellow` | false |
 | badge_no_ipv6 | sinner, —, false | `IPv6: no IPv6` | `red` | false |
 | badge_inactive | inactive, —, false | `IPv6: inactive` | `lightgrey` | false |
@@ -829,7 +830,7 @@ trust-consistent and cannot leak observation-level noise.
 There is **no** parity/golden-capture plan: the frozen-frontend compat surface is dropped and
 there is no production reference to record against (design report §10.6). This section owns the
 native contract fixtures — the OpenAPI drift gate and the behavioral tests that prove the real
-status/classification/gold/flags model reaches the wire correctly. Endpoint **shapes** are
+status/classification/saint/flags model reaches the wire correctly. Endpoint **shapes** are
 authoritative in 07-api.md; this section never restates a response shape, it cites the design
 concept and 07.
 
@@ -863,9 +864,11 @@ same seeded DB (same keyset cursor, same order):
 |---|---|
 | `GET /heroes` | `GET /domains?class=hero` |
 | `GET /sinners` | `GET /domains?class=sinner` |
-| `GET /gold` | `GET /domains?gold=true` |
-| `GET /almost` | `GET /domains?class=partial` ("almost there" ≡ `partial` — one class, two names; 07-api.md §2.2) |
-| `GET /mail` | `GET /domains?class=hero&mx=supported` (scoped so `mx=` is indexed via `class`) |
+| `GET /saints` | `GET /domains?saint=true` |
+
+(The former `/almost` and `/mail` tier paths are removed — ADR 0003; `GET /domains?class=partial`
+and `GET /domains?class=hero&mx=supported` are the canonical spellings and stay covered by the
+`/domains` filter vectors.)
 
 Assert the filter param is **`class`** (not `classification`), that there is **no `/v1`** URL
 segment (served at root), and that tier paths accept the same additional filters — `GET
@@ -877,8 +880,8 @@ segment (served at root), and that tier paths accept the same additional filters
 Reframed from the deleted legacy membership synthetics onto the real model:
 
 - **Membership ladder:** an entity confirmed `base=supported, www=unsupported` appears on `GET
-  /almost` carrying `www_missing` in `class_flags`, and **not** on `GET /heroes`; a confirmed
-  `base=unsupported` appears on `GET /sinners` and not `/almost`. Repeat for the
+  /domains?class=partial` carrying `www_missing` in `class_flags`, and **not** on `GET /heroes`;
+  a confirmed `base=unsupported` appears on `GET /sinners` and not `/domains?class=partial`. Repeat for the
   `/countries/{code}/domains?class=sinner` vs `?class=hero` pair.
 - **Visibility:** a `disabled=true` domain appears on **no** list, feed, stats, or search
   response and returns `404 not-found` on `GET /domains/{host}`; a `disabled=true` campaign
@@ -1046,7 +1049,7 @@ live schema and assert the persisted rows:
   non-definitive sweep (timeout/SERVFAIL) changes nothing except bumping `next_check_at = now()+2h`;
   a definitive sweep sets `next_check_at = now()+24h`; hosts never write changelog rows.
 - **Phase gate (03 §17 #9):** with `crawler.resources.enabled=false`, every `scan.resources` row
-  is `not_applicable`, all `domain.resources_*` columns stay NULL, and no domain is `gold`; flip
+  is `not_applicable`, all `domain.resources_*` columns stay NULL, and no domain is `saint`; flip
   to true and one clean scan after the first sweep confirms resources via the first-observation rule.
 
 ### 10.3 Lifecycle sweep (04 — §8; design §2.6 step 1)
@@ -1124,8 +1127,8 @@ Config keys `live_check.workers`, `job_budget`, `reclaim_after`, `fail_after`, `
 
 ### 10.6 Badge handler (design report §6.2)
 
-Against a live DB with seeded rows: a hero-gold host → `200` `image/svg+xml` byte-equal to the
-`IPv6: gold` golden (§7.6); unknown host → `200` gray `IPv6: unknown`; disabled host → `200`
+Against a live DB with seeded rows: a hero-saint host → `200` `image/svg+xml` byte-equal to the
+`IPv6: full` golden (§7.6); unknown host → `200` gray `IPv6: unknown`; disabled host → `200`
 gray `IPv6: unknown` (differs from `GET /domains/{host}`'s 404-on-disabled); `xn--`-input and
 the equivalent Unicode input render the **same** badge (Canonicalize folds them); `.svg`-less
 path (`/badge/dnb.no`) → `404` (route miss); invalid host → `400 invalid-parameter`

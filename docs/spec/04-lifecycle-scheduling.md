@@ -251,7 +251,7 @@ Scheduling then lands on the slow lane via §5.1 step 3 (`next_check_at = now() 
 - **NXDOMAIN domains** produce definitive `base = no_record` observations, so they ride **daily cadence** → dead in 7 days.
 - **Genuinely-lame all-SERVFAIL domains** (all-SERVFAIL/REFUSED **and** CD=1 → `cd_fail`) produce `base = error` (non-definitive), so they ride the §5 error-lane backoff: the 7th consecutive unresolvable scan lands after 6+12+24+48+96+192 = 378h of accumulated spacing → dead in **~2.3 weeks**. An all-SERVFAIL domain that is merely DNSSEC-broken (CD=1 → `cd_present`) is credited `base = supported` and is **never** dead (grilling round, 2026-07-10).
 
-Setting `disabled = TRUE` does **NOT** modify `classification`, `class_flags`, `gold`, or any confirmed status/`*_since` column — history and state are preserved; public exclusion is achieved solely by the `NOT disabled` filter in every public query (07-api.md).
+Setting `disabled = TRUE` does **NOT** modify `classification`, `class_flags`, `saint`, or any confirmed status/`*_since` column — history and state are preserved; public exclusion is achieved solely by the `NOT disabled` filter in every public query (07-api.md).
 
 ### 6.3 Recovery (auto, slow-lane revalidation)
 

@@ -49,7 +49,7 @@ Consequences the operator must expect (all intended, none a bug):
 - **Cold classification start.** No statuses are seeded from production; every domain sits
   at `unknown` until the anti-flap machine confirms each dimension over N consecutive crawl
   cycles (03-state-machine.md — first-confirmation rule). The day-1 dashboard's
-  hero/gold/sinner counts start low and rise to their true values over the first ~N days.
+  hero/saint/sinner counts start low and rise to their true values over the first ~N days.
   This is honest and self-heals; flag it so the low day-1 hero count reads as expected, not
   a snapshot bug.
 - **Empty changelog history.** The "who went green when" archive — the `/changelog` feeds,
@@ -121,7 +121,7 @@ throughout until the flip, so there is no public downtime.
    deployed alongside. Watch the ops webhook + Grafana for error-rate and latency
    regressions.
 6. **Soak & confirm.** Over the first ~N crawl cycles the confirmed counts
-   (heroes/gold/sinners) rise from the cold-start baseline to their true values (§1). Verify
+   (heroes/saints/sinners) rise from the cold-start baseline to their true values (§1). Verify
    the daily tick writes a `stats_*` row and the `/changelog` feed begins recording native
    post-cutover transitions.
 7. **Decommission the old backend** only after ≥1 week of clean operation on the new stack
@@ -154,9 +154,9 @@ contract-test suite (10-testing.md).
 
 **Gate C2 — membership ladder (synthetic).** Seed one entity with confirmed
 `base = supported, www = unsupported` and one with `base = unsupported`. Assert the first
-appears in `/almost` and NOT in `/sinners`; the second appears in `/sinners` and NOT in
-`/almost`. Repeat for the country-scoped tier lists. (Reframed against the new spec;
-fixtures owned by 10-testing.md.)
+appears in `/domains?class=partial` and NOT in `/sinners`; the second appears in `/sinners`
+and NOT in `/domains?class=partial`. Repeat for the country-scoped tier lists. (Reframed
+against the new spec; fixtures owned by 10-testing.md.)
 
 **Gate C3 — error/inconsistent exclusion (synthetic).** Assert the per-domain
 history/timeline endpoint (07-api.md — §4.9) excludes `error`/`inconsistent` scan rows — the

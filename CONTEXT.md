@@ -1,7 +1,7 @@
 # WhyNoIPv6 — Domain Context
 
 The canonical project glossary lives in `docs/spec/00-overview.md` §6 (entity/kind,
-dimension, observation, confirmed status, classification, gold, frontier, lease,
+dimension, observation, confirmed status, classification, saint, frontier, lease,
 quorum, changelog, campaign membership, preflight, keyset cursor, tier collections).
 Terms defined there are not redefined here — this file only records vocabulary that
 crystallized *after* the spec was frozen.
@@ -34,7 +34,7 @@ crystallized *after* the spec was frozen.
 
 - **IPv6-only fold.** The derived `ipv6_only` status (ADR 0002): `domain.IPv6Only(conn,
   resources)` — "does the site present the same over an IPv6-only connection".
-  Ungated by classification (unlike gold), strict on NULL inputs, serialized on
+  Ungated by classification (unlike saint), strict on NULL inputs, serialized on
   domain payloads at render time, rendered as the table's "IPv6 Only" column.
   _Avoid:_ re-deriving conn+resources verdicts in the frontend or handlers.
 
