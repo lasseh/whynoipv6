@@ -31,6 +31,6 @@ Considered and rejected: folding gold's criteria into the hero classification. T
 
 **Negative / accepted**
 
-- Breaking wire change (`gold` field/param/path and stats counter disappear) — acceptable pre-cutover with no external consumers; old `?filter=gold|almost|mail` frontend URLs fall back to the sinners tab, and an unknown `?gold=` API param is silently ignored.
+- Breaking wire change (`gold` field/param/path and stats counter disappear) — moot pre-deployment: no external consumers and no inbound URLs exist.
 - Spec 11 (implementation-plan) keeps its historical "gold" mentions as phase history; this ADR governs.
 - ADR 0002 retains its historical "gold rule" wording (ADRs are immutable records).

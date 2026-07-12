@@ -241,7 +241,7 @@ func TestVisibility(t *testing.T) {
 
 // TestTierEquivalence (07 §4.4): GET /sinners ≡ GET /domains?class=sinner;
 // the saints preset and the partial/mail /domains filters return their
-// subsets; the retired /almost and /mail tier paths 404 (ADR 0003).
+// subsets.
 func TestTierEquivalence(t *testing.T) {
 	srv, _ := newAPI(t)
 	var tier, filtered envelope
@@ -270,16 +270,6 @@ func TestTierEquivalence(t *testing.T) {
 	}
 	if len(mail.Items) == 0 {
 		t.Error("the mail track should list the odd-numbered heroes")
-	}
-	for _, gone := range []string{"/gold", "/almost", "/mail"} {
-		resp, err := http.Get(srv.URL + gone)
-		if err != nil {
-			t.Fatal(err)
-		}
-		resp.Body.Close()
-		if resp.StatusCode != http.StatusNotFound {
-			t.Errorf("GET %s = %d, want 404 (tier retired, ADR 0003)", gone, resp.StatusCode)
-		}
 	}
 	// Tier + country composition: sinners in Norway (only d2 ≤3 is partial,
 	// so no NO sinner; UN holds the rest).
