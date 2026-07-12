@@ -13,7 +13,7 @@ resources. Each dimension holds a confirmed status: `supported` (IPv6
 works), `unsupported` (no IPv6), `no_record` (no records published),
 `not_applicable` (the domain does not use that service — never penalized),
 or null (never checked). Domains classify as `hero` (full IPv6),
-`partial`, `sinner` (no IPv6), `inactive`, or `unknown`; `gold` marks
+`partial`, `sinner` (no IPv6), `inactive`, or `unknown`; `saint` marks
 exemplary heroes.
 
 ## The API (use this instead of scraping)

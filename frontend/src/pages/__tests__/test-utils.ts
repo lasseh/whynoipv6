@@ -59,7 +59,7 @@ export const domainDetail: DomainDetail = {
   parent: null,
   classification: 'partial',
   class_flags: [],
-  gold: false,
+  saint: false,
   ipv6_only: null,
   status: {
     base: status('supported'),

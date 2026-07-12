@@ -1,7 +1,7 @@
 // The tier collections (07 §2.3) as data: this one table drives the
-// DomainList tabs, its fetch dispatch, and the /heroes /sinners /gold
-// /almost /mail routes. Adding a tier is one row here, nothing else.
-import { listAlmost, listGold, listHeroes, listMail, listSinners } from '@/api'
+// DomainList tabs, its fetch dispatch, and the /heroes /sinners /saints
+// routes. Adding a tier is one row here, nothing else.
+import { listHeroes, listSaints, listSinners } from '@/api'
 import type { DomainSummary, Meta, Page } from '@/api'
 
 export interface Tier {
@@ -29,22 +29,10 @@ export const TIERS: Tier[] = [
     list: listHeroes,
   },
   {
-    slug: 'gold',
-    label: 'Gold',
+    slug: 'saints',
+    label: 'Saints',
     description: 'Heroes that also serve their sub-resources over IPv6.',
-    list: listGold,
-  },
-  {
-    slug: 'almost',
-    label: 'Almost There',
-    description: 'Domains with IPv6 on the base host but missing the hero bar.',
-    list: listAlmost,
-  },
-  {
-    slug: 'mail',
-    label: 'Mail',
-    description: 'The mail (MX) track.',
-    list: listMail,
+    list: listSaints,
   },
 ]
 

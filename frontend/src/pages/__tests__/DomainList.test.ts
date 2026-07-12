@@ -8,9 +8,7 @@ import { layoutStubs, emptyCollection, makeRouter } from './test-utils'
 vi.mock('@/api', () => ({
   listSinners: vi.fn(),
   listHeroes: vi.fn(),
-  listGold: vi.fn(),
-  listAlmost: vi.fn(),
-  listMail: vi.fn(),
+  listSaints: vi.fn(),
 }))
 
 describe('DomainList (smoke)', () => {
