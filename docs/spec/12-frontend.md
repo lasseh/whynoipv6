@@ -226,7 +226,7 @@ The visual output of each component is unchanged; only its input changes. This s
 
 ### 7.1 Domain status dimensions
 
-Old: 4 fields (`base_domain`, `www_domain`, `nameserver`, `mx_record`), 3-value strings. New: 6 status objects (07 §4.1), 4-value enum + `null`. Table columns are **Rank / Domain / Apex / WWW / E-Mail / Nameserver / IPv6 Only** — the first four status columns map to `status.base/www/mx/ns.value`; **IPv6 Only** renders the derived `ipv6_only` field (07 §4.2 — the conn+resources fold, ADR), through the same `StatusIcon` vocabulary (`null` = "Not yet checked" minus, strict until both dimensions confirm). The raw `conn`/`resources` objects stay off the table; the 4-row detail accordion is unchanged until phase 2 (§10.3).
+Old: 4 fields (`base_domain`, `www_domain`, `nameserver`, `mx_record`), 3-value strings. New: 6 status objects (07 §4.1), 4-value enum + `null`. Table columns are **Rank / Domain / Apex / WWW / E-Mail / Nameserver / IPv6 Only** — the first four status columns map to `status.base/www/mx/ns.value`; **IPv6 Only** renders the derived `ipv6_only` field (07 §4.2 — the conn+resources fold, ADR), through the same `StatusIcon` vocabulary (`null` = "Not yet checked" minus, strict until both dimensions confirm). The raw `conn`/`resources` objects stay off the table. The detail status card renders the four §7.1 rows plus an **IPv6 Only** accordion row showing the `ipv6_only` fold, which expands to the two source-dimension Trackers (`conn` labeled "Reachability", `resources` labeled "Page resources").
 
 ### 7.2 Status → icon/color (component `StatusIcon`)
 
@@ -302,7 +302,7 @@ Every page keeps its current copy and section order (scroll-animation attributes
 
 1. **Home** — HomeSaaS hero ("Shame as a Service" copy verbatim) → Searchbar (GET-form to `/search?q=`) → HomeSinners (curated `/shame` picks + rotating testimonial) → HomeDomains (top-of-`/sinners` preview table) → Notification banner (§9.5).
 2. **DomainList** — title "Unmasking the Top 1M Websites", Sinners/Heroes toggle buttons (`?filter=`), `DomainTable`, `Pagination` (§9.1). Page size 50 (`?limit=50`, the API default).
-3. **DomainDetail** — breadcrumb, host + Provider/Rank header (rank badge `bg-fuchsia-900`), Domain Status card: `RatingStars` (4 stars, §7.3) + 4-row accordion (§7.1/§7.2) each expanding a `Tracker` (§7.3) + "Last checked", then `ChangelogTable` from `/domains/{host}/changelog`. Unknown host → §6.3 not-found redirect.
+3. **DomainDetail** — breadcrumb, host + Provider/Rank header (rank badge `bg-fuchsia-900`), Domain Status card: `RatingStars` (4 stars, §7.3) + the §7.1 accordion (four dimension rows + the IPv6 Only fold row) each expanding a `Tracker` (§7.3) + "Last checked", then `ChangelogTable` from `/domains/{host}/changelog`. Unknown host → §6.3 not-found redirect.
 4. **CampaignDomain** — DomainDetail variant: campaign breadcrumb, changelog scope `/campaigns/{uuid}/domains/{host}/changelog`.
 5. **Search** — input + single "Domains" result table from `/domains?q=`, cursor-paged via §9.1 (the old page showed one unpaged list; results past 50 are now reachable through the same Previous/Next control — §7.3 covers the campaign-domain fold-in).
 6. **Metrics** — tabs `?t=overview|asn`. Overview: MetricCrawler stat grid (§7.3 mapping). ASN: MetricASN bars + sort toggle + search (§7.3).

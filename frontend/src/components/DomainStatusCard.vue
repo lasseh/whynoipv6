@@ -23,24 +23,48 @@ const headerAlignClass = computed(() =>
   props.align === 'start' ? 'text-left' : 'text-center md:text-left',
 )
 
-// Accordion state per dimension row.
-const open = reactive<Record<Dimension, boolean>>({
+// Accordion state per row (the four §7.1 dimensions + the derived fold).
+const open = reactive<Record<Dimension | 'ipv6_only', boolean>>({
   base: false,
   www: false,
   ns: false,
   mx: false,
   conn: false,
   resources: false,
+  ipv6_only: false,
 })
 
-// The four phase-1 rows (§7.1): Apex / WWW / Nameserver / E-Mail.
-const rows = computed(() => {
+interface Row {
+  key: Dimension | 'ipv6_only'
+  label: string
+  value: DomainDetail['ipv6_only']
+  /** Tracker dimensions shown when expanded; labeled when more than one. */
+  dims: { dim: Dimension; label?: string }[]
+}
+
+// The four §7.1 rows (Apex / WWW / Nameserver / E-Mail) plus the derived
+// IPv6 Only fold (ADR 0002), which expands to its two source trackers.
+const rows = computed<Row[]>(() => {
   const status = props.domain.status
   return [
-    { key: 'base' as const, label: props.domain.host, value: status.base.value },
-    { key: 'www' as const, label: `www.${props.domain.host}`, value: status.www.value },
-    { key: 'ns' as const, label: 'Nameserver', value: status.ns.value },
-    { key: 'mx' as const, label: 'E-Mail', value: status.mx.value },
+    { key: 'base', label: props.domain.host, value: status.base.value, dims: [{ dim: 'base' }] },
+    {
+      key: 'www',
+      label: `www.${props.domain.host}`,
+      value: status.www.value,
+      dims: [{ dim: 'www' }],
+    },
+    { key: 'ns', label: 'Nameserver', value: status.ns.value, dims: [{ dim: 'ns' }] },
+    { key: 'mx', label: 'E-Mail', value: status.mx.value, dims: [{ dim: 'mx' }] },
+    {
+      key: 'ipv6_only',
+      label: 'IPv6 Only',
+      value: props.domain.ipv6_only,
+      dims: [
+        { dim: 'conn', label: 'Reachability' },
+        { dim: 'resources', label: 'Page resources' },
+      ],
+    },
   ]
 })
 
@@ -111,27 +135,30 @@ const formattedTsCheck = computed(() =>
         :id="`tracker-${row.key}`"
         class="mt-2 p-2 mr-1 ml-1 bg-gray-800/30 rounded-md"
       >
-        <Tracker
-          :points="history"
-          :dimension="row.key"
-          :days="90"
-          :hover-effect="true"
-          class="mt-3 hidden lg:block"
-        />
-        <Tracker
-          :points="history"
-          :dimension="row.key"
-          :days="60"
-          :hover-effect="true"
-          class="mt-3 hidden sm:block lg:hidden"
-        />
-        <Tracker
-          :points="history"
-          :dimension="row.key"
-          :days="30"
-          :hover-effect="true"
-          class="mt-3 block sm:hidden"
-        />
+        <div v-for="d in row.dims" :key="d.dim">
+          <div v-if="d.label" class="mt-2 text-xs font-medium text-gray-400">{{ d.label }}</div>
+          <Tracker
+            :points="history"
+            :dimension="d.dim"
+            :days="90"
+            :hover-effect="true"
+            class="mt-3 hidden lg:block"
+          />
+          <Tracker
+            :points="history"
+            :dimension="d.dim"
+            :days="60"
+            :hover-effect="true"
+            class="mt-3 hidden sm:block lg:hidden"
+          />
+          <Tracker
+            :points="history"
+            :dimension="d.dim"
+            :days="30"
+            :hover-effect="true"
+            class="mt-3 block sm:hidden"
+          />
+        </div>
       </div>
     </li>
   </ul>
