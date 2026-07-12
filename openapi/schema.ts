@@ -954,6 +954,8 @@ export interface components {
             classification: components["schemas"]["Classification"];
             class_flags: components["schemas"]["ClassFlag"][];
             gold: boolean;
+            /** @description Derived conn+resources fold — whether the site presents the same over an IPv6-only connection. Null until both dimensions are confirmed. */
+            ipv6_only: components["schemas"]["IPv6Status"] | null;
             status: components["schemas"]["StatusBlock"];
             tld: string | null;
             country: components["schemas"]["CountryRef"];
@@ -985,6 +987,8 @@ export interface components {
             classification: components["schemas"]["Classification"];
             class_flags: components["schemas"]["ClassFlag"][];
             gold: boolean;
+            /** @description Derived conn+resources fold — whether the site presents the same over an IPv6-only connection. Null until both dimensions are confirmed. */
+            ipv6_only: components["schemas"]["IPv6Status"] | null;
             status: components["schemas"]["StatusBlock"];
             informational: components["schemas"]["Informational"];
             tld: string | null;

@@ -60,3 +60,45 @@ func Classify(confirmed map[Dimension]*IPv6Status) (class Classification, flags 
 	gold = class == ClassHero && resOK && (res == StatusSupported || res == StatusNotApplicable)
 	return class, flags, gold
 }
+
+// IPv6Only folds conn and resources into the derived "IPv6 only" status:
+// whether the site presents the same over an IPv6-only connection (03 §10).
+// It is ungated by classification — a non-hero domain can still be fully
+// usable IPv6-only. nil = not claimable yet; strict by design: a reachable
+// site (conn = supported) never yields supported while resources is
+// unconfirmed NULL.
+func IPv6Only(conn, resources *IPv6Status) *IPv6Status {
+	if conn == nil {
+		return nil
+	}
+	switch *conn {
+	case StatusUnsupported:
+		// broken_v6: publishes AAAA but doesn't answer — definitively not
+		// usable IPv6-only, whatever the resources say.
+		return new(StatusUnsupported)
+	case StatusNotApplicable:
+		// No AAAA on base or www — nothing to assess; the base/www
+		// statuses tell that story.
+		return new(StatusNotApplicable)
+	case StatusSupported:
+		if resources == nil {
+			return nil
+		}
+		switch *resources {
+		case StatusSupported, StatusNotApplicable:
+			// not_applicable = confirmed empty required-host set — the
+			// same vacuous pass the gold rule accepts.
+			return new(StatusSupported)
+		case StatusUnsupported:
+			return new(StatusUnsupported)
+		case StatusNoRecord:
+			// no_record never occurs on resources (02 §2 rule 3) — claim
+			// nothing on impossible input.
+			return nil
+		}
+	case StatusNoRecord:
+		// no_record never occurs on conn (02 §2 rule 3) — claim nothing.
+		return nil
+	}
+	return nil
+}

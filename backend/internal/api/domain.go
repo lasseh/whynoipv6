@@ -40,6 +40,23 @@ type StatusBlock struct {
 	Resources StatusObject `json:"resources"`
 }
 
+// ipv6OnlyOf derives the ipv6_only fold (03 §10 — domain.IPv6Only) from an
+// assembled status block, so summary and detail cannot disagree.
+func ipv6OnlyOf(st *StatusBlock) *string {
+	conv := func(v *string) *domain.IPv6Status {
+		if v == nil {
+			return nil
+		}
+		s := domain.IPv6Status(*v)
+		return &s
+	}
+	if v := domain.IPv6Only(conv(st.Conn.Value), conv(st.Resources.Value)); v != nil {
+		s := string(*v)
+		return &s
+	}
+	return nil
+}
+
 // CountryRef / ASNRef / ProviderRef are the embedded pivot objects (07 §4.2).
 type CountryRef struct {
 	Code string  `json:"code"`
@@ -66,6 +83,7 @@ type DomainSummary struct {
 	Classification  string       `json:"classification"`
 	ClassFlags      []string     `json:"class_flags"`
 	Gold            bool         `json:"gold"`
+	IPv6Only        *string      `json:"ipv6_only"`
 	Status          StatusBlock  `json:"status"`
 	TLD             *string      `json:"tld"`
 	Country         CountryRef   `json:"country"`
@@ -123,6 +141,7 @@ func summaryFromRow(r *postgres.DomainRow) DomainSummary {
 		HostingProvider: r.Hosting,
 		LastCheckedAt:   r.LastCheckedAt,
 	}
+	s.IPv6Only = ipv6OnlyOf(&s.Status)
 	if r.ProviderID != nil && r.ProviderName != nil {
 		s.DNSProvider = &ProviderRef{ID: *r.ProviderID, Name: *r.ProviderName}
 	}
@@ -513,6 +532,7 @@ type DomainDetail struct {
 	Classification  string           `json:"classification"`
 	ClassFlags      []string         `json:"class_flags"`
 	Gold            bool             `json:"gold"`
+	IPv6Only        *string          `json:"ipv6_only"`
 	Status          StatusBlock      `json:"status"`
 	Informational   Informational    `json:"informational"`
 	TLD             *string          `json:"tld"`
@@ -611,6 +631,7 @@ func (s *Server) getDomain(w http.ResponseWriter, r *http.Request) {
 		flags = []string{}
 	}
 	sextet := row.Confirmed()
+	status := statusBlockTyped(&sextet)
 	d := DomainDetail{
 		Host:           row.Host,
 		Rank:           row.Rank,
@@ -619,7 +640,8 @@ func (s *Server) getDomain(w http.ResponseWriter, r *http.Request) {
 		Classification: string(row.Classification),
 		ClassFlags:     flags,
 		Gold:           row.Gold,
-		Status:         statusBlockTyped(&sextet),
+		IPv6Only:       ipv6OnlyOf(&status),
+		Status:         status,
 		Informational: Informational{
 			DNSSEC:      maskObservation(row.DnssecObserved, false),
 			PTR:         maskObservation(row.PtrObserved, true),

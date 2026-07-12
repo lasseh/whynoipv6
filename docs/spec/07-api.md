@@ -377,6 +377,7 @@ The row returned in every `/domains*` collection:
   "classification": "partial",
   "class_flags": ["www_missing", "mail_missing"],
   "gold": false,
+  "ipv6_only": null,
   "status": {
     "base":      { "value": "supported",   "since": "2024-11-03T00:00:00Z" },
     "www":       { "value": "unsupported", "since": "2025-05-10T00:00:00Z" },
@@ -394,7 +395,7 @@ The row returned in every `/domains*` collection:
 }
 ```
 
-`rank` is `int` or **JSON `null`** (campaign-only, subdomains, live-check hosts) — never the legacy `0`. `class_flags` is the ordered array (`broken_v6`/`www_missing`/`ns_missing`/`mail_missing`/`resources_v4only`); a `partial` domain may legitimately carry `[]`. `country`/`asn` are **embedded objects**, not display-name strings. `tld` (bare eTLD suffix, `domain.tld`), `dns_provider` (embedded `{id,name}` from the `dns_provider` mapping via `domain.dns_provider_id`, `null` when unmapped), and `hosting_provider` (the normalized `domain.hosting_provider` TEXT tag as a plain string, `null` when unset) are the new per-domain pivots (05-schema.md — domain table; OPEN-4). `?fields=` can trim this to e.g. `host,rank,classification,gold`.
+`rank` is `int` or **JSON `null`** (campaign-only, subdomains, live-check hosts) — never the legacy `0`. `class_flags` is the ordered array (`broken_v6`/`www_missing`/`ns_missing`/`mail_missing`/`resources_v4only`); a `partial` domain may legitimately carry `[]`. `country`/`asn` are **embedded objects**, not display-name strings. `tld` (bare eTLD suffix, `domain.tld`), `dns_provider` (embedded `{id,name}` from the `dns_provider` mapping via `domain.dns_provider_id`, `null` when unmapped), and `hosting_provider` (the normalized `domain.hosting_provider` TEXT tag as a plain string, `null` when unset) are the new per-domain pivots (05-schema.md — domain table; OPEN-4). `?fields=` can trim this to e.g. `host,rank,classification,gold`. `ipv6_only` is the **derived conn+resources fold** (`internal/domain.IPv6Only`, 03 §10): `supported` iff `conn = supported` and `resources ∈ {supported, not_applicable}`; `unsupported` on any definitive negative; `not_applicable` when there is no AAAA to assess; JSON `null` until both dimensions are confirmed (strict — never claimed from `conn` alone). Serialized on both the §4.2 summary and the §4.3 detail, derived at render time from the same confirmed sextet as `status` so the two can never disagree.
 
 ### 4.3 Domain detail
 

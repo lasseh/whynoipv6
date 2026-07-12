@@ -1158,7 +1158,7 @@ components:
     DomainSummary:
       type: object
       description: The §4.2 list row served by every /domains* collection.
-      required: [host, rank, kind, parent, classification, class_flags, gold, status, tld, country, asn, dns_provider, hosting_provider, last_checked_at]
+      required: [host, rank, kind, parent, classification, class_flags, gold, ipv6_only, status, tld, country, asn, dns_provider, hosting_provider, last_checked_at]
       properties:
         host: { type: string, example: example.com }
         rank: { type: integer, nullable: true, description: Never the legacy 0 — null when unranked. }
@@ -1169,6 +1169,10 @@ components:
           type: array
           items: { $ref: "#/components/schemas/ClassFlag" }
         gold: { type: boolean }
+        ipv6_only:
+          allOf: [{ $ref: "#/components/schemas/IPv6Status" }]
+          nullable: true
+          description: Derived conn+resources fold — whether the site presents the same over an IPv6-only connection. Null until both dimensions are confirmed.
         status: { $ref: "#/components/schemas/StatusBlock" }
         tld: { type: string, nullable: true }
         country: { $ref: "#/components/schemas/CountryRef" }
@@ -1194,7 +1198,7 @@ components:
         latency_v6_ms: { type: integer, nullable: true }
     DomainDetail:
       type: object
-      required: [host, rank, kind, parent, classification, class_flags, gold, status, informational, tld, country, asn, dns_provider, hosting_provider, subdomain_count, disabled, last_checked_at, created_at, meta]
+      required: [host, rank, kind, parent, classification, class_flags, gold, ipv6_only, status, informational, tld, country, asn, dns_provider, hosting_provider, subdomain_count, disabled, last_checked_at, created_at, meta]
       properties:
         host: { type: string }
         rank: { type: integer, nullable: true }
@@ -1205,6 +1209,10 @@ components:
           type: array
           items: { $ref: "#/components/schemas/ClassFlag" }
         gold: { type: boolean }
+        ipv6_only:
+          allOf: [{ $ref: "#/components/schemas/IPv6Status" }]
+          nullable: true
+          description: Derived conn+resources fold — whether the site presents the same over an IPv6-only connection. Null until both dimensions are confirmed.
         status: { $ref: "#/components/schemas/StatusBlock" }
         informational: { $ref: "#/components/schemas/Informational" }
         tld: { type: string, nullable: true }

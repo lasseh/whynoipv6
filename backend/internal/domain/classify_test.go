@@ -5,8 +5,6 @@ import (
 	"testing"
 )
 
-func sp(s IPv6Status) *IPv6Status { return &s }
-
 func conf(base, www, ns, conn, mx, res *IPv6Status) map[Dimension]*IPv6Status {
 	return map[Dimension]*IPv6Status{
 		DimBase: base, DimWWW: www, DimNS: ns, DimConn: conn, DimMX: mx, DimResources: res,
@@ -16,7 +14,7 @@ func conf(base, www, ns, conn, mx, res *IPv6Status) map[Dimension]*IPv6Status {
 // TestClassify reproduces the 03 §10 truth table (10-testing.md §6.1–§6.3)
 // plus a totality sweep over the full cross-product.
 func TestClassify(t *testing.T) {
-	sup, uns, nr, na := sp(StatusSupported), sp(StatusUnsupported), sp(StatusNoRecord), sp(StatusNotApplicable)
+	sup, uns, nr, na := new(StatusSupported), new(StatusUnsupported), new(StatusNoRecord), new(StatusNotApplicable)
 
 	classRows := []struct {
 		name                    string
@@ -119,7 +117,7 @@ func TestClassify(t *testing.T) {
 // five classes) and non-contradicting (unknown iff base NULL, etc.).
 func TestClassifyTotality(t *testing.T) {
 	vals := []*IPv6Status{nil,
-		sp(StatusSupported), sp(StatusUnsupported), sp(StatusNoRecord), sp(StatusNotApplicable)}
+		new(StatusSupported), new(StatusUnsupported), new(StatusNoRecord), new(StatusNotApplicable)}
 	valid := map[Classification]bool{
 		ClassUnknown: true, ClassInactive: true, ClassSinner: true,
 		ClassPartial: true, ClassHero: true,
@@ -151,5 +149,66 @@ func TestClassifyTotality(t *testing.T) {
 	}
 	if n != 3125 {
 		t.Fatalf("cross-product size = %d, want 5^5", n)
+	}
+}
+
+// TestIPv6Only pins the full 5×5 truth table of the conn+resources fold
+// (03 §10): strict on NULL resources, first-match on a broken conn, and
+// nothing claimed on the impossible no_record inputs.
+func TestIPv6Only(t *testing.T) {
+	sup, uns, nr, na := new(StatusSupported), new(StatusUnsupported), new(StatusNoRecord), new(StatusNotApplicable)
+
+	// want[conn][resources]; key "" = nil input, value nil = nil result.
+	key := func(s *IPv6Status) IPv6Status {
+		if s == nil {
+			return ""
+		}
+		return *s
+	}
+	want := map[IPv6Status]map[IPv6Status]*IPv6Status{
+		"": {"": nil, StatusSupported: nil, StatusUnsupported: nil, StatusNoRecord: nil, StatusNotApplicable: nil},
+		StatusSupported: {
+			"":                  nil, // reachable, resources unconfirmed → claim nothing (strict)
+			StatusSupported:     sup,
+			StatusUnsupported:   uns,
+			StatusNoRecord:      nil, // impossible input
+			StatusNotApplicable: sup, // vacuous pass: no required resources
+		},
+		StatusUnsupported: { // broken_v6 wins regardless of resources
+			"": uns, StatusSupported: uns, StatusUnsupported: uns, StatusNoRecord: uns, StatusNotApplicable: uns,
+		},
+		StatusNoRecord: { // impossible input → claim nothing
+			"": nil, StatusSupported: nil, StatusUnsupported: nil, StatusNoRecord: nil, StatusNotApplicable: nil,
+		},
+		StatusNotApplicable: { // no AAAA anywhere — nothing to assess
+			"": na, StatusSupported: na, StatusUnsupported: na, StatusNoRecord: na, StatusNotApplicable: na,
+		},
+	}
+
+	vals := []*IPv6Status{nil, sup, uns, nr, na}
+	n := 0
+	for _, conn := range vals {
+		for _, res := range vals {
+			n++
+			got := IPv6Only(conn, res)
+			expected := want[key(conn)][key(res)]
+			if key(got) != key(expected) {
+				t.Errorf("IPv6Only(%q, %q) = %q, want %q", key(conn), key(res), key(got), key(expected))
+			}
+			// Trust invariants: supported requires reachable + clean/vacuous
+			// resources; unsupported requires a definitive negative.
+			if got != nil && *got == StatusSupported &&
+				(key(conn) != StatusSupported ||
+					(key(res) != StatusSupported && key(res) != StatusNotApplicable)) {
+				t.Errorf("supported claimed without evidence: conn=%q res=%q", key(conn), key(res))
+			}
+			if got != nil && *got == StatusUnsupported &&
+				key(conn) != StatusUnsupported && key(res) != StatusUnsupported {
+				t.Errorf("unsupported claimed without a definitive negative: conn=%q res=%q", key(conn), key(res))
+			}
+		}
+	}
+	if n != 25 {
+		t.Fatalf("cross-product size = %d, want 5^2", n)
 	}
 }
