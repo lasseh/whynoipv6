@@ -60,7 +60,7 @@ const hoverIndex = ref<number | null>(null)
             </div>
             <div class="font-semibold text-center md:hidden">MX</div>
           </th>
-          <th class="px-5 py-3 whitespace-nowrap">
+          <th class="px-2 py-3 whitespace-nowrap">
             <div class="font-semibold text-center md:block hidden">
               <div class="has-tooltip">
                 <span
@@ -71,6 +71,18 @@ const hoverIndex = ref<number | null>(null)
               </div>
             </div>
             <div class="font-semibold text-center md:hidden">NS</div>
+          </th>
+          <th class="px-5 py-3 whitespace-nowrap">
+            <div class="font-semibold text-center md:block hidden">
+              <div class="has-tooltip">
+                <span
+                  class="tooltip rounded border border-slate-700 shadow-lg p-1 bg-gray-800 text-fuchsia-600 -mt-8 normal-case"
+                  >Loads fully over an IPv6-only connection (site + page resources)</span
+                >
+                IPv6 Only
+              </div>
+            </div>
+            <div class="font-semibold text-center md:hidden">V6</div>
           </th>
         </tr>
       </thead>
@@ -122,6 +134,11 @@ const hoverIndex = ref<number | null>(null)
           <td class="px-2 py-3 whitespace-nowrap w-px md:w-[10%] text-center">
             <div class="inline-flex px-2.5 py-1">
               <StatusIcon :value="domain.status.ns.value" />
+            </div>
+          </td>
+          <td class="px-2 py-3 whitespace-nowrap w-px md:w-[10%] text-center">
+            <div class="inline-flex px-2.5 py-1">
+              <StatusIcon :value="domain.ipv6_only" />
             </div>
           </td>
         </tr>
