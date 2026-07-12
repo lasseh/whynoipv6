@@ -32,6 +32,18 @@ crystallized *after* the spec was frozen.
   defers the dimension (`rollupResources` → error). _Avoid:_ building
   `LinkedResource` slices in callers.
 
+- **IPv6-only fold.** The derived `ipv6_only` status (ADR 0002): `domain.IPv6Only(conn,
+  resources)` — "does the site present the same over an IPv6-only connection".
+  Ungated by classification (unlike gold), strict on NULL inputs, serialized on
+  domain payloads at render time, rendered as the table's "IPv6 Only" column.
+  _Avoid:_ re-deriving conn+resources verdicts in the frontend or handlers.
+
+- **Shadow transition.** A confirmed `conn/resources → not_applicable` flip — a
+  deterministic consequence of a base/www/conn row from the same confirmation
+  window. It commits (status/`*_since`/telemetry Transition) but never writes a
+  changelog row (03 §11, write-time suppression, same mechanism as bootstrap).
+  _Avoid:_ read-time filtering of changelog rows per consumer.
+
 - **Keyset spec.** The per-endpoint description of a keyset-paginated list —
   `api.KeysetSpec{Sort, Positioned, Fetch, Key}` — consumed by `api.KeysetPage`,
   which owns the whole cursor pipeline (fingerprint → decode → seek → N+1 fetch →
