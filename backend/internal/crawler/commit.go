@@ -45,11 +45,22 @@ type CommitInput struct {
 	T            time.Time // fixed once per domain
 }
 
-// Transition is one confirmed changelog row (dim, old, new).
+// Transition is one confirmed dimension flip (dim, old, new). Every flip is
+// a Transition (telemetry); not every Transition writes a changelog row.
 type Transition struct {
 	Dim domain.Dimension
 	Old domain.IPv6Status
 	New domain.IPv6Status
+}
+
+// shadowTransition reports whether a confirmed flip is a deterministic
+// shadow of a base/www row from the same confirmation window and therefore
+// never written to the changelog (03 §11): conn → not_applicable only
+// happens when base/www lose their AAAA (which writes its own row), and
+// resources → not_applicable only happens when conn leaves supported.
+func shadowTransition(d domain.Dimension, newVal domain.IPv6Status) bool {
+	return (d == domain.DimConn || d == domain.DimResources) &&
+		newVal == domain.StatusNotApplicable
 }
 
 // CommitResult reports one commit's outcome.
@@ -173,10 +184,12 @@ func ComputeCommit(in *CommitInput, cfg *CommitConfig) (*commitUnit, error) {
 		case w.pending != nil && *w.pending == val: // pending re-observed
 			w.count++
 			if w.count >= domain.ConfirmN(d) {
-				changelog = append(changelog, db.InsertChangelogParams{
-					DomainID: s.ID, Ts: tstz(t), Field: string(d),
-					OldValue: db.Ipv6Status(*w.status), NewValue: db.Ipv6Status(val),
-				})
+				if !shadowTransition(d, val) {
+					changelog = append(changelog, db.InsertChangelogParams{
+						DomainID: s.ID, Ts: tstz(t), Field: string(d),
+						OldValue: db.Ipv6Status(*w.status), NewValue: db.Ipv6Status(val),
+					})
+				}
 				transitions = append(transitions, Transition{Dim: d, Old: *w.status, New: val})
 				w.status = &val
 				w.since = &t

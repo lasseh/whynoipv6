@@ -245,6 +245,36 @@ func TestCommitN3Flip(t *testing.T) {
 	m.assertDim(domain.DimConn, ptrStatus(domain.StatusUnsupported), nil, 0)
 }
 
+// TestCommitShadowSuppressed (03 §11): a confirmed conn → not_applicable
+// flip is a shadow of the base/www AAAA-loss rows — the status flips and
+// the Transition is reported, but no changelog row is written. Same rule
+// for resources → not_applicable.
+func TestCommitShadowSuppressed(t *testing.T) {
+	m := newMachine(t)
+	m.step(0, stableObs(domain.DimConn, domain.ObsSupported), false)
+
+	m.step(24*time.Hour, stableObs(domain.DimConn, domain.ObsNotApplicable), false)
+	m.step(48*time.Hour, stableObs(domain.DimConn, domain.ObsNotApplicable), false)
+	u := m.step(72*time.Hour, stableObs(domain.DimConn, domain.ObsNotApplicable), false)
+	if len(u.changelog) != 0 {
+		t.Fatalf("shadow conn → not_applicable wrote a changelog row: %+v", u.changelog)
+	}
+	if len(u.transitions) != 1 || u.transitions[0].Dim != domain.DimConn ||
+		u.transitions[0].New != domain.StatusNotApplicable {
+		t.Fatalf("flip must still report a Transition: %+v", u.transitions)
+	}
+	m.assertDim(domain.DimConn, ptrStatus(domain.StatusNotApplicable), nil, 0)
+
+	// The reverse direction is real news and keeps its row.
+	m.step(96*time.Hour, stableObs(domain.DimConn, domain.ObsSupported), false)
+	m.step(120*time.Hour, stableObs(domain.DimConn, domain.ObsSupported), false)
+	u = m.step(144*time.Hour, stableObs(domain.DimConn, domain.ObsSupported), false)
+	if len(u.changelog) != 1 || u.changelog[0].Field != "conn" ||
+		u.changelog[0].NewValue != db.Ipv6StatusSupported {
+		t.Fatalf("conn not_applicable → supported must keep its row: %+v", u.changelog)
+	}
+}
+
 // TestCommitNonDefinitive (10-testing §5.5): error/inconsistent touch
 // nothing; the pending candidate survives and the flip lands afterwards.
 func TestCommitNonDefinitive(t *testing.T) {
