@@ -392,8 +392,8 @@ func TestCommitResourcesExcluded(t *testing.T) {
 	if u.scan.Resources != db.ObservationNotApplicable {
 		t.Errorf("scan.resources = %s, want not_applicable", u.scan.Resources)
 	}
-	if u.params.Gold {
-		t.Error("gold while resources disabled")
+	if u.params.Saint {
+		t.Error("saint while resources disabled")
 	}
 }
 

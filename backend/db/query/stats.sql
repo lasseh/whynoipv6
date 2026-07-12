@@ -4,7 +4,7 @@
 
 -- name: SnapshotGlobalDaily :exec
 INSERT INTO stats_global_daily (
-  day, domains, sinners, partial, heroes, gold, inactive, unknown, disabled,
+  day, domains, sinners, partial, heroes, saints, inactive, unknown, disabled,
   base_supported, www_supported, ns_supported, mx_supported, conn_supported,
   resources_supported, top_heroes, top_nameserver, generated_at)
 SELECT
@@ -13,7 +13,7 @@ SELECT
   count(*) FILTER (WHERE NOT disabled AND classification = 'sinner'),
   count(*) FILTER (WHERE NOT disabled AND classification = 'partial'),
   count(*) FILTER (WHERE NOT disabled AND classification = 'hero'),
-  count(*) FILTER (WHERE NOT disabled AND gold),
+  count(*) FILTER (WHERE NOT disabled AND saint),
   count(*) FILTER (WHERE NOT disabled AND classification = 'inactive'),
   count(*) FILTER (WHERE NOT disabled AND classification = 'unknown'),
   count(*) FILTER (WHERE disabled),
@@ -36,7 +36,7 @@ ON CONFLICT (day) DO UPDATE SET
   sinners             = excluded.sinners,
   partial             = excluded.partial,
   heroes              = excluded.heroes,
-  gold                = excluded.gold,
+  saints              = excluded.saints,
   inactive            = excluded.inactive,
   unknown             = excluded.unknown,
   disabled            = excluded.disabled,
@@ -133,7 +133,7 @@ SELECT day, generated_at FROM stats_global_daily ORDER BY day DESC LIMIT 1;
 -- weekly sampling happens API-side over the fetched window.
 
 -- name: StatsGlobalRange :many
-SELECT day, domains, sinners, partial, heroes, gold, inactive, unknown, disabled,
+SELECT day, domains, sinners, partial, heroes, saints, inactive, unknown, disabled,
        base_supported, www_supported, ns_supported, mx_supported, conn_supported,
        resources_supported, top_heroes, top_nameserver
 FROM stats_global_daily
@@ -163,7 +163,7 @@ ORDER BY day ASC;
 -- three tiers — ranked_only for top100k/top1m, max_rank 0 = unbounded.
 -- name: ExportRows :many
 SELECT d.host, d.rank, d.kind, p.host AS parent,
-       d.classification, d.class_flags, d.gold,
+       d.classification, d.class_flags, d.saint,
        d.base_status, d.www_status, d.ns_status,
        d.mx_status, d.conn_status, d.resources_status,
        d.base_since, d.www_since, d.ns_since, d.mx_since, d.conn_since, d.resources_since,

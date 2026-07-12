@@ -38,7 +38,7 @@ type CheckEnvelope struct {
 type CheckConfirmed struct {
 	Classification string      `json:"classification"`
 	ClassFlags     []string    `json:"class_flags"`
-	Gold           bool        `json:"gold"`
+	Saint          bool        `json:"saint"`
 	Status         StatusBlock `json:"status"`
 	AsOf           *time.Time  `json:"as_of"`
 }
@@ -258,7 +258,7 @@ func confirmedBlock(row *db.DomainConfirmedRow) *CheckConfirmed {
 	return &CheckConfirmed{
 		Classification: string(row.Classification),
 		ClassFlags:     flags,
-		Gold:           row.Gold,
+		Saint:          row.Saint,
 		Status:         statusBlockTyped(&sextet),
 		AsOf:           pgTimePtr(row.LastCheckedAt),
 	}

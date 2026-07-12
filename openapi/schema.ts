@@ -174,49 +174,15 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/gold": {
+    "/saints": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Tier preset: gold=true */
-        get: operations["listGold"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/almost": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Tier preset: class=partial (the almost-there list) */
-        get: operations["listAlmost"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/mail": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** The mail-heroes track: class=hero & mx=supported */
-        get: operations["listMail"];
+        /** Tier preset: saint=true */
+        get: operations["listSaints"];
         put?: never;
         post?: never;
         delete?: never;
@@ -953,7 +919,7 @@ export interface components {
             parent: string | null;
             classification: components["schemas"]["Classification"];
             class_flags: components["schemas"]["ClassFlag"][];
-            gold: boolean;
+            saint: boolean;
             /** @description Derived conn+resources fold — whether the site presents the same over an IPv6-only connection. Null until both dimensions are confirmed. */
             ipv6_only: components["schemas"]["IPv6Status"] | null;
             status: components["schemas"]["StatusBlock"];
@@ -986,7 +952,7 @@ export interface components {
             parent: string | null;
             classification: components["schemas"]["Classification"];
             class_flags: components["schemas"]["ClassFlag"][];
-            gold: boolean;
+            saint: boolean;
             /** @description Derived conn+resources fold — whether the site presents the same over an IPv6-only connection. Null until both dimensions are confirmed. */
             ipv6_only: components["schemas"]["IPv6Status"] | null;
             status: components["schemas"]["StatusBlock"];
@@ -1160,7 +1126,7 @@ export interface components {
             sinners?: number | null;
             inactive?: number | null;
             unknown?: number | null;
-            gold?: number | null;
+            saints?: number | null;
             disabled?: number | null;
             base_supported?: number | null;
             www_supported?: number | null;
@@ -1273,7 +1239,7 @@ export interface components {
         CheckConfirmed: {
             classification: components["schemas"]["Classification"];
             class_flags: components["schemas"]["ClassFlag"][];
-            gold: boolean;
+            saint: boolean;
             status: components["schemas"]["StatusBlock"];
             /** Format: date-time */
             as_of: string | null;
@@ -1317,7 +1283,7 @@ export interface components {
             /** @enum {string} */
             label: "IPv6";
             /** @enum {string} */
-            message: "supported" | "gold" | "partial" | "no IPv6" | "inactive" | "unknown";
+            message: "supported" | "full" | "partial" | "no IPv6" | "inactive" | "unknown";
             /** @enum {string} */
             color: "brightgreen" | "yellow" | "red" | "lightgrey";
             /** @example 86400 */
@@ -1491,8 +1457,8 @@ export interface components {
         afterRank: number;
         sort: "rank" | "-rank" | "host";
         class: components["schemas"]["Classification"];
-        /** @description The only accepted value is true (gold ⊂ hero). */
-        gold: boolean;
+        /** @description The only accepted value is true (saint ⊂ hero). */
+        saint: boolean;
         /** @description ISO code scope; composes with class + rank order. */
         country: string;
         /** @description AS-number scope. */
@@ -1543,8 +1509,8 @@ export interface operations {
         parameters: {
             query?: {
                 class?: components["parameters"]["class"];
-                /** @description The only accepted value is true (gold ⊂ hero). */
-                gold?: components["parameters"]["gold"];
+                /** @description The only accepted value is true (saint ⊂ hero). */
+                saint?: components["parameters"]["saint"];
                 /** @description ISO code scope; composes with class + rank order. */
                 country?: components["parameters"]["country"];
                 /** @description AS-number scope. */
@@ -1836,89 +1802,7 @@ export interface operations {
             422: components["responses"]["ScopeRequired"];
         };
     };
-    listGold: {
-        parameters: {
-            query?: {
-                /** @description ISO code scope; composes with class + rank order. */
-                country?: components["parameters"]["country"];
-                /** @description AS-number scope. */
-                asn?: components["parameters"]["asn"];
-                /** @description eTLD-suffix pivot; scope-required. */
-                tld?: components["parameters"]["tld"];
-                /** @description dns_provider id pivot; scope-required as a query filter. */
-                provider?: components["parameters"]["provider"];
-                /** @description Hosting/CDN text-tag pivot; scope-required. */
-                hosting?: components["parameters"]["hosting"];
-                /** @description class_flags residual; scope-required. */
-                flag?: components["parameters"]["flag"];
-                mx?: components["parameters"]["dimMX"];
-                rank_min?: components["parameters"]["rankMin"];
-                rank_max?: components["parameters"]["rankMax"];
-                /** @description Substring search; forces the host ordering. */
-                q?: components["parameters"]["q"];
-                sort?: components["parameters"]["sort"];
-                /** @description Sparse fieldset (comma-separated top-level keys). */
-                fields?: components["parameters"]["fields"];
-                format?: components["parameters"]["format"];
-                /** @description Opaque keyset cursor from `page.next_cursor`. */
-                cursor?: components["parameters"]["cursor"];
-                /** @description Page size; default 50, cap 200 (CSV raises the cap to `export.csv_max_rows`). */
-                limit?: components["parameters"]["limit"];
-                /** @description Stateless deep link; rank-ordered views only. */
-                after_rank?: components["parameters"]["afterRank"];
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: components["responses"]["DomainList"];
-            422: components["responses"]["ScopeRequired"];
-        };
-    };
-    listAlmost: {
-        parameters: {
-            query?: {
-                /** @description ISO code scope; composes with class + rank order. */
-                country?: components["parameters"]["country"];
-                /** @description AS-number scope. */
-                asn?: components["parameters"]["asn"];
-                /** @description eTLD-suffix pivot; scope-required. */
-                tld?: components["parameters"]["tld"];
-                /** @description dns_provider id pivot; scope-required as a query filter. */
-                provider?: components["parameters"]["provider"];
-                /** @description Hosting/CDN text-tag pivot; scope-required. */
-                hosting?: components["parameters"]["hosting"];
-                /** @description class_flags residual; scope-required. */
-                flag?: components["parameters"]["flag"];
-                mx?: components["parameters"]["dimMX"];
-                rank_min?: components["parameters"]["rankMin"];
-                rank_max?: components["parameters"]["rankMax"];
-                /** @description Substring search; forces the host ordering. */
-                q?: components["parameters"]["q"];
-                sort?: components["parameters"]["sort"];
-                /** @description Sparse fieldset (comma-separated top-level keys). */
-                fields?: components["parameters"]["fields"];
-                format?: components["parameters"]["format"];
-                /** @description Opaque keyset cursor from `page.next_cursor`. */
-                cursor?: components["parameters"]["cursor"];
-                /** @description Page size; default 50, cap 200 (CSV raises the cap to `export.csv_max_rows`). */
-                limit?: components["parameters"]["limit"];
-                /** @description Stateless deep link; rank-ordered views only. */
-                after_rank?: components["parameters"]["afterRank"];
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: components["responses"]["DomainList"];
-            422: components["responses"]["ScopeRequired"];
-        };
-    };
-    listMail: {
+    listSaints: {
         parameters: {
             query?: {
                 /** @description ISO code scope; composes with class + rank order. */
@@ -2032,8 +1916,8 @@ export interface operations {
         parameters: {
             query?: {
                 class?: components["parameters"]["class"];
-                /** @description The only accepted value is true (gold ⊂ hero). */
-                gold?: components["parameters"]["gold"];
+                /** @description The only accepted value is true (saint ⊂ hero). */
+                saint?: components["parameters"]["saint"];
                 /** @description eTLD-suffix pivot; scope-required. */
                 tld?: components["parameters"]["tld"];
                 /** @description dns_provider id pivot; scope-required as a query filter. */
@@ -2210,8 +2094,8 @@ export interface operations {
         parameters: {
             query?: {
                 class?: components["parameters"]["class"];
-                /** @description The only accepted value is true (gold ⊂ hero). */
-                gold?: components["parameters"]["gold"];
+                /** @description The only accepted value is true (saint ⊂ hero). */
+                saint?: components["parameters"]["saint"];
                 /** @description eTLD-suffix pivot; scope-required. */
                 tld?: components["parameters"]["tld"];
                 /** @description dns_provider id pivot; scope-required as a query filter. */
@@ -2332,8 +2216,8 @@ export interface operations {
         parameters: {
             query?: {
                 class?: components["parameters"]["class"];
-                /** @description The only accepted value is true (gold ⊂ hero). */
-                gold?: components["parameters"]["gold"];
+                /** @description The only accepted value is true (saint ⊂ hero). */
+                saint?: components["parameters"]["saint"];
                 /** @description eTLD-suffix pivot; scope-required. */
                 tld?: components["parameters"]["tld"];
                 /** @description dns_provider id pivot; scope-required as a query filter. */

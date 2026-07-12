@@ -29,7 +29,7 @@ func seedExport(t *testing.T, pool *pgxpool.Pool) {
 	stmts := []string{
 		// 5 ranked apexes (one above 100k), one disabled, one rank-NULL.
 		`INSERT INTO domain (host, kind, rank, created_by, asn_id, country_id, tld,
-		                     classification, gold, base_status, base_since, last_checked_at)
+		                     classification, saint, base_status, base_since, last_checked_at)
 		 SELECT 'e' || g || '.example', 'apex', CASE WHEN g = 5 THEN 200000 ELSE g END, 'tranco',
 		        (SELECT id FROM asn WHERE number = 0), (SELECT id FROM country WHERE code = 'UN'),
 		        'example', 'hero', g = 1, 'supported', now() - interval '10 days', now()

@@ -14,7 +14,8 @@ import (
 
 // badgeVariant is one row of the normative copy/color table (07 §5.2) — the
 // ONE place to reword. Copy is public status vocabulary, never ladder
-// branding: a README badge never says "sinner"/"hero".
+// branding: a README badge never says "sinner"/"hero"/"saint" (the saint
+// variant's label is the neutral "full", ADR 0003).
 type badgeVariant struct {
 	Message  string // shields message ("supported", "no IPv6", …)
 	Color    string // shields color name (.json variant)
@@ -25,7 +26,7 @@ type badgeVariant struct {
 
 var badgeVariants = map[string]badgeVariant{
 	"supported": {Message: "supported", Color: "brightgreen", Hex: "#4c1", TextFill: "#fff"},
-	"gold":      {Message: "gold", Color: "brightgreen", Hex: "#4c1", TextFill: "#ffd700"},
+	"full":      {Message: "full", Color: "brightgreen", Hex: "#4c1", TextFill: "#ffd700"},
 	"partial":   {Message: "partial", Color: "yellow", Hex: "#dfb317", TextFill: "#fff"},
 	"no-ipv6":   {Message: "no IPv6", Color: "red", Hex: "#e05d44", TextFill: "#fff"},
 	"inactive":  {Message: "inactive", Color: "lightgrey", Hex: "#9f9f9f", TextFill: "#fff"},
@@ -33,14 +34,14 @@ var badgeVariants = map[string]badgeVariant{
 }
 
 // pickBadgeVariant applies the first-match rule: no row / disabled /
-// unknown → unknown; hero+gold → gold; hero → supported; partial; sinner →
+// unknown → unknown; hero+saint → full; hero → supported; partial; sinner →
 // no IPv6; inactive.
-func pickBadgeVariant(found bool, classification string, gold, disabled bool) string {
+func pickBadgeVariant(found bool, classification string, saint, disabled bool) string {
 	switch {
 	case !found || disabled || classification == "unknown":
 		return "unknown"
-	case classification == "hero" && gold:
-		return "gold"
+	case classification == "hero" && saint:
+		return "full"
 	case classification == "hero":
 		return "supported"
 	case classification == "partial":
@@ -147,7 +148,7 @@ func (s *Server) badgeVariantFor(r *http.Request, host string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return pickBadgeVariant(true, string(row.Classification), row.Gold, row.Disabled), nil
+	return pickBadgeVariant(true, string(row.Classification), row.Saint, row.Disabled), nil
 }
 
 func (s *Server) badgeCache(w http.ResponseWriter, r *http.Request) bool {

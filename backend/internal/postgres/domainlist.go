@@ -18,12 +18,12 @@ import (
 )
 
 // DomainListFilter is the validated §3.3 filter set. Closed-set values
-// (class, status dims, flag, gold) are emitted as SQL literals — required
+// (class, status dims, flag, saint) are emitted as SQL literals — required
 // for the planner's partial-index predicate-implication check; free-text
 // values (tld, hosting, q) ride bind parameters.
 type DomainListFilter struct {
 	Class     string // validated classification literal; "" = none
-	Gold      bool
+	Saint     bool
 	CountryID *int32 // resolved from the ISO code by the caller
 	ASNID     *int32 // resolved from the AS number
 	Provider  *int64 // dns_provider.id
@@ -62,7 +62,7 @@ type DomainRow struct {
 	Parent         *string    `db:"parent"`
 	Classification string     `db:"classification"`
 	ClassFlags     []string   `db:"class_flags"`
-	Gold           bool       `db:"gold"`
+	Saint          bool       `db:"saint"`
 	BaseStatus     *string    `db:"base_status"`
 	BaseSince      *time.Time `db:"base_since"`
 	WWWStatus      *string    `db:"www_status"`
@@ -94,7 +94,7 @@ func (r *DomainRow) Confirmed() ([6]*string, [6]*time.Time) {
 }
 
 const domainRowColumns = `d.id, d.host, d.rank, d.kind::text AS kind, p.host AS parent,
-d.classification::text AS classification, d.class_flags, d.gold,
+d.classification::text AS classification, d.class_flags, d.saint,
 d.base_status::text AS base_status, d.base_since,
 d.www_status::text AS www_status, d.www_since,
 d.ns_status::text AS ns_status, d.ns_since,
@@ -160,8 +160,8 @@ func buildDomainList(f *DomainListFilter, sortKey ListSort, seek *DomainSeek, af
 	if f.Class != "" {
 		q = q.Where(sq.Expr(fmt.Sprintf("d.classification = '%s'", f.Class))) // validated closed set
 	}
-	if f.Gold {
-		q = q.Where(sq.Expr("d.gold"))
+	if f.Saint {
+		q = q.Where(sq.Expr("d.saint"))
 	}
 	if f.CountryID != nil {
 		q = q.Where(sq.Expr(fmt.Sprintf("d.country_id = %d", *f.CountryID)))

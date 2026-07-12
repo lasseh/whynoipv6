@@ -58,7 +58,7 @@ func csvTime(p *time.Time) string {
 // domainCSVHeader is the defined /domains* column set — the §4.2
 // summary-row fields flattened.
 var domainCSVHeader = []string{
-	"host", "rank", "kind", "parent", "classification", "class_flags", "gold",
+	"host", "rank", "kind", "parent", "classification", "class_flags", "saint",
 	"base_status", "base_since", "www_status", "www_since",
 	"ns_status", "ns_since", "mx_status", "mx_since",
 	"conn_status", "conn_since", "resources_status", "resources_since",
@@ -84,7 +84,7 @@ func writeDomainsCSV(w http.ResponseWriter, items []DomainSummary) {
 		res, resSince := st(d.Status.Resources)
 		rows[i] = []string{
 			d.Host, csvInt32(d.Rank), d.Kind, csvStr(d.Parent), d.Classification,
-			strings.Join(d.ClassFlags, ";"), strconv.FormatBool(d.Gold),
+			strings.Join(d.ClassFlags, ";"), strconv.FormatBool(d.Saint),
 			base, baseSince, www, wwwSince, ns, nsSince, mx, mxSince,
 			conn, connSince, res, resSince,
 			csvStr(d.TLD), d.Country.Code, d.Country.Name,

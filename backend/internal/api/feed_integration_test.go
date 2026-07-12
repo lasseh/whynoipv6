@@ -161,7 +161,7 @@ func TestCSV(t *testing.T) {
 		t.Fatalf("domains csv rows = %d, want 10", len(records)-1+1)
 	}
 	header := strings.Join(records[0], ",")
-	for _, col := range []string{"host", "rank", "classification", "gold", "base_status", "country_code", "asn_number", "hosting_provider", "last_checked_at"} {
+	for _, col := range []string{"host", "rank", "classification", "saint", "base_status", "country_code", "asn_number", "hosting_provider", "last_checked_at"} {
 		if !strings.Contains(header, col) {
 			t.Errorf("domains csv header missing %s: %s", col, header)
 		}

@@ -490,7 +490,7 @@ type Domain struct {
 	LatencyV6Ms           *int32             `json:"latency_v6_ms"`
 	Classification        Classification     `json:"classification"`
 	ClassFlags            []string           `json:"class_flags"`
-	Gold                  bool               `json:"gold"`
+	Saint                 bool               `json:"saint"`
 	AsnID                 int32              `json:"asn_id"`
 	CountryID             int32              `json:"country_id"`
 	Tld                   *string            `json:"tld"`
@@ -616,7 +616,7 @@ type StatsGlobalDaily struct {
 	Sinners            *int32             `json:"sinners"`
 	Partial            *int32             `json:"partial"`
 	Heroes             *int32             `json:"heroes"`
-	Gold               *int32             `json:"gold"`
+	Saints             *int32             `json:"saints"`
 	Inactive           *int32             `json:"inactive"`
 	Unknown            *int32             `json:"unknown"`
 	Disabled           *int32             `json:"disabled"`

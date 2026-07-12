@@ -40,7 +40,7 @@ type Row struct {
 	Parent          *string `parquet:"parent,optional" json:"parent"`
 	Classification  string  `parquet:"classification" json:"classification"`
 	ClassFlags      string  `parquet:"class_flags" json:"class_flags"` // ;-joined
-	Gold            bool    `parquet:"gold" json:"gold"`
+	Saint           bool    `parquet:"saint" json:"saint"`
 	Base            *string `parquet:"base,optional" json:"base"`
 	WWW             *string `parquet:"www,optional" json:"www"`
 	NS              *string `parquet:"ns,optional" json:"ns"`
@@ -63,7 +63,7 @@ type Row struct {
 
 // columns is the CSV header and the Table Schema field order.
 var columns = []string{
-	"host", "rank", "kind", "parent", "classification", "class_flags", "gold",
+	"host", "rank", "kind", "parent", "classification", "class_flags", "saint",
 	"base", "www", "ns", "mx", "conn", "resources",
 	"base_since", "www_since", "ns_since", "mx_since", "conn_since", "resources_since",
 	"tld", "country", "asn", "dns_provider", "hosting_provider", "last_checked",
@@ -78,7 +78,7 @@ const (
 
 // columnTypes maps column → Frictionless Table Schema type.
 var columnTypes = map[string]string{
-	"rank": "integer", "gold": "boolean", "asn": "integer",
+	"rank": "integer", "saint": "boolean", "asn": "integer",
 	"base_since": typeDatetime, "www_since": typeDatetime, "ns_since": typeDatetime,
 	"mx_since": typeDatetime, "conn_since": typeDatetime, "resources_since": typeDatetime,
 	"last_checked": typeDatetime,
@@ -225,7 +225,7 @@ func (e *Exporter) fetch(ctx context.Context, rankedOnly bool, maxRank int32) ([
 			Host: d.Host, Rank: rank, Kind: string(d.Kind), Parent: d.Parent,
 			Classification: string(d.Classification),
 			ClassFlags:     strings.Join(d.ClassFlags, ";"),
-			Gold:           d.Gold,
+			Saint:          d.Saint,
 			Base:           status(d.BaseStatus), WWW: status(d.WwwStatus), NS: status(d.NsStatus),
 			MX: status(d.MxStatus), Conn: status(d.ConnStatus), Resources: status(d.ResourcesStatus),
 			BaseSince: ts(d.BaseSince), WWWSince: ts(d.WwwSince), NSSince: ts(d.NsSince),
@@ -251,7 +251,7 @@ func (r *Row) csv() []string {
 	}
 	return []string{
 		r.Host, rank, r.Kind, str(r.Parent), r.Classification, r.ClassFlags,
-		strconv.FormatBool(r.Gold),
+		strconv.FormatBool(r.Saint),
 		str(r.Base), str(r.WWW), str(r.NS), str(r.MX), str(r.Conn), str(r.Resources),
 		str(r.BaseSince), str(r.WWWSince), str(r.NSSince), str(r.MXSince), str(r.ConnSince), str(r.ResourcesSince),
 		str(r.TLD), r.Country, strconv.FormatInt(r.ASN, 10),
@@ -542,7 +542,7 @@ exported nightly. License: CC-BY-NC-4.0. https://whynoipv6.com
 | parent | string | parent apex for subdomains |
 | classification | string | unknown, inactive, sinner, partial, hero |
 | class_flags | string | ;-joined: broken_v6, www_missing, ns_missing, mail_missing, resources_v4only |
-| gold | boolean | hero with IPv6-clean page resources |
+| saint | boolean | hero with IPv6-clean page resources |
 | base/www/ns/mx/conn/resources | string | confirmed status: supported, unsupported, no_record, not_applicable; empty = never confirmed |
 | *_since | datetime | when the current confirmed value was established |
 | tld | string | bare eTLD suffix |

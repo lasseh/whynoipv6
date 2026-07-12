@@ -13,7 +13,7 @@ import (
 
 const ExportRows = `-- name: ExportRows :many
 SELECT d.host, d.rank, d.kind, p.host AS parent,
-       d.classification, d.class_flags, d.gold,
+       d.classification, d.class_flags, d.saint,
        d.base_status, d.www_status, d.ns_status,
        d.mx_status, d.conn_status, d.resources_status,
        d.base_since, d.www_since, d.ns_since, d.mx_since, d.conn_since, d.resources_since,
@@ -42,7 +42,7 @@ type ExportRowsRow struct {
 	Parent          *string            `json:"parent"`
 	Classification  Classification     `json:"classification"`
 	ClassFlags      []string           `json:"class_flags"`
-	Gold            bool               `json:"gold"`
+	Saint           bool               `json:"saint"`
 	BaseStatus      *Ipv6Status        `json:"base_status"`
 	WwwStatus       *Ipv6Status        `json:"www_status"`
 	NsStatus        *Ipv6Status        `json:"ns_status"`
@@ -81,7 +81,7 @@ func (q *Queries) ExportRows(ctx context.Context, arg ExportRowsParams) ([]Expor
 			&i.Parent,
 			&i.Classification,
 			&i.ClassFlags,
-			&i.Gold,
+			&i.Saint,
 			&i.BaseStatus,
 			&i.WwwStatus,
 			&i.NsStatus,
@@ -206,7 +206,7 @@ const SnapshotGlobalDaily = `-- name: SnapshotGlobalDaily :exec
 
 
 INSERT INTO stats_global_daily (
-  day, domains, sinners, partial, heroes, gold, inactive, unknown, disabled,
+  day, domains, sinners, partial, heroes, saints, inactive, unknown, disabled,
   base_supported, www_supported, ns_supported, mx_supported, conn_supported,
   resources_supported, top_heroes, top_nameserver, generated_at)
 SELECT
@@ -215,7 +215,7 @@ SELECT
   count(*) FILTER (WHERE NOT disabled AND classification = 'sinner'),
   count(*) FILTER (WHERE NOT disabled AND classification = 'partial'),
   count(*) FILTER (WHERE NOT disabled AND classification = 'hero'),
-  count(*) FILTER (WHERE NOT disabled AND gold),
+  count(*) FILTER (WHERE NOT disabled AND saint),
   count(*) FILTER (WHERE NOT disabled AND classification = 'inactive'),
   count(*) FILTER (WHERE NOT disabled AND classification = 'unknown'),
   count(*) FILTER (WHERE disabled),
@@ -238,7 +238,7 @@ ON CONFLICT (day) DO UPDATE SET
   sinners             = excluded.sinners,
   partial             = excluded.partial,
   heroes              = excluded.heroes,
-  gold                = excluded.gold,
+  saints              = excluded.saints,
   inactive            = excluded.inactive,
   unknown             = excluded.unknown,
   disabled            = excluded.disabled,
@@ -439,7 +439,7 @@ func (q *Queries) StatsGeneration(ctx context.Context) (StatsGenerationRow, erro
 
 const StatsGlobalRange = `-- name: StatsGlobalRange :many
 
-SELECT day, domains, sinners, partial, heroes, gold, inactive, unknown, disabled,
+SELECT day, domains, sinners, partial, heroes, saints, inactive, unknown, disabled,
        base_supported, www_supported, ns_supported, mx_supported, conn_supported,
        resources_supported, top_heroes, top_nameserver
 FROM stats_global_daily
@@ -458,7 +458,7 @@ type StatsGlobalRangeRow struct {
 	Sinners            *int32      `json:"sinners"`
 	Partial            *int32      `json:"partial"`
 	Heroes             *int32      `json:"heroes"`
-	Gold               *int32      `json:"gold"`
+	Saints             *int32      `json:"saints"`
 	Inactive           *int32      `json:"inactive"`
 	Unknown            *int32      `json:"unknown"`
 	Disabled           *int32      `json:"disabled"`
@@ -489,7 +489,7 @@ func (q *Queries) StatsGlobalRange(ctx context.Context, arg StatsGlobalRangePara
 			&i.Sinners,
 			&i.Partial,
 			&i.Heroes,
-			&i.Gold,
+			&i.Saints,
 			&i.Inactive,
 			&i.Unknown,
 			&i.Disabled,

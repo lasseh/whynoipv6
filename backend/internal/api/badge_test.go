@@ -40,14 +40,14 @@ func TestBadgeVariantTable(t *testing.T) {
 	cases := []struct {
 		found               bool
 		class               string
-		gold, disabled      bool
+		saint, disabled     bool
 		variant, msg, color string
 		isError             bool
 	}{
 		{true, "hero", false, false, "supported", "supported", "brightgreen", false},
-		{true, "hero", true, false, "gold", "gold", "brightgreen", false},
+		{true, "hero", true, false, "full", "full", "brightgreen", false},
 		{true, "partial", false, false, "partial", "partial", "yellow", false},
-		{true, "partial", true, false, "partial", "partial", "yellow", false}, // gold ⊂ hero only
+		{true, "partial", true, false, "partial", "partial", "yellow", false}, // saint ⊂ hero only
 		{true, "sinner", false, false, "no-ipv6", "no IPv6", "red", false},
 		{true, "inactive", false, false, "inactive", "inactive", "lightgrey", false},
 		{true, "unknown", false, false, "unknown", "unknown", "lightgrey", true},
@@ -55,9 +55,9 @@ func TestBadgeVariantTable(t *testing.T) {
 		{true, "hero", true, true, "unknown", "unknown", "lightgrey", true}, // disabled wins first
 	}
 	for _, tc := range cases {
-		got := pickBadgeVariant(tc.found, tc.class, tc.gold, tc.disabled)
+		got := pickBadgeVariant(tc.found, tc.class, tc.saint, tc.disabled)
 		if got != tc.variant {
-			t.Errorf("pick(%v,%q,%v,%v) = %s, want %s", tc.found, tc.class, tc.gold, tc.disabled, got, tc.variant)
+			t.Errorf("pick(%v,%q,%v,%v) = %s, want %s", tc.found, tc.class, tc.saint, tc.disabled, got, tc.variant)
 			continue
 		}
 		v := badgeVariants[got]

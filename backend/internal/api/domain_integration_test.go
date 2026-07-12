@@ -20,7 +20,7 @@ import (
 func TestMain(m *testing.M) { os.Exit(pgtest.Main(m)) }
 
 // seedLeaderboard: a small mixed population — heroes, sinners, partial, a
-// gold hero, a disabled row, a rank-NULL campaign row, and a shame pick.
+// saint hero, a disabled row, a rank-NULL campaign row, and a shame pick.
 func seedLeaderboard(t *testing.T, pool *pgxpool.Pool) {
 	t.Helper()
 	ctx := context.Background()
@@ -30,7 +30,7 @@ func seedLeaderboard(t *testing.T, pool *pgxpool.Pool) {
 		`INSERT INTO dns_provider (name, ns_suffixes) VALUES ('Cloudflare', '{ns.cloudflare.com}')`,
 		// 10 ranked apexes: odd rank = hero, even = sinner; rank 2 partial.
 		`INSERT INTO domain (host, kind, rank, created_by, asn_id, country_id, tld,
-		                     classification, gold, base_status, base_since, ns_status, ns_since,
+		                     classification, saint, base_status, base_since, ns_status, ns_since,
 		                     mx_status, dns_provider_id, hosting_provider, last_checked_at)
 		 SELECT 'd' || g || '.example', 'apex', g, 'tranco',
 		        (SELECT id FROM asn WHERE number = CASE WHEN g <= 3 THEN 2119 ELSE 0 END),
@@ -133,13 +133,13 @@ func TestDomainRowShape(t *testing.T) {
 	if len(env.Items) != 9 { // 10 ranked − 1 disabled; rank-NULL invisible
 		t.Fatalf("want 9 visible rows, got %d: %v", len(env.Items), hosts(t, env.Items))
 	}
-	row := env.Items[0] // d1: rank 1, hero, gold
+	row := env.Items[0] // d1: rank 1, hero, saint
 	var summary struct {
 		Host           string   `json:"host"`
 		Rank           *int32   `json:"rank"`
 		Classification string   `json:"classification"`
 		ClassFlags     []string `json:"class_flags"`
-		Gold           bool     `json:"gold"`
+		Saint          bool     `json:"saint"`
 		Status         map[string]struct {
 			Value *string `json:"value"`
 			Since *string `json:"since"`
@@ -165,8 +165,8 @@ func TestDomainRowShape(t *testing.T) {
 	if summary.Host != "d1.example" || summary.Rank == nil || *summary.Rank != 1 {
 		t.Errorf("row 0 = %s rank %v, want d1.example rank 1", summary.Host, summary.Rank)
 	}
-	if summary.Classification != "hero" || !summary.Gold {
-		t.Errorf("d1 classification=%s gold=%t", summary.Classification, summary.Gold)
+	if summary.Classification != "hero" || !summary.Saint {
+		t.Errorf("d1 classification=%s saint=%t", summary.Classification, summary.Saint)
 	}
 	if summary.ClassFlags == nil {
 		t.Error("class_flags must be [] not null")
@@ -240,7 +240,8 @@ func TestVisibility(t *testing.T) {
 }
 
 // TestTierEquivalence (07 §4.4): GET /sinners ≡ GET /domains?class=sinner;
-// gold/almost/mail presets return their subsets.
+// the saints preset and the partial/mail /domains filters return their
+// subsets; the retired /almost and /mail tier paths 404 (ADR 0003).
 func TestTierEquivalence(t *testing.T) {
 	srv, _ := newAPI(t)
 	var tier, filtered envelope
@@ -250,25 +251,35 @@ func TestTierEquivalence(t *testing.T) {
 	if fmt.Sprint(th) != fmt.Sprint(fh) || len(th) == 0 {
 		t.Errorf("/sinners %v != /domains?class=sinner %v", th, fh)
 	}
-	var gold envelope
-	getJSON(t, srv.URL+"/gold", &gold)
-	if g := hosts(t, gold.Items); len(g) != 1 || g[0] != "d1.example" {
-		t.Errorf("/gold = %v, want [d1.example]", g)
+	var saints envelope
+	getJSON(t, srv.URL+"/saints", &saints)
+	if g := hosts(t, saints.Items); len(g) != 1 || g[0] != "d1.example" {
+		t.Errorf("/saints = %v, want [d1.example]", g)
 	}
-	var almost envelope
-	getJSON(t, srv.URL+"/almost", &almost)
-	if a := hosts(t, almost.Items); len(a) != 1 || a[0] != "d2.example" {
-		t.Errorf("/almost = %v, want [d2.example]", a)
+	var partial envelope
+	getJSON(t, srv.URL+"/domains?class=partial", &partial)
+	if a := hosts(t, partial.Items); len(a) != 1 || a[0] != "d2.example" {
+		t.Errorf("/domains?class=partial = %v, want [d2.example]", a)
 	}
 	var mail envelope
-	getJSON(t, srv.URL+"/mail", &mail)
+	getJSON(t, srv.URL+"/domains?class=hero&mx=supported", &mail)
 	for _, h := range hosts(t, mail.Items) {
 		if h == "d2.example" || h == "d4.example" {
-			t.Errorf("/mail must contain only mx-supported heroes, got %s", h)
+			t.Errorf("the mail track must contain only mx-supported heroes, got %s", h)
 		}
 	}
 	if len(mail.Items) == 0 {
-		t.Error("/mail should list the odd-numbered heroes")
+		t.Error("the mail track should list the odd-numbered heroes")
+	}
+	for _, gone := range []string{"/gold", "/almost", "/mail"} {
+		resp, err := http.Get(srv.URL + gone)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusNotFound {
+			t.Errorf("GET %s = %d, want 404 (tier retired, ADR 0003)", gone, resp.StatusCode)
+		}
 	}
 	// Tier + country composition: sinners in Norway (only d2 ≤3 is partial,
 	// so no NO sinner; UN holds the rest).
@@ -486,7 +497,7 @@ func TestShameList(t *testing.T) {
 func TestFieldsTrim(t *testing.T) {
 	srv, _ := newAPI(t)
 	var env envelope
-	getJSON(t, srv.URL+"/domains?fields=host,rank,classification,gold", &env)
+	getJSON(t, srv.URL+"/domains?fields=host,rank,classification,saint", &env)
 	if len(env.Items) == 0 {
 		t.Fatal("no rows")
 	}
@@ -496,6 +507,6 @@ func TestFieldsTrim(t *testing.T) {
 		for k := range row {
 			keys = append(keys, k)
 		}
-		t.Errorf("trimmed row has keys %v, want exactly host,rank,classification,gold", keys)
+		t.Errorf("trimmed row has keys %v, want exactly host,rank,classification,saint", keys)
 	}
 }

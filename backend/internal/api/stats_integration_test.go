@@ -18,7 +18,7 @@ func TestStatsEndpoints(t *testing.T) {
 
 	// 14 daily global snapshots + country/campaign/asn rows on two days.
 	stmts := []string{
-		`INSERT INTO stats_global_daily (day, domains, heroes, sinners, gold, mx_supported)
+		`INSERT INTO stats_global_daily (day, domains, heroes, sinners, saints, mx_supported)
 		 SELECT current_date - g, 1000 + g, 100 + g, 200, 10, 300
 		 FROM generate_series(1, 14) g`,
 		`INSERT INTO stats_country_daily (day, country_id, domains, heroes, base_supported)
@@ -41,7 +41,7 @@ func TestStatsEndpoints(t *testing.T) {
 			Day         string `json:"day"`
 			Domains     *int32 `json:"domains"`
 			Heroes      *int32 `json:"heroes"`
-			Gold        *int32 `json:"gold"`
+			Saints      *int32 `json:"saints"`
 			MxSupported *int32 `json:"mx_supported"`
 		} `json:"points"`
 		Meta struct {

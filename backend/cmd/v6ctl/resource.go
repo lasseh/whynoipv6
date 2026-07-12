@@ -70,7 +70,7 @@ func resourceCmd() *cobra.Command {
 		},
 	}
 	addCmd.Flags().BoolVar(&advisory, "advisory", false,
-		"required=FALSE: visible on the detail API, excluded from the Gold roll-up")
+		"required=FALSE: visible on the detail API, excluded from the Saint roll-up")
 	cmd.AddCommand(addCmd)
 
 	cmd.AddCommand(&cobra.Command{

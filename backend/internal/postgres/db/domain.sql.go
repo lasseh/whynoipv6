@@ -12,12 +12,12 @@ import (
 )
 
 const BadgeDomain = `-- name: BadgeDomain :one
-SELECT classification, gold, disabled FROM domain WHERE host = $1
+SELECT classification, saint, disabled FROM domain WHERE host = $1
 `
 
 type BadgeDomainRow struct {
 	Classification Classification `json:"classification"`
-	Gold           bool           `json:"gold"`
+	Saint          bool           `json:"saint"`
 	Disabled       bool           `json:"disabled"`
 }
 
@@ -25,7 +25,7 @@ type BadgeDomainRow struct {
 func (q *Queries) BadgeDomain(ctx context.Context, host string) (BadgeDomainRow, error) {
 	row := q.db.QueryRow(ctx, BadgeDomain, host)
 	var i BadgeDomainRow
-	err := row.Scan(&i.Classification, &i.Gold, &i.Disabled)
+	err := row.Scan(&i.Classification, &i.Saint, &i.Disabled)
 	return i, err
 }
 
@@ -310,7 +310,7 @@ func (q *Queries) DomainByHost(ctx context.Context, host string) (DomainByHostRo
 
 const DomainConfirmed = `-- name: DomainConfirmed :one
 
-SELECT id, kind, classification, class_flags, gold,
+SELECT id, kind, classification, class_flags, saint,
        base_status, base_since, www_status, www_since, ns_status, ns_since,
        mx_status, mx_since, conn_status, conn_since, resources_status, resources_since,
        last_checked_at, disabled, disabled_reason
@@ -322,7 +322,7 @@ type DomainConfirmedRow struct {
 	Kind            DomainKind         `json:"kind"`
 	Classification  Classification     `json:"classification"`
 	ClassFlags      []string           `json:"class_flags"`
-	Gold            bool               `json:"gold"`
+	Saint           bool               `json:"saint"`
 	BaseStatus      *Ipv6Status        `json:"base_status"`
 	BaseSince       pgtype.Timestamptz `json:"base_since"`
 	WwwStatus       *Ipv6Status        `json:"www_status"`
@@ -349,7 +349,7 @@ func (q *Queries) DomainConfirmed(ctx context.Context, host string) (DomainConfi
 		&i.Kind,
 		&i.Classification,
 		&i.ClassFlags,
-		&i.Gold,
+		&i.Saint,
 		&i.BaseStatus,
 		&i.BaseSince,
 		&i.WwwStatus,
@@ -371,7 +371,7 @@ func (q *Queries) DomainConfirmed(ctx context.Context, host string) (DomainConfi
 
 const DomainDetailByHost = `-- name: DomainDetailByHost :one
 SELECT d.id, d.host, d.rank, d.kind, p.host AS parent,
-  d.classification, d.class_flags, d.gold,
+  d.classification, d.class_flags, d.saint,
   d.base_status, d.base_since, d.www_status, d.www_since,
   d.ns_status, d.ns_since, d.mx_status, d.mx_since,
   d.conn_status, d.conn_since, d.resources_status, d.resources_since,
@@ -399,7 +399,7 @@ type DomainDetailByHostRow struct {
 	Parent          *string            `json:"parent"`
 	Classification  Classification     `json:"classification"`
 	ClassFlags      []string           `json:"class_flags"`
-	Gold            bool               `json:"gold"`
+	Saint           bool               `json:"saint"`
 	BaseStatus      *Ipv6Status        `json:"base_status"`
 	BaseSince       pgtype.Timestamptz `json:"base_since"`
 	WwwStatus       *Ipv6Status        `json:"www_status"`
@@ -444,7 +444,7 @@ func (q *Queries) DomainDetailByHost(ctx context.Context, host string) (DomainDe
 		&i.Parent,
 		&i.Classification,
 		&i.ClassFlags,
-		&i.Gold,
+		&i.Saint,
 		&i.BaseStatus,
 		&i.BaseSince,
 		&i.WwwStatus,

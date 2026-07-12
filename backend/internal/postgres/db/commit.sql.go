@@ -30,7 +30,7 @@ UPDATE domain SET
   dnssec_observed = $31, ptr_observed = $32,
   smtp_observed = $33, parity_observed = $34,
   latency_v4_ms = $35, latency_v6_ms = $36,
-  classification = $37, class_flags = $38, gold = $39,
+  classification = $37, class_flags = $38, saint = $39,
   asn_id = $40, country_id = $41,
   disabled = $42, disabled_reason = $43, disabled_at = $44,
   dead_streak = $45, error_streak = $46,
@@ -78,7 +78,7 @@ type CommitDomainParams struct {
 	LatencyV6Ms           *int32             `json:"latency_v6_ms"`
 	Classification        Classification     `json:"classification"`
 	ClassFlags            []string           `json:"class_flags"`
-	Gold                  bool               `json:"gold"`
+	Saint                 bool               `json:"saint"`
 	AsnID                 int32              `json:"asn_id"`
 	CountryID             int32              `json:"country_id"`
 	Disabled              bool               `json:"disabled"`
@@ -135,7 +135,7 @@ func (q *Queries) CommitDomain(ctx context.Context, arg CommitDomainParams) (int
 		arg.LatencyV6Ms,
 		arg.Classification,
 		arg.ClassFlags,
-		arg.Gold,
+		arg.Saint,
 		arg.AsnID,
 		arg.CountryID,
 		arg.Disabled,

@@ -65,7 +65,7 @@ type GlobalStatsPoint struct {
 	Sinners            *int32 `json:"sinners"`
 	Inactive           *int32 `json:"inactive"`
 	Unknown            *int32 `json:"unknown"`
-	Gold               *int32 `json:"gold"`
+	Saints             *int32 `json:"saints"`
 	Disabled           *int32 `json:"disabled"`
 	BaseSupported      *int32 `json:"base_supported"`
 	WwwSupported       *int32 `json:"www_supported"`
@@ -107,7 +107,7 @@ func (s *Server) getStatsOverview(w http.ResponseWriter, r *http.Request) {
 			Day:     rows[i].Day.Time.Format("2006-01-02"),
 			Domains: rows[i].Domains, Heroes: rows[i].Heroes, Partial: rows[i].Partial,
 			Sinners: rows[i].Sinners, Inactive: rows[i].Inactive, Unknown: rows[i].Unknown,
-			Gold: rows[i].Gold, Disabled: rows[i].Disabled,
+			Saints: rows[i].Saints, Disabled: rows[i].Disabled,
 			BaseSupported: rows[i].BaseSupported, WwwSupported: rows[i].WwwSupported,
 			NsSupported: rows[i].NsSupported, MxSupported: rows[i].MxSupported,
 			ConnSupported: rows[i].ConnSupported, ResourcesSupported: rows[i].ResourcesSupported,

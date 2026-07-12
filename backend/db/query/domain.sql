@@ -158,7 +158,7 @@ WHERE host = @host AND disabled AND disabled_reason IN ('manual', 'service');
 
 -- name: DomainDetailByHost :one
 SELECT d.id, d.host, d.rank, d.kind, p.host AS parent,
-  d.classification, d.class_flags, d.gold,
+  d.classification, d.class_flags, d.saint,
   d.base_status, d.base_since, d.www_status, d.www_since,
   d.ns_status, d.ns_since, d.mx_status, d.mx_since,
   d.conn_status, d.conn_since, d.resources_status, d.resources_since,
@@ -182,12 +182,12 @@ SELECT count(*) FROM domain WHERE parent_id = @parent_id AND NOT disabled;
 
 -- The badge read (07 §5.2): read-only, zero side effects, any kind/origin.
 -- name: BadgeDomain :one
-SELECT classification, gold, disabled FROM domain WHERE host = @host;
+SELECT classification, saint, disabled FROM domain WHERE host = @host;
 
 -- The §5.1 live-check domain reads/writes.
 
 -- name: DomainConfirmed :one
-SELECT id, kind, classification, class_flags, gold,
+SELECT id, kind, classification, class_flags, saint,
        base_status, base_since, www_status, www_since, ns_status, ns_since,
        mx_status, mx_since, conn_status, conn_since, resources_status, resources_since,
        last_checked_at, disabled, disabled_reason

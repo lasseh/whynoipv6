@@ -16,7 +16,7 @@ func TestBadgeHandlers(t *testing.T) {
 	ctx := context.Background()
 	// Real-TLD fixtures (the .example seeds hit the reserved-TLD layer).
 	stmts := []string{
-		`INSERT INTO domain (host, kind, rank, created_by, asn_id, country_id, tld, classification, gold)
+		`INSERT INTO domain (host, kind, rank, created_by, asn_id, country_id, tld, classification, saint)
 		 VALUES ('badge-hero.no', 'apex', 900, 'tranco', (SELECT id FROM asn WHERE number = 0),
 		         (SELECT id FROM country WHERE code = 'NO'), 'no', 'hero', true)`,
 		`INSERT INTO domain (host, kind, rank, created_by, asn_id, country_id, tld, classification)
@@ -41,8 +41,8 @@ func TestBadgeHandlers(t *testing.T) {
 		t.Fatalf("hero badge: %d %s cache=%q etag=%q", resp.StatusCode,
 			resp.Header.Get("Content-Type"), resp.Header.Get("Cache-Control"), resp.Header.Get("ETag"))
 	}
-	if !strings.Contains(string(body), ">gold</text>") {
-		t.Errorf("hero+gold badge must render the gold variant")
+	if !strings.Contains(string(body), ">full</text>") {
+		t.Errorf("hero+saint badge must render the full variant")
 	}
 	_, sinner := fetch(t, srv.URL+"/badge/badge-sinner.no.svg")
 	if !strings.Contains(string(sinner), ">no IPv6</text>") {

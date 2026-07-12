@@ -211,7 +211,7 @@ func ComputeCommit(in *CommitInput, cfg *CommitConfig) (*commitUnit, error) {
 	for _, d := range domain.Dimensions {
 		confirmed[d] = work[d].status
 	}
-	class, flags, gold := domain.Classify(confirmed)
+	class, flags, saint := domain.Classify(confirmed)
 
 	// Step 4 — dead trigger.
 	deadTriggered := false
@@ -253,7 +253,7 @@ func ComputeCommit(in *CommitInput, cfg *CommitConfig) (*commitUnit, error) {
 	params := db.CommitDomainParams{
 		Classification: db.Classification(class),
 		ClassFlags:     flags,
-		Gold:           gold,
+		Saint:          saint,
 		AsnID:          asnID,
 		CountryID:      countryID,
 		Disabled:       disabled,
@@ -429,7 +429,7 @@ func (c *Committer) flush(ctx context.Context, u *commitUnit) (leaseLost bool, e
 		p.ResourcesStatus, p.ResourcesObserved, p.ResourcesPending, p.ResourcesPendingCount, p.ResourcesSince,
 		p.DnssecObserved, p.PtrObserved, p.SmtpObserved, p.ParityObserved,
 		p.LatencyV4Ms, p.LatencyV6Ms,
-		p.Classification, p.ClassFlags, p.Gold,
+		p.Classification, p.ClassFlags, p.Saint,
 		p.AsnID, p.CountryID,
 		p.Disabled, p.DisabledReason, p.DisabledAt,
 		p.DeadStreak, p.ErrorStreak,

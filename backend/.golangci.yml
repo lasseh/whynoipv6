@@ -39,7 +39,7 @@ linters:
         linters:
           - goconst
       # The API package is a serialization surface: the same wire words
-      # ("base", "gold", "tld") repeat across independent vocabularies —
+      # ("base", "saint", "tld") repeat across independent vocabularies —
       # query params, JSON keys, CSV headers, SQL dimension names, feed
       # copy. A shared constant would couple vocabularies that only
       # coincidentally spell alike.

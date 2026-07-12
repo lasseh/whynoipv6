@@ -85,28 +85,28 @@ func TestClassify(t *testing.T) {
 		t.Errorf("sinner flags = %s/%v, want sinner with broken_v6", got, flags)
 	}
 
-	goldRows := []struct {
+	saintRows := []struct {
 		name string
 		res  *IPv6Status
 		hero bool
 		want bool
 	}{
-		{"gold_hero_res_supported", sup, true, true},
-		{"gold_hero_res_na", na, true, true},
-		{"gold_hero_res_unsupported", uns, true, false},
-		{"gold_hero_res_null", nil, true, false},
-		{"gold_partial_res_supported", sup, false, false},
+		{"saint_hero_res_supported", sup, true, true},
+		{"saint_hero_res_na", na, true, true},
+		{"saint_hero_res_unsupported", uns, true, false},
+		{"saint_hero_res_null", nil, true, false},
+		{"saint_partial_res_supported", sup, false, false},
 	}
-	for _, tc := range goldRows {
-		t.Run("gold/"+tc.name, func(t *testing.T) {
+	for _, tc := range saintRows {
+		t.Run("saint/"+tc.name, func(t *testing.T) {
 			base := sup
 			conn := sup
 			if !tc.hero {
 				conn = nil // hero bar not met → partial
 			}
-			class, _, gold := Classify(conf(base, sup, sup, conn, sup, tc.res))
-			if gold != tc.want {
-				t.Errorf("gold = %t (class %s), want %t", gold, class, tc.want)
+			class, _, saint := Classify(conf(base, sup, sup, conn, sup, tc.res))
+			if saint != tc.want {
+				t.Errorf("saint = %t (class %s), want %t", saint, class, tc.want)
 			}
 		})
 	}

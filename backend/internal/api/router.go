@@ -98,9 +98,7 @@ func NewRouter(pool *pgxpool.Pool, opts Options) http.Handler {
 	r.Get("/domains/{host}/resources", s.listDomainResources)
 	r.Get("/heroes", s.listHeroes)
 	r.Get("/sinners", s.listSinners)
-	r.Get("/gold", s.listGold)
-	r.Get("/almost", s.listAlmost)
-	r.Get("/mail", s.listMail)
+	r.Get("/saints", s.listSaints)
 	r.Get("/shame", s.listShame)
 
 	// Country / ASN / DNS-provider pivots (§4.5/§4.6).

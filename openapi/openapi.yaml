@@ -58,7 +58,7 @@ paths:
       summary: The general filterable domain leaderboard
       parameters:
         - $ref: "#/components/parameters/class"
-        - $ref: "#/components/parameters/gold"
+        - $ref: "#/components/parameters/saint"
         - $ref: "#/components/parameters/country"
         - $ref: "#/components/parameters/asn"
         - $ref: "#/components/parameters/tld"
@@ -204,29 +204,11 @@ paths:
       responses:
         "200": { $ref: "#/components/responses/DomainList" }
         "422": { $ref: "#/components/responses/ScopeRequired" }
-  /gold:
+  /saints:
     get:
-      operationId: listGold
+      operationId: listSaints
       tags: [tiers]
-      summary: "Tier preset: gold=true"
-      parameters: *tierParams
-      responses:
-        "200": { $ref: "#/components/responses/DomainList" }
-        "422": { $ref: "#/components/responses/ScopeRequired" }
-  /almost:
-    get:
-      operationId: listAlmost
-      tags: [tiers]
-      summary: "Tier preset: class=partial (the almost-there list)"
-      parameters: *tierParams
-      responses:
-        "200": { $ref: "#/components/responses/DomainList" }
-        "422": { $ref: "#/components/responses/ScopeRequired" }
-  /mail:
-    get:
-      operationId: listMail
-      tags: [tiers]
-      summary: "The mail-heroes track: class=hero & mx=supported"
+      summary: "Tier preset: saint=true"
       parameters: *tierParams
       responses:
         "200": { $ref: "#/components/responses/DomainList" }
@@ -283,7 +265,7 @@ paths:
       parameters:
         - $ref: "#/components/parameters/countryCode"
         - $ref: "#/components/parameters/class"
-        - $ref: "#/components/parameters/gold"
+        - $ref: "#/components/parameters/saint"
         - $ref: "#/components/parameters/tld"
         - $ref: "#/components/parameters/provider"
         - $ref: "#/components/parameters/hosting"
@@ -391,7 +373,7 @@ paths:
       parameters:
         - $ref: "#/components/parameters/asnNumber"
         - $ref: "#/components/parameters/class"
-        - $ref: "#/components/parameters/gold"
+        - $ref: "#/components/parameters/saint"
         - $ref: "#/components/parameters/tld"
         - $ref: "#/components/parameters/provider"
         - $ref: "#/components/parameters/hosting"
@@ -470,7 +452,7 @@ paths:
       parameters:
         - $ref: "#/components/parameters/providerID"
         - $ref: "#/components/parameters/class"
-        - $ref: "#/components/parameters/gold"
+        - $ref: "#/components/parameters/saint"
         - $ref: "#/components/parameters/tld"
         - $ref: "#/components/parameters/provider"
         - $ref: "#/components/parameters/hosting"
@@ -856,10 +838,10 @@ components:
       name: class
       in: query
       schema: { $ref: "#/components/schemas/Classification" }
-    gold:
-      name: gold
+    saint:
+      name: saint
       in: query
-      description: The only accepted value is true (gold ⊂ hero).
+      description: The only accepted value is true (saint ⊂ hero).
       schema: { type: boolean }
     country:
       name: country
@@ -1158,7 +1140,7 @@ components:
     DomainSummary:
       type: object
       description: The §4.2 list row served by every /domains* collection.
-      required: [host, rank, kind, parent, classification, class_flags, gold, ipv6_only, status, tld, country, asn, dns_provider, hosting_provider, last_checked_at]
+      required: [host, rank, kind, parent, classification, class_flags, saint, ipv6_only, status, tld, country, asn, dns_provider, hosting_provider, last_checked_at]
       properties:
         host: { type: string, example: example.com }
         rank: { type: integer, nullable: true, description: Never the legacy 0 — null when unranked. }
@@ -1168,7 +1150,7 @@ components:
         class_flags:
           type: array
           items: { $ref: "#/components/schemas/ClassFlag" }
-        gold: { type: boolean }
+        saint: { type: boolean }
         ipv6_only:
           allOf: [{ $ref: "#/components/schemas/IPv6Status" }]
           nullable: true
@@ -1198,7 +1180,7 @@ components:
         latency_v6_ms: { type: integer, nullable: true }
     DomainDetail:
       type: object
-      required: [host, rank, kind, parent, classification, class_flags, gold, ipv6_only, status, informational, tld, country, asn, dns_provider, hosting_provider, subdomain_count, disabled, last_checked_at, created_at, meta]
+      required: [host, rank, kind, parent, classification, class_flags, saint, ipv6_only, status, informational, tld, country, asn, dns_provider, hosting_provider, subdomain_count, disabled, last_checked_at, created_at, meta]
       properties:
         host: { type: string }
         rank: { type: integer, nullable: true }
@@ -1208,7 +1190,7 @@ components:
         class_flags:
           type: array
           items: { $ref: "#/components/schemas/ClassFlag" }
-        gold: { type: boolean }
+        saint: { type: boolean }
         ipv6_only:
           allOf: [{ $ref: "#/components/schemas/IPv6Status" }]
           nullable: true
@@ -1447,7 +1429,7 @@ components:
         sinners: { type: integer, nullable: true }
         inactive: { type: integer, nullable: true }
         unknown: { type: integer, nullable: true }
-        gold: { type: integer, nullable: true }
+        saints: { type: integer, nullable: true }
         disabled: { type: integer, nullable: true }
         base_supported: { type: integer, nullable: true }
         www_supported: { type: integer, nullable: true }
@@ -1595,13 +1577,13 @@ components:
         created_at: { type: string, format: date-time }
     CheckConfirmed:
       type: object
-      required: [classification, class_flags, gold, status, as_of]
+      required: [classification, class_flags, saint, status, as_of]
       properties:
         classification: { $ref: "#/components/schemas/Classification" }
         class_flags:
           type: array
           items: { $ref: "#/components/schemas/ClassFlag" }
-        gold: { type: boolean }
+        saint: { type: boolean }
         status: { $ref: "#/components/schemas/StatusBlock" }
         as_of: { type: string, format: date-time, nullable: true }
     CheckEnvelope:
@@ -1648,7 +1630,7 @@ components:
       properties:
         schemaVersion: { type: integer, enum: [1] }
         label: { type: string, enum: [IPv6] }
-        message: { type: string, enum: [supported, gold, partial, no IPv6, inactive, unknown] }
+        message: { type: string, enum: [supported, full, partial, no IPv6, inactive, unknown] }
         color: { type: string, enum: [brightgreen, yellow, red, lightgrey] }
         cacheSeconds: { type: integer, example: 86400 }
         isError: { type: boolean }

@@ -82,7 +82,7 @@ type DomainSummary struct {
 	Parent          *string      `json:"parent"`
 	Classification  string       `json:"classification"`
 	ClassFlags      []string     `json:"class_flags"`
-	Gold            bool         `json:"gold"`
+	Saint           bool         `json:"saint"`
 	IPv6Only        *string      `json:"ipv6_only"`
 	Status          StatusBlock  `json:"status"`
 	TLD             *string      `json:"tld"`
@@ -133,7 +133,7 @@ func summaryFromRow(r *postgres.DomainRow) DomainSummary {
 		Parent:          r.Parent,
 		Classification:  r.Classification,
 		ClassFlags:      flags,
-		Gold:            r.Gold,
+		Saint:           r.Saint,
 		Status:          statusBlockOf(r.Confirmed()),
 		TLD:             r.TLD,
 		Country:         CountryRef{Code: r.CountryCode, Name: r.CountryName},
@@ -183,11 +183,11 @@ func (s *Server) parseDomainFilter(r *http.Request, q url.Values) (postgres.Doma
 		}
 		f.Class = v
 	}
-	if v := q.Get("gold"); v != "" {
+	if v := q.Get("saint"); v != "" {
 		if v != "true" {
-			return f, validationError{"gold", "the only accepted value is true"}
+			return f, validationError{"saint", "the only accepted value is true"}
 		}
-		f.Gold = true
+		f.Saint = true
 	}
 	if v := q.Get(paramCountry); v != "" {
 		id, err := s.q.CountryIDByCode(r.Context(), strings.ToUpper(v))
@@ -260,7 +260,7 @@ func (s *Server) parseDomainFilter(r *http.Request, q url.Values) (postgres.Doma
 
 // isUnfiltered reports whether the global max(rank) count shortcut applies.
 func isUnfiltered(f *postgres.DomainListFilter) bool {
-	return f.Class == "" && !f.Gold && f.CountryID == nil && f.ASNID == nil &&
+	return f.Class == "" && !f.Saint && f.CountryID == nil && f.ASNID == nil &&
 		f.Provider == nil && f.TLD == "" && f.Hosting == "" && f.Flag == "" &&
 		f.StatusDim == "" && f.RankMin == nil && f.RankMax == nil && f.Query == ""
 }
@@ -279,16 +279,8 @@ func (s *Server) listSinners(w http.ResponseWriter, r *http.Request) {
 	s.serveDomainList(w, r, url.Values{paramClass: {classSinner}})
 }
 
-func (s *Server) listGold(w http.ResponseWriter, r *http.Request) {
-	s.serveDomainList(w, r, url.Values{"gold": {"true"}})
-}
-
-func (s *Server) listAlmost(w http.ResponseWriter, r *http.Request) {
-	s.serveDomainList(w, r, url.Values{paramClass: {"partial"}})
-}
-
-func (s *Server) listMail(w http.ResponseWriter, r *http.Request) {
-	s.serveDomainList(w, r, url.Values{paramClass: {classHero}, "mx": {statusSupported}})
+func (s *Server) listSaints(w http.ResponseWriter, r *http.Request) {
+	s.serveDomainList(w, r, url.Values{"saint": {"true"}})
 }
 
 // serveDomainList is the shared /domains* engine: preset params override the
@@ -531,7 +523,7 @@ type DomainDetail struct {
 	Parent          *string          `json:"parent"`
 	Classification  string           `json:"classification"`
 	ClassFlags      []string         `json:"class_flags"`
-	Gold            bool             `json:"gold"`
+	Saint           bool             `json:"saint"`
 	IPv6Only        *string          `json:"ipv6_only"`
 	Status          StatusBlock      `json:"status"`
 	Informational   Informational    `json:"informational"`
@@ -639,7 +631,7 @@ func (s *Server) getDomain(w http.ResponseWriter, r *http.Request) {
 		Parent:         row.Parent,
 		Classification: string(row.Classification),
 		ClassFlags:     flags,
-		Gold:           row.Gold,
+		Saint:          row.Saint,
 		IPv6Only:       ipv6OnlyOf(&status),
 		Status:         status,
 		Informational: Informational{

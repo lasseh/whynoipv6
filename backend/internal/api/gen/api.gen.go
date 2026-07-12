@@ -380,19 +380,19 @@ func (e ManifestEntryFormats) Valid() bool {
 
 // Defines values for ManifestEntryTiers.
 const (
-	Full    ManifestEntryTiers = "full"
-	Top100k ManifestEntryTiers = "top100k"
-	Top1m   ManifestEntryTiers = "top1m"
+	ManifestEntryTiersFull    ManifestEntryTiers = "full"
+	ManifestEntryTiersTop100k ManifestEntryTiers = "top100k"
+	ManifestEntryTiersTop1m   ManifestEntryTiers = "top1m"
 )
 
 // Valid indicates whether the value is a known member of the ManifestEntryTiers enum.
 func (e ManifestEntryTiers) Valid() bool {
 	switch e {
-	case Full:
+	case ManifestEntryTiersFull:
 		return true
-	case Top100k:
+	case ManifestEntryTiersTop100k:
 		return true
-	case Top1m:
+	case ManifestEntryTiersTop1m:
 		return true
 	default:
 		return false
@@ -458,7 +458,7 @@ func (e ShieldsBadgeLabel) Valid() bool {
 
 // Defines values for ShieldsBadgeMessage.
 const (
-	ShieldsBadgeMessageGold      ShieldsBadgeMessage = "gold"
+	ShieldsBadgeMessageFull      ShieldsBadgeMessage = "full"
 	ShieldsBadgeMessageInactive  ShieldsBadgeMessage = "inactive"
 	ShieldsBadgeMessageNoIPv6    ShieldsBadgeMessage = "no IPv6"
 	ShieldsBadgeMessagePartial   ShieldsBadgeMessage = "partial"
@@ -469,7 +469,7 @@ const (
 // Valid indicates whether the value is a known member of the ShieldsBadgeMessage enum.
 func (e ShieldsBadgeMessage) Valid() bool {
 	switch e {
-	case ShieldsBadgeMessageGold:
+	case ShieldsBadgeMessageFull:
 		return true
 	case ShieldsBadgeMessageInactive:
 		return true
@@ -567,45 +567,6 @@ func (e Sort) Valid() bool {
 	case SortMinusRank:
 		return true
 	case SortRank:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for ListAlmostParamsSort.
-const (
-	ListAlmostParamsSortHost      ListAlmostParamsSort = "host"
-	ListAlmostParamsSortMinusRank ListAlmostParamsSort = "-rank"
-	ListAlmostParamsSortRank      ListAlmostParamsSort = "rank"
-)
-
-// Valid indicates whether the value is a known member of the ListAlmostParamsSort enum.
-func (e ListAlmostParamsSort) Valid() bool {
-	switch e {
-	case ListAlmostParamsSortHost:
-		return true
-	case ListAlmostParamsSortMinusRank:
-		return true
-	case ListAlmostParamsSortRank:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for ListAlmostParamsFormat.
-const (
-	ListAlmostParamsFormatCsv  ListAlmostParamsFormat = "csv"
-	ListAlmostParamsFormatJson ListAlmostParamsFormat = "json"
-)
-
-// Valid indicates whether the value is a known member of the ListAlmostParamsFormat enum.
-func (e ListAlmostParamsFormat) Valid() bool {
-	switch e {
-	case ListAlmostParamsFormatCsv:
-		return true
-	case ListAlmostParamsFormatJson:
 		return true
 	default:
 		return false
@@ -942,45 +903,6 @@ func (e GetDomainHistoryParamsInterval) Valid() bool {
 	}
 }
 
-// Defines values for ListGoldParamsSort.
-const (
-	ListGoldParamsSortHost      ListGoldParamsSort = "host"
-	ListGoldParamsSortMinusRank ListGoldParamsSort = "-rank"
-	ListGoldParamsSortRank      ListGoldParamsSort = "rank"
-)
-
-// Valid indicates whether the value is a known member of the ListGoldParamsSort enum.
-func (e ListGoldParamsSort) Valid() bool {
-	switch e {
-	case ListGoldParamsSortHost:
-		return true
-	case ListGoldParamsSortMinusRank:
-		return true
-	case ListGoldParamsSortRank:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for ListGoldParamsFormat.
-const (
-	ListGoldParamsFormatCsv  ListGoldParamsFormat = "csv"
-	ListGoldParamsFormatJson ListGoldParamsFormat = "json"
-)
-
-// Valid indicates whether the value is a known member of the ListGoldParamsFormat enum.
-func (e ListGoldParamsFormat) Valid() bool {
-	switch e {
-	case ListGoldParamsFormatCsv:
-		return true
-	case ListGoldParamsFormatJson:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for ListHeroesParamsSort.
 const (
 	ListHeroesParamsSortHost      ListHeroesParamsSort = "host"
@@ -1038,45 +960,6 @@ func (e GetIP200JSONResponseBodyFamily) Valid() bool {
 	}
 }
 
-// Defines values for ListMailParamsSort.
-const (
-	ListMailParamsSortHost      ListMailParamsSort = "host"
-	ListMailParamsSortMinusRank ListMailParamsSort = "-rank"
-	ListMailParamsSortRank      ListMailParamsSort = "rank"
-)
-
-// Valid indicates whether the value is a known member of the ListMailParamsSort enum.
-func (e ListMailParamsSort) Valid() bool {
-	switch e {
-	case ListMailParamsSortHost:
-		return true
-	case ListMailParamsSortMinusRank:
-		return true
-	case ListMailParamsSortRank:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for ListMailParamsFormat.
-const (
-	ListMailParamsFormatCsv  ListMailParamsFormat = "csv"
-	ListMailParamsFormatJson ListMailParamsFormat = "json"
-)
-
-// Valid indicates whether the value is a known member of the ListMailParamsFormat enum.
-func (e ListMailParamsFormat) Valid() bool {
-	switch e {
-	case ListMailParamsFormatCsv:
-		return true
-	case ListMailParamsFormatJson:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for ListProvidersParamsFormat.
 const (
 	ListProvidersParamsFormatCsv  ListProvidersParamsFormat = "csv"
@@ -1128,6 +1011,45 @@ func (e ListProviderDomainsParamsFormat) Valid() bool {
 	case ListProviderDomainsParamsFormatCsv:
 		return true
 	case ListProviderDomainsParamsFormatJson:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListSaintsParamsSort.
+const (
+	ListSaintsParamsSortHost      ListSaintsParamsSort = "host"
+	ListSaintsParamsSortMinusRank ListSaintsParamsSort = "-rank"
+	ListSaintsParamsSortRank      ListSaintsParamsSort = "rank"
+)
+
+// Valid indicates whether the value is a known member of the ListSaintsParamsSort enum.
+func (e ListSaintsParamsSort) Valid() bool {
+	switch e {
+	case ListSaintsParamsSortHost:
+		return true
+	case ListSaintsParamsSortMinusRank:
+		return true
+	case ListSaintsParamsSortRank:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListSaintsParamsFormat.
+const (
+	ListSaintsParamsFormatCsv  ListSaintsParamsFormat = "csv"
+	ListSaintsParamsFormatJson ListSaintsParamsFormat = "json"
+)
+
+// Valid indicates whether the value is a known member of the ListSaintsParamsFormat enum.
+func (e ListSaintsParamsFormat) Valid() bool {
+	switch e {
+	case ListSaintsParamsFormatCsv:
+		return true
+	case ListSaintsParamsFormatJson:
 		return true
 	default:
 		return false
@@ -1330,7 +1252,7 @@ type CheckConfirmed struct {
 	AsOf           *time.Time     `json:"as_of"`
 	ClassFlags     []ClassFlag    `json:"class_flags"`
 	Classification Classification `json:"classification"`
-	Gold           bool           `json:"gold"`
+	Saint          bool           `json:"saint"`
 	Status         StatusBlock    `json:"status"`
 }
 
@@ -1423,7 +1345,6 @@ type Dependent struct {
 	Classification  Classification `json:"classification"`
 	Country         CountryRef     `json:"country"`
 	DnsProvider     *ProviderRef   `json:"dns_provider"`
-	Gold            bool           `json:"gold"`
 	Host            string         `json:"host"`
 	HostingProvider *string        `json:"hosting_provider"`
 
@@ -1436,6 +1357,7 @@ type Dependent struct {
 	// Rank Never the legacy 0 — null when unranked.
 	Rank     *int            `json:"rank"`
 	Required bool            `json:"required"`
+	Saint    bool            `json:"saint"`
 	Source   DependentSource `json:"source"`
 	Status   StatusBlock     `json:"status"`
 	Tld      *string         `json:"tld"`
@@ -1478,7 +1400,6 @@ type DomainDetail struct {
 
 	// Evidence Latest scan_detail payload (the §5.1.3 result shape); only with `?include=evidence`.
 	Evidence        *map[string]interface{} `json:"evidence,omitempty"`
-	Gold            bool                    `json:"gold"`
 	Host            string                  `json:"host"`
 	HostingProvider *string                 `json:"hosting_provider"`
 
@@ -1492,6 +1413,7 @@ type DomainDetail struct {
 	Meta           DetailMeta       `json:"meta"`
 	Parent         *string          `json:"parent"`
 	Rank           *int             `json:"rank"`
+	Saint          bool             `json:"saint"`
 	Status         StatusBlock      `json:"status"`
 	SubdomainCount int64            `json:"subdomain_count"`
 	Tld            *string          `json:"tld"`
@@ -1516,7 +1438,6 @@ type DomainSummary struct {
 	Classification  Classification `json:"classification"`
 	Country         CountryRef     `json:"country"`
 	DnsProvider     *ProviderRef   `json:"dns_provider"`
-	Gold            bool           `json:"gold"`
 	Host            string         `json:"host"`
 	HostingProvider *string        `json:"hosting_provider"`
 
@@ -1528,6 +1449,7 @@ type DomainSummary struct {
 
 	// Rank Never the legacy 0 — null when unranked.
 	Rank   *int        `json:"rank"`
+	Saint  bool        `json:"saint"`
 	Status StatusBlock `json:"status"`
 	Tld    *string     `json:"tld"`
 }
@@ -1542,13 +1464,13 @@ type GlobalStatsPoint struct {
 	Day                openapi_types.Date `json:"day"`
 	Disabled           *int               `json:"disabled,omitempty"`
 	Domains            *int               `json:"domains,omitempty"`
-	Gold               *int               `json:"gold,omitempty"`
 	Heroes             *int               `json:"heroes,omitempty"`
 	Inactive           *int               `json:"inactive,omitempty"`
 	MxSupported        *int               `json:"mx_supported,omitempty"`
 	NsSupported        *int               `json:"ns_supported,omitempty"`
 	Partial            *int               `json:"partial,omitempty"`
 	ResourcesSupported *int               `json:"resources_supported,omitempty"`
+	Saints             *int               `json:"saints,omitempty"`
 	Sinners            *int               `json:"sinners,omitempty"`
 	TopHeroes          *int               `json:"top_heroes,omitempty"`
 	TopNameserver      *int               `json:"top_nameserver,omitempty"`
@@ -1917,9 +1839,6 @@ type Flag = ClassFlag
 // Format defines model for format.
 type Format string
 
-// Gold defines model for gold.
-type Gold = bool
-
 // Host defines model for host.
 type Host = string
 
@@ -1946,6 +1865,9 @@ type RankMax = int
 
 // RankMin defines model for rankMin.
 type RankMin = int
+
+// Saint defines model for saint.
+type Saint = bool
 
 // Sort defines model for sort.
 type Sort string
@@ -1980,53 +1902,6 @@ type UnsupportedMediaType = Problem
 // ValidationError defines model for ValidationError.
 type ValidationError = ValidationProblem
 
-// ListAlmostParams defines parameters for ListAlmost.
-type ListAlmostParams struct {
-	// CountryParam ISO code scope; composes with class + rank order.
-	CountryParam *CountryParam `form:"country,omitempty" json:"country,omitempty"`
-
-	// Asn AS-number scope.
-	Asn *Asn `form:"asn,omitempty" json:"asn,omitempty"`
-
-	// Tld eTLD-suffix pivot; scope-required.
-	Tld *Tld `form:"tld,omitempty" json:"tld,omitempty"`
-
-	// ProviderParam dns_provider id pivot; scope-required as a query filter.
-	ProviderParam *ProviderParam `form:"provider,omitempty" json:"provider,omitempty"`
-
-	// Hosting Hosting/CDN text-tag pivot; scope-required.
-	Hosting *Hosting `form:"hosting,omitempty" json:"hosting,omitempty"`
-
-	// Flag class_flags residual; scope-required.
-	Flag    *Flag    `form:"flag,omitempty" json:"flag,omitempty"`
-	Mx      *DimMX   `form:"mx,omitempty" json:"mx,omitempty"`
-	RankMin *RankMin `form:"rank_min,omitempty" json:"rank_min,omitempty"`
-	RankMax *RankMax `form:"rank_max,omitempty" json:"rank_max,omitempty"`
-
-	// Q Substring search; forces the host ordering.
-	Q    *Q                    `form:"q,omitempty" json:"q,omitempty"`
-	Sort *ListAlmostParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
-
-	// Fields Sparse fieldset (comma-separated top-level keys).
-	Fields *Fields                 `form:"fields,omitempty" json:"fields,omitempty"`
-	Format *ListAlmostParamsFormat `form:"format,omitempty" json:"format,omitempty"`
-
-	// Cursor Opaque keyset cursor from `page.next_cursor`.
-	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
-
-	// Limit Page size; default 50, cap 200 (CSV raises the cap to `export.csv_max_rows`).
-	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
-
-	// AfterRank Stateless deep link; rank-ordered views only.
-	AfterRank *AfterRank `form:"after_rank,omitempty" json:"after_rank,omitempty"`
-}
-
-// ListAlmostParamsSort defines parameters for ListAlmost.
-type ListAlmostParamsSort string
-
-// ListAlmostParamsFormat defines parameters for ListAlmost.
-type ListAlmostParamsFormat string
-
 // ListASNsParams defines parameters for ListASNs.
 type ListASNsParams struct {
 	Sort *ListASNsParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
@@ -2052,8 +1927,8 @@ type ListASNsParamsFormat string
 type ListASNDomainsParams struct {
 	Class *Class `form:"class,omitempty" json:"class,omitempty"`
 
-	// Gold The only accepted value is true (gold ⊂ hero).
-	Gold *Gold `form:"gold,omitempty" json:"gold,omitempty"`
+	// Saint The only accepted value is true (saint ⊂ hero).
+	Saint *Saint `form:"saint,omitempty" json:"saint,omitempty"`
 
 	// Tld eTLD-suffix pivot; scope-required.
 	Tld *Tld `form:"tld,omitempty" json:"tld,omitempty"`
@@ -2204,8 +2079,8 @@ type ListCountriesParamsFormat string
 type ListCountryDomainsParams struct {
 	Class *Class `form:"class,omitempty" json:"class,omitempty"`
 
-	// Gold The only accepted value is true (gold ⊂ hero).
-	Gold *Gold `form:"gold,omitempty" json:"gold,omitempty"`
+	// Saint The only accepted value is true (saint ⊂ hero).
+	Saint *Saint `form:"saint,omitempty" json:"saint,omitempty"`
 
 	// Tld eTLD-suffix pivot; scope-required.
 	Tld *Tld `form:"tld,omitempty" json:"tld,omitempty"`
@@ -2265,8 +2140,8 @@ type GetCountryStatsParamsInterval string
 type ListDomainsParams struct {
 	Class *Class `form:"class,omitempty" json:"class,omitempty"`
 
-	// Gold The only accepted value is true (gold ⊂ hero).
-	Gold *Gold `form:"gold,omitempty" json:"gold,omitempty"`
+	// Saint The only accepted value is true (saint ⊂ hero).
+	Saint *Saint `form:"saint,omitempty" json:"saint,omitempty"`
 
 	// CountryParam ISO code scope; composes with class + rank order.
 	CountryParam *CountryParam `form:"country,omitempty" json:"country,omitempty"`
@@ -2374,53 +2249,6 @@ type ListSubdomainsParams struct {
 	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
-// ListGoldParams defines parameters for ListGold.
-type ListGoldParams struct {
-	// CountryParam ISO code scope; composes with class + rank order.
-	CountryParam *CountryParam `form:"country,omitempty" json:"country,omitempty"`
-
-	// Asn AS-number scope.
-	Asn *Asn `form:"asn,omitempty" json:"asn,omitempty"`
-
-	// Tld eTLD-suffix pivot; scope-required.
-	Tld *Tld `form:"tld,omitempty" json:"tld,omitempty"`
-
-	// ProviderParam dns_provider id pivot; scope-required as a query filter.
-	ProviderParam *ProviderParam `form:"provider,omitempty" json:"provider,omitempty"`
-
-	// Hosting Hosting/CDN text-tag pivot; scope-required.
-	Hosting *Hosting `form:"hosting,omitempty" json:"hosting,omitempty"`
-
-	// Flag class_flags residual; scope-required.
-	Flag    *Flag    `form:"flag,omitempty" json:"flag,omitempty"`
-	Mx      *DimMX   `form:"mx,omitempty" json:"mx,omitempty"`
-	RankMin *RankMin `form:"rank_min,omitempty" json:"rank_min,omitempty"`
-	RankMax *RankMax `form:"rank_max,omitempty" json:"rank_max,omitempty"`
-
-	// Q Substring search; forces the host ordering.
-	Q    *Q                  `form:"q,omitempty" json:"q,omitempty"`
-	Sort *ListGoldParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
-
-	// Fields Sparse fieldset (comma-separated top-level keys).
-	Fields *Fields               `form:"fields,omitempty" json:"fields,omitempty"`
-	Format *ListGoldParamsFormat `form:"format,omitempty" json:"format,omitempty"`
-
-	// Cursor Opaque keyset cursor from `page.next_cursor`.
-	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
-
-	// Limit Page size; default 50, cap 200 (CSV raises the cap to `export.csv_max_rows`).
-	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
-
-	// AfterRank Stateless deep link; rank-ordered views only.
-	AfterRank *AfterRank `form:"after_rank,omitempty" json:"after_rank,omitempty"`
-}
-
-// ListGoldParamsSort defines parameters for ListGold.
-type ListGoldParamsSort string
-
-// ListGoldParamsFormat defines parameters for ListGold.
-type ListGoldParamsFormat string
-
 // ListHeroesParams defines parameters for ListHeroes.
 type ListHeroesParams struct {
 	// CountryParam ISO code scope; composes with class + rank order.
@@ -2471,53 +2299,6 @@ type ListHeroesParamsFormat string
 // GetIP200JSONResponseBodyFamily defines parameters for GetIP.
 type GetIP200JSONResponseBodyFamily string
 
-// ListMailParams defines parameters for ListMail.
-type ListMailParams struct {
-	// CountryParam ISO code scope; composes with class + rank order.
-	CountryParam *CountryParam `form:"country,omitempty" json:"country,omitempty"`
-
-	// Asn AS-number scope.
-	Asn *Asn `form:"asn,omitempty" json:"asn,omitempty"`
-
-	// Tld eTLD-suffix pivot; scope-required.
-	Tld *Tld `form:"tld,omitempty" json:"tld,omitempty"`
-
-	// ProviderParam dns_provider id pivot; scope-required as a query filter.
-	ProviderParam *ProviderParam `form:"provider,omitempty" json:"provider,omitempty"`
-
-	// Hosting Hosting/CDN text-tag pivot; scope-required.
-	Hosting *Hosting `form:"hosting,omitempty" json:"hosting,omitempty"`
-
-	// Flag class_flags residual; scope-required.
-	Flag    *Flag    `form:"flag,omitempty" json:"flag,omitempty"`
-	Mx      *DimMX   `form:"mx,omitempty" json:"mx,omitempty"`
-	RankMin *RankMin `form:"rank_min,omitempty" json:"rank_min,omitempty"`
-	RankMax *RankMax `form:"rank_max,omitempty" json:"rank_max,omitempty"`
-
-	// Q Substring search; forces the host ordering.
-	Q    *Q                  `form:"q,omitempty" json:"q,omitempty"`
-	Sort *ListMailParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
-
-	// Fields Sparse fieldset (comma-separated top-level keys).
-	Fields *Fields               `form:"fields,omitempty" json:"fields,omitempty"`
-	Format *ListMailParamsFormat `form:"format,omitempty" json:"format,omitempty"`
-
-	// Cursor Opaque keyset cursor from `page.next_cursor`.
-	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
-
-	// Limit Page size; default 50, cap 200 (CSV raises the cap to `export.csv_max_rows`).
-	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
-
-	// AfterRank Stateless deep link; rank-ordered views only.
-	AfterRank *AfterRank `form:"after_rank,omitempty" json:"after_rank,omitempty"`
-}
-
-// ListMailParamsSort defines parameters for ListMail.
-type ListMailParamsSort string
-
-// ListMailParamsFormat defines parameters for ListMail.
-type ListMailParamsFormat string
-
 // ListProvidersParams defines parameters for ListProviders.
 type ListProvidersParams struct {
 	Format *ListProvidersParamsFormat `form:"format,omitempty" json:"format,omitempty"`
@@ -2530,8 +2311,8 @@ type ListProvidersParamsFormat string
 type ListProviderDomainsParams struct {
 	Class *Class `form:"class,omitempty" json:"class,omitempty"`
 
-	// Gold The only accepted value is true (gold ⊂ hero).
-	Gold *Gold `form:"gold,omitempty" json:"gold,omitempty"`
+	// Saint The only accepted value is true (saint ⊂ hero).
+	Saint *Saint `form:"saint,omitempty" json:"saint,omitempty"`
 
 	// Tld eTLD-suffix pivot; scope-required.
 	Tld *Tld `form:"tld,omitempty" json:"tld,omitempty"`
@@ -2580,6 +2361,53 @@ type ListResourceDependentsParams struct {
 	// Limit Page size; default 50, cap 200 (CSV raises the cap to `export.csv_max_rows`).
 	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
 }
+
+// ListSaintsParams defines parameters for ListSaints.
+type ListSaintsParams struct {
+	// CountryParam ISO code scope; composes with class + rank order.
+	CountryParam *CountryParam `form:"country,omitempty" json:"country,omitempty"`
+
+	// Asn AS-number scope.
+	Asn *Asn `form:"asn,omitempty" json:"asn,omitempty"`
+
+	// Tld eTLD-suffix pivot; scope-required.
+	Tld *Tld `form:"tld,omitempty" json:"tld,omitempty"`
+
+	// ProviderParam dns_provider id pivot; scope-required as a query filter.
+	ProviderParam *ProviderParam `form:"provider,omitempty" json:"provider,omitempty"`
+
+	// Hosting Hosting/CDN text-tag pivot; scope-required.
+	Hosting *Hosting `form:"hosting,omitempty" json:"hosting,omitempty"`
+
+	// Flag class_flags residual; scope-required.
+	Flag    *Flag    `form:"flag,omitempty" json:"flag,omitempty"`
+	Mx      *DimMX   `form:"mx,omitempty" json:"mx,omitempty"`
+	RankMin *RankMin `form:"rank_min,omitempty" json:"rank_min,omitempty"`
+	RankMax *RankMax `form:"rank_max,omitempty" json:"rank_max,omitempty"`
+
+	// Q Substring search; forces the host ordering.
+	Q    *Q                    `form:"q,omitempty" json:"q,omitempty"`
+	Sort *ListSaintsParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
+
+	// Fields Sparse fieldset (comma-separated top-level keys).
+	Fields *Fields                 `form:"fields,omitempty" json:"fields,omitempty"`
+	Format *ListSaintsParamsFormat `form:"format,omitempty" json:"format,omitempty"`
+
+	// Cursor Opaque keyset cursor from `page.next_cursor`.
+	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// Limit Page size; default 50, cap 200 (CSV raises the cap to `export.csv_max_rows`).
+	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// AfterRank Stateless deep link; rank-ordered views only.
+	AfterRank *AfterRank `form:"after_rank,omitempty" json:"after_rank,omitempty"`
+}
+
+// ListSaintsParamsSort defines parameters for ListSaints.
+type ListSaintsParamsSort string
+
+// ListSaintsParamsFormat defines parameters for ListSaints.
+type ListSaintsParamsFormat string
 
 // ListSinnersParams defines parameters for ListSinners.
 type ListSinnersParams struct {
@@ -2761,9 +2589,6 @@ func (a CheckEnvelope_Result) MarshalJSON() ([]byte, error) {
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
-	// Tier preset: class=partial (the almost-there list)
-	// (GET /almost)
-	ListAlmost(w http.ResponseWriter, r *http.Request, params ListAlmostParams)
 	// The hosting-ASN league table
 	// (GET /asns)
 	ListASNs(w http.ResponseWriter, r *http.Request, params ListASNsParams)
@@ -2869,18 +2694,12 @@ type ServerInterface interface {
 	// An apex's non-disabled children, host-ordered
 	// (GET /domains/{host}/subdomains)
 	ListSubdomains(w http.ResponseWriter, r *http.Request, host Host, params ListSubdomainsParams)
-	// Tier preset: gold=true
-	// (GET /gold)
-	ListGold(w http.ResponseWriter, r *http.Request, params ListGoldParams)
 	// Tier preset: class=hero
 	// (GET /heroes)
 	ListHeroes(w http.ResponseWriter, r *http.Request, params ListHeroesParams)
 	// Client-IP echo (the visitor banner source)
 	// (GET /ip)
 	GetIP(w http.ResponseWriter, r *http.Request)
-	// The mail-heroes track: class=hero & mx=supported
-	// (GET /mail)
-	ListMail(w http.ResponseWriter, r *http.Request, params ListMailParams)
 	// The government-mandate view (≡ /campaigns?tag=mandate)
 	// (GET /mandates)
 	ListMandates(w http.ResponseWriter, r *http.Request)
@@ -2899,6 +2718,9 @@ type ServerInterface interface {
 	// Reverse dependents: the advocacy surface
 	// (GET /resources/{host}/dependents)
 	ListResourceDependents(w http.ResponseWriter, r *http.Request, host Host, params ListResourceDependentsParams)
+	// Tier preset: saint=true
+	// (GET /saints)
+	ListSaints(w http.ResponseWriter, r *http.Request, params ListSaintsParams)
 	// The curated editorial shame list
 	// (GET /shame)
 	ListShame(w http.ResponseWriter, r *http.Request)
@@ -2913,12 +2735,6 @@ type ServerInterface interface {
 // Unimplemented server implementation that returns http.StatusNotImplemented for each endpoint.
 
 type Unimplemented struct{}
-
-// Tier preset: class=partial (the almost-there list)
-// (GET /almost)
-func (_ Unimplemented) ListAlmost(w http.ResponseWriter, r *http.Request, params ListAlmostParams) {
-	w.WriteHeader(http.StatusNotImplemented)
-}
 
 // The hosting-ASN league table
 // (GET /asns)
@@ -3130,12 +2946,6 @@ func (_ Unimplemented) ListSubdomains(w http.ResponseWriter, r *http.Request, ho
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Tier preset: gold=true
-// (GET /gold)
-func (_ Unimplemented) ListGold(w http.ResponseWriter, r *http.Request, params ListGoldParams) {
-	w.WriteHeader(http.StatusNotImplemented)
-}
-
 // Tier preset: class=hero
 // (GET /heroes)
 func (_ Unimplemented) ListHeroes(w http.ResponseWriter, r *http.Request, params ListHeroesParams) {
@@ -3145,12 +2955,6 @@ func (_ Unimplemented) ListHeroes(w http.ResponseWriter, r *http.Request, params
 // Client-IP echo (the visitor banner source)
 // (GET /ip)
 func (_ Unimplemented) GetIP(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusNotImplemented)
-}
-
-// The mail-heroes track: class=hero & mx=supported
-// (GET /mail)
-func (_ Unimplemented) ListMail(w http.ResponseWriter, r *http.Request, params ListMailParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -3190,6 +2994,12 @@ func (_ Unimplemented) ListResourceDependents(w http.ResponseWriter, r *http.Req
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// Tier preset: saint=true
+// (GET /saints)
+func (_ Unimplemented) ListSaints(w http.ResponseWriter, r *http.Request, params ListSaintsParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // The curated editorial shame list
 // (GET /shame)
 func (_ Unimplemented) ListShame(w http.ResponseWriter, r *http.Request) {
@@ -3216,234 +3026,6 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
-
-// ListAlmost operation middleware
-func (siw *ServerInterfaceWrapper) ListAlmost(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params ListAlmostParams
-
-	// ------------- Optional query parameter "country" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "country", r.URL.Query(), &params.CountryParam, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "country"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "country", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "asn" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "asn", r.URL.Query(), &params.Asn, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "asn"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "asn", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "tld" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "tld", r.URL.Query(), &params.Tld, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "tld"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "tld", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "provider" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "provider", r.URL.Query(), &params.ProviderParam, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "provider"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "provider", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "hosting" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "hosting", r.URL.Query(), &params.Hosting, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "hosting"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "hosting", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "flag" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "flag", r.URL.Query(), &params.Flag, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "flag"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "flag", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "mx" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "mx", r.URL.Query(), &params.Mx, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "mx"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "mx", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "rank_min" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "rank_min", r.URL.Query(), &params.RankMin, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "rank_min"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "rank_min", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "rank_max" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "rank_max", r.URL.Query(), &params.RankMax, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "rank_max"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "rank_max", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "q" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "q", r.URL.Query(), &params.Q, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "q"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "sort" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "sort", r.URL.Query(), &params.Sort, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "sort"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sort", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "fields" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "fields", r.URL.Query(), &params.Fields, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "fields"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "fields", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "format" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "format", r.URL.Query(), &params.Format, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "format"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "format", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "cursor" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "limit" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "after_rank" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "after_rank", r.URL.Query(), &params.AfterRank, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "after_rank"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "after_rank", Err: err})
-		}
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListAlmost(w, r, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
 
 // ListASNs operation middleware
 func (siw *ServerInterfaceWrapper) ListASNs(w http.ResponseWriter, r *http.Request) {
@@ -3587,15 +3169,15 @@ func (siw *ServerInterfaceWrapper) ListASNDomains(w http.ResponseWriter, r *http
 		return
 	}
 
-	// ------------- Optional query parameter "gold" -------------
+	// ------------- Optional query parameter "saint" -------------
 
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "gold", r.URL.Query(), &params.Gold, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "saint", r.URL.Query(), &params.Saint, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
 	if err != nil {
 		var requiredError *runtime.RequiredParameterError
 		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "gold"})
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "saint"})
 		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "gold", Err: err})
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "saint", Err: err})
 		}
 		return
 	}
@@ -4626,15 +4208,15 @@ func (siw *ServerInterfaceWrapper) ListCountryDomains(w http.ResponseWriter, r *
 		return
 	}
 
-	// ------------- Optional query parameter "gold" -------------
+	// ------------- Optional query parameter "saint" -------------
 
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "gold", r.URL.Query(), &params.Gold, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "saint", r.URL.Query(), &params.Saint, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
 	if err != nil {
 		var requiredError *runtime.RequiredParameterError
 		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "gold"})
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "saint"})
 		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "gold", Err: err})
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "saint", Err: err})
 		}
 		return
 	}
@@ -4936,15 +4518,15 @@ func (siw *ServerInterfaceWrapper) ListDomains(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	// ------------- Optional query parameter "gold" -------------
+	// ------------- Optional query parameter "saint" -------------
 
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "gold", r.URL.Query(), &params.Gold, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "saint", r.URL.Query(), &params.Saint, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
 	if err != nil {
 		var requiredError *runtime.RequiredParameterError
 		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "gold"})
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "saint"})
 		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "gold", Err: err})
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "saint", Err: err})
 		}
 		return
 	}
@@ -5583,234 +5165,6 @@ func (siw *ServerInterfaceWrapper) ListSubdomains(w http.ResponseWriter, r *http
 	handler.ServeHTTP(w, r)
 }
 
-// ListGold operation middleware
-func (siw *ServerInterfaceWrapper) ListGold(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params ListGoldParams
-
-	// ------------- Optional query parameter "country" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "country", r.URL.Query(), &params.CountryParam, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "country"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "country", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "asn" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "asn", r.URL.Query(), &params.Asn, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "asn"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "asn", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "tld" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "tld", r.URL.Query(), &params.Tld, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "tld"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "tld", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "provider" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "provider", r.URL.Query(), &params.ProviderParam, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "provider"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "provider", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "hosting" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "hosting", r.URL.Query(), &params.Hosting, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "hosting"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "hosting", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "flag" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "flag", r.URL.Query(), &params.Flag, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "flag"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "flag", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "mx" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "mx", r.URL.Query(), &params.Mx, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "mx"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "mx", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "rank_min" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "rank_min", r.URL.Query(), &params.RankMin, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "rank_min"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "rank_min", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "rank_max" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "rank_max", r.URL.Query(), &params.RankMax, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "rank_max"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "rank_max", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "q" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "q", r.URL.Query(), &params.Q, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "q"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "sort" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "sort", r.URL.Query(), &params.Sort, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "sort"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sort", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "fields" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "fields", r.URL.Query(), &params.Fields, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "fields"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "fields", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "format" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "format", r.URL.Query(), &params.Format, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "format"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "format", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "cursor" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "limit" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "after_rank" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "after_rank", r.URL.Query(), &params.AfterRank, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "after_rank"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "after_rank", Err: err})
-		}
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListGold(w, r, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
 // ListHeroes operation middleware
 func (siw *ServerInterfaceWrapper) ListHeroes(w http.ResponseWriter, r *http.Request) {
 
@@ -6053,234 +5407,6 @@ func (siw *ServerInterfaceWrapper) GetIP(w http.ResponseWriter, r *http.Request)
 	handler.ServeHTTP(w, r)
 }
 
-// ListMail operation middleware
-func (siw *ServerInterfaceWrapper) ListMail(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params ListMailParams
-
-	// ------------- Optional query parameter "country" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "country", r.URL.Query(), &params.CountryParam, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "country"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "country", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "asn" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "asn", r.URL.Query(), &params.Asn, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "asn"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "asn", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "tld" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "tld", r.URL.Query(), &params.Tld, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "tld"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "tld", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "provider" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "provider", r.URL.Query(), &params.ProviderParam, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "provider"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "provider", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "hosting" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "hosting", r.URL.Query(), &params.Hosting, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "hosting"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "hosting", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "flag" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "flag", r.URL.Query(), &params.Flag, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "flag"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "flag", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "mx" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "mx", r.URL.Query(), &params.Mx, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "mx"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "mx", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "rank_min" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "rank_min", r.URL.Query(), &params.RankMin, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "rank_min"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "rank_min", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "rank_max" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "rank_max", r.URL.Query(), &params.RankMax, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "rank_max"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "rank_max", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "q" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "q", r.URL.Query(), &params.Q, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "q"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "sort" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "sort", r.URL.Query(), &params.Sort, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "sort"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sort", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "fields" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "fields", r.URL.Query(), &params.Fields, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "fields"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "fields", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "format" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "format", r.URL.Query(), &params.Format, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "format"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "format", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "cursor" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "limit" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "after_rank" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "after_rank", r.URL.Query(), &params.AfterRank, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "after_rank"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "after_rank", Err: err})
-		}
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListMail(w, r, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
 // ListMandates operation middleware
 func (siw *ServerInterfaceWrapper) ListMandates(w http.ResponseWriter, r *http.Request) {
 
@@ -6385,15 +5511,15 @@ func (siw *ServerInterfaceWrapper) ListProviderDomains(w http.ResponseWriter, r 
 		return
 	}
 
-	// ------------- Optional query parameter "gold" -------------
+	// ------------- Optional query parameter "saint" -------------
 
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "gold", r.URL.Query(), &params.Gold, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "saint", r.URL.Query(), &params.Saint, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
 	if err != nil {
 		var requiredError *runtime.RequiredParameterError
 		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "gold"})
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "saint"})
 		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "gold", Err: err})
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "saint", Err: err})
 		}
 		return
 	}
@@ -6663,6 +5789,234 @@ func (siw *ServerInterfaceWrapper) ListResourceDependents(w http.ResponseWriter,
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListResourceDependents(w, r, host, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListSaints operation middleware
+func (siw *ServerInterfaceWrapper) ListSaints(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListSaintsParams
+
+	// ------------- Optional query parameter "country" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "country", r.URL.Query(), &params.CountryParam, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "country"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "country", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "asn" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "asn", r.URL.Query(), &params.Asn, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "asn"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "asn", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "tld" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "tld", r.URL.Query(), &params.Tld, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "tld"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "tld", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "provider" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "provider", r.URL.Query(), &params.ProviderParam, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "provider"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "provider", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "hosting" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "hosting", r.URL.Query(), &params.Hosting, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "hosting"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "hosting", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "flag" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "flag", r.URL.Query(), &params.Flag, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "flag"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "flag", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "mx" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "mx", r.URL.Query(), &params.Mx, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "mx"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "mx", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "rank_min" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "rank_min", r.URL.Query(), &params.RankMin, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "rank_min"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "rank_min", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "rank_max" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "rank_max", r.URL.Query(), &params.RankMax, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "rank_max"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "rank_max", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "q" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "q", r.URL.Query(), &params.Q, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "q"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "sort" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "sort", r.URL.Query(), &params.Sort, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "sort"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sort", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "fields" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "fields", r.URL.Query(), &params.Fields, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "fields"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "fields", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "format" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "format", r.URL.Query(), &params.Format, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "format"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "format", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "after_rank" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "after_rank", r.URL.Query(), &params.AfterRank, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "after_rank"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "after_rank", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListSaints(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -7087,9 +6441,6 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	}
 
 	r.Group(func(r chi.Router) {
-		r.Get(options.BaseURL+"/almost", wrapper.ListAlmost)
-	})
-	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/asns", wrapper.ListASNs)
 	})
 	r.Group(func(r chi.Router) {
@@ -7195,16 +6546,10 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Get(options.BaseURL+"/domains/{host}/subdomains", wrapper.ListSubdomains)
 	})
 	r.Group(func(r chi.Router) {
-		r.Get(options.BaseURL+"/gold", wrapper.ListGold)
-	})
-	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/heroes", wrapper.ListHeroes)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/ip", wrapper.GetIP)
-	})
-	r.Group(func(r chi.Router) {
-		r.Get(options.BaseURL+"/mail", wrapper.ListMail)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/mandates", wrapper.ListMandates)
@@ -7223,6 +6568,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/resources/{host}/dependents", wrapper.ListResourceDependents)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/saints", wrapper.ListSaints)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/shame", wrapper.ListShame)
@@ -7281,61 +6629,6 @@ type ScopeRequiredApplicationProblemPlusJSONResponse Problem
 type UnsupportedMediaTypeApplicationProblemPlusJSONResponse Problem
 
 type ValidationErrorApplicationProblemPlusJSONResponse ValidationProblem
-
-type ListAlmostRequestObject struct {
-	Params ListAlmostParams
-}
-
-type ListAlmostResponseObject interface {
-	VisitListAlmostResponse(w http.ResponseWriter) error
-}
-
-type ListAlmost200JSONResponse struct{ DomainListJSONResponse }
-
-func (response ListAlmost200JSONResponse) VisitListAlmostResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type ListAlmost200TextcsvResponse struct{ DomainListTextcsvResponse }
-
-func (response ListAlmost200TextcsvResponse) VisitListAlmostResponse(w http.ResponseWriter) error {
-
-	w.Header().Set("Content-Type", "text/csv")
-	if response.ContentLength != 0 {
-		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
-	}
-	w.WriteHeader(200)
-
-	if closer, ok := response.Body.(io.ReadCloser); ok {
-		defer closer.Close()
-	}
-	_, err := io.Copy(w, response.Body)
-	return err
-}
-
-type ListAlmost422ApplicationProblemPlusJSONResponse struct {
-	ScopeRequiredApplicationProblemPlusJSONResponse
-}
-
-func (response ListAlmost422ApplicationProblemPlusJSONResponse) VisitListAlmostResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(422)
-	_, err := buf.WriteTo(w)
-	return err
-}
 
 type ListASNsRequestObject struct {
 	Params ListASNsParams
@@ -9082,61 +8375,6 @@ func (response ListSubdomains404ApplicationProblemPlusJSONResponse) VisitListSub
 	return err
 }
 
-type ListGoldRequestObject struct {
-	Params ListGoldParams
-}
-
-type ListGoldResponseObject interface {
-	VisitListGoldResponse(w http.ResponseWriter) error
-}
-
-type ListGold200JSONResponse struct{ DomainListJSONResponse }
-
-func (response ListGold200JSONResponse) VisitListGoldResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type ListGold200TextcsvResponse struct{ DomainListTextcsvResponse }
-
-func (response ListGold200TextcsvResponse) VisitListGoldResponse(w http.ResponseWriter) error {
-
-	w.Header().Set("Content-Type", "text/csv")
-	if response.ContentLength != 0 {
-		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
-	}
-	w.WriteHeader(200)
-
-	if closer, ok := response.Body.(io.ReadCloser); ok {
-		defer closer.Close()
-	}
-	_, err := io.Copy(w, response.Body)
-	return err
-}
-
-type ListGold422ApplicationProblemPlusJSONResponse struct {
-	ScopeRequiredApplicationProblemPlusJSONResponse
-}
-
-func (response ListGold422ApplicationProblemPlusJSONResponse) VisitListGoldResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(422)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
 type ListHeroesRequestObject struct {
 	Params ListHeroesParams
 }
@@ -9212,61 +8450,6 @@ func (response GetIP200JSONResponse) VisitGetIPResponse(w http.ResponseWriter) e
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(200)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type ListMailRequestObject struct {
-	Params ListMailParams
-}
-
-type ListMailResponseObject interface {
-	VisitListMailResponse(w http.ResponseWriter) error
-}
-
-type ListMail200JSONResponse struct{ DomainListJSONResponse }
-
-func (response ListMail200JSONResponse) VisitListMailResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type ListMail200TextcsvResponse struct{ DomainListTextcsvResponse }
-
-func (response ListMail200TextcsvResponse) VisitListMailResponse(w http.ResponseWriter) error {
-
-	w.Header().Set("Content-Type", "text/csv")
-	if response.ContentLength != 0 {
-		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
-	}
-	w.WriteHeader(200)
-
-	if closer, ok := response.Body.(io.ReadCloser); ok {
-		defer closer.Close()
-	}
-	_, err := io.Copy(w, response.Body)
-	return err
-}
-
-type ListMail422ApplicationProblemPlusJSONResponse struct {
-	ScopeRequiredApplicationProblemPlusJSONResponse
-}
-
-func (response ListMail422ApplicationProblemPlusJSONResponse) VisitListMailResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(422)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -9537,6 +8720,61 @@ func (response ListResourceDependents404ApplicationProblemPlusJSONResponse) Visi
 	return err
 }
 
+type ListSaintsRequestObject struct {
+	Params ListSaintsParams
+}
+
+type ListSaintsResponseObject interface {
+	VisitListSaintsResponse(w http.ResponseWriter) error
+}
+
+type ListSaints200JSONResponse struct{ DomainListJSONResponse }
+
+func (response ListSaints200JSONResponse) VisitListSaintsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListSaints200TextcsvResponse struct{ DomainListTextcsvResponse }
+
+func (response ListSaints200TextcsvResponse) VisitListSaintsResponse(w http.ResponseWriter) error {
+
+	w.Header().Set("Content-Type", "text/csv")
+	if response.ContentLength != 0 {
+		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
+	}
+	w.WriteHeader(200)
+
+	if closer, ok := response.Body.(io.ReadCloser); ok {
+		defer closer.Close()
+	}
+	_, err := io.Copy(w, response.Body)
+	return err
+}
+
+type ListSaints422ApplicationProblemPlusJSONResponse struct {
+	ScopeRequiredApplicationProblemPlusJSONResponse
+}
+
+func (response ListSaints422ApplicationProblemPlusJSONResponse) VisitListSaintsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListShameRequestObject struct {
 }
 
@@ -9653,9 +8891,6 @@ func (response GetStatsOverview400ApplicationProblemPlusJSONResponse) VisitGetSt
 
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
-	// Tier preset: class=partial (the almost-there list)
-	// (GET /almost)
-	ListAlmost(ctx context.Context, request ListAlmostRequestObject) (ListAlmostResponseObject, error)
 	// The hosting-ASN league table
 	// (GET /asns)
 	ListASNs(ctx context.Context, request ListASNsRequestObject) (ListASNsResponseObject, error)
@@ -9761,18 +8996,12 @@ type StrictServerInterface interface {
 	// An apex's non-disabled children, host-ordered
 	// (GET /domains/{host}/subdomains)
 	ListSubdomains(ctx context.Context, request ListSubdomainsRequestObject) (ListSubdomainsResponseObject, error)
-	// Tier preset: gold=true
-	// (GET /gold)
-	ListGold(ctx context.Context, request ListGoldRequestObject) (ListGoldResponseObject, error)
 	// Tier preset: class=hero
 	// (GET /heroes)
 	ListHeroes(ctx context.Context, request ListHeroesRequestObject) (ListHeroesResponseObject, error)
 	// Client-IP echo (the visitor banner source)
 	// (GET /ip)
 	GetIP(ctx context.Context, request GetIPRequestObject) (GetIPResponseObject, error)
-	// The mail-heroes track: class=hero & mx=supported
-	// (GET /mail)
-	ListMail(ctx context.Context, request ListMailRequestObject) (ListMailResponseObject, error)
 	// The government-mandate view (≡ /campaigns?tag=mandate)
 	// (GET /mandates)
 	ListMandates(ctx context.Context, request ListMandatesRequestObject) (ListMandatesResponseObject, error)
@@ -9791,6 +9020,9 @@ type StrictServerInterface interface {
 	// Reverse dependents: the advocacy surface
 	// (GET /resources/{host}/dependents)
 	ListResourceDependents(ctx context.Context, request ListResourceDependentsRequestObject) (ListResourceDependentsResponseObject, error)
+	// Tier preset: saint=true
+	// (GET /saints)
+	ListSaints(ctx context.Context, request ListSaintsRequestObject) (ListSaintsResponseObject, error)
 	// The curated editorial shame list
 	// (GET /shame)
 	ListShame(ctx context.Context, request ListShameRequestObject) (ListShameResponseObject, error)
@@ -9829,32 +9061,6 @@ type strictHandler struct {
 	ssi         StrictServerInterface
 	middlewares []StrictMiddlewareFunc
 	options     StrictHTTPServerOptions
-}
-
-// ListAlmost operation middleware
-func (sh *strictHandler) ListAlmost(w http.ResponseWriter, r *http.Request, params ListAlmostParams) {
-	var request ListAlmostRequestObject
-
-	request.Params = params
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.ListAlmost(ctx, request.(ListAlmostRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "ListAlmost")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(ListAlmostResponseObject); ok {
-		if err := validResponse.VisitListAlmostResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
 }
 
 // ListASNs operation middleware
@@ -10779,32 +9985,6 @@ func (sh *strictHandler) ListSubdomains(w http.ResponseWriter, r *http.Request, 
 	}
 }
 
-// ListGold operation middleware
-func (sh *strictHandler) ListGold(w http.ResponseWriter, r *http.Request, params ListGoldParams) {
-	var request ListGoldRequestObject
-
-	request.Params = params
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.ListGold(ctx, request.(ListGoldRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "ListGold")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(ListGoldResponseObject); ok {
-		if err := validResponse.VisitListGoldResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
 // ListHeroes operation middleware
 func (sh *strictHandler) ListHeroes(w http.ResponseWriter, r *http.Request, params ListHeroesParams) {
 	var request ListHeroesRequestObject
@@ -10848,32 +10028,6 @@ func (sh *strictHandler) GetIP(w http.ResponseWriter, r *http.Request) {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetIPResponseObject); ok {
 		if err := validResponse.VisitGetIPResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// ListMail operation middleware
-func (sh *strictHandler) ListMail(w http.ResponseWriter, r *http.Request, params ListMailParams) {
-	var request ListMailRequestObject
-
-	request.Params = params
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.ListMail(ctx, request.(ListMailRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "ListMail")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(ListMailResponseObject); ok {
-		if err := validResponse.VisitListMailResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -11037,6 +10191,32 @@ func (sh *strictHandler) ListResourceDependents(w http.ResponseWriter, r *http.R
 	}
 }
 
+// ListSaints operation middleware
+func (sh *strictHandler) ListSaints(w http.ResponseWriter, r *http.Request, params ListSaintsParams) {
+	var request ListSaintsRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListSaints(ctx, request.(ListSaintsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListSaints")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListSaintsResponseObject); ok {
+		if err := validResponse.VisitListSaintsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // ListShame operation middleware
 func (sh *strictHandler) ListShame(w http.ResponseWriter, r *http.Request) {
 	var request ListShameRequestObject
@@ -11118,154 +10298,152 @@ func (sh *strictHandler) GetStatsOverview(w http.ResponseWriter, r *http.Request
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
+	"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",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

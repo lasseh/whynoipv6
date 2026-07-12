@@ -19,7 +19,7 @@ UPDATE domain SET
   dnssec_observed = @dnssec_observed, ptr_observed = @ptr_observed,
   smtp_observed = @smtp_observed, parity_observed = @parity_observed,
   latency_v4_ms = @latency_v4_ms, latency_v6_ms = @latency_v6_ms,
-  classification = @classification, class_flags = @class_flags, gold = @gold,
+  classification = @classification, class_flags = @class_flags, saint = @saint,
   asn_id = @asn_id, country_id = @country_id,
   disabled = @disabled, disabled_reason = @disabled_reason, disabled_at = @disabled_at,
   dead_streak = @dead_streak, error_streak = @error_streak,

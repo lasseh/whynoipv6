@@ -273,7 +273,7 @@ INSERT INTO country (name, code, tld) VALUES
 -- stats_global_daily row and MUST always find one, even on first boot before
 -- the first nightly snapshot.
 INSERT INTO stats_global_daily (
-  day, domains, sinners, partial, heroes, gold, inactive, unknown, disabled,
+  day, domains, sinners, partial, heroes, saints, inactive, unknown, disabled,
   base_supported, www_supported, ns_supported, mx_supported, conn_supported,
   resources_supported, top_heroes, top_nameserver)
 VALUES (CURRENT_DATE, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)

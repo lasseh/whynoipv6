@@ -1,11 +1,11 @@
 package domain
 
 // Classify implements the deterministic first-match classification ladder,
-// the five sub-reason flags, and the gold rule (03-state-machine.md §10),
+// the five sub-reason flags, and the saint rule (03-state-machine.md §10),
 // evaluated over CONFIRMED values only. nil = never confirmed (NULL).
 // Flags are returned in the fixed order broken_v6, www_missing, ns_missing,
 // mail_missing, resources_v4only.
-func Classify(confirmed map[Dimension]*IPv6Status) (class Classification, flags []string, gold bool) {
+func Classify(confirmed map[Dimension]*IPv6Status) (class Classification, flags []string, saint bool) {
 	get := func(d Dimension) (IPv6Status, bool) {
 		if v := confirmed[d]; v != nil {
 			return *v, true
@@ -57,8 +57,8 @@ func Classify(confirmed map[Dimension]*IPv6Status) (class Classification, flags 
 		flags = append(flags, "resources_v4only")
 	}
 
-	gold = class == ClassHero && resOK && (res == StatusSupported || res == StatusNotApplicable)
-	return class, flags, gold
+	saint = class == ClassHero && resOK && (res == StatusSupported || res == StatusNotApplicable)
+	return class, flags, saint
 }
 
 // IPv6Only folds conn and resources into the derived "IPv6 only" status:
@@ -87,7 +87,7 @@ func IPv6Only(conn, resources *IPv6Status) *IPv6Status {
 		switch *resources {
 		case StatusSupported, StatusNotApplicable:
 			// not_applicable = confirmed empty required-host set — the
-			// same vacuous pass the gold rule accepts.
+			// same vacuous pass the saint rule accepts.
 			return new(StatusSupported)
 		case StatusUnsupported:
 			return new(StatusUnsupported)

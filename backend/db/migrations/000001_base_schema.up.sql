@@ -128,7 +128,7 @@ CREATE TABLE domain (
   classification  classification NOT NULL DEFAULT 'unknown',
   class_flags     TEXT[] NOT NULL DEFAULT '{}',   -- broken_v6, www_missing, ns_missing,
                                                   -- mail_missing, resources_v4only
-  gold            BOOLEAN NOT NULL DEFAULT FALSE, -- hero + all resources v6 (badge)
+  saint           BOOLEAN NOT NULL DEFAULT FALSE, -- hero + all resources v6 (badge)
 
   asn_id      INT NOT NULL REFERENCES asn(id),     -- sentinel row when unknown (§6);
   country_id  INT NOT NULL REFERENCES country(id), --   no serializer ever handles NULL
@@ -328,7 +328,7 @@ CREATE UNIQUE INDEX idx_tranco_import_list ON tranco_import (list_id) WHERE NOT 
 
 CREATE TABLE stats_global_daily (
   day DATE PRIMARY KEY,
-  domains INT, sinners INT, partial INT, heroes INT, gold INT, inactive INT,
+  domains INT, sinners INT, partial INT, heroes INT, saints INT, inactive INT,
   unknown INT, disabled INT,
   base_supported INT, www_supported INT, ns_supported INT, mx_supported INT,
   conn_supported INT, resources_supported INT,
