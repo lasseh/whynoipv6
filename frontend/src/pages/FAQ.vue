@@ -71,11 +71,11 @@ watch(
                   <h4 class="text-xl font-medium mb-2">How does WhyNoIPv6.com work?</h4>
                   <p class="text-md text-gray-400">
                     At WhyNoIPv6.com, we meticulously scan each domain from Tranco's top-ranked list
-                    every 3 days to evaluate critical IPv6 adoption metrics. Specifically, we check
-                    for the existence of IPv6 DNS records and MX records. The data gleaned from
-                    these scans is then aggregated, analyzed, and made publicly available, providing
-                    a comprehensive and up-to-date snapshot of IPv6 implementation across
-                    influential websites.
+                    every day to evaluate critical IPv6 adoption metrics. Specifically, we check for
+                    the existence of IPv6 DNS records and MX records. The data gleaned from these
+                    scans is then aggregated, analyzed, and made publicly available, providing a
+                    comprehensive and up-to-date snapshot of IPv6 implementation across influential
+                    websites.
                   </p>
                 </li>
                 <li class="py-4">
@@ -138,15 +138,21 @@ watch(
                 </li>
                 <li class="py-4">
                   <h4 class="text-xl font-medium mb-2">Crawler Rules</h4>
+                  <p class="text-md text-gray-400 mb-2">
+                    The crawler checks AAAA records on domain.com, www.domain.com, and the domain's
+                    NS and MX records. It also opens a real HTTP connection over IPv6 — publishing
+                    an AAAA record that doesn't answer won't fool anyone.
+                  </p>
                   <p class="text-md text-gray-400">
-                    The crawler checks for IPv6 records on domain.com, www.domain.com, and the
-                    domain's NS and MX records.
+                    The domain and www lookups go through three independent public resolvers, and
+                    two out of three must agree.
                   </p>
                 </li>
                 <li class="py-4">
                   <h4 class="text-xl font-medium mb-2">Crawler Frequency</h4>
                   <p class="text-md text-gray-400">
-                    The crawler will check the domain every 3 days.
+                    Every domain is scanned once per day. A status only changes after 3 consecutive
+                    scans agree, so one flaky DNS answer won't flip your verdict.
                   </p>
                 </li>
                 <li class="py-4">
@@ -158,9 +164,16 @@ watch(
                 <li class="py-4">
                   <h4 class="text-xl font-medium mb-2">Heroes</h4>
                   <p class="text-md text-gray-400">
-                    To become one of the IPv6 heroes here, you need IPv6 support on domain.com,
-                    www.domain.com and the nameservers. Then MX records need to have IPv6 or be
-                    empty.
+                    To become one of the IPv6 heroes here, you need IPv6 on domain.com,
+                    www.domain.com and the nameservers. MX records need IPv6 or be empty, and the
+                    site has to actually respond over IPv6.
+                  </p>
+                </li>
+                <li class="py-4">
+                  <h4 class="text-xl font-medium mb-2">Saints</h4>
+                  <p class="text-md text-gray-400">
+                    Saints are heroes that also load all their page resources — scripts, fonts,
+                    images — over IPv6. The full package: the site works on an IPv6-only connection.
                   </p>
                 </li>
                 <li class="pt-4">
