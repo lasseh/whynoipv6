@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  STATUS_CLASSES,
   statusCardBorderClass,
   statusCardTextClass,
   statusIcon,
@@ -66,5 +67,32 @@ describe('status maps', () => {
     expect(statusCardBorderClass(row.value)).toBe(row.border)
     expect(statusLabel(row.value)).toBe(row.label)
     expect(statusTooltip(row.value)).toBe(row.tooltip)
+  })
+})
+
+// The hue-family invariant: shades vary by surface on purpose, but the
+// family per status never does — supported is always emerald, unsupported
+// pink, no_record amber, the muted states zinc/gray. A new status value or
+// surface added to STATUS_CLASSES must declare its family here.
+describe('status hue families', () => {
+  const FAMILY: Record<string, string[]> = {
+    supported: ['emerald'],
+    unsupported: ['pink'],
+    no_record: ['amber'],
+    not_applicable: ['zinc'],
+    unconfirmed: ['zinc', 'gray'],
+  }
+
+  it('every surface class stays inside its status family', () => {
+    for (const [surface, classes] of Object.entries(STATUS_CLASSES)) {
+      for (const [status, cls] of Object.entries(classes)) {
+        const families = FAMILY[status]
+        expect(families, `unknown status ${status}`).toBeDefined()
+        expect(
+          families!.some((f) => cls.includes(`-${f}-`)),
+          `${surface}.${status} = ${cls}, want family ${families!.join('/')}`,
+        ).toBe(true)
+      }
+    }
   })
 })

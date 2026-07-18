@@ -1,32 +1,19 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { StatusBlock } from '@/api'
+import { STAR_CLASS, statusStarKind, type StarKind } from '@/utils/status'
 import Tooltip from '@/components/Tooltip.vue'
 
 // The 4-star detail rating (§7.3, resolved OPEN-F1): one star per rated
-// dimension (base/www/ns/mx). supported → filled emerald; not_applicable →
-// muted zinc (neither earned nor missing — a no-MX domain is never
-// penalized); unsupported/no_record/null → empty gray. Stars render
-// filled-first to keep the old left-filled look.
+// dimension (base/www/ns/mx); the status→star trichotomy and hues live in
+// utils/status. Stars render filled-first to keep the old left-filled look.
 const props = defineProps<{ status: StatusBlock }>()
 
-type StarKind = 'filled' | 'muted' | 'empty'
-
 const STAR_ORDER: Record<StarKind, number> = { filled: 0, muted: 1, empty: 2 }
-const STAR_CLASS: Record<StarKind, string> = {
-  filled: 'text-emerald-600',
-  muted: 'text-zinc-600',
-  empty: 'text-gray-600',
-}
 
 const stars = computed<StarKind[]>(() =>
   (['base', 'www', 'ns', 'mx'] as const)
-    .map((dim): StarKind => {
-      const value = props.status[dim].value
-      if (value === 'supported') return 'filled'
-      if (value === 'not_applicable') return 'muted'
-      return 'empty'
-    })
+    .map((dim) => statusStarKind(props.status[dim].value))
     .sort((a, b) => STAR_ORDER[a] - STAR_ORDER[b]),
 )
 </script>
