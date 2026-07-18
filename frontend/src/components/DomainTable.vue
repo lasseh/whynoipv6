@@ -2,15 +2,23 @@
 import { ref } from 'vue'
 import type { DomainSummary } from '@/api'
 import StatusIcon from '@/components/StatusIcon.vue'
+import Tooltip from '@/components/Tooltip.vue'
 
-// The §4.2 list row: columns Apex/WWW/E-Mail/Nameserver map to
-// status.base/www/mx/ns.value (§7.1). Rank badge hides on null — never
-// renders 0 (§7.3). `loading` suppresses the empty state so it can't
-// flash before the first page arrives.
-withDefaults(defineProps<{ domains?: DomainSummary[]; loading?: boolean }>(), {
-  domains: () => [],
-  loading: false,
-})
+// The one domain-table module (§4.2 list row): columns Apex/WWW/E-Mail/
+// Nameserver map to status.base/www/mx/ns.value (§7.1). Two surfaces share
+// it — leaderboards (rank badge, hidden on null and never 0 (§7.3), the
+// IPv6 Only column, DomainDetail links) and campaign members
+// (`campaignUuid` set: member links, the server's v6_ready row highlight
+// (07 §4.7 — never re-derived here), no Rank / IPv6 Only columns).
+// `loading` suppresses the empty state so it can't flash before the first
+// page arrives.
+withDefaults(
+  defineProps<{ domains?: DomainSummary[]; loading?: boolean; campaignUuid?: string }>(),
+  {
+    domains: () => [],
+    loading: false,
+  },
+)
 
 const hoverIndex = ref<number | null>(null)
 </script>
@@ -24,63 +32,38 @@ const hoverIndex = ref<number | null>(null)
         class="text-xs font-semibold uppercase text-fuchsia-600 border-t border-b border-slate-700"
       >
         <tr>
-          <th class="px-5 py-3 whitespace-nowrap text-left md:table-cell hidden">
+          <th
+            v-if="!campaignUuid"
+            class="px-5 py-3 whitespace-nowrap text-left md:table-cell hidden"
+          >
             <div class="font-semibold text-left">Rank</div>
           </th>
           <th class="md:px-2 px-5 py-3 whitespace-nowrap text-left">
             <div class="font-semibold text-left">Domain</div>
           </th>
           <th class="px-2 py-3 whitespace-nowrap">
-            <div class="has-tooltip">
-              <span
-                class="tooltip rounded border border-slate-700 shadow-lg p-1 bg-gray-800 text-fuchsia-600 -mt-8 normal-case"
-                >Top-level domain query: dig AAAA domain.com</span
-              >
-              Apex
-            </div>
+            <Tooltip text="Top-level domain query: dig AAAA domain.com">Apex</Tooltip>
           </th>
           <th class="px-2 py-3 whitespace-nowrap">
-            <div class="has-tooltip">
-              <span
-                class="tooltip rounded border border-slate-700 shadow-lg p-1 bg-gray-800 text-fuchsia-600 -mt-8 normal-case"
-                >Query AAAA record for www.domain.com</span
-              >
-              WWW
-            </div>
+            <Tooltip text="Query AAAA record for www.domain.com">WWW</Tooltip>
           </th>
           <th class="px-2 py-3 whitespace-nowrap">
             <div class="font-semibold text-center md:block hidden">
-              <div class="has-tooltip">
-                <span
-                  class="tooltip rounded border border-slate-700 shadow-lg p-1 bg-gray-800 text-fuchsia-600 -mt-8 normal-case"
-                  >Query MX record for domain.com</span
-                >
-                E-Mail
-              </div>
+              <Tooltip text="Query MX record for domain.com">E-Mail</Tooltip>
             </div>
             <div class="font-semibold text-center md:hidden">MX</div>
           </th>
-          <th class="px-2 py-3 whitespace-nowrap">
+          <th class="px-5 py-3 whitespace-nowrap">
             <div class="font-semibold text-center md:block hidden">
-              <div class="has-tooltip">
-                <span
-                  class="tooltip rounded border border-slate-700 shadow-lg p-1 bg-gray-800 text-fuchsia-600 -mt-8 normal-case"
-                  >Query NS record for domain.com</span
-                >
-                Nameserver
-              </div>
+              <Tooltip text="Query NS record for domain.com">Nameserver</Tooltip>
             </div>
             <div class="font-semibold text-center md:hidden">NS</div>
           </th>
-          <th class="px-5 py-3 whitespace-nowrap">
+          <th v-if="!campaignUuid" class="px-5 py-3 whitespace-nowrap">
             <div class="font-semibold text-center md:block hidden">
-              <div class="has-tooltip">
-                <span
-                  class="tooltip rounded border border-slate-700 shadow-lg p-1 bg-gray-800 text-fuchsia-600 -mt-8 normal-case"
-                  >Loads fully over an IPv6-only connection (site + page resources)</span
-                >
-                IPv6 Only
-              </div>
+              <Tooltip text="Loads fully over an IPv6-only connection (site + page resources)"
+                >IPv6 Only</Tooltip
+              >
             </div>
             <div class="font-semibold text-center md:hidden">V6</div>
           </th>
@@ -91,11 +74,14 @@ const hoverIndex = ref<number | null>(null)
         <tr
           v-for="(domain, index) in domains"
           :key="domain.host"
-          class="hover:bg-gray-800"
+          :class="[{ 'bg-emerald-900/50': campaignUuid && domain.v6_ready }, 'hover:bg-gray-800']"
           @mouseover="hoverIndex = index"
           @mouseout="hoverIndex = null"
         >
-          <td class="px-2 py-3 whitespace-nowrap md:table-cell hidden w-px text-center">
+          <td
+            v-if="!campaignUuid"
+            class="px-2 py-3 whitespace-nowrap md:table-cell hidden w-px text-center"
+          >
             <div class="flex items-center">
               <div
                 v-if="domain.rank !== null"
@@ -109,7 +95,14 @@ const hoverIndex = ref<number | null>(null)
           <td class="px-5 md:px-2 py-3 whitespace-nowrap text-left">
             <div class="flex items-center">
               <router-link
-                :to="{ name: 'DomainDetail', params: { domain: domain.host } }"
+                :to="
+                  campaignUuid
+                    ? {
+                        name: 'CampaignDomain',
+                        params: { uuid: campaignUuid, domain: domain.host },
+                      }
+                    : { name: 'DomainDetail', params: { domain: domain.host } }
+                "
                 class="font-medium text-slate-100"
               >
                 {{ domain.host }}
@@ -136,7 +129,7 @@ const hoverIndex = ref<number | null>(null)
               <StatusIcon :value="domain.status.ns.value" />
             </div>
           </td>
-          <td class="px-2 py-3 whitespace-nowrap w-px md:w-[10%] text-center">
+          <td v-if="!campaignUuid" class="px-2 py-3 whitespace-nowrap w-px md:w-[10%] text-center">
             <div class="inline-flex px-2.5 py-1">
               <StatusIcon :value="domain.ipv6_only" />
             </div>
@@ -153,15 +146,3 @@ const hoverIndex = ref<number | null>(null)
     </div>
   </div>
 </template>
-
-<style scoped>
-.tooltip {
-  visibility: hidden;
-  position: absolute;
-}
-
-.has-tooltip:hover .tooltip {
-  visibility: visible;
-  z-index: 50;
-}
-</style>
