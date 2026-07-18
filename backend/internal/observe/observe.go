@@ -22,13 +22,6 @@ import (
 // (03 §14.2); shared with the crawler's buildDetails serialization.
 const ConnKey = "conn"
 
-// Conditional-A outcome tokens (02 §2.7 — mirrored from internal/consensus).
-const (
-	aPresent = "a_present"
-	aAbsent  = "a_absent"
-	aError   = "a_error"
-)
-
 // error_type wire tokens (01-engine.md §11.7 — the conn table keys off them).
 const (
 	errTypeConnRefused = "connection_refused"
@@ -147,24 +140,23 @@ func mapAAAA(st checker.CheckStatus, d *checker.AAAADetail, www bool) domain.Obs
 		return domain.ObsNoRecord
 	case checker.StatusUnsupported: // quorum empty → by a_outcome
 		switch d.AOutcome {
-		case aPresent:
+		case checker.AOutcomePresent:
 			return domain.ObsUnsupported
-		case aAbsent:
+		case checker.AOutcomeAbsent:
 			if www {
 				return domain.ObsNotApplicable
 			}
 			return domain.ObsNoRecord
-		case aError:
+		case checker.AOutcomeError:
 			return domain.ObsError
 		default:
 			slog.Warn("a_outcome missing", "check_status", st)
 			return domain.ObsError
 		}
-	case checker.StatusPartial:
-		// Unreachable: the AAAA checks never emit partial. Non-definitive.
-		return domain.ObsError
 	default:
-		return domain.ObsError
+		// Includes the unreachable AAAA partial; the defensive default
+		// warns and defers the dimension.
+		return obsFromStatusDefensive(st)
 	}
 }
 
@@ -180,7 +172,7 @@ func mapNS(st checker.CheckStatus) domain.Observation {
 	case checker.StatusError:
 		return domain.ObsError
 	default:
-		return domain.ObsError
+		return obsFromStatusDefensive(st)
 	}
 }
 
@@ -195,7 +187,7 @@ func mapMX(st checker.CheckStatus) domain.Observation {
 	case checker.StatusError:
 		return domain.ObsError
 	default:
-		return domain.ObsError
+		return obsFromStatusDefensive(st)
 	}
 }
 
@@ -223,7 +215,7 @@ func composeConn(hSt checker.CheckStatus, errType string, pSt checker.CheckStatu
 	case hSt == checker.StatusNotApplicable: // row 6
 		obs = domain.ObsNotApplicable
 	default:
-		obs = domain.ObsError
+		obs = obsFromStatusDefensive(hSt)
 	}
 
 	// Final preflight guard: EVERY conn=unsupported requires a fresh pass.
@@ -276,6 +268,16 @@ func rollupResources(conn domain.Observation, links []LinkedResource) domain.Obs
 	default:
 		return domain.ObsSupported
 	}
+}
+
+// obsFromStatusDefensive is the shared defensive default of the
+// per-dimension bridge tables (mapAAAA/mapNS/mapMX/composeConn): a status a
+// decision table does not enumerate is non-definitive. It warns — so an
+// enum addition or an unreachable branch is loud instead of silently
+// landing on error — and defers the dimension.
+func obsFromStatusDefensive(st checker.CheckStatus) domain.Observation {
+	slog.Warn("check status outside bridge table", "status", st)
+	return domain.ObsError
 }
 
 // obsFromStatus is the single CheckStatus→Observation value bridge. The two

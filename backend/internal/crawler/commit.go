@@ -7,13 +7,13 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/lasseh/whynoipv6/internal/checker"
 	"github.com/lasseh/whynoipv6/internal/domain"
 	"github.com/lasseh/whynoipv6/internal/observe"
+	"github.com/lasseh/whynoipv6/internal/postgres"
 	db "github.com/lasseh/whynoipv6/internal/postgres/db"
 )
 
@@ -70,17 +70,11 @@ type CommitResult struct {
 	Bootstraps  int
 }
 
-// commitUnit is the computed write unit: everything the flush queues.
+// commitUnit is the computed write unit: the typed postgres.CommitUnit the
+// flush adapter executes, plus the telemetry the crawler keeps.
 type commitUnit struct {
-	domainID    int64
+	postgres.CommitUnit
 	host        string
-	lease       time.Time
-	params      db.CommitDomainParams
-	changelog   []db.InsertChangelogParams
-	scan        db.InsertScanParams
-	detail      db.InsertScanDetailParams
-	resources   []string // hosts to ensure/upsert; empty = no link statements
-	pruneLinks  bool
 	transitions []Transition
 	bootstraps  int
 }
@@ -170,7 +164,10 @@ func ComputeCommit(in *CommitInput, cfg *CommitConfig) (*commitUnit, error) {
 		if !counting {
 			continue // record-only scan
 		}
-		val := domain.IPv6Status(o)
+		val, confirmable := o.Confirmed()
+		if !confirmable { // unreachable after the partial/definitive gates above
+			return nil, fmt.Errorf("commit defect: non-confirmable observation %s on %s", o, d)
+		}
 		switch {
 		case w.status == nil: // BOOTSTRAP: commits immediately, NO changelog
 			w.status = &val
@@ -251,6 +248,7 @@ func ComputeCommit(in *CommitInput, cfg *CommitConfig) (*commitUnit, error) {
 		flags = []string{}
 	}
 	params := db.CommitDomainParams{
+		Lease:          tstz(s.ClaimedAt),
 		Classification: db.Classification(class),
 		ClassFlags:     flags,
 		Saint:          saint,
@@ -284,31 +282,31 @@ func ComputeCommit(in *CommitInput, cfg *CommitConfig) (*commitUnit, error) {
 	bindDim(&params.ResourcesStatus, &params.ResourcesObserved, &params.ResourcesPending, &params.ResourcesPendingCount, &params.ResourcesSince, work[domain.DimResources])
 
 	u := &commitUnit{
-		domainID:    s.ID,
+		CommitUnit: postgres.CommitUnit{
+			Domain:    params,
+			Changelog: changelog,
+			Scan: db.InsertScanParams{
+				DomainID: s.ID, Ts: tstz(t),
+				Base: db.Observation(in.Obs.Base), Www: db.Observation(in.Obs.WWW),
+				Ns: db.Observation(in.Obs.NS), Mx: db.Observation(in.Obs.MX),
+				Conn: db.Observation(in.Obs.Conn), Resources: db.Observation(in.Obs.Resources),
+				Dnssec: obsDB(in.Obs.DNSSEC), Ptr: obsDB(in.Obs.PTR),
+				Smtp: obsDB(in.Obs.SMTP), Parity: obsDB(in.Obs.Parity),
+				LatencyV4Ms: in.Obs.LatencyV4Ms, LatencyV6Ms: in.Obs.LatencyV6Ms,
+				Classification: db.Classification(class),
+				CountryID:      &countryID, AsnID: &asnID,
+			},
+			Detail: db.InsertScanDetailParams{
+				DomainID: s.ID, Ts: tstz(t), Details: in.Details, DurationMs: &in.DurationMS,
+			},
+		},
 		host:        s.Host,
-		lease:       s.ClaimedAt,
-		params:      params,
-		changelog:   changelog,
 		transitions: transitions,
 		bootstraps:  bootstraps,
-		scan: db.InsertScanParams{
-			DomainID: s.ID, Ts: tstz(t),
-			Base: db.Observation(in.Obs.Base), Www: db.Observation(in.Obs.WWW),
-			Ns: db.Observation(in.Obs.NS), Mx: db.Observation(in.Obs.MX),
-			Conn: db.Observation(in.Obs.Conn), Resources: db.Observation(in.Obs.Resources),
-			Dnssec: obsDB(in.Obs.DNSSEC), Ptr: obsDB(in.Obs.PTR),
-			Smtp: obsDB(in.Obs.SMTP), Parity: obsDB(in.Obs.Parity),
-			LatencyV4Ms: in.Obs.LatencyV4Ms, LatencyV6Ms: in.Obs.LatencyV6Ms,
-			Classification: db.Classification(class),
-			CountryID:      &countryID, AsnID: &asnID,
-		},
-		detail: db.InsertScanDetailParams{
-			DomainID: s.ID, Ts: tstz(t), Details: in.Details, DurationMs: &in.DurationMS,
-		},
 	}
 	if cfg.ResourcesEnabled && in.DiscoveryOK {
-		u.resources = in.Discovered
-		u.pruneLinks = true
+		u.Resources = in.Discovered
+		u.PruneLinks = true
 	}
 	return u, nil
 }
@@ -349,50 +347,26 @@ func tstzPtr(t *time.Time) pgtype.Timestamptz {
 	return pgtype.Timestamptz{Time: *t, Valid: true}
 }
 
-// The two multi-CTE resource statements live here as constants (the
-// 05-schema.md §10.2 escape hatch); the SQL text is 03 §12.3's.
-const (
-	sqlUpsertDomainResource = `WITH rh AS (
-  SELECT id FROM resource_host WHERE host = $1
-), ins AS (
-  INSERT INTO domain_resource (domain_id, resource_host_id, source, required, first_seen, last_seen)
-  SELECT $2, rh.id, 'discovered', TRUE, $3, $3 FROM rh
-  ON CONFLICT (domain_id, resource_host_id) DO NOTHING
-  RETURNING resource_host_id
-), bump AS (
-  UPDATE resource_host SET dependent_count = dependent_count + 1
-  WHERE id IN (SELECT resource_host_id FROM ins)
-)
-UPDATE domain_resource SET last_seen = $3
-WHERE domain_resource.domain_id = $2
-  AND domain_resource.resource_host_id IN (SELECT id FROM rh)
-  AND NOT EXISTS (SELECT 1 FROM ins)`
-
-	sqlPruneDomainResources = `WITH del AS (
-  DELETE FROM domain_resource
-  WHERE domain_id = $1
-    AND source = 'discovered'
-    AND last_seen < $2::timestamptz - INTERVAL '30 days'
-  RETURNING resource_host_id
-)
-UPDATE resource_host SET dependent_count = dependent_count - 1
-WHERE id IN (SELECT resource_host_id FROM del)`
-)
-
 // Committer flushes commit units under the lease fence (03 §12–§13).
 type Committer struct {
-	pool *pgxpool.Pool
-	cfg  *CommitConfig
-	log  *slog.Logger
+	flush func(ctx context.Context, u *postgres.CommitUnit) (leaseLost bool, err error)
+	cfg   *CommitConfig
+	log   *slog.Logger
 
 	// Counters consumed by the metrics checkpointer (03 §15).
 	LeaseLost    atomic.Int64
 	CommitErrors atomic.Int64
 }
 
-// NewCommitter builds the committer.
+// NewCommitter builds the committer over the postgres flush adapter.
 func NewCommitter(pool *pgxpool.Pool, cfg *CommitConfig, log *slog.Logger) *Committer {
-	return &Committer{pool: pool, cfg: cfg, log: log}
+	return &Committer{
+		flush: func(ctx context.Context, u *postgres.CommitUnit) (bool, error) {
+			return postgres.FlushCommit(ctx, pool, u)
+		},
+		cfg: cfg,
+		log: log,
+	}
 }
 
 // Commit runs 03 §5–§12 for one domain: pure state computation, then the
@@ -404,119 +378,35 @@ func (c *Committer) Commit(ctx context.Context, in *CommitInput) (CommitResult, 
 		c.log.Error("commit compute failed", "domain", in.Snapshot.Host, "err", err.Error())
 		return CommitResult{}, err
 	}
-	leaseLost, err := c.flush(ctx, u)
+	leaseLost, err := c.flush(ctx, &u.CommitUnit)
 	if err != nil {
 		c.CommitErrors.Add(1)
 		c.log.Error("commit flush failed", "domain", in.Snapshot.Host, "err", err.Error())
 		return CommitResult{}, err
 	}
 	if leaseLost {
+		c.LeaseLost.Add(1)
+		c.log.Warn("lease lost, commit discarded", "domain", u.host)
 		return CommitResult{LeaseLost: true}, nil
 	}
 	return CommitResult{Transitions: u.transitions, Bootstraps: u.bootstraps}, nil
 }
 
-// flush sends the whole unit as one pgx.Batch in one pgx.Tx (03 §12.2).
-func (c *Committer) flush(ctx context.Context, u *commitUnit) (leaseLost bool, err error) {
-	batch := &pgx.Batch{}
-	p := u.params
-	batch.Queue(db.CommitDomain,
-		p.BaseStatus, p.BaseObserved, p.BasePending, p.BasePendingCount, p.BaseSince,
-		p.WwwStatus, p.WwwObserved, p.WwwPending, p.WwwPendingCount, p.WwwSince,
-		p.NsStatus, p.NsObserved, p.NsPending, p.NsPendingCount, p.NsSince,
-		p.MxStatus, p.MxObserved, p.MxPending, p.MxPendingCount, p.MxSince,
-		p.ConnStatus, p.ConnObserved, p.ConnPending, p.ConnPendingCount, p.ConnSince,
-		p.ResourcesStatus, p.ResourcesObserved, p.ResourcesPending, p.ResourcesPendingCount, p.ResourcesSince,
-		p.DnssecObserved, p.PtrObserved, p.SmtpObserved, p.ParityObserved,
-		p.LatencyV4Ms, p.LatencyV6Ms,
-		p.Classification, p.ClassFlags, p.Saint,
-		p.AsnID, p.CountryID,
-		p.Disabled, p.DisabledReason, p.DisabledAt,
-		p.DeadStreak, p.ErrorStreak,
-		p.NextCheckAt, p.Ts, p.LastCountedAt,
-		p.DomainID, tstz(u.lease))
-	for _, cl := range u.changelog {
-		batch.Queue(db.InsertChangelog, cl.DomainID, cl.Ts, cl.Field, cl.OldValue, cl.NewValue)
-	}
-	sc := u.scan
-	batch.Queue(db.InsertScan,
-		sc.DomainID, sc.Ts, sc.Base, sc.Www, sc.Ns, sc.Mx, sc.Conn, sc.Resources,
-		sc.Dnssec, sc.Ptr, sc.Smtp, sc.Parity, sc.LatencyV4Ms, sc.LatencyV6Ms,
-		sc.Classification, sc.CountryID, sc.AsnID)
-	batch.Queue(db.InsertScanDetail, u.detail.DomainID, u.detail.Ts, u.detail.Details, u.detail.DurationMs)
-	for _, host := range u.resources {
-		batch.Queue(db.EnsureResourceHost, host)
-		batch.Queue(sqlUpsertDomainResource, host, u.domainID, u.params.Ts)
-	}
-	if u.pruneLinks {
-		batch.Queue(sqlPruneDomainResources, u.domainID, u.params.Ts)
-	}
-
-	tx, err := c.pool.BeginTx(ctx, pgx.TxOptions{})
-	if err != nil {
-		return false, fmt.Errorf("begin: %w", err)
-	}
-	defer func() { _ = tx.Rollback(ctx) }() // no-op after a successful Commit
-
-	br := tx.SendBatch(ctx, batch)
-	tag, firstErr := br.Exec() // statement 1: the fenced domain UPDATE
-	leaseLost = firstErr == nil && tag.RowsAffected() == 0
-	for i := 1; i < batch.Len(); i++ { // drain every remaining result
-		if _, e := br.Exec(); e != nil && firstErr == nil {
-			firstErr = e
-		}
-	}
-	if e := br.Close(); e != nil && firstErr == nil {
-		firstErr = e
-	}
-	if leaseLost {
-		c.LeaseLost.Add(1)
-		c.log.Warn("lease lost, commit discarded", "domain", u.host)
-		return true, nil // deferred Rollback discards EVERYTHING
-	}
-	if firstErr != nil {
-		return false, fmt.Errorf("commit batch: %w", firstErr)
-	}
-	return false, tx.Commit(ctx)
-}
-
-// Dead-signal evidence tokens (03 §4).
-const (
-	rcodeNXDomain = "NXDOMAIN"
-	cdFail        = "cd_fail"
-	rcServfail    = "SERVFAIL"
-	rcRefused     = "REFUSED"
-)
-
 // Unresolvable computes the dead signal U from raw engine/consensus
 // evidence (03 §4): (a) apex AAAA quorum NXDOMAIN with no delegated zone
-// found by the NS walk-up, or (b) all 3 providers answering explicit
-// SERVFAIL/REFUSED with the CD=1 re-query also failing (cd_fail). Timeouts
-// never count; a 2-of-2 degraded fan-out can never satisfy branch (b).
+// found by the NS walk-up, or (b) the base payload's explicit
+// all-SERVFAIL/REFUSED + failed CD=1 rescue verdict, owned by
+// checker.AAAADetail.ExplicitlyUnresolvable.
 func Unresolvable(sr checker.ScanResult) bool {
 	_, base, ok := sr.AAAABase()
 	if !ok {
 		return false
 	}
-
 	// Branch (a): NXDOMAIN + no delegated zone for the host.
-	if base.Rcode == rcodeNXDomain && !nsZoneFound(sr) {
+	if base.Rcode == checker.RcodeNXDomain && !nsZoneFound(sr) {
 		return true
 	}
-
-	// Branch (b): explicit all-SERVFAIL/REFUSED + cd_fail.
-	if base.CDOutcome != cdFail {
-		return false
-	}
-	if base.Quorum == nil || len(base.Quorum.Rcodes) != 3 {
-		return false // degraded 2-of-2: dead detection requires all 3
-	}
-	for _, rc := range base.Quorum.Rcodes {
-		if rc != rcServfail && rc != rcRefused {
-			return false // a timeout/transport non-answer disqualifies
-		}
-	}
-	return true
+	return base.ExplicitlyUnresolvable()
 }
 
 // nsZoneFound reads the NS walk-up evidence from the raw result (03 §4):

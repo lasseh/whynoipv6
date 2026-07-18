@@ -76,7 +76,7 @@ func (c *DNSAAAAWww) Check(ctx context.Context, host string, _ Kind) (Result, er
 
 	// NXDOMAIN means the www subdomain doesn't exist — the domain simply
 	// doesn't use www, so this check is not applicable (not unsupported).
-	if ans.Rcode == "NXDOMAIN" {
+	if ans.Rcode == RcodeNXDomain {
 		d.Reason = "www subdomain does not exist"
 		return Result{Status: StatusNotApplicable, Detail: d, Latency: time.Since(start)}, nil
 	}

@@ -43,10 +43,30 @@ const (
 	ObsInconsistent  Observation = "inconsistent"
 )
 
+// ObservationValues is the complete declared value set, for exhaustiveness
+// guards over the observation bridges (kept adjacent to the const block).
+var ObservationValues = []Observation{
+	ObsSupported, ObsPartial, ObsUnsupported, ObsNoRecord,
+	ObsNotApplicable, ObsError, ObsInconsistent,
+}
+
 // Definitive reports whether an observation can advance confirmed state
 // (NOT error/inconsistent — 00-overview.md glossary).
 func (o Observation) Definitive() bool {
 	return o != ObsError && o != ObsInconsistent
+}
+
+// Confirmed converts a public-safe definitive observation to its confirmed
+// status — the one Observation→IPv6Status value bridge. ok=false for
+// partial/error/inconsistent, the three values that never become confirmed
+// state (00 §6 raw-vs-trusted).
+func (o Observation) Confirmed() (IPv6Status, bool) {
+	switch o {
+	case ObsSupported, ObsUnsupported, ObsNoRecord, ObsNotApplicable:
+		return IPv6Status(o), true
+	default:
+		return "", false
+	}
 }
 
 // Classification is the materialized public verdict.

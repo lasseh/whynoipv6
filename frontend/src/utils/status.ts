@@ -1,6 +1,74 @@
-// The §7.2 status → icon/color mapping — the single source for visual-contract
-// compliance. Never inline these ternaries in templates.
+// The §7.2 status → presentation contract — the single source for
+// visual-contract compliance. Never inline these ternaries in templates.
+//
+// One table, keyed surface → status. Shades vary by surface on purpose
+// (tables use 500, the detail card the old site's stronger 600, the
+// changelog dot 400/500), but the hue FAMILY per status never does:
+// supported is always emerald, unsupported pink, no_record amber, the
+// muted states zinc (status.test.ts pins this invariant). Tailwind needs
+// literal class strings, so shades are spelled out rather than composed.
 import type { StatusValue } from '@/api'
+
+type StatusKey = 'supported' | 'unsupported' | 'no_record' | 'not_applicable' | 'unconfirmed'
+
+const keyOf = (value: StatusValue): StatusKey => value ?? 'unconfirmed'
+
+export const STATUS_CLASSES = {
+  /** Table / status-icon text. */
+  text: {
+    supported: 'text-emerald-500',
+    unsupported: 'text-pink-500',
+    no_record: 'text-amber-500',
+    not_applicable: 'text-zinc-600',
+    unconfirmed: 'text-zinc-600',
+  },
+  /** Detail accordion (DomainStatusCard) text. */
+  cardText: {
+    supported: 'text-emerald-600',
+    unsupported: 'text-pink-600',
+    no_record: 'text-amber-500',
+    not_applicable: 'text-zinc-600',
+    unconfirmed: 'text-zinc-600',
+  },
+  /** Detail accordion border. */
+  cardBorder: {
+    supported: 'border-emerald-600',
+    unsupported: 'border-pink-600',
+    no_record: 'border-amber-500',
+    not_applicable: 'border-zinc-600',
+    unconfirmed: 'border-zinc-600',
+  },
+  /** Tracker day-block fill — the old timeline shades; null days stay neutral. */
+  block: {
+    supported: 'bg-emerald-600',
+    unsupported: 'bg-pink-600',
+    no_record: 'bg-amber-500',
+    not_applicable: 'bg-zinc-600',
+    unconfirmed: 'bg-gray-800',
+  },
+  /** Changelog message text (§7.4). */
+  changelogText: {
+    supported: 'text-emerald-600',
+    unsupported: 'text-pink-600',
+    no_record: 'text-amber-500',
+    not_applicable: 'text-zinc-600',
+    unconfirmed: 'text-zinc-600',
+  },
+  /** Changelog bullet dot (§7.4). */
+  changelogDot: {
+    supported: 'bg-emerald-500',
+    unsupported: 'bg-pink-500',
+    no_record: 'bg-amber-400',
+    not_applicable: 'bg-zinc-500',
+    unconfirmed: 'bg-zinc-500',
+  },
+} as const satisfies Record<string, Record<StatusKey, string>>
+
+export type StatusSurface = keyof typeof STATUS_CLASSES
+
+export function statusClass(surface: StatusSurface, value: StatusValue): string {
+  return STATUS_CLASSES[surface][keyOf(value)]
+}
 
 export type StatusIconKind = 'check' | 'cross' | 'minus'
 
@@ -16,62 +84,36 @@ export function statusIcon(value: StatusValue): StatusIconKind {
 }
 
 export function statusTextClass(value: StatusValue): string {
-  switch (value) {
-    case 'supported':
-      return 'text-emerald-500'
-    case 'unsupported':
-      return 'text-pink-500'
-    case 'no_record':
-      return 'text-amber-500'
-    default:
-      // not_applicable and null (never confirmed) — the muted states.
-      return 'text-zinc-600'
-  }
+  return statusClass('text', value)
 }
 
-// The detail accordion (DomainStatusCard) uses the stronger 600 shades the old
-// site had there — tables keep 500 via statusTextClass.
 export function statusCardTextClass(value: StatusValue): string {
-  switch (value) {
-    case 'supported':
-      return 'text-emerald-600'
-    case 'unsupported':
-      return 'text-pink-600'
-    case 'no_record':
-      return 'text-amber-500'
-    default:
-      return 'text-zinc-600'
-  }
+  return statusClass('cardText', value)
 }
 
 export function statusCardBorderClass(value: StatusValue): string {
-  switch (value) {
-    case 'supported':
-      return 'border-emerald-600'
-    case 'unsupported':
-      return 'border-pink-600'
-    case 'no_record':
-      return 'border-amber-500'
-    default:
-      return 'border-zinc-600'
-  }
+  return statusClass('cardBorder', value)
 }
 
-/** Tracker day-block fill — the old timeline shades; null days stay neutral. */
 export function statusBlockClass(value: StatusValue): string {
-  switch (value) {
-    case 'supported':
-      return 'bg-emerald-600'
-    case 'unsupported':
-      return 'bg-pink-600'
-    case 'no_record':
-      return 'bg-amber-500'
-    case 'not_applicable':
-      return 'bg-zinc-600'
-    default:
-      // Never confirmed / before the dimension's `since` — neutral.
-      return 'bg-gray-800'
-  }
+  return statusClass('block', value)
+}
+
+// The 4-star rating trichotomy (§7.3): supported earns a filled emerald
+// star; not_applicable a muted zinc one (neither earned nor missing — a
+// no-MX domain is never penalized); everything else stays empty.
+export type StarKind = 'filled' | 'muted' | 'empty'
+
+export function statusStarKind(value: StatusValue): StarKind {
+  if (value === 'supported') return 'filled'
+  if (value === 'not_applicable') return 'muted'
+  return 'empty'
+}
+
+export const STAR_CLASS: Record<StarKind, string> = {
+  filled: 'text-emerald-600',
+  muted: 'text-zinc-600',
+  empty: 'text-gray-600',
 }
 
 export function statusLabel(value: StatusValue): string {

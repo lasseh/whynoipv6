@@ -6,6 +6,25 @@ import (
 	"net"
 )
 
+// The AAAAAnswer / AAAADetail evidence vocabulary (02 §2.7, §2.7b). These
+// are wire values (scan_detail JSON and quorum rcodes) — single-sourced
+// here so producers (consensus) and consumers (observe, the crawler's
+// dead-signal computation) can never drift.
+const (
+	RcodeNoError  = "NOERROR"
+	RcodeNXDomain = "NXDOMAIN"
+	RcodeServfail = "SERVFAIL"
+	RcodeRefused  = "REFUSED"
+
+	AOutcomePresent = "a_present"
+	AOutcomeAbsent  = "a_absent"
+	AOutcomeError   = "a_error"
+
+	CDOutcomePresent = "cd_present"
+	CDOutcomeEmpty   = "cd_empty"
+	CDOutcomeFail    = "cd_fail"
+)
+
 // AAAAAnswer is the result of a (possibly quorum'd) AAAA resolution.
 type AAAAAnswer struct {
 	IPs        []net.IP

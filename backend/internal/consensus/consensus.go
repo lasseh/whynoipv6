@@ -56,13 +56,6 @@ const (
 	symNXDomain = "nxdomain"
 	symTimeout  = "timeout"
 	symError    = "error"
-
-	rcodeNoError  = "NOERROR"
-	rcodeNXDomain = "NXDOMAIN"
-
-	aPresent = "a_present"
-	aAbsent  = "a_absent"
-	aError   = "a_error"
 )
 
 // Config mirrors the consensus.* config keys (registry: 09-ops.md).
@@ -301,11 +294,11 @@ func reduce(ips []net.IP, rcode string, err error) string {
 		// Transport error, or SERVFAIL (the lifted LookupAAAA converts
 		// SERVFAIL to an error) — non-answer.
 		return symError
-	case rcode == rcodeNXDomain:
+	case rcode == checker.RcodeNXDomain:
 		return symNXDomain
-	case rcode == rcodeNoError && len(routableOnly(ips)) > 0:
+	case rcode == checker.RcodeNoError && len(routableOnly(ips)) > 0:
 		return symExists
-	case rcode == rcodeNoError:
+	case rcode == checker.RcodeNoError:
 		return symEmpty
 	default:
 		// REFUSED, NOTIMP, FORMERR, ... — non-answer, never `empty`.
@@ -361,18 +354,18 @@ func (r *Resolver) classifyA(ctx context.Context, name string) (outcome string, 
 	resp, err := r.bulk.QueryWithRetry(ctx, msg)
 	switch {
 	case err != nil:
-		return aError, nil
+		return checker.AOutcomeError, nil
 	case resp.Rcode == dns.RcodeSuccess:
 		for _, rr := range resp.Answer {
 			if a, ok := rr.(*dns.A); ok {
-				return aPresent, a.A
+				return checker.AOutcomePresent, a.A
 			}
 		}
-		return aAbsent, nil
+		return checker.AOutcomeAbsent, nil
 	case resp.Rcode == dns.RcodeNameError:
-		return aAbsent, nil // NXDOMAIN contradicting the AAAA NOERROR → domain's favor
+		return checker.AOutcomeAbsent, nil // NXDOMAIN contradicting the AAAA NOERROR → domain's favor
 	default:
-		return aError, nil
+		return checker.AOutcomeError, nil
 	}
 }
 
@@ -385,7 +378,7 @@ func allServfailOrRefused(outcomes []providerOutcome) bool {
 		if o.rcode == "" {
 			continue // timeout/transport — does not qualify, but does not disqualify
 		}
-		if o.rcode != "SERVFAIL" && o.rcode != "REFUSED" {
+		if o.rcode != checker.RcodeServfail && o.rcode != checker.RcodeRefused {
 			return false
 		}
 		sawExplicit = true
@@ -404,7 +397,7 @@ func (r *Resolver) rescueCD(ctx context.Context, name string, qi *checker.Quorum
 
 	resp, err := r.bulk.QueryWithRetry(ctx, msg)
 	if err != nil || resp == nil || (resp.Rcode != dns.RcodeSuccess && resp.Rcode != dns.RcodeNameError) {
-		return checker.AAAAAnswer{Quorum: qi, CDOutcome: "cd_fail"},
+		return checker.AAAAAnswer{Quorum: qi, CDOutcome: checker.CDOutcomeFail},
 			fmt.Errorf("aaaa consensus for %s: %d valid answers from %d providers", name, nValid, nActive)
 	}
 
@@ -416,11 +409,11 @@ func (r *Resolver) rescueCD(ctx context.Context, name string, qi *checker.Quorum
 	}
 	routable := routableOnly(ips)
 	if len(routable) > 0 {
-		return checker.AAAAAnswer{IPs: routable, Rcode: rcodeNoError, CDOutcome: "cd_present", Quorum: qi}, nil
+		return checker.AAAAAnswer{IPs: routable, Rcode: checker.RcodeNoError, CDOutcome: checker.CDOutcomePresent, Quorum: qi}, nil
 	}
 	outcome, aip := r.classifyA(ctx, name)
 	return checker.AAAAAnswer{
-		Rcode: rcodeNoError, CDOutcome: "cd_empty",
+		Rcode: checker.RcodeNoError, CDOutcome: checker.CDOutcomeEmpty,
 		AOutcome: outcome, AIP: aip, Quorum: qi,
 	}, nil
 }

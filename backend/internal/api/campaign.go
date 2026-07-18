@@ -214,5 +214,10 @@ func (s *Server) listCampaignDomains(w http.ResponseWriter, r *http.Request) {
 // (§3.2 — host is unique, so the seek is total despite rank being NULL).
 func (s *Server) campaignMembersPage(r *http.Request, campaignID, generation int32, limit int) ([]DomainSummary, Page, error) {
 	filter := postgres.DomainListFilter{CampaignID: &campaignID}
-	return s.hostOrderedPage(r, &filter, generation, limit)
+	members, page, err := s.hostOrderedPage(r, &filter, generation, limit)
+	for i := range members {
+		ready := v6ReadyOf(&members[i].Status)
+		members[i].V6Ready = &ready
+	}
+	return members, page, err
 }

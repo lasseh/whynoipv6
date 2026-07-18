@@ -17,25 +17,53 @@ import (
 	db "github.com/lasseh/whynoipv6/internal/postgres/db"
 )
 
+// The Worker's consumer-side seams: each names exactly what Process needs
+// from a collaborator, so the per-domain orchestration (gate order,
+// deferrals, pivot/metric conditions) is unit-testable with fakes — the
+// second adapter at each seam.
+
+// Scanner runs the engine for one host — *checker.Runner in production.
+type Scanner interface {
+	Run(ctx context.Context, host string, kind domain.Kind) checker.ScanResult
+}
+
+// PreflightState exposes the vantage-health timestamp the observation
+// mapper needs — *checker.Preflight in production.
+type PreflightState interface {
+	LastPass() time.Time
+}
+
+// CommitSink accepts one scan's commit — *Committer in production.
+type CommitSink interface {
+	Commit(ctx context.Context, in *CommitInput) (CommitResult, error)
+}
+
+// Enricher computes this scan's attribution input and stamps the provider
+// pivots after a successful commit — *GeoEnricher in production; nil skips
+// both (attribution then defers to the snapshot on every scan).
+type Enricher interface {
+	Attribution(ctx context.Context, d *ClaimedDomain, sr checker.ScanResult) *Attribution
+	StampPivots(ctx context.Context, d *ClaimedDomain, sr checker.ScanResult)
+}
+
 // Worker is the per-domain slot body (04 §12 a–f): engine run → map →
 // schedule/commit → metrics, plus attribution and the pivot stamps.
 type Worker struct {
-	Pool      *pgxpool.Pool
-	Runner    *checker.Runner
-	Preflight *checker.Preflight
-	Committer *Committer
+	Pool      *pgxpool.Pool // required-link reads (observe.PersistedLinks)
+	Scanner   Scanner
+	Preflight PreflightState
+	Committer CommitSink
 	Metrics   *Metrics
 
 	// BreakerOpen reports the consensus fast-lane breaker state (nil = closed).
 	BreakerOpen func() bool
 
-	// Attribution inputs (06 §6). Attr may be nil (no mmdb — attribution
-	// then defers to the snapshot on every scan).
-	Attr      *geoip.Attributor
-	Countries *geoip.CountryMap
+	// Enrich is the attribution + pivot seam (nil = neither runs).
+	Enrich Enricher
 
-	// Providers is the ns_host → provider snapshot (nil = no stamping).
-	Providers *ingest.ProviderMapping
+	// Links loads the persisted required-host statuses for the resources
+	// roll-up (nil = the observe.PersistedLinks adapter over Pool).
+	Links func(ctx context.Context, domainID int64) []observe.LinkedResource
 
 	ResourcesEnabled bool
 }
@@ -45,13 +73,23 @@ func (w *Worker) Process(ctx context.Context, d ClaimedDomain) { //nolint:gocrit
 	start := time.Now()
 	t := time.Now().UTC() // T — fixed once per domain (03 §3)
 
-	sr := w.Runner.Run(ctx, d.Host, d.Kind)
+	sr := w.Scanner.Run(ctx, d.Host, d.Kind)
 
-	links := observe.PersistedLinks(ctx, w.Pool, d.ID, w.ResourcesEnabled)
+	var links []observe.LinkedResource
+	if w.ResourcesEnabled {
+		if w.Links != nil {
+			links = w.Links(ctx, d.ID)
+		} else {
+			links = observe.PersistedLinks(ctx, w.Pool, d.ID, true)
+		}
+	}
 	obs := observe.MapObservations(d.Kind, sr, w.Preflight.LastPass(), t, links, w.ResourcesEnabled)
 
 	unresolvable := Unresolvable(sr)
-	attribution := w.attribution(ctx, &d, sr)
+	var attribution *Attribution
+	if w.Enrich != nil {
+		attribution = w.Enrich.Attribution(ctx, &d, sr)
+	}
 
 	details := buildDetails(sr, &obs)
 	breakerOpen := false
@@ -78,7 +116,9 @@ func (w *Worker) Process(ctx context.Context, d ClaimedDomain) { //nolint:gocrit
 
 	res, err := w.Committer.Commit(ctx, in)
 	if err == nil && !res.LeaseLost {
-		w.stampPivots(ctx, &d, sr)
+		if w.Enrich != nil {
+			w.Enrich.StampPivots(ctx, &d, sr)
+		}
 		if wasStepR(&d, &obs) {
 			w.Metrics.RecordRecovered()
 		}
@@ -89,20 +129,34 @@ func (w *Worker) Process(ctx context.Context, d ClaimedDomain) { //nolint:gocrit
 		"lease_lost", res.LeaseLost, "transitions", len(res.Transitions))
 }
 
-// attribution computes A (06 §6.2–§6.4): input IP from this scan's base
+// GeoEnricher is the production Enricher: geoip attribution plus the
+// provider pivot stamps, sharing one pool and one mmdb reader.
+type GeoEnricher struct {
+	Pool *pgxpool.Pool
+
+	// Attr may be nil (no mmdb — attribution then defers to the snapshot
+	// on every scan).
+	Attr      *geoip.Attributor
+	Countries *geoip.CountryMap
+
+	// Providers is the ns_host → provider snapshot (nil = no stamping).
+	Providers *ingest.ProviderMapping
+}
+
+// Attribution computes A (06 §6.2–§6.4): input IP from this scan's base
 // answers (AAAA wins over the conditional A), ASN ensure-by-number, ccTLD
 // country. nil = deferred (no readers, or non-definitive base handled by
 // the commit itself).
-func (w *Worker) attribution(ctx context.Context, d *ClaimedDomain, sr checker.ScanResult) *Attribution {
-	if w.Attr == nil || w.Countries == nil {
+func (e *GeoEnricher) Attribution(ctx context.Context, d *ClaimedDomain, sr checker.ScanResult) *Attribution {
+	if e.Attr == nil || e.Countries == nil {
 		return nil
 	}
 	ip := attributionIP(sr)
 
-	countryID := w.Attr.CountryID(d.Host, ip)
-	asnID := w.Countries.SentinelASN
-	if res := w.Attr.ASN(ip); res.Number != 0 {
-		if id, err := w.ensureASN(ctx, int64(res.Number), res.Org); err == nil {
+	countryID := e.Attr.CountryID(d.Host, ip)
+	asnID := e.Countries.SentinelASN
+	if res := e.Attr.ASN(ip); res.Number != 0 {
+		if id, err := e.ensureASN(ctx, int64(res.Number), res.Org); err == nil {
 			asnID = id
 		}
 	}
@@ -130,8 +184,8 @@ func attributionIP(sr checker.ScanResult) netip.Addr {
 	return zero
 }
 
-func (w *Worker) ensureASN(ctx context.Context, number int64, org string) (int32, error) {
-	q := db.New(w.Pool)
+func (e *GeoEnricher) ensureASN(ctx context.Context, number int64, org string) (int32, error) {
+	q := db.New(e.Pool)
 	if org == "" {
 		org = "Unknown"
 	}
@@ -142,21 +196,21 @@ func (w *Worker) ensureASN(ctx context.Context, number int64, org string) (int32
 	return q.ASNIDByNumber(ctx, number) // conflict: re-read
 }
 
-// stampPivots writes the dns_provider_id / hosting_provider attribution
+// StampPivots writes the dns_provider_id / hosting_provider attribution
 // pivots after a successful commit (06 §6.10): definitive-base scans only,
 // idempotent, self-healing next scan. (03 §12.1's pinned fenced UPDATE does
 // not carry these columns, so they ride separate pivot-only statements.)
-func (w *Worker) stampPivots(ctx context.Context, d *ClaimedDomain, sr checker.ScanResult) {
+func (e *GeoEnricher) StampPivots(ctx context.Context, d *ClaimedDomain, sr checker.ScanResult) {
 	baseSt, _, _ := sr.AAAABase()
 	definitive := baseSt == checker.StatusSupported ||
 		baseSt == checker.StatusUnsupported || baseSt == checker.StatusNotApplicable
 	if !definitive {
 		return // deferred scans never touch the pivots (06 §6.6)
 	}
-	q := db.New(w.Pool)
+	q := db.New(e.Pool)
 
-	if w.Providers != nil {
-		if err := ingest.StampDNSProvider(ctx, q, w.Providers, d.ID, nsHosts(sr)); err != nil {
+	if e.Providers != nil {
+		if err := ingest.StampDNSProvider(ctx, q, e.Providers, d.ID, nsHosts(sr)); err != nil {
 			slog.Warn("dns provider stamp failed", "domain", d.Host, "err", err.Error())
 		}
 	}
@@ -166,9 +220,9 @@ func (w *Worker) stampPivots(ctx context.Context, d *ClaimedDomain, sr checker.S
 	_, www, _ := sr.AAAAWWW()
 	cdnDetected, chain := www.CDNDetected, www.CNAMEChain
 	var asn uint
-	if w.Attr != nil {
+	if e.Attr != nil {
 		if ip := attributionIP(sr); ip.IsValid() {
-			n, _ := w.Attr.Meta.ASN(ip)
+			n, _ := e.Attr.Meta.ASN(ip)
 			asn = n
 		}
 	}

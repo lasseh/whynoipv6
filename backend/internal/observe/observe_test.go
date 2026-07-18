@@ -336,3 +336,58 @@ func TestLinkSetConstructorsAgree(t *testing.T) {
 		})
 	}
 }
+
+// TestBridgeTotality pins every per-dimension bridge over the complete
+// declared CheckStatus set plus an out-of-set value: each input maps to a
+// declared Observation, and anything a decision table does not enumerate
+// defers to error. A CheckStatus addition fails here until every bridge
+// names its mapping.
+func TestBridgeTotality(t *testing.T) {
+	declared := map[domain.Observation]bool{}
+	for _, o := range domain.ObservationValues {
+		declared[o] = true
+	}
+	inputs := append([]checker.CheckStatus{"bogus"}, checker.CheckStatuses...)
+
+	pin := func(name string, f func(checker.CheckStatus) domain.Observation, want map[checker.CheckStatus]domain.Observation) {
+		t.Helper()
+		for _, st := range inputs {
+			got := f(st)
+			if !declared[got] {
+				t.Errorf("%s(%s) = %q, not a declared Observation", name, st, got)
+			}
+			w, ok := want[st]
+			if !ok {
+				w = domain.ObsError // everything unenumerated defers
+			}
+			if got != w {
+				t.Errorf("%s(%s) = %s, want %s", name, st, got, w)
+			}
+		}
+	}
+
+	pin("mapAAAA(base)", func(st checker.CheckStatus) domain.Observation {
+		return mapAAAA(st, &checker.AAAADetail{AOutcome: checker.AOutcomePresent}, false)
+	}, map[checker.CheckStatus]domain.Observation{
+		checker.StatusSupported:     domain.ObsSupported,
+		checker.StatusUnsupported:   domain.ObsUnsupported,
+		checker.StatusNotApplicable: domain.ObsNoRecord,
+	})
+	pin("mapNS", mapNS, map[checker.CheckStatus]domain.Observation{
+		checker.StatusSupported:   domain.ObsSupported,
+		checker.StatusPartial:     domain.ObsSupported,
+		checker.StatusUnsupported: domain.ObsUnsupported,
+	})
+	pin("mapMX", mapMX, map[checker.CheckStatus]domain.Observation{
+		checker.StatusSupported:     domain.ObsSupported,
+		checker.StatusPartial:       domain.ObsSupported,
+		checker.StatusUnsupported:   domain.ObsUnsupported,
+		checker.StatusNotApplicable: domain.ObsNotApplicable,
+	})
+	pin("obsFromStatus", obsFromStatus, map[checker.CheckStatus]domain.Observation{
+		checker.StatusSupported:     domain.ObsSupported,
+		checker.StatusPartial:       domain.ObsPartial,
+		checker.StatusUnsupported:   domain.ObsUnsupported,
+		checker.StatusNotApplicable: domain.ObsNotApplicable,
+	})
+}

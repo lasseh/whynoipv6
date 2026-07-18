@@ -2,6 +2,7 @@
 // keyed on (field, old_value, new_value) — old_value matters: a host going
 // not_applicable → unsupported never *had* IPv6 to lose.
 import type { ChangelogItem, Dimension } from '@/api'
+import { statusClass } from '@/utils/status'
 
 export const FIELD_LABELS: Record<Dimension, string> = {
   base: 'the base domain',
@@ -24,6 +25,11 @@ export interface ChangelogParts {
   dotClass: string
 }
 
+// The dot keys on new_value; the defensive conn/resources branches pin
+// not_applicable's zinc regardless of the (impossible) row value.
+const dotOf = (item: Pick<ChangelogItem, 'new_value'>) =>
+  statusClass('changelogDot', item.new_value)
+
 /**
  * The §7.4 wording split at the host boundary: message = `${host} ${phrase}`.
  * conn and resources are derived dimensions with bespoke reachability
@@ -38,54 +44,53 @@ export function changelogParts(
   if (item.field === 'conn') {
     switch (item.new_value) {
       case 'supported':
-        return { phrase: 'is now reachable over IPv6', dotClass: 'bg-emerald-500' }
+        return { phrase: 'is now reachable over IPv6', dotClass: dotOf(item) }
       case 'unsupported':
         return {
           phrase: fromNA
             ? 'published IPv6 addresses — but connections fail'
             : 'is no longer reachable over IPv6',
-          dotClass: 'bg-pink-500',
+          dotClass: dotOf(item),
         }
       default: // not_applicable — suppressed at write (03 §11); defensive only
-        return { phrase: 'has no IPv6 addresses left to test', dotClass: 'bg-zinc-500' }
+        return {
+          phrase: 'has no IPv6 addresses left to test',
+          dotClass: statusClass('changelogDot', 'not_applicable'),
+        }
     }
   }
   if (item.field === 'resources') {
     switch (item.new_value) {
       case 'supported':
-        return { phrase: 'now loads all page resources over IPv6', dotClass: 'bg-emerald-500' }
+        return { phrase: 'now loads all page resources over IPv6', dotClass: dotOf(item) }
       case 'unsupported':
-        return { phrase: 'loads some page resources without IPv6', dotClass: 'bg-pink-500' }
+        return { phrase: 'loads some page resources without IPv6', dotClass: dotOf(item) }
       default: // not_applicable — suppressed at write (03 §11); defensive only
-        return { phrase: 'no longer has its page resources checked', dotClass: 'bg-zinc-500' }
+        return {
+          phrase: 'no longer has its page resources checked',
+          dotClass: statusClass('changelogDot', 'not_applicable'),
+        }
     }
   }
   const label = FIELD_LABELS[item.field]
   switch (item.new_value) {
     case 'supported':
-      return { phrase: `now supports IPv6 on ${label}`, dotClass: 'bg-emerald-500' }
+      return { phrase: `now supports IPv6 on ${label}`, dotClass: dotOf(item) }
     case 'unsupported':
       return {
         phrase: fromNA ? `started using ${label} — without IPv6` : `lost IPv6 on ${label}`,
-        dotClass: 'bg-pink-500',
+        dotClass: dotOf(item),
       }
     case 'no_record':
       return {
         phrase: fromNA
           ? `started publishing ${label} — without IPv6 records`
           : `no longer publishes records for ${label}`,
-        dotClass: 'bg-amber-400',
+        dotClass: dotOf(item),
       }
     case 'not_applicable':
-      return { phrase: `no longer uses ${label}`, dotClass: 'bg-zinc-500' }
+      return { phrase: `no longer uses ${label}`, dotClass: dotOf(item) }
   }
-}
-
-const TEXT_COLORS: Record<ChangelogItem['new_value'], string> = {
-  supported: 'text-emerald-600',
-  unsupported: 'text-pink-600',
-  no_record: 'text-amber-500',
-  not_applicable: 'text-zinc-600',
 }
 
 export function changelogMessage(
@@ -93,6 +98,6 @@ export function changelogMessage(
 ): ChangelogMessage {
   return {
     message: `${item.host} ${changelogParts(item).phrase}`,
-    colorClass: TEXT_COLORS[item.new_value],
+    colorClass: statusClass('changelogText', item.new_value),
   }
 }

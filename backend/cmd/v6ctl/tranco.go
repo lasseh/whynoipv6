@@ -38,10 +38,7 @@ func trancoCmd() *cobra.Command {
 				return err
 			}
 			defer pool.Close()
-			imp := ingest.NewTrancoImporter(pool, ingest.NewHTTPTrancoSource(), ingest.TrancoConfig{
-				MinRows:      cfg.Int("tranco.min_rows"),
-				MaxDelistPct: cfg.Float("tranco.max_delist_pct"),
-			})
+			imp := ingest.NewTrancoImporter(pool, ingest.NewHTTPTrancoSource(), ingest.TrancoConfigFrom(cfg))
 			rep, err := imp.Import(cmd.Context(), force)
 			if err != nil {
 				return err

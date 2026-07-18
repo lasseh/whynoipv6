@@ -61,6 +61,17 @@ func Classify(confirmed map[Dimension]*IPv6Status) (class Classification, flags 
 	return class, flags, saint
 }
 
+// V6Ready reports the campaign readiness predicate (07 §3.2): confirmed
+// base and ns supported, www supported or not_applicable. Strict on NULLs
+// — an unconfirmed dimension is never ready. The stats_campaign_daily
+// v6_ready counter (db/query/stats.sql) aggregates this same predicate in
+// SQL; the two must not drift.
+func V6Ready(base, ns, www *IPv6Status) bool {
+	return base != nil && *base == StatusSupported &&
+		ns != nil && *ns == StatusSupported &&
+		www != nil && (*www == StatusSupported || *www == StatusNotApplicable)
+}
+
 // IPv6Only folds conn and resources into the derived "IPv6 only" status:
 // whether the site presents the same over an IPv6-only connection (03 §10).
 // It is ungated by classification — a non-hero domain can still be fully

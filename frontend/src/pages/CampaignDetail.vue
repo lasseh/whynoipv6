@@ -6,7 +6,7 @@ import PageShell from '@/components/PageShell.vue'
 import ApiError from '@/components/ApiError.vue'
 import Breadcrumb from '@/components/Breadcrumb.vue'
 
-import CampaignDomainTable from '@/components/CampaignDomainTable.vue'
+import DomainTable from '@/components/DomainTable.vue'
 import ChangelogTable from '@/components/ChangelogTable.vue'
 import Pagination from '@/components/Pagination.vue'
 import RatingBadge from '@/components/RatingBadge.vue'
@@ -105,7 +105,7 @@ getCampaignChangelog(uuid)
             <div>
               <!-- Error state (§6.3) -->
               <ApiError v-if="error" :problem="error" />
-              <CampaignDomainTable v-else :domains="items" :uuid="uuid" :loading="loading" />
+              <DomainTable v-else :domains="items" :campaign-uuid="uuid" :loading="loading" />
             </div>
 
             <!-- Pagination -->

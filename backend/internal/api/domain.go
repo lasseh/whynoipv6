@@ -57,6 +57,21 @@ func ipv6OnlyOf(st *StatusBlock) *string {
 	return nil
 }
 
+// v6ReadyOf derives the campaign v6-ready flag from an assembled status
+// block (domain.V6Ready) — the same predicate the stats v6_ready counter
+// aggregates, so highlighted rows and adoption percentages cannot
+// disagree. Stamped only on campaign membership rows.
+func v6ReadyOf(st *StatusBlock) bool {
+	conv := func(v *string) *domain.IPv6Status {
+		if v == nil {
+			return nil
+		}
+		s := domain.IPv6Status(*v)
+		return &s
+	}
+	return domain.V6Ready(conv(st.Base.Value), conv(st.NS.Value), conv(st.WWW.Value))
+}
+
 // CountryRef / ASNRef / ProviderRef are the embedded pivot objects (07 §4.2).
 type CountryRef struct {
 	Code string  `json:"code"`
@@ -84,6 +99,7 @@ type DomainSummary struct {
 	ClassFlags      []string     `json:"class_flags"`
 	Saint           bool         `json:"saint"`
 	IPv6Only        *string      `json:"ipv6_only"`
+	V6Ready         *bool        `json:"v6_ready,omitempty"` // campaign members rows only
 	Status          StatusBlock  `json:"status"`
 	TLD             *string      `json:"tld"`
 	Country         CountryRef   `json:"country"`

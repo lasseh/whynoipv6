@@ -289,8 +289,9 @@ func TestCampaigns(t *testing.T) {
 		} `json:"adoption"`
 		Domains struct {
 			Items []struct {
-				Host string `json:"host"`
-				Rank *int32 `json:"rank"`
+				Host    string `json:"host"`
+				Rank    *int32 `json:"rank"`
+				V6Ready *bool  `json:"v6_ready"`
 			} `json:"items"`
 			Page struct {
 				HasMore bool `json:"has_more"`
@@ -318,6 +319,13 @@ func TestCampaigns(t *testing.T) {
 	}
 	if detail.Domains.Items[0].Rank != nil {
 		t.Errorf("campaign-only rank = %v, want JSON null", *detail.Domains.Items[0].Rank)
+	}
+	// Campaign membership rows carry the server-derived v6_ready flag
+	// (the row highlight consumes it; the frontend never re-derives).
+	for _, m := range detail.Domains.Items {
+		if m.V6Ready == nil {
+			t.Errorf("member %s: v6_ready missing", m.Host)
+		}
 	}
 
 	var members envelope
