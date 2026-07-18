@@ -103,7 +103,7 @@ func (m *machine) stepErr(dt time.Duration, obs observe.Observations) error {
 
 // fold applies the unit's fenced-UPDATE values back onto the snapshot.
 func (m *machine) fold(u *commitUnit) {
-	p := u.params
+	p := u.Domain
 	m.s.Disabled = p.Disabled
 	m.s.DisabledReason = nil
 	if p.DisabledReason != nil {
@@ -172,8 +172,8 @@ func TestCommitBootstrap(t *testing.T) {
 		t.Run(string(dim), func(t *testing.T) {
 			m := newMachine(t)
 			u := m.step(0, stableObs(dim, domain.ObsSupported), false)
-			if len(u.changelog) != 0 {
-				t.Errorf("bootstrap wrote %d changelog rows, want 0", len(u.changelog))
+			if len(u.Changelog) != 0 {
+				t.Errorf("bootstrap wrote %d changelog rows, want 0", len(u.Changelog))
 			}
 			if u.bootstraps == 0 {
 				t.Error("bootstrap counter not incremented")
@@ -193,16 +193,16 @@ func TestCommitN2Flip(t *testing.T) {
 	m.step(0, stableObs(domain.DimBase, domain.ObsSupported), false)
 
 	u := m.step(24*time.Hour, stableObs(domain.DimBase, domain.ObsUnsupported), false)
-	if len(u.changelog) != 0 {
+	if len(u.Changelog) != 0 {
 		t.Fatal("first unsupported must not flip")
 	}
 	m.assertDim(domain.DimBase, ptrStatus(domain.StatusSupported), ptrStatus(domain.StatusUnsupported), 1)
 
 	u = m.step(48*time.Hour, stableObs(domain.DimBase, domain.ObsUnsupported), false)
-	if len(u.changelog) != 1 {
-		t.Fatalf("changelog rows = %d, want 1", len(u.changelog))
+	if len(u.Changelog) != 1 {
+		t.Fatalf("changelog rows = %d, want 1", len(u.Changelog))
 	}
-	cl := u.changelog[0]
+	cl := u.Changelog[0]
 	if cl.Field != "base" || cl.OldValue != db.Ipv6StatusSupported || cl.NewValue != db.Ipv6StatusUnsupported {
 		t.Errorf("changelog = %+v", cl)
 	}
@@ -222,8 +222,8 @@ func TestCommitCountingGate(t *testing.T) {
 	m.assertDim(domain.DimBase, ptrStatus(domain.StatusSupported), ptrStatus(domain.StatusUnsupported), 1)
 
 	u := m.step(37*time.Hour, stableObs(domain.DimBase, domain.ObsUnsupported), false) // ≥12h: flip
-	if len(u.changelog) != 1 {
-		t.Fatalf("changelog rows = %d, want 1 (spaced flip)", len(u.changelog))
+	if len(u.Changelog) != 1 {
+		t.Fatalf("changelog rows = %d, want 1 (spaced flip)", len(u.Changelog))
 	}
 	m.assertDim(domain.DimBase, ptrStatus(domain.StatusUnsupported), nil, 0)
 }
@@ -239,8 +239,8 @@ func TestCommitN3Flip(t *testing.T) {
 	m.step(48*time.Hour, stableObs(domain.DimConn, domain.ObsUnsupported), false)
 	m.assertDim(domain.DimConn, ptrStatus(domain.StatusSupported), ptrStatus(domain.StatusUnsupported), 2)
 	u := m.step(72*time.Hour, stableObs(domain.DimConn, domain.ObsUnsupported), false)
-	if len(u.changelog) != 1 || u.changelog[0].Field != "conn" {
-		t.Fatalf("conn N=3 flip: %+v", u.changelog)
+	if len(u.Changelog) != 1 || u.Changelog[0].Field != "conn" {
+		t.Fatalf("conn N=3 flip: %+v", u.Changelog)
 	}
 	m.assertDim(domain.DimConn, ptrStatus(domain.StatusUnsupported), nil, 0)
 }
@@ -256,8 +256,8 @@ func TestCommitShadowSuppressed(t *testing.T) {
 	m.step(24*time.Hour, stableObs(domain.DimConn, domain.ObsNotApplicable), false)
 	m.step(48*time.Hour, stableObs(domain.DimConn, domain.ObsNotApplicable), false)
 	u := m.step(72*time.Hour, stableObs(domain.DimConn, domain.ObsNotApplicable), false)
-	if len(u.changelog) != 0 {
-		t.Fatalf("shadow conn → not_applicable wrote a changelog row: %+v", u.changelog)
+	if len(u.Changelog) != 0 {
+		t.Fatalf("shadow conn → not_applicable wrote a changelog row: %+v", u.Changelog)
 	}
 	if len(u.transitions) != 1 || u.transitions[0].Dim != domain.DimConn ||
 		u.transitions[0].New != domain.StatusNotApplicable {
@@ -269,9 +269,9 @@ func TestCommitShadowSuppressed(t *testing.T) {
 	m.step(96*time.Hour, stableObs(domain.DimConn, domain.ObsSupported), false)
 	m.step(120*time.Hour, stableObs(domain.DimConn, domain.ObsSupported), false)
 	u = m.step(144*time.Hour, stableObs(domain.DimConn, domain.ObsSupported), false)
-	if len(u.changelog) != 1 || u.changelog[0].Field != "conn" ||
-		u.changelog[0].NewValue != db.Ipv6StatusSupported {
-		t.Fatalf("conn not_applicable → supported must keep its row: %+v", u.changelog)
+	if len(u.Changelog) != 1 || u.Changelog[0].Field != "conn" ||
+		u.Changelog[0].NewValue != db.Ipv6StatusSupported {
+		t.Fatalf("conn not_applicable → supported must keep its row: %+v", u.Changelog)
 	}
 }
 
@@ -283,11 +283,11 @@ func TestCommitNonDefinitive(t *testing.T) {
 	m.step(24*time.Hour, stableObs(domain.DimBase, domain.ObsUnsupported), false)
 
 	u := m.step(48*time.Hour, stableObs(domain.DimBase, domain.ObsError), false)
-	if len(u.changelog) != 0 {
+	if len(u.Changelog) != 0 {
 		t.Fatal("error scan wrote changelog")
 	}
 	m.assertDim(domain.DimBase, ptrStatus(domain.StatusSupported), ptrStatus(domain.StatusUnsupported), 1)
-	if obs := u.params.BaseObserved; obs == nil || *obs != db.ObservationError {
+	if obs := u.Domain.BaseObserved; obs == nil || *obs != db.ObservationError {
 		t.Errorf("base_observed = %v, want error (always recorded)", obs)
 	}
 
@@ -295,8 +295,8 @@ func TestCommitNonDefinitive(t *testing.T) {
 	m.assertDim(domain.DimBase, ptrStatus(domain.StatusSupported), ptrStatus(domain.StatusUnsupported), 1)
 
 	u = m.step(96*time.Hour, stableObs(domain.DimBase, domain.ObsUnsupported), false)
-	if len(u.changelog) != 1 {
-		t.Fatalf("flip after interleaved non-definitive: %d rows", len(u.changelog))
+	if len(u.Changelog) != 1 {
+		t.Fatalf("flip after interleaved non-definitive: %d rows", len(u.Changelog))
 	}
 	m.assertDim(domain.DimBase, ptrStatus(domain.StatusUnsupported), nil, 0)
 }
@@ -311,8 +311,8 @@ func TestCommitPendingReset(t *testing.T) {
 	m.assertDim(domain.DimBase, ptrStatus(domain.StatusSupported), ptrStatus(domain.StatusNoRecord), 1)
 
 	u := m.step(72*time.Hour, stableObs(domain.DimBase, domain.ObsNoRecord), false)
-	if len(u.changelog) != 1 || u.changelog[0].NewValue != db.Ipv6StatusNoRecord {
-		t.Fatalf("no_record flip: %+v", u.changelog)
+	if len(u.Changelog) != 1 || u.Changelog[0].NewValue != db.Ipv6StatusNoRecord {
+		t.Fatalf("no_record flip: %+v", u.Changelog)
 	}
 }
 
@@ -338,14 +338,14 @@ func TestCommitStepR(t *testing.T) {
 
 	// Recovery: definitive base observation.
 	u := m.step(38*24*time.Hour, stableObs(domain.DimBase, domain.ObsSupported), false)
-	if len(u.changelog) != 0 {
-		t.Fatalf("step R wrote %d changelog rows, want 0 (clean changelog)", len(u.changelog))
+	if len(u.Changelog) != 0 {
+		t.Fatalf("step R wrote %d changelog rows, want 0 (clean changelog)", len(u.Changelog))
 	}
 	if m.s.Disabled || m.s.DisabledReason != nil {
 		t.Errorf("recovered row still disabled: %+v", m.s)
 	}
 	m.assertDim(domain.DimBase, ptrStatus(domain.StatusSupported), nil, 0)
-	if u.params.Classification == "" {
+	if u.Domain.Classification == "" {
 		t.Error("classification missing after step R")
 	}
 }
@@ -385,14 +385,14 @@ func TestCommitResourcesExcluded(t *testing.T) {
 	obs.ResourcesExcluded = true
 	u := m.step(0, obs, false)
 
-	if u.params.ResourcesStatus != nil || u.params.ResourcesObserved != nil ||
-		u.params.ResourcesPending != nil || u.params.ResourcesPendingCount != 0 {
-		t.Errorf("resources columns written while excluded: %+v", u.params)
+	if u.Domain.ResourcesStatus != nil || u.Domain.ResourcesObserved != nil ||
+		u.Domain.ResourcesPending != nil || u.Domain.ResourcesPendingCount != 0 {
+		t.Errorf("resources columns written while excluded: %+v", u.Domain)
 	}
-	if u.scan.Resources != db.ObservationNotApplicable {
-		t.Errorf("scan.resources = %s, want not_applicable", u.scan.Resources)
+	if u.Scan.Resources != db.ObservationNotApplicable {
+		t.Errorf("scan.resources = %s, want not_applicable", u.Scan.Resources)
 	}
-	if u.params.Saint {
+	if u.Domain.Saint {
 		t.Error("saint while resources disabled")
 	}
 }
@@ -419,8 +419,8 @@ func TestCommitAttributionDeferred(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if u.params.AsnID != 1 || u.params.CountryID != 1 {
-		t.Errorf("attribution touched on non-definitive base: %d/%d", u.params.AsnID, u.params.CountryID)
+	if u.Domain.AsnID != 1 || u.Domain.CountryID != 1 {
+		t.Errorf("attribution touched on non-definitive base: %d/%d", u.Domain.AsnID, u.Domain.CountryID)
 	}
 
 	u, err = ComputeCommit(&CommitInput{
@@ -430,8 +430,8 @@ func TestCommitAttributionDeferred(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if u.params.AsnID != 99 || u.params.CountryID != 98 {
-		t.Errorf("attribution not refreshed on definitive base: %d/%d", u.params.AsnID, u.params.CountryID)
+	if u.Domain.AsnID != 99 || u.Domain.CountryID != 98 {
+		t.Errorf("attribution not refreshed on definitive base: %d/%d", u.Domain.AsnID, u.Domain.CountryID)
 	}
 }
 
@@ -558,10 +558,10 @@ func TestCommitErrorStreakBreakerOpen(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if u.params.ErrorStreak != 1 {
-		t.Errorf("error_streak = %d under open breaker, want 1", u.params.ErrorStreak)
+	if u.Domain.ErrorStreak != 1 {
+		t.Errorf("error_streak = %d under open breaker, want 1", u.Domain.ErrorStreak)
 	}
-	if got := u.params.NextCheckAt.Time.Sub(seqT0.Add(24 * time.Hour)); got != 24*time.Hour {
+	if got := u.Domain.NextCheckAt.Time.Sub(seqT0.Add(24 * time.Hour)); got != 24*time.Hour {
 		t.Errorf("breaker-open scheduling = %v, want cadence 24h", got)
 	}
 }

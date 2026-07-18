@@ -44,6 +44,15 @@ crystallized *after* the spec was frozen.
   changelog row (03 §11, write-time suppression, same mechanism as bootstrap).
   _Avoid:_ read-time filtering of changelog rows per consumer.
 
+- **Commit unit.** The typed per-domain write unit `postgres.CommitUnit`
+  (03 §12's batch: fenced `CommitDomainParams` UPDATE + changelog/scan/detail
+  rows + resource links), executed only by `postgres.FlushCommit` — one
+  pgx.Batch, one tx, lease fence. Statement args bind through the sqlc params
+  structs (field order = placeholder order, pinned by
+  `TestCommitStatementBinding`); the crawler's `Committer` reaches the flush
+  only through its seam, so tests substitute a fake. _Avoid:_ hand-listing
+  commit columns positionally in a caller.
+
 - **Keyset spec.** The per-endpoint description of a keyset-paginated list —
   `api.KeysetSpec{Sort, Positioned, Fetch, Key}` — consumed by `api.KeysetPage`,
   which owns the whole cursor pipeline (fingerprint → decode → seek → N+1 fetch →
