@@ -1155,6 +1155,13 @@ components:
           allOf: [{ $ref: "#/components/schemas/IPv6Status" }]
           nullable: true
           description: Derived conn+resources fold — whether the site presents the same over an IPv6-only connection. Null until both dimensions are confirmed.
+        v6_ready:
+          type: boolean
+          description: >
+            Campaign membership rows only (listCampaignDomains) — confirmed
+            base and ns supported with www supported-or-not_applicable; the
+            same predicate the campaign stats v6_ready counter aggregates.
+            Absent on every other /domains* collection.
         status: { $ref: "#/components/schemas/StatusBlock" }
         tld: { type: string, nullable: true }
         country: { $ref: "#/components/schemas/CountryRef" }

@@ -231,3 +231,28 @@ func TestConfirmedTotality(t *testing.T) {
 		t.Error("Confirmed accepted an undeclared observation")
 	}
 }
+
+// TestV6Ready pins the campaign readiness predicate — the same table
+// stats.sql's v6_ready counter encodes in SQL.
+func TestV6Ready(t *testing.T) {
+	sup, unsup, na := StatusSupported, StatusUnsupported, StatusNotApplicable
+	cases := []struct {
+		name          string
+		base, ns, www *IPv6Status
+		want          bool
+	}{
+		{"all supported", &sup, &sup, &sup, true},
+		{"www n/a passes", &sup, &sup, &na, true},
+		{"www unsupported fails", &sup, &sup, &unsup, false},
+		{"ns unsupported fails", &sup, &unsup, &sup, false},
+		{"base unsupported fails", &unsup, &sup, &sup, false},
+		{"NULL base strict", nil, &sup, &sup, false},
+		{"NULL ns strict", &sup, nil, &sup, false},
+		{"NULL www strict", &sup, &sup, nil, false},
+	}
+	for _, tc := range cases {
+		if got := V6Ready(tc.base, tc.ns, tc.www); got != tc.want {
+			t.Errorf("%s: V6Ready = %t, want %t", tc.name, got, tc.want)
+		}
+	}
+}

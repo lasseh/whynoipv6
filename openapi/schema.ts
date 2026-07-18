@@ -922,6 +922,8 @@ export interface components {
             saint: boolean;
             /** @description Derived conn+resources fold — whether the site presents the same over an IPv6-only connection. Null until both dimensions are confirmed. */
             ipv6_only: components["schemas"]["IPv6Status"] | null;
+            /** @description Campaign membership rows only (listCampaignDomains) — confirmed base and ns supported with www supported-or-not_applicable; the same predicate the campaign stats v6_ready counter aggregates. Absent on every other /domains* collection. */
+            v6_ready?: boolean;
             status: components["schemas"]["StatusBlock"];
             tld: string | null;
             country: components["schemas"]["CountryRef"];

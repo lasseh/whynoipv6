@@ -2,25 +2,15 @@
 import type { DomainSummary } from '@/api'
 import StatusIcon from '@/components/StatusIcon.vue'
 
-// Campaign members table: no Rank column; the "fully ready" row highlight uses
-// the server's v6_ready predicate (07 §4.7: base supported ∧ ns supported ∧
-// www ∈ {supported, not_applicable} — MX deliberately excluded) so the
-// highlighted-row count always agrees with adoption.v6_ready_percent.
-// `loading` suppresses the empty state so it can't flash before the first
-// page arrives.
+// Campaign members table: no Rank column; the "fully ready" row highlight
+// consumes the server's per-row v6_ready flag — derived backend-side from
+// the same predicate as adoption.v6_ready_percent (07 §4.7), never
+// re-derived here. `loading` suppresses the empty state so it can't flash
+// before the first page arrives.
 withDefaults(defineProps<{ domains?: DomainSummary[]; uuid: string; loading?: boolean }>(), {
   domains: () => [],
   loading: false,
 })
-
-function isReady(domain: DomainSummary): boolean {
-  const { base, ns, www } = domain.status
-  return (
-    base.value === 'supported' &&
-    ns.value === 'supported' &&
-    (www.value === 'supported' || www.value === 'not_applicable')
-  )
-}
 </script>
 
 <template>
@@ -84,7 +74,7 @@ function isReady(domain: DomainSummary): boolean {
         <tr
           v-for="domain in domains"
           :key="domain.host"
-          :class="[{ 'bg-emerald-900/50': isReady(domain) }, 'hover:bg-gray-800']"
+          :class="[{ 'bg-emerald-900/50': domain.v6_ready }, 'hover:bg-gray-800']"
         >
           <td class="px-5 py-3 whitespace-nowrap text-left">
             <div class="flex items-center">

@@ -141,6 +141,7 @@ INSERT INTO stats_campaign_daily (
 SELECT
   CURRENT_DATE, cd.campaign_id,
   count(*),
+  -- the campaign v6-ready predicate — must match domain.V6Ready (07 §3.2)
   count(*) FILTER (WHERE d.base_status = 'supported'
                      AND d.ns_status  = 'supported'
                      AND d.www_status IN ('supported','not_applicable')),
