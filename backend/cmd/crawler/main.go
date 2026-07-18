@@ -130,10 +130,14 @@ func run() error {
 	metrics.Heartbeat = func() { notifier.HeartbeatOK(rootCtx) }
 
 	w := &crawler.Worker{
-		Pool: pool, Runner: runner, Preflight: preflight, Committer: committer,
+		Pool: pool, Scanner: runner, Preflight: preflight, Committer: committer,
 		Metrics: metrics, BreakerOpen: cons.FastLaneSuppressed,
-		Attr:      &geoip.Attributor{Meta: geoReader, Countries: countries},
-		Countries: countries, Providers: providers,
+		Enrich: &crawler.GeoEnricher{
+			Pool:      pool,
+			Attr:      &geoip.Attributor{Meta: geoReader, Countries: countries},
+			Countries: countries,
+			Providers: providers,
+		},
 		ResourcesEnabled: resourcesEnabled,
 	}
 
