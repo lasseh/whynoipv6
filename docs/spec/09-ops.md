@@ -1,6 +1,6 @@
 # 09 — Operations, Packaging & the Config Registry
 
-_Status: Round 3.0 — API redesign folded in (docs/api-design-research.md, decisions 2026-07-09): clean root API, keyset pagination, RFC 9457, no legacy compat, no history import._
+_Status: Round 3.0 — API redesign folded in (docs/history/api-design-research.md, decisions 2026-07-09): clean root API, keyset pagination, RFC 9457, no legacy compat, no history import._
 
 **Purpose:** Everything a single maintainer needs to build, configure, deploy, and
 run the three binaries on his own VMs. This file is the **single source of truth for

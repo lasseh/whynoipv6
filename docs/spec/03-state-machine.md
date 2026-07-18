@@ -1,6 +1,6 @@
 # 03 — Confirmed-Status State Machine (the trust core)
 
-_Status: Round 3.0 — API redesign folded in (docs/api-design-research.md, decisions 2026-07-09): clean root API, keyset pagination, RFC 9457, no legacy compat, no history import._
+_Status: Round 3.0 — API redesign folded in (docs/history/api-design-research.md, decisions 2026-07-09): clean root API, keyset pagination, RFC 9457, no legacy compat, no history import._
 
 **Purpose:** This file specifies the confirmed-status commit machine — the single code path that turns per-scan observations into public, confirmed IPv6 state, changelog entries, and classification. It is the trust core of the whole system: every public status, every changelog row, and every hero/partial/sinner verdict flows through the algorithm defined here, exactly once per scanned domain, in one atomic per-domain transaction protected by a lease fence.
 
