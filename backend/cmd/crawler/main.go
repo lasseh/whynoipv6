@@ -75,29 +75,11 @@ func run() error {
 	dialer := checker.NewSafeDialer(bulk)
 	notifier := notify.New(cfg.String("ops.webhook_url"), cfg.String("ops.healthcheck_url"),
 		cfg.String("ops.healthcheck_tick_url"), cfg.Duration("ops.healthcheck_min_interval"))
-	cons := consensus.New(consensus.Config{
-		PerProviderQPS: cfg.Int("consensus.per_provider_qps"),
-		FastLane: consensus.FastLaneConfig{
-			NondefinitiveRate: cfg.Float("consensus.fastlane_breaker.nondefinitive_rate"),
-			Window:            cfg.Duration("consensus.fastlane_breaker.window"),
-			MinSamples:        cfg.Int("consensus.fastlane_breaker.min_samples"),
-			RecoverBelow:      cfg.Float("consensus.fastlane_breaker.recover_below"),
-		},
-		Provider: consensus.ProviderConfig{
-			FailureRate:    cfg.Float("consensus.provider_breaker.failure_rate"),
-			Window:         cfg.Duration("consensus.provider_breaker.window"),
-			MinSamples:     cfg.Int("consensus.provider_breaker.min_samples"),
-			RecoveryProbes: cfg.Int("consensus.provider_breaker.recovery_probes"),
-		},
-	}, bulk, notifier.Webhook, log)
+	cons := consensus.New(consensus.ConfigFrom(cfg), bulk, notifier.Webhook, log)
 	defer cons.Close()
 
 	resourcesEnabled := cfg.Bool("crawler.resources.enabled")
-	runner := checker.NewRunner(checker.Config{
-		MaxNSLookups:            cfg.Int("checks.max_ns_lookups"),
-		MaxMXLookups:            cfg.Int("checks.max_mx_lookups"),
-		EnableResourceDiscovery: resourcesEnabled,
-	}, cons, dialer, log)
+	runner := checker.NewRunner(checker.ConfigFrom(cfg), cons, dialer, log)
 	preflight := checker.NewPreflight(bulk, cfg.String("preflight.probe_host"), log)
 
 	providers, err := ingest.LoadProviderMapping(rootCtx, q)
@@ -105,19 +87,7 @@ func run() error {
 		return err
 	}
 
-	scheduleCfg := crawler.ScheduleConfig{
-		CadenceDefault:      cfg.Duration("cadence.default"),
-		RecheckInconsistent: cfg.Duration("recheck_inconsistent"),
-		RecheckError:        cfg.Duration("recheck_error"),
-		RecheckBackoffMax:   cfg.Duration("recheck_backoff_max"),
-		SlowLaneEvery:       cfg.Duration("lifecycle.slow_lane_every"),
-	}
-	committer := crawler.NewCommitter(pool, &crawler.CommitConfig{
-		MinConfirmSpacing: cfg.Duration("anti_flap.min_confirm_spacing"),
-		DeadStreak:        int16(cfg.Int("lifecycle.dead_streak")),
-		ResourcesEnabled:  resourcesEnabled,
-		Schedule:          scheduleCfg,
-	}, log)
+	committer := crawler.NewCommitter(pool, crawler.CommitConfigFrom(cfg), log)
 
 	runID := uuid.New()
 	hostname, _ := os.Hostname()
@@ -141,13 +111,7 @@ func run() error {
 		ResourcesEnabled: resourcesEnabled,
 	}
 
-	frontier := crawler.NewFrontier(pool, crawler.FrontierConfig{
-		BatchSize:     cfg.Int("claim.batch_size"),
-		Order:         cfg.String("claim.order"),
-		EmptyPoll:     cfg.Duration("claim.empty_poll_interval"),
-		WorkerSlots:   cfg.Int("worker_slots"),
-		RetryInterval: cfg.Duration("preflight.retry_interval"),
-	})
+	frontier := crawler.NewFrontier(pool, crawler.FrontierConfigFrom(cfg))
 	// Workers commit under rootCtx (drain); the claim loop stops first.
 	frontier.Process = func(_ context.Context, d crawler.ClaimedDomain) { w.Process(rootCtx, d) }
 	frontier.Preflight = func(ctx context.Context) bool {
@@ -161,33 +125,18 @@ func run() error {
 	}
 	frontier.OnIdle = func() {} // idle checkpoints ride the metrics loop
 
+	campaignCfg := campaign.ConfigFrom(cfg)
+	campaignCfg.Pull, campaignCfg.Push = true, true
 	tick := &crawler.Tick{
-		Pool: pool,
-		Cfg: crawler.TickConfig{
-			Sweep: crawler.SweepConfig{
-				LiveCheckLinkage: cfg.Duration("lifecycle.live_check_linkage"),
-				DelistGrace:      cfg.Duration("lifecycle.delist_grace"),
-				SlowLaneEvery:    cfg.Duration("lifecycle.slow_lane_every"),
-			},
-			IndegreeThreshold:  int32(cfg.Int("service_detect.indegree_threshold")),
-			LiveCheckRetention: cfg.Duration("live_check.retention"),
-		},
-		Campaign: campaign.Config{
-			RepoPath:          cfg.String("campaign.repo_path"),
-			GitRemote:         cfg.String("campaign.git_remote"),
-			MaxDomainsPerFile: cfg.Int("campaign.max_domains_per_file"),
-			Pull:              true,
-			Push:              true,
-		},
+		Pool:     pool,
+		Cfg:      crawler.TickConfigFrom(cfg),
+		Campaign: campaignCfg,
 		Notify:   notifier.Webhook,
 		PingTick: notifier.PingTick,
 	}
 	coordinator := &crawler.Coordinator{
 		Pool: pool, Tick: tick, Metrics: metrics, Notify: notifier.Webhook,
-		Tranco: ingest.NewTrancoImporter(pool, ingest.NewHTTPTrancoSource(), ingest.TrancoConfig{
-			MinRows:      cfg.Int("tranco.min_rows"),
-			MaxDelistPct: cfg.Float("tranco.max_delist_pct"),
-		}),
+		Tranco:        ingest.NewTrancoImporter(pool, ingest.NewHTTPTrancoSource(), ingest.TrancoConfigFrom(cfg)),
 		ImportAt:      cfg.String("tranco.import_at"),
 		RetryInterval: cfg.Duration("tranco.retry_interval"),
 		StaleWarn:     cfg.Duration("tranco.stale_warn_after"),
@@ -212,13 +161,7 @@ func run() error {
 	// The §5.1.5 check-job consumer pool + reaper (04 — placement).
 	liveChecker := &crawler.LiveChecker{
 		Pool: pool, Q: q, Runner: runner, Preflight: preflight,
-		Cfg: crawler.LiveCheckConfig{
-			Workers:          cfg.Int("live_check.workers"),
-			JobBudget:        cfg.Duration("live_check.job_budget"),
-			ReclaimAfter:     cfg.Duration("live_check.reclaim_after"),
-			FailAfter:        cfg.Duration("live_check.fail_after"),
-			ResourcesEnabled: cfg.Bool("crawler.resources.enabled"),
-		},
+		Cfg: crawler.LiveCheckConfigFrom(cfg),
 	}
 	go liveChecker.Run(claimCtx)
 

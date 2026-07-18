@@ -131,3 +131,19 @@ func TestEnvOverrides(t *testing.T) {
 	}
 	_ = fmt.Sprintf("%v", cfg) // the summary path is exercised by LogSummary in Load callers
 }
+
+// TestUnregisteredKeyPanics pins the fail-fast getter contract: a key
+// outside the registry must panic at read time, never resolve to a zero.
+func TestUnregisteredKeyPanics(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://u@localhost/whynoipv6")
+	cfg, err := Load("crawler")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if recover() == nil {
+			t.Fatal("getter accepted an unregistered key")
+		}
+	}()
+	_ = cfg.Duration("consensus.fastlane_breaker.windw") // typo'd on purpose
+}

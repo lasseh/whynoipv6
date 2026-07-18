@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/lasseh/whynoipv6/internal/campaign"
+	"github.com/lasseh/whynoipv6/internal/config"
 )
 
 func campaignCmd() *cobra.Command {
@@ -26,14 +27,7 @@ func campaignCmd() *cobra.Command {
 				return err
 			}
 			defer pool.Close()
-			rep, err := campaign.Sync(cmd.Context(), campaign.Config{
-				RepoPath:          cfg.String("campaign.repo_path"),
-				GitRemote:         cfg.String("campaign.git_remote"),
-				MaxDomainsPerFile: cfg.Int("campaign.max_domains_per_file"),
-				AdoptUnknownUUIDs: adopt,
-				Pull:              true,
-				Push:              true,
-			}, pool)
+			rep, err := campaign.Sync(cmd.Context(), campaignConfig(cfg, adopt), pool)
 			if err != nil {
 				return err
 			}
@@ -58,4 +52,13 @@ func campaignCmd() *cobra.Command {
 	cmd.AddCommand(syncCmd)
 	cmd.AddCommand(campaignValidateCmd())
 	return cmd
+}
+
+// campaignConfig binds the registry keys and applies v6ctl's invocation
+// policy: interactive syncs always pull and push.
+func campaignConfig(cfg *config.Config, adopt bool) campaign.Config {
+	c := campaign.ConfigFrom(cfg)
+	c.AdoptUnknownUUIDs = adopt
+	c.Pull, c.Push = true, true
+	return c
 }

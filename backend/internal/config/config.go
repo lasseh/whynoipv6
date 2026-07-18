@@ -39,7 +39,8 @@ type Config struct {
 	PublicBaseURL string
 	LogLevel      slog.Level
 
-	v *viper.Viper
+	v        *viper.Viper
+	registry map[string]any
 }
 
 // Load builds the configuration for the named binary (api, crawler, v6ctl).
@@ -80,6 +81,7 @@ func Load(binary string) (*Config, error) {
 		PublicBaseURL: v.GetString("PUBLIC_BASE_URL"),
 		LogLevel:      lvl,
 		v:             v,
+		registry:      registryDefaults(binary),
 	}, nil
 }
 
@@ -98,24 +100,34 @@ func parseLevel(s string) (slog.Level, error) {
 	}
 }
 
+// know panics on a key outside the registry: every read happens once
+// during startup wiring, so a typo'd key must fail fast there instead of
+// resolving to a silent zero value.
+func (c *Config) know(key string) {
+	if _, ok := c.registry[key]; !ok {
+		panic(fmt.Sprintf("config: unregistered key %q", key))
+	}
+}
+
 // String returns the value of a registry key.
-func (c *Config) String(key string) string { return c.v.GetString(key) }
+func (c *Config) String(key string) string { c.know(key); return c.v.GetString(key) }
 
 // Int returns the value of a registry key.
-func (c *Config) Int(key string) int { return c.v.GetInt(key) }
+func (c *Config) Int(key string) int { c.know(key); return c.v.GetInt(key) }
 
 // Bool returns the value of a registry key.
-func (c *Config) Bool(key string) bool { return c.v.GetBool(key) }
+func (c *Config) Bool(key string) bool { c.know(key); return c.v.GetBool(key) }
 
 // Float returns the value of a registry key.
-func (c *Config) Float(key string) float64 { return c.v.GetFloat64(key) }
+func (c *Config) Float(key string) float64 { c.know(key); return c.v.GetFloat64(key) }
 
 // Duration returns the value of a registry key.
-func (c *Config) Duration(key string) time.Duration { return c.v.GetDuration(key) }
+func (c *Config) Duration(key string) time.Duration { c.know(key); return c.v.GetDuration(key) }
 
 // StringSlice returns the value of a list registry key; env overrides are
 // comma-separated (09-ops.md §1).
 func (c *Config) StringSlice(key string) []string {
+	c.know(key)
 	if s := c.v.GetString(key); strings.Contains(s, ",") {
 		parts := strings.Split(s, ",")
 		for i := range parts {
@@ -128,8 +140,8 @@ func (c *Config) StringSlice(key string) []string {
 
 // Keys returns every registered registry key, sorted (registry test surface).
 func (c *Config) Keys() []string {
-	keys := make([]string, 0, len(registryDefaults(c.Binary)))
-	for k := range registryDefaults(c.Binary) {
+	keys := make([]string, 0, len(c.registry))
+	for k := range c.registry {
 		keys = append(keys, k)
 	}
 	slices.Sort(keys)
@@ -186,7 +198,7 @@ func (c *Config) InstallLogger() (*slog.Logger, func(), error) {
 // LogSummary emits the info-level startup config summary: every registry key
 // with its resolved value, secrets redacted (09-ops.md §1, §15.3).
 func (c *Config) LogSummary(log *slog.Logger) {
-	attrs := make([]any, 0, 2*len(registryDefaults(c.Binary))+2)
+	attrs := make([]any, 0, 2*len(c.registry)+2)
 	attrs = append(attrs, "DATABASE_URL", redactDSN(c.DatabaseURL))
 	for _, key := range c.Keys() {
 		val := c.v.Get(key)
