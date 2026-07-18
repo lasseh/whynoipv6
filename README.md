@@ -93,6 +93,17 @@ One monorepo, three moving parts:
 - **[docs/internals.md](docs/internals.md)** — a tour of the codebase
 - **[docs/spec/](docs/spec/)** — the full build spec (normative)
 
+## Contributing
+
+Contributions welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) to get the local
+stack running and [SECURITY.md](SECURITY.md) for reporting vulnerabilities.
+
+## License
+
+The code is licensed under [GPL-3.0](LICENSE). The published measurement data
+served by the API is licensed
+[CC-BY-NC-4.0](https://creativecommons.org/licenses/by-nc/4.0/).
+
 ## Contributors
 
 <a href="https://github.com/lasseh">
