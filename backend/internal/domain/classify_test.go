@@ -212,3 +212,22 @@ func TestIPv6Only(t *testing.T) {
 		t.Fatalf("cross-product size = %d, want 5^2", n)
 	}
 }
+
+// TestConfirmedTotality: the one Observation→IPv6Status bridge accepts
+// exactly the four public-safe values and rejects the rest.
+func TestConfirmedTotality(t *testing.T) {
+	want := map[Observation]IPv6Status{
+		ObsSupported: StatusSupported, ObsUnsupported: StatusUnsupported,
+		ObsNoRecord: StatusNoRecord, ObsNotApplicable: StatusNotApplicable,
+	}
+	for _, o := range ObservationValues {
+		got, ok := o.Confirmed()
+		w, confirmable := want[o]
+		if ok != confirmable || (ok && got != w) {
+			t.Errorf("Confirmed(%s) = (%s, %t), want (%s, %t)", o, got, ok, w, confirmable)
+		}
+	}
+	if _, ok := Observation("bogus").Confirmed(); ok {
+		t.Error("Confirmed accepted an undeclared observation")
+	}
+}

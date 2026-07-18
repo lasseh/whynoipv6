@@ -31,6 +31,12 @@ const (
 	StatusNotApplicable CheckStatus = "not_applicable"
 )
 
+// CheckStatuses is the complete declared value set, for exhaustiveness
+// guards over the observation bridges (kept adjacent to the const block).
+var CheckStatuses = []CheckStatus{
+	StatusSupported, StatusUnsupported, StatusPartial, StatusError, StatusNotApplicable,
+}
+
 // Result is the outcome of a single check against a host.
 type Result struct {
 	// Status is the check outcome. One of the CheckStatus constants.

@@ -164,7 +164,10 @@ func ComputeCommit(in *CommitInput, cfg *CommitConfig) (*commitUnit, error) {
 		if !counting {
 			continue // record-only scan
 		}
-		val := domain.IPv6Status(o)
+		val, confirmable := o.Confirmed()
+		if !confirmable { // unreachable after the partial/definitive gates above
+			return nil, fmt.Errorf("commit defect: non-confirmable observation %s on %s", o, d)
+		}
 		switch {
 		case w.status == nil: // BOOTSTRAP: commits immediately, NO changelog
 			w.status = &val
