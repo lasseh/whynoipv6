@@ -64,6 +64,25 @@ type AAAADetail struct {
 	TTL          *int        `json:"ttl,omitempty"` // present iff addresses are
 }
 
+// ExplicitlyUnresolvable reports the 03 §4 branch-(b) dead evidence this
+// payload owns: all three providers answered an explicit SERVFAIL/REFUSED
+// and the CD=1 rescue also failed. Timeouts (empty rcode) never count; a
+// degraded 2-of-2 fan-out can never satisfy it.
+func (d *AAAADetail) ExplicitlyUnresolvable() bool {
+	if d.CDOutcome != CDOutcomeFail {
+		return false
+	}
+	if d.Quorum == nil || len(d.Quorum.Rcodes) != 3 {
+		return false
+	}
+	for _, rc := range d.Quorum.Rcodes {
+		if rc != RcodeServfail && rc != RcodeRefused {
+			return false
+		}
+	}
+	return true
+}
+
 // NSHost is one nameserver's AAAA evidence inside NSDetail.
 type NSHost struct {
 	HasIPv6   bool     `json:"has_ipv6"`

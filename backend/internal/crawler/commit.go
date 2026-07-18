@@ -389,43 +389,21 @@ func (c *Committer) Commit(ctx context.Context, in *CommitInput) (CommitResult, 
 	return CommitResult{Transitions: u.transitions, Bootstraps: u.bootstraps}, nil
 }
 
-// Dead-signal evidence tokens (03 §4).
-const (
-	rcodeNXDomain = "NXDOMAIN"
-	cdFail        = "cd_fail"
-	rcServfail    = "SERVFAIL"
-	rcRefused     = "REFUSED"
-)
-
 // Unresolvable computes the dead signal U from raw engine/consensus
 // evidence (03 §4): (a) apex AAAA quorum NXDOMAIN with no delegated zone
-// found by the NS walk-up, or (b) all 3 providers answering explicit
-// SERVFAIL/REFUSED with the CD=1 re-query also failing (cd_fail). Timeouts
-// never count; a 2-of-2 degraded fan-out can never satisfy branch (b).
+// found by the NS walk-up, or (b) the base payload's explicit
+// all-SERVFAIL/REFUSED + failed CD=1 rescue verdict, owned by
+// checker.AAAADetail.ExplicitlyUnresolvable.
 func Unresolvable(sr checker.ScanResult) bool {
 	_, base, ok := sr.AAAABase()
 	if !ok {
 		return false
 	}
-
 	// Branch (a): NXDOMAIN + no delegated zone for the host.
-	if base.Rcode == rcodeNXDomain && !nsZoneFound(sr) {
+	if base.Rcode == checker.RcodeNXDomain && !nsZoneFound(sr) {
 		return true
 	}
-
-	// Branch (b): explicit all-SERVFAIL/REFUSED + cd_fail.
-	if base.CDOutcome != cdFail {
-		return false
-	}
-	if base.Quorum == nil || len(base.Quorum.Rcodes) != 3 {
-		return false // degraded 2-of-2: dead detection requires all 3
-	}
-	for _, rc := range base.Quorum.Rcodes {
-		if rc != rcServfail && rc != rcRefused {
-			return false // a timeout/transport non-answer disqualifies
-		}
-	}
-	return true
+	return base.ExplicitlyUnresolvable()
 }
 
 // nsZoneFound reads the NS walk-up evidence from the raw result (03 §4):

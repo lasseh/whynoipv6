@@ -50,7 +50,7 @@ func (c *DNSAAAABase) Check(ctx context.Context, host string, _ Kind) (Result, e
 	// NXDOMAIN: raw engine status stays not_applicable with the raw rcode
 	// preserved — the observation layer maps base NXDOMAIN to no_record;
 	// dead-detection requires NXDOMAIN specifically (02/03).
-	if ans.Rcode == "NXDOMAIN" {
+	if ans.Rcode == RcodeNXDomain {
 		d.Reason = "domain does not exist"
 		return Result{Status: StatusNotApplicable, Detail: d, Latency: time.Since(start)}, nil
 	}

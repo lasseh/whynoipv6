@@ -22,13 +22,6 @@ import (
 // (03 §14.2); shared with the crawler's buildDetails serialization.
 const ConnKey = "conn"
 
-// Conditional-A outcome tokens (02 §2.7 — mirrored from internal/consensus).
-const (
-	aPresent = "a_present"
-	aAbsent  = "a_absent"
-	aError   = "a_error"
-)
-
 // error_type wire tokens (01-engine.md §11.7 — the conn table keys off them).
 const (
 	errTypeConnRefused = "connection_refused"
@@ -147,14 +140,14 @@ func mapAAAA(st checker.CheckStatus, d *checker.AAAADetail, www bool) domain.Obs
 		return domain.ObsNoRecord
 	case checker.StatusUnsupported: // quorum empty → by a_outcome
 		switch d.AOutcome {
-		case aPresent:
+		case checker.AOutcomePresent:
 			return domain.ObsUnsupported
-		case aAbsent:
+		case checker.AOutcomeAbsent:
 			if www {
 				return domain.ObsNotApplicable
 			}
 			return domain.ObsNoRecord
-		case aError:
+		case checker.AOutcomeError:
 			return domain.ObsError
 		default:
 			slog.Warn("a_outcome missing", "check_status", st)

@@ -22,10 +22,6 @@ const (
 // sweepOutcome is one host's mapped lookup result; empty = non-definitive.
 type sweepOutcome string
 
-// rcodeNoError complements commit.go's rcodeNXDomain (both mirror
-// internal/consensus).
-const rcodeNoError = "NOERROR"
-
 // ResourceSweeper is the per-process resource-host sweep goroutine
 // (06 §5.2–§5.4). Runs in every crawler process; SKIP LOCKED makes the
 // concurrency safe without singleton gating. Not started while
@@ -98,9 +94,9 @@ func (s *ResourceSweeper) lookup(ctx context.Context, host string) sweepOutcome 
 		return "" // timeout / network error → non-definitive
 	}
 	switch rcode {
-	case rcodeNXDomain:
+	case checker.RcodeNXDomain:
 		return sweepOutcome(domain.StatusNoRecord)
-	case rcodeNoError:
+	case checker.RcodeNoError:
 		for _, ip := range ips {
 			if checker.IsGloballyRoutableIPv6(ip) {
 				return sweepOutcome(domain.StatusSupported)
