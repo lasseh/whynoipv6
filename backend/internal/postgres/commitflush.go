@@ -36,6 +36,9 @@ func FlushCommit(ctx context.Context, pool *pgxpool.Pool, u *CommitUnit) (leaseL
 	}
 	queueParams(batch, db.InsertScan, u.Scan)
 	queueParams(batch, db.InsertScanDetail, u.Detail)
+	// The two CTE statements bind positionally: their args are pairwise
+	// distinct types (text, bigint, timestamptz), so unlike the 50-column
+	// commit a transposition fails at execution, not silently.
 	for _, host := range u.Resources {
 		batch.Queue(db.EnsureResourceHost, host)
 		batch.Queue(SQLUpsertDomainResource, host, u.Domain.DomainID, u.Domain.Ts)

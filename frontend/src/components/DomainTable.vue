@@ -53,7 +53,7 @@ const hoverIndex = ref<number | null>(null)
             </div>
             <div class="font-semibold text-center md:hidden">MX</div>
           </th>
-          <th class="px-5 py-3 whitespace-nowrap">
+          <th class="px-2 py-3 whitespace-nowrap">
             <div class="font-semibold text-center md:block hidden">
               <Tooltip text="Query NS record for domain.com">Nameserver</Tooltip>
             </div>

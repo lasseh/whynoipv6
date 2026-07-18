@@ -154,8 +154,8 @@ func mapAAAA(st checker.CheckStatus, d *checker.AAAADetail, www bool) domain.Obs
 			return domain.ObsError
 		}
 	default:
-		// Includes the unreachable AAAA partial; obsFromStatus warns on
-		// values outside the declared set.
+		// Includes the unreachable AAAA partial; the defensive default
+		// warns and defers the dimension.
 		return obsFromStatusDefensive(st)
 	}
 }

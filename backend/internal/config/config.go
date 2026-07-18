@@ -100,34 +100,34 @@ func parseLevel(s string) (slog.Level, error) {
 	}
 }
 
-// know panics on a key outside the registry: every read happens once
+// mustKnow panics on a key outside the registry: every read happens once
 // during startup wiring, so a typo'd key must fail fast there instead of
 // resolving to a silent zero value.
-func (c *Config) know(key string) {
+func (c *Config) mustKnow(key string) {
 	if _, ok := c.registry[key]; !ok {
 		panic(fmt.Sprintf("config: unregistered key %q", key))
 	}
 }
 
 // String returns the value of a registry key.
-func (c *Config) String(key string) string { c.know(key); return c.v.GetString(key) }
+func (c *Config) String(key string) string { c.mustKnow(key); return c.v.GetString(key) }
 
 // Int returns the value of a registry key.
-func (c *Config) Int(key string) int { c.know(key); return c.v.GetInt(key) }
+func (c *Config) Int(key string) int { c.mustKnow(key); return c.v.GetInt(key) }
 
 // Bool returns the value of a registry key.
-func (c *Config) Bool(key string) bool { c.know(key); return c.v.GetBool(key) }
+func (c *Config) Bool(key string) bool { c.mustKnow(key); return c.v.GetBool(key) }
 
 // Float returns the value of a registry key.
-func (c *Config) Float(key string) float64 { c.know(key); return c.v.GetFloat64(key) }
+func (c *Config) Float(key string) float64 { c.mustKnow(key); return c.v.GetFloat64(key) }
 
 // Duration returns the value of a registry key.
-func (c *Config) Duration(key string) time.Duration { c.know(key); return c.v.GetDuration(key) }
+func (c *Config) Duration(key string) time.Duration { c.mustKnow(key); return c.v.GetDuration(key) }
 
 // StringSlice returns the value of a list registry key; env overrides are
 // comma-separated (09-ops.md §1).
 func (c *Config) StringSlice(key string) []string {
-	c.know(key)
+	c.mustKnow(key)
 	if s := c.v.GetString(key); strings.Contains(s, ",") {
 		parts := strings.Split(s, ",")
 		for i := range parts {

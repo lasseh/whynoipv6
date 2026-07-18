@@ -25,8 +25,8 @@ export interface ChangelogParts {
   dotClass: string
 }
 
-// The dot depends only on new_value; the wording switch below owns only
-// the phrases.
+// The dot keys on new_value; the defensive conn/resources branches pin
+// not_applicable's zinc regardless of the (impossible) row value.
 const dotOf = (item: Pick<ChangelogItem, 'new_value'>) =>
   statusClass('changelogDot', item.new_value)
 
@@ -53,7 +53,10 @@ export function changelogParts(
           dotClass: dotOf(item),
         }
       default: // not_applicable — suppressed at write (03 §11); defensive only
-        return { phrase: 'has no IPv6 addresses left to test', dotClass: dotOf(item) }
+        return {
+          phrase: 'has no IPv6 addresses left to test',
+          dotClass: statusClass('changelogDot', 'not_applicable'),
+        }
     }
   }
   if (item.field === 'resources') {
@@ -63,7 +66,10 @@ export function changelogParts(
       case 'unsupported':
         return { phrase: 'loads some page resources without IPv6', dotClass: dotOf(item) }
       default: // not_applicable — suppressed at write (03 §11); defensive only
-        return { phrase: 'no longer has its page resources checked', dotClass: dotOf(item) }
+        return {
+          phrase: 'no longer has its page resources checked',
+          dotClass: statusClass('changelogDot', 'not_applicable'),
+        }
     }
   }
   const label = FIELD_LABELS[item.field]
