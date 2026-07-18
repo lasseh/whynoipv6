@@ -1,5 +1,14 @@
 # WhyNoIPv6 — docs
 
+## Start here
+
+- **[`architecture.md`](architecture.md)** — how the system fits together (components,
+  the crawl → confirm → publish pipeline, design decisions).
+- **[`deploy.md`](deploy.md)** — run it locally with Docker Compose, the full `v6ctl`
+  tool catalog, and the production layout (systemd, nginx, backups).
+- **[`internals.md`](internals.md)** — the codebase tour: package map, life of a scan,
+  DB layer, conventions, frontend structure.
+
 ## Authoritative: the build spec
 
 **[`spec/`](spec/)** is the single source of truth for the implementation. Start at
