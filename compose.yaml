@@ -62,6 +62,7 @@ services:
     environment:
       DATABASE_URL: postgres://whynoipv6:whynoipv6@db:5432/whynoipv6?sslmode=disable
       RESOLVER_BULK_UPSTREAMS: "unbound1:53,unbound2:53"
+      WORKER_SLOTS: "4"   # dev cap: full 64-slot fan-out overruns OrbStack's 16k UDP conntrack limit
       GEOIP_PATH: /var/lib/GeoIP
       LOG_LEVEL: debug
     volumes:
