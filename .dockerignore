@@ -1,0 +1,6 @@
+# Root-context builds (frontend/Dockerfile). The backend build uses its own
+# context (./backend) and is unaffected.
+.git
+frontend/node_modules
+frontend/dist
+frontend/*.tsbuildinfo

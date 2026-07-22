@@ -44,6 +44,17 @@ services:
     depends_on:
       migrate: {condition: service_completed_successfully}
 
+  # Built bundle served by nginx on :8081 (5173 stays free for local
+  # `npm run dev`, which hits the api container via .env.development).
+  # VITE_API_URL is baked at build time, so it must be the host-visible origin.
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args: {VITE_API_URL: "http://localhost:8080"}
+    ports: ["8081:80"]
+    depends_on: [api]
+
   # Init container: fetch the IPinfo Lite mmdb into the geoip volume before the
   # crawler starts. Runs as root to write the root-owned volume; the crawler
   # reads it :ro. Set IPINFO_TOKEN in a gitignored .env (free IPinfo token).
