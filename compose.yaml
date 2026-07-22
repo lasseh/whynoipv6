@@ -87,3 +87,10 @@ volumes:
   pgdata:
   datasets:
   geoip:
+
+# Docker networks are IPv4-only by default — without this the crawler's v6
+# preflight fails with "network is unreachable" even on a v6-enabled host.
+# Engine 27+ auto-allocates a ULA subnet and NAT66s outbound via ip6tables.
+networks:
+  default:
+    enable_ipv6: true
