@@ -5,7 +5,7 @@ services:
       POSTGRES_USER: whynoipv6
       POSTGRES_PASSWORD: whynoipv6
       POSTGRES_DB: whynoipv6
-    ports: ["5432:5432"]
+    ports: ["15432:5432"]   # 15432: the dev host runs a native postgres on 5432
     volumes: ["pgdata:/var/lib/postgresql"]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U whynoipv6"]
