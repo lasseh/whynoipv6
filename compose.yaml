@@ -1,6 +1,7 @@
 services:
   db:
     image: timescale/timescaledb:latest-pg18
+    shm_size: 256m   # docker's 64m default breaks parallel queries over the 1M-row domain table
     environment:
       POSTGRES_USER: whynoipv6
       POSTGRES_PASSWORD: whynoipv6
