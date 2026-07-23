@@ -52,7 +52,10 @@ services:
     build:
       context: .
       dockerfile: frontend/Dockerfile
-      args: {VITE_API_URL: "http://localhost:8080"}
+      # Host-visible API origin baked into the bundle. Laptop default hits the
+      # published api port; the dev host exports FRONTEND_API_URL (in
+      # ~/.zshenv) so the bundle targets the nginx-fronted public API.
+      args: {VITE_API_URL: "${FRONTEND_API_URL:-http://localhost:8080}"}
     ports: ["8081:80"]
     depends_on: [api]
 
