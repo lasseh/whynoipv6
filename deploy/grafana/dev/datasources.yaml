@@ -1,0 +1,19 @@
+# Dev-compose Grafana datasource: the stack's Postgres/Timescale. The uid is
+# load-bearing — deploy/grafana/alerts.yaml provisions rules against
+# `whynoipv6-pg` (09-ops.md §12).
+apiVersion: 1
+datasources:
+  - name: WhyNoIPv6 Postgres
+    uid: whynoipv6-pg
+    type: postgres
+    access: proxy
+    url: db:5432
+    user: whynoipv6
+    secureJsonData:
+      password: whynoipv6
+    jsonData:
+      database: whynoipv6
+      sslmode: disable
+      timescaledb: true
+    isDefault: true
+    editable: false

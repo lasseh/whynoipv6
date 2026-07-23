@@ -1,0 +1,118 @@
+{
+  "uid": "wni6-crawler",
+  "title": "WhyNoIPv6 — Crawler & Backend",
+  "tags": ["whynoipv6", "crawler"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "refresh": "1m",
+  "time": {"from": "now-24h", "to": "now"},
+  "panels": [
+    {
+      "type": "stat", "title": "Queue depth", "gridPos": {"x": 0, "y": 0, "w": 4, "h": 4},
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "table",
+        "rawSql": "SELECT queue_depth FROM crawler_metrics WHERE queue_depth IS NOT NULL ORDER BY ts DESC LIMIT 1"}],
+      "fieldConfig": {"defaults": {"unit": "short", "thresholds": {"mode": "absolute", "steps": [{"value": null, "color": "green"}, {"value": 50000, "color": "yellow"}, {"value": 200000, "color": "red"}]}}, "overrides": []}
+    },
+    {
+      "type": "stat", "title": "Active slots", "gridPos": {"x": 4, "y": 0, "w": 4, "h": 4},
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "table",
+        "rawSql": "SELECT coalesce(sum(active_slots),0) AS slots FROM (SELECT DISTINCT ON (worker) active_slots FROM crawler_metrics ORDER BY worker, ts DESC) s"}],
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []}
+    },
+    {
+      "type": "stat", "title": "Processed (24h)", "gridPos": {"x": 8, "y": 0, "w": 4, "h": 4},
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "table",
+        "rawSql": "SELECT coalesce(sum(processed),0) AS processed FROM crawler_metrics WHERE ts > now() - interval '24 hours'"}],
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []}
+    },
+    {
+      "type": "stat", "title": "Failure ratio (1h)", "gridPos": {"x": 12, "y": 0, "w": 4, "h": 4},
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "table",
+        "rawSql": "SELECT coalesce(sum(failed)::float / nullif(sum(processed),0), 0) AS ratio FROM crawler_metrics WHERE ts > now() - interval '1 hour'"}],
+      "fieldConfig": {"defaults": {"unit": "percentunit", "thresholds": {"mode": "absolute", "steps": [{"value": null, "color": "green"}, {"value": 0.1, "color": "yellow"}, {"value": 0.2, "color": "red"}]}}, "overrides": []}
+    },
+    {
+      "type": "stat", "title": "Domains classified", "gridPos": {"x": 16, "y": 0, "w": 4, "h": 4},
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "table",
+        "rawSql": "SELECT count(*) AS classified FROM domain WHERE last_checked_at IS NOT NULL"}],
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []}
+    },
+    {
+      "type": "stat", "title": "Changelog rows (7d)", "gridPos": {"x": 20, "y": 0, "w": 4, "h": 4},
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "table",
+        "rawSql": "SELECT count(*) AS changes FROM changelog WHERE ts > now() - interval '7 days'"}],
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []}
+    },
+    {
+      "type": "timeseries", "title": "Crawl throughput (per 5m)", "gridPos": {"x": 0, "y": 4, "w": 12, "h": 8},
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "time_series",
+        "rawSql": "SELECT $__timeGroup(ts, '5m') AS time, sum(processed) AS processed, sum(failed) AS failed FROM crawler_metrics WHERE $__timeFilter(ts) GROUP BY 1 ORDER BY 1"}],
+      "fieldConfig": {"defaults": {"unit": "short", "custom": {"drawStyle": "line", "fillOpacity": 10}}, "overrides": [{"matcher": {"id": "byName", "options": "failed"}, "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "red"}}]}]}
+    },
+    {
+      "type": "timeseries", "title": "Scan latency", "gridPos": {"x": 12, "y": 4, "w": 12, "h": 8},
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "time_series",
+        "rawSql": "SELECT $__timeGroup(ts, '5m') AS time, avg(p50_ms) AS p50, max(p99_ms) AS p99 FROM crawler_metrics WHERE $__timeFilter(ts) GROUP BY 1 ORDER BY 1"}],
+      "fieldConfig": {"defaults": {"unit": "ms", "custom": {"drawStyle": "line", "fillOpacity": 10}}, "overrides": []}
+    },
+    {
+      "type": "timeseries", "title": "Queue depth over time", "gridPos": {"x": 0, "y": 12, "w": 12, "h": 8},
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "time_series",
+        "rawSql": "SELECT $__timeGroup(ts, '5m') AS time, max(queue_depth) AS queue_depth FROM crawler_metrics WHERE $__timeFilter(ts) AND queue_depth IS NOT NULL GROUP BY 1 ORDER BY 1"}],
+      "fieldConfig": {"defaults": {"unit": "short", "custom": {"drawStyle": "line", "fillOpacity": 10}}, "overrides": []}
+    },
+    {
+      "type": "table", "title": "Classification breakdown", "gridPos": {"x": 12, "y": 12, "w": 6, "h": 8},
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "table",
+        "rawSql": "SELECT classification::text, count(*) AS domains FROM domain WHERE last_checked_at IS NOT NULL GROUP BY 1 ORDER BY 2 DESC"}],
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []}
+    },
+    {
+      "type": "table", "title": "Tranco imports", "gridPos": {"x": 18, "y": 12, "w": 6, "h": 8},
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "table",
+        "rawSql": "SELECT imported_at, list_id, line_count, imported_count, delisted, aborted, note FROM tranco_import ORDER BY imported_at DESC LIMIT 10"}],
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []}
+    },
+    {
+      "type": "timeseries", "title": "Unbound queries (per 5m)", "gridPos": {"x": 0, "y": 20, "w": 8, "h": 8},
+      "description": "Empty in dev unless the unbound-stats scraper runs (v6ctl ops unbound-stats; needs unbound remote-control).",
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "time_series",
+        "rawSql": "SELECT $__timeGroup(ts, '5m') AS time, host AS metric, sum(num_queries) AS queries FROM unbound_stats WHERE $__timeFilter(ts) GROUP BY 1, 2 ORDER BY 1"}],
+      "fieldConfig": {"defaults": {"unit": "short", "custom": {"drawStyle": "line", "fillOpacity": 10}}, "overrides": []}
+    },
+    {
+      "type": "timeseries", "title": "Unbound cache hit ratio", "gridPos": {"x": 8, "y": 20, "w": 8, "h": 8},
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "time_series",
+        "rawSql": "SELECT $__timeGroup(ts, '5m') AS time, host AS metric, sum(cache_hits)::float / nullif(sum(cache_hits) + sum(cache_miss), 0) AS hit_ratio FROM unbound_stats WHERE $__timeFilter(ts) GROUP BY 1, 2 ORDER BY 1"}],
+      "fieldConfig": {"defaults": {"unit": "percentunit", "max": 1, "custom": {"drawStyle": "line", "fillOpacity": 10}}, "overrides": []}
+    },
+    {
+      "type": "timeseries", "title": "Unbound SERVFAIL / NXDOMAIN (per 5m)", "gridPos": {"x": 16, "y": 20, "w": 8, "h": 8},
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "time_series",
+        "rawSql": "SELECT $__timeGroup(ts, '5m') AS time, sum(rcode_servfail) AS servfail, sum(rcode_nxdomain) AS nxdomain FROM unbound_stats WHERE $__timeFilter(ts) GROUP BY 1 ORDER BY 1"}],
+      "fieldConfig": {"defaults": {"unit": "short", "custom": {"drawStyle": "line", "fillOpacity": 10}}, "overrides": []}
+    },
+    {
+      "type": "timeseries", "title": "Global classification over time (daily stats)", "gridPos": {"x": 0, "y": 28, "w": 24, "h": 8},
+      "description": "Populated by the daily stats snapshot (v6ctl stats recalc / daily tick).",
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "time_series",
+        "rawSql": "SELECT day::timestamptz AS time, heroes, saints, partial, sinners, inactive FROM stats_global_daily WHERE $__timeFilter(day::timestamptz) ORDER BY 1"}],
+      "fieldConfig": {"defaults": {"unit": "short", "custom": {"drawStyle": "line", "fillOpacity": 10}}, "overrides": []}
+    }
+  ]
+}

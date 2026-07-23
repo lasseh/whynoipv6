@@ -87,10 +87,29 @@ services:
       migrate: {condition: service_completed_successfully}
       geoip-init: {condition: service_completed_successfully}
 
+  # Dashboards + alert rules A1–A5 provisioned from deploy/grafana (09-ops §12).
+  # Loopback-only publish: reach it via ssh -L 3000:localhost:3000 on the server.
+  grafana:
+    image: grafana/grafana:latest
+    ports: ["127.0.0.1:3000:3000"]
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - "./deploy/grafana/dev/datasources.yaml:/etc/grafana/provisioning/datasources/whynoipv6.yaml:ro"
+      - "./deploy/grafana/dev/dashboards.yaml:/etc/grafana/provisioning/dashboards/whynoipv6.yaml:ro"
+      - "./deploy/grafana/dev/dashboards:/var/lib/grafana/dashboards:ro"
+      - "./deploy/grafana/alerts.yaml:/etc/grafana/provisioning/alerting/whynoipv6.yaml:ro"
+      - "grafana:/var/lib/grafana"
+    depends_on:
+      db: {condition: service_healthy}
+
 volumes:
   pgdata:
   datasets:
   geoip:
+  grafana:
 
 # Docker networks are IPv4-only by default — without this the crawler's v6
 # preflight fails with "network is unreachable" even on a v6-enabled host.
