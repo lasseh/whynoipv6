@@ -79,6 +79,9 @@ services:
   crawler:
     build: {context: ./backend, dockerfile: Dockerfile}
     entrypoint: ["/crawler"]
+    # Prod shape is 2 processes (00-overview CRAWLER_PROCS); the dev host
+    # exports CRAWLER_REPLICAS=2, laptops default to 1.
+    scale: ${CRAWLER_REPLICAS:-1}
     environment:
       DATABASE_URL: postgres://whynoipv6:whynoipv6@db:5432/whynoipv6?sslmode=disable
       RESOLVER_BULK_UPSTREAMS: "unbound1:53,unbound2:53"
