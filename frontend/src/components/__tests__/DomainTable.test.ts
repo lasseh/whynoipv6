@@ -49,8 +49,8 @@ describe('table empty state vs loading', () => {
   })
 })
 
-// One table module, two surfaces: the leaderboard mode carries Rank and
-// IPv6 Only; campaign mode drops both and highlights the server's
+// One table module, two surfaces: both carry IPv6 Only; the leaderboard
+// mode adds Rank; campaign mode drops Rank and highlights the server's
 // v6_ready rows (never re-derived client-side).
 describe('leaderboard vs campaign surface', () => {
   it('leaderboard mode renders Rank and IPv6 Only columns', () => {
@@ -63,7 +63,7 @@ describe('leaderboard vs campaign surface', () => {
     expect(wrapper.text()).toContain('42')
   })
 
-  it('campaign mode drops Rank / IPv6 Only and highlights v6_ready rows', () => {
+  it('campaign mode drops Rank, keeps IPv6 Only, highlights v6_ready rows', () => {
     const wrapper = mount(DomainTable, {
       props: {
         domains: [
@@ -75,7 +75,7 @@ describe('leaderboard vs campaign surface', () => {
       global: { stubs },
     })
     expect(wrapper.text()).not.toContain('Rank')
-    expect(wrapper.text()).not.toContain('IPv6 Only')
+    expect(wrapper.text()).toContain('IPv6 Only')
     const rows = wrapper.findAll('tbody tr')
     expect(rows).toHaveLength(2)
     expect(rows[0]?.classes()).toContain('bg-emerald-900/50')

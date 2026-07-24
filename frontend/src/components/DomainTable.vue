@@ -5,11 +5,11 @@ import StatusIcon from '@/components/StatusIcon.vue'
 import Tooltip from '@/components/Tooltip.vue'
 
 // The one domain-table module (§4.2 list row): columns Apex/WWW/E-Mail/
-// Nameserver map to status.base/www/mx/ns.value (§7.1). Two surfaces share
-// it — leaderboards (rank badge, hidden on null and never 0 (§7.3), the
-// IPv6 Only column, DomainDetail links) and campaign members
+// Nameserver/IPv6 Only map to status.base/www/mx/ns.value and ipv6_only
+// (§7.1). Two surfaces share it — leaderboards (rank badge, hidden on null
+// and never 0 (§7.3), DomainDetail links) and campaign members
 // (`campaignUuid` set: member links, the server's v6_ready row highlight
-// (07 §4.7 — never re-derived here), no Rank / IPv6 Only columns).
+// (07 §4.7 — never re-derived here), no Rank column).
 // `loading` suppresses the empty state so it can't flash before the first
 // page arrives.
 withDefaults(
@@ -59,7 +59,7 @@ const hoverIndex = ref<number | null>(null)
             </div>
             <div class="font-semibold text-center md:hidden">NS</div>
           </th>
-          <th v-if="!campaignUuid" class="px-5 py-3 whitespace-nowrap">
+          <th class="px-5 py-3 whitespace-nowrap">
             <div class="font-semibold text-center md:block hidden">
               <Tooltip text="Loads fully over an IPv6-only connection (site + page resources)"
                 >IPv6 Only</Tooltip
@@ -129,7 +129,7 @@ const hoverIndex = ref<number | null>(null)
               <StatusIcon :value="domain.status.ns.value" />
             </div>
           </td>
-          <td v-if="!campaignUuid" class="px-2 py-3 whitespace-nowrap w-px md:w-[10%] text-center">
+          <td class="px-2 py-3 whitespace-nowrap w-px md:w-[10%] text-center">
             <div class="inline-flex px-2.5 py-1">
               <StatusIcon :value="domain.ipv6_only" />
             </div>
