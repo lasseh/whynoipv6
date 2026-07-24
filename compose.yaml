@@ -14,14 +14,19 @@ services:
       timeout: 5s
       retries: 10
 
+  # UNBOUND_DEV_PROFILE picks the config dir: "dev" (default, fan-out capped
+  # for OrbStack laptops) or "dev-fast" (prod fan-out; the dev host
+  # exports it in ~/.zshenv).
   unbound1:
     image: mvance/unbound:latest
-    volumes: ["./deploy/unbound/dev/unbound1.conf:/opt/unbound/etc/unbound/unbound.conf:ro"]
+    volumes:
+      ["./deploy/unbound/${UNBOUND_DEV_PROFILE:-dev}/unbound1.conf:/opt/unbound/etc/unbound/unbound.conf:ro"]
     ports: ["5301:53/udp", "5301:53/tcp"]
 
   unbound2:
     image: mvance/unbound:latest
-    volumes: ["./deploy/unbound/dev/unbound2.conf:/opt/unbound/etc/unbound/unbound.conf:ro"]
+    volumes:
+      ["./deploy/unbound/${UNBOUND_DEV_PROFILE:-dev}/unbound2.conf:/opt/unbound/etc/unbound/unbound.conf:ro"]
     ports: ["5302:53/udp", "5302:53/tcp"]
 
   migrate:
