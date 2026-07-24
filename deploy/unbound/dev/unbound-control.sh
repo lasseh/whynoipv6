@@ -8,4 +8,6 @@ case "$2" in
   8954) host=unbound2 ;;
   *)    host=unbound1 ;;
 esac
-exec unbound-control -c /etc/unbound/control-client.conf -s "${host}@8953" "$3"
+# unbound-control -s takes an IP, not a hostname — resolve the service name.
+ip="$(getent hosts "$host" | awk '{print $1; exit}')"
+exec unbound-control -c /etc/unbound/control-client.conf -s "${ip}@8953" "$3"
