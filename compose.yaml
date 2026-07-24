@@ -87,6 +87,23 @@ services:
       migrate: {condition: service_completed_successfully}
       geoip-init: {condition: service_completed_successfully}
 
+  # Scrapes `unbound-control stats` from both resolvers into unbound_stats
+  # every 60s (feeds the Grafana panels and keeps alert A5 quiet). The prod
+  # convention is a same-host timer; this sidecar maps ports 8953/8954 to the
+  # two containers via unbound-control-compose.
+  unbound-stats:
+    build:
+      context: .
+      dockerfile: deploy/unbound/dev/stats-scraper.Dockerfile
+    hostname: unbound-stats
+    environment:
+      DATABASE_URL: postgres://whynoipv6:whynoipv6@db:5432/whynoipv6?sslmode=disable
+      UNBOUND_STATS_CONTROL: /usr/local/bin/unbound-control-compose
+    depends_on:
+      db: {condition: service_healthy}
+      unbound1: {condition: service_started}
+      unbound2: {condition: service_started}
+
   # Dashboards + alert rules A1–A5 provisioned from deploy/grafana (09-ops §12).
   # Loopback-only publish: reach it via ssh -L 3000:localhost:3000 on the server.
   grafana:

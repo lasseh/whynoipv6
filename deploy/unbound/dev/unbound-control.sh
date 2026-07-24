@@ -1,12 +1,11 @@
 #!/bin/sh
-# unbound_stats.control shim for the dev compose stack. `v6ctl ops
-# unbound-stats` invokes `<control> -p 8953|8954 stats` (the prod
-# same-host convention, 09-ops §8); here each port maps to one unbound
-# container and unbound-control runs inside it over the loopback,
-# certless control socket.
-dir="$(cd "$(dirname "$0")/../../.." && pwd)"
+# unbound_stats.control shim for the dev-compose scraper sidecar. `v6ctl ops
+# unbound-stats` invokes `<control> -p 8953|8954 stats` (the prod same-host
+# convention, 09-ops §8); here each port maps to one unbound container,
+# reached over the compose network on the default control port with the
+# certless client config.
 case "$2" in
-  8954) svc=unbound2 ;;
-  *)    svc=unbound1 ;;
+  8954) host=unbound2 ;;
+  *)    host=unbound1 ;;
 esac
-exec docker compose --project-directory "$dir" exec -T "$svc" unbound-control "$3"
+exec unbound-control -c /etc/unbound/control-client.conf -s "${host}@8953" "$3"
