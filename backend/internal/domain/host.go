@@ -81,14 +81,3 @@ func TLD(canonical string) string {
 		return suffix
 	}
 }
-
-// ETLDPlusOne returns the registrable domain (eTLD+1, pay-level domain) of a
-// canonical host — the Tranco unit and the parent of a campaign subdomain
-// (06-ingest.md §3.4).
-func ETLDPlusOne(canonical string) (string, error) {
-	apex, err := publicsuffix.EffectiveTLDPlusOne(canonical)
-	if err != nil {
-		return "", fmt.Errorf("%w: %q: %w", ErrInvalidHost, canonical, err)
-	}
-	return apex, nil
-}

@@ -1,7 +1,12 @@
+// Package domain is the shared vocabulary of the module: the pure enum types
+// mirroring the DB enums (03-state-machine.md §16; 05-schema.md §3), the one
+// Observation→IPv6Status bridge with the Definitive/ConfirmN anti-flap
+// thresholds (00-overview.md §6; 03 §2), the deterministic classification
+// ladder, saint rule and IPv6-only fold (03 §10; ADR 0002), and the PSL/IDNA
+// host canonicalization every DB write and lookup passes through
+// (06-ingest.md §1). It imports no other internal/ package; golang.org/x/net
+// (idna, publicsuffix) is its only non-stdlib dependency.
 package domain
-
-// Pure enum types mirroring the DB enums (03-state-machine.md §16;
-// 05-schema.md §3). This package has zero non-stdlib deps.
 
 // Dimension is one measured facet of a domain's IPv6 posture (core six).
 type Dimension string

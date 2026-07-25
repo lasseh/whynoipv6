@@ -9,7 +9,6 @@ package main
 
 import (
 	"fmt"
-	"os"
 	"sort"
 	"sync"
 	"time"
@@ -114,5 +113,3 @@ func pct(lat []float64, p int) float64 {
 	}
 	return s[idx]
 }
-
-var _ = os.Exit

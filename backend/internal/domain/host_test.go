@@ -84,39 +84,21 @@ func TestCanonicalize(t *testing.T) {
 }
 
 func TestTLD(t *testing.T) {
-	cases := []struct{ host, want string }{
-		{"dnb.no", "no"},
-		{"example.com", "com"},
-		{"bbc.co.uk", "co.uk"},   // multi-label registry suffix
-		{"www.gov.uk", "gov.uk"}, // multi-label registry suffix
-		{"usa.gov", "gov"},
-		{"foo.blogspot.com", "com"}, // private-registry suffix walks up to ICANN
-		{"xn--mre-qla.no", "no"},
+	cases := []struct{ name, host, want string }{
+		{"cctld", "dnb.no", "no"},
+		{"gtld", "example.com", "com"},
+		{"multi_label_registry", "bbc.co.uk", "co.uk"},
+		{"multi_label_registry_subdomain", "www.gov.uk", "gov.uk"},
+		{"sponsored_tld", "usa.gov", "gov"},
+		{"private_registry_walks_up", "foo.blogspot.com", "com"},
+		{"punycode", "xn--mre-qla.no", "no"},
 	}
 	for _, tc := range cases {
-		if got := TLD(tc.host); got != tc.want {
-			t.Errorf("TLD(%q) = %q, want %q", tc.host, got, tc.want)
-		}
-	}
-}
-
-func TestETLDPlusOne(t *testing.T) {
-	cases := []struct{ host, want string }{
-		{"www.bbc.co.uk", "bbc.co.uk"},
-		{"api.dnb.no", "dnb.no"},
-		{"dnb.no", "dnb.no"},
-	}
-	for _, tc := range cases {
-		got, err := ETLDPlusOne(tc.host)
-		if err != nil {
-			t.Fatalf("ETLDPlusOne(%q) error: %v", tc.host, err)
-		}
-		if got != tc.want {
-			t.Errorf("ETLDPlusOne(%q) = %q, want %q", tc.host, got, tc.want)
-		}
-	}
-	if _, err := ETLDPlusOne("co.uk"); err == nil {
-		t.Error("ETLDPlusOne(co.uk) should fail (bare public suffix)")
+		t.Run(tc.name, func(t *testing.T) {
+			if got := TLD(tc.host); got != tc.want {
+				t.Errorf("TLD(%q) = %q, want %q", tc.host, got, tc.want)
+			}
+		})
 	}
 }
 

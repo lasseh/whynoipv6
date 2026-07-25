@@ -251,8 +251,10 @@ func TestV6Ready(t *testing.T) {
 		{"NULL www strict", &sup, &sup, nil, false},
 	}
 	for _, tc := range cases {
-		if got := V6Ready(tc.base, tc.ns, tc.www); got != tc.want {
-			t.Errorf("%s: V6Ready = %t, want %t", tc.name, got, tc.want)
-		}
+		t.Run(tc.name, func(t *testing.T) {
+			if got := V6Ready(tc.base, tc.ns, tc.www); got != tc.want {
+				t.Errorf("V6Ready = %t, want %t", got, tc.want)
+			}
+		})
 	}
 }

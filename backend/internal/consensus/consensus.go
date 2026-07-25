@@ -21,8 +21,14 @@ import (
 	"github.com/lasseh/whynoipv6/internal/checker"
 )
 
-// providerQuad9 names the third pinned provider (referenced in tests/metrics).
-const providerQuad9 = "quad9"
+// The three pinned provider names (§2.2). They are the identity of a provider
+// everywhere it is reported: breaker state, per-provider metrics, disagreement
+// counts and log attrs all key off these exact strings.
+const (
+	providerCloudflare = "cloudflare"
+	providerGoogle     = "google"
+	providerQuad9      = "quad9"
+)
 
 // providerDef is one pinned public resolver network (§2.2 — not config).
 type providerDef struct {
@@ -31,23 +37,21 @@ type providerDef struct {
 }
 
 var providerDefs = []providerDef{
-	{name: "cloudflare", upstreams: []string{"1.1.1.1:53", "[2606:4700:4700::1111]:53"}},
-	{name: "google", upstreams: []string{"8.8.8.8:53", "[2001:4860:4860::8888]:53"}},
+	{name: providerCloudflare, upstreams: []string{"1.1.1.1:53", "[2606:4700:4700::1111]:53"}},
+	{name: providerGoogle, upstreams: []string{"8.8.8.8:53", "[2001:4860:4860::8888]:53"}},
 	{name: providerQuad9, upstreams: []string{"9.9.9.9:53", "[2620:fe::fe]:53"}},
 }
 
 // Package constants (§2.3, §2.10 — deliberately not config).
 const (
-	perAttemptTimeout = 2 * time.Second // documentation constant; enforced via perProviderBudget
+	perAttemptTimeout = 2 * time.Second
 	canaryInterval    = 5 * time.Minute
 	canaryName        = "one.one.one.one"
 )
 
 // perProviderBudget is 2s × (1 attempt + 1 retry); a var only so tests can
 // shrink the timeout rows (§2.3 Decision).
-var perProviderBudget = 4 * time.Second
-
-var _ = perAttemptTimeout
+var perProviderBudget = 2 * perAttemptTimeout
 
 // Reduced per-resolver symbols and lookup-outcome tokens (§2.4, §2.7, §2.7b).
 const (

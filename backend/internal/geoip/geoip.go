@@ -85,7 +85,7 @@ func (r *Reader) load() error {
 func (r *Reader) MaybeReload() error {
 	info, err := os.Stat(filepath.Join(r.dir, liteFile))
 	if err != nil {
-		return err
+		return fmt.Errorf("geoip: %w", err)
 	}
 	if info.ModTime().UnixNano() == r.mtime.Load() {
 		return nil

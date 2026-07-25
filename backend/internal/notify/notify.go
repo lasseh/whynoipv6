@@ -44,7 +44,7 @@ func (c *Client) Webhook(ctx context.Context, msg string) {
 	body := strings.NewReader(`{"text":` + jsonString(msg) + `}`)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.WebhookURL, body)
 	if err != nil {
-		slog.Warn("ops webhook request build failed", "err", err.Error())
+		slog.Warn("notify request build failed", "channel", "ops webhook", "err", err.Error())
 		return
 	}
 	req.Header.Set("Content-Type", "application/json")
@@ -88,7 +88,7 @@ func (c *Client) PingTick(ctx context.Context) {
 func (c *Client) ping(ctx context.Context, url, what string) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, http.NoBody)
 	if err != nil {
-		slog.Warn(what+" request build failed", "err", err.Error())
+		slog.Warn("notify request build failed", "channel", what, "err", err.Error())
 		return
 	}
 	c.deliver(req, what)
@@ -99,12 +99,12 @@ func (c *Client) ping(ctx context.Context, url, what string) {
 func (c *Client) deliver(req *http.Request, what string) {
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
-		slog.Warn(what+" delivery failed", "err", redactURLs(err.Error(), req.URL.String()))
+		slog.Warn("notify delivery failed", "channel", what, "err", redactURLs(err.Error(), req.URL.String()))
 		return
 	}
 	_ = resp.Body.Close()
 	if resp.StatusCode >= 400 {
-		slog.Warn(what+" delivery failed", "status", resp.StatusCode)
+		slog.Warn("notify delivery failed", "channel", what, "status", resp.StatusCode)
 	}
 }
 

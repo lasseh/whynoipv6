@@ -369,7 +369,7 @@ func MapLiveResult(
 		string(domain.DimWWW):       status(o.WWW),
 		string(domain.DimNS):        status(o.NS),
 		string(domain.DimMX):        status(o.MX),
-		ConnKey:                     status(o.Conn),
+		string(domain.DimConn):      status(o.Conn),
 		string(domain.DimResources): status(o.Resources),
 		"tls":                       raw(needStatus(sr.Domain, checker.NameTLS, sr.TLS)),
 		"smtp":                      status(infoSMTP(needStatus(sr.Domain, checker.NameSMTP, sr.SMTP))),
@@ -480,11 +480,13 @@ func LiveLinks(ctx context.Context, pool *pgxpool.Pool, sr checker.ScanResult, e
 	}
 	// One set-based probe, not a per-host loop.
 	byHost := map[string]domain.IPv6Status{}
-	if rows, err := db.New(pool).ResourceHostStatuses(ctx, rawHosts); err == nil {
-		for _, row := range rows {
-			if row.AaaaStatus != nil {
-				byHost[row.Host] = domain.IPv6Status(*row.AaaaStatus)
-			}
+	rows, err := db.New(pool).ResourceHostStatuses(ctx, rawHosts)
+	if err != nil {
+		slog.Warn("resource host status read failed", "err", err.Error())
+	}
+	for _, row := range rows {
+		if row.AaaaStatus != nil {
+			byHost[row.Host] = domain.IPv6Status(*row.AaaaStatus)
 		}
 	}
 	return linksForHosts(rawHosts, byHost)
