@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import CrossIcon from '@/partials/icons/Cross.vue'
+import CrossIcon from '@/components/icons/Cross.vue'
 import { listShame } from '@/api'
 import type { ShameItem } from '@/api'
 

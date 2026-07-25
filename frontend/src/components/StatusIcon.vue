@@ -3,9 +3,9 @@ import { computed } from 'vue'
 import type { StatusValue } from '@/api'
 import { statusIcon, statusTextClass, statusTooltip } from '@/utils/status'
 import Tooltip from '@/components/Tooltip.vue'
-import CheckIcon from '@/partials/icons/Check.vue'
-import CrossIcon from '@/partials/icons/Cross.vue'
-import MinusIcon from '@/partials/icons/Minus.vue'
+import CheckIcon from '@/components/icons/Check.vue'
+import CrossIcon from '@/components/icons/Cross.vue'
+import MinusIcon from '@/components/icons/Minus.vue'
 
 const props = defineProps<{ value: StatusValue }>()
 

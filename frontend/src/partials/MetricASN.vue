@@ -2,8 +2,12 @@
 import { computed, onMounted, reactive, ref, toRefs } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
+import ApiError from '@/components/ApiError.vue'
+import SegmentedTabs from '@/components/SegmentedTabs.vue'
+
 import { listASNs } from '@/api'
 import type { ASN } from '@/api'
+import { ApiProblem } from '@/api/problem'
 
 // Sort toggle keeps the old ipv4/ipv6 tab vocabulary in the URL (?sort=),
 // mapped onto the API's count_total/count_v6 (§7.3). count_v4 is now served
@@ -13,24 +17,26 @@ const props = withDefaults(defineProps<{ query?: string }>(), { query: '' })
 const router = useRouter()
 const route = useRoute()
 const searchQuery = ref(props.query)
+const error = ref<ApiProblem | null>(null)
 const state = reactive({
-  isLoading: true,
   asnData: [] as ASN[],
+  isLoading: true,
 })
 const orderBy = computed(() => {
   const sort = route.query.sort
   return sort === 'ipv6' ? 'ipv6' : 'ipv4'
 })
 
-const { asnData } = toRefs(state)
+const { asnData, isLoading } = toRefs(state)
 
 async function getAsnData(order: string = 'ipv4') {
+  error.value = null
+  state.isLoading = true
   try {
-    state.isLoading = true
     const response = await listASNs({ sort: order === 'ipv6' ? 'count_v6' : 'count_total' })
     state.asnData = response.items
-  } catch (error) {
-    console.error('Failed to fetch ASN data:', error)
+  } catch (e) {
+    error.value = ApiProblem.from(e)
   } finally {
     state.isLoading = false
   }
@@ -39,37 +45,30 @@ async function getAsnData(order: string = 'ipv4') {
 async function getOrderedAsnData(order: string) {
   void getAsnData(order)
   // Update the route without adding history and without refreshing the page
-  router.replace({ query: { ...route.query, sort: order } }).catch((err) => {
-    console.error('Failed to update route:', err)
-  })
+  void router.replace({ query: { ...route.query, sort: order } })
 }
 
 // Search for ASN data
 async function searchAsn(query: string) {
   if (query.length < 2) {
-    console.error('Search query is too short.')
     return
   }
 
+  error.value = null
   state.asnData = []
+  state.isLoading = true
   listASNs({ q: query })
     .then((response) => {
       state.asnData = response.items
       // Update the URL with the search query
-      router.replace({ query: { ...route.query, q: query } }).catch((err) => {
-        console.error('Failed to update route:', err)
-      })
+      void router.replace({ query: { ...route.query, q: query } })
     })
-    .catch((error) => {
-      console.error('Failed to search ASN data:', error)
+    .catch((e) => {
+      error.value = ApiProblem.from(e)
     })
-}
-
-const tabClass = (orderType: string): string[] => {
-  return [
-    'btn border-zinc-700 hover:bg-zinc-800/20 rounded-none first:rounded-l last:rounded-r',
-    orderBy.value === orderType ? 'text-fuchsia-600 bg-zinc-500/20' : 'text-slate-300',
-  ]
+    .finally(() => {
+      state.isLoading = false
+    })
 }
 
 const barWidths = computed(() => (asn: ASN): [string, string] => {
@@ -184,53 +183,48 @@ onMounted(() => {
     </div>
 
     <!-- Filter Buttons -->
-    <div class="flex h-10 justify-end">
-      <button :class="tabClass('ipv4')" @click="getOrderedAsnData('ipv4')">IPv4</button>
-      <button :class="tabClass('ipv6')" @click="getOrderedAsnData('ipv6')">IPv6</button>
+    <div class="mb-4">
+      <SegmentedTabs
+        :options="[
+          { value: 'ipv4', label: 'IPv4' },
+          { value: 'ipv6', label: 'IPv6' },
+        ]"
+        :model-value="orderBy"
+        @update:model-value="getOrderedAsnData"
+      />
     </div>
 
-    <!-- Provider bars -->
-    <div v-for="asn in asnData" :key="asn.number">
-      <div class="flex justify-between mb-1">
-        <span class="text-base font-medium text-white">
-          {{ asn.name }}
-          <span class="text-xs font-medium text-gray-500 pl-2">AS{{ asn.number }}</span>
-        </span>
-      </div>
-      <div class="mb-1 flex h-3 overflow-hidden rounded text-xs">
-        <div
-          class="flex flex-col justify-center bg-emerald-600 text-black"
-          :style="{ width: barWidths(asn)[1] }"
-        ></div>
-        <div
-          class="flex flex-col justify-center bg-violet-950 text-black"
-          :style="{ width: barWidths(asn)[0] }"
-        ></div>
-      </div>
-      <div class="mb-3 flex items-center justify-between text-xs">
-        <div class="text-gray-400">{{ formatLargeNumber(asn.count_v6) }} Dual Stack</div>
-        <div class="text-gray-400">{{ formatLargeNumber(asn.count_v4) }} IPv4 Only</div>
-      </div>
-    </div>
+    <!-- Error state (§6.3) -->
+    <ApiError v-if="error" :problem="error" />
 
-    <div v-if="asnData.length === 0">
-      <div class="flex justify-between mb-1">
-        <span class="text-base font-medium text-white">
-          Not Found
-          <span class="text-xs font-medium text-gray-500 pl-2">AS404</span>
-        </span>
+    <template v-else>
+      <!-- Provider bars -->
+      <div v-for="asn in asnData" :key="asn.number">
+        <div class="flex justify-between mb-1">
+          <span class="text-base font-medium text-white">
+            {{ asn.name }}
+            <span class="text-xs font-medium text-gray-500 pl-2">AS{{ asn.number }}</span>
+          </span>
+        </div>
+        <div class="mb-1 flex h-3 overflow-hidden rounded text-xs">
+          <div
+            class="flex flex-col justify-center bg-emerald-600 text-black"
+            :style="{ width: barWidths(asn)[1] }"
+          ></div>
+          <div
+            class="flex flex-col justify-center bg-violet-950 text-black"
+            :style="{ width: barWidths(asn)[0] }"
+          ></div>
+        </div>
+        <div class="mb-3 flex items-center justify-between text-xs">
+          <div class="text-gray-400">{{ formatLargeNumber(asn.count_v6) }} Dual Stack</div>
+          <div class="text-gray-400">{{ formatLargeNumber(asn.count_v4) }} IPv4 Only</div>
+        </div>
       </div>
-      <div class="mb-1 flex h-3 overflow-hidden rounded text-xs">
-        <div
-          class="flex flex-col justify-center bg-emerald-600 text-black"
-          style="width: 100%"
-        ></div>
-        <div class="flex flex-col justify-center bg-violet-950 text-black" style="width: 0%"></div>
-      </div>
-      <div class="mb-3 flex items-center justify-between text-xs">
-        <div class="text-gray-400">0 IPv6 Enabled</div>
-        <div class="text-gray-400">0 IPv4 Only</div>
-      </div>
-    </div>
+
+      <p v-if="!isLoading && asnData.length === 0" class="text-gray-400">
+        No network providers matched.
+      </p>
+    </template>
   </section>
 </template>

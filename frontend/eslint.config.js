@@ -35,7 +35,7 @@ export default tseslint.config(
   },
   {
     // The site's established SFC names are single-word (Home, Header, Tracker, …).
-    files: ['src/pages/*.vue', 'src/partials/**/*.vue', 'src/components/*.vue'],
+    files: ['src/pages/*.vue', 'src/partials/**/*.vue', 'src/components/**/*.vue'],
     rules: { 'vue/multi-word-component-names': 'off' },
   },
   configPrettier,
