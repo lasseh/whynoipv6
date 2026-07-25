@@ -13,7 +13,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/lasseh/whynoipv6/internal/campaign"
-	"github.com/lasseh/whynoipv6/internal/checker"
 	"github.com/lasseh/whynoipv6/internal/domain"
 	"github.com/lasseh/whynoipv6/internal/observe"
 	db "github.com/lasseh/whynoipv6/internal/postgres/db"
@@ -40,8 +39,8 @@ const (
 type LiveChecker struct {
 	Pool      *pgxpool.Pool
 	Q         *db.Queries
-	Runner    *checker.Runner
-	Preflight *checker.Preflight
+	Runner    Scanner
+	Preflight PreflightState
 	Cfg       LiveCheckConfig
 }
 
@@ -141,9 +140,6 @@ func (lc *LiveChecker) process(ctx context.Context, id int64, host string) {
 	}
 }
 
-// ensureDomain inserts the initial row for an unknown host (§5.1.5 step 2):
-// created_by='live_check', rank NULL, parent linked only when the
-// registrable parent row ALREADY exists — never auto-ensured.
 // pslEvalError marks a PSL evaluation failure — an invalid host, not an
 // internal fault.
 type pslEvalError struct{ err error }
@@ -151,6 +147,9 @@ type pslEvalError struct{ err error }
 func (e *pslEvalError) Error() string { return e.err.Error() }
 func (e *pslEvalError) Unwrap() error { return e.err }
 
+// ensureDomain inserts the initial row for an unknown host (§5.1.5 step 2):
+// created_by='live_check', rank NULL, parent linked only when the
+// registrable parent row ALREADY exists — never auto-ensured.
 func (lc *LiveChecker) ensureDomain(ctx context.Context, host string) (domain.Kind, error) {
 	registrable, tld, err := campaign.PSLParse(host)
 	if err != nil {

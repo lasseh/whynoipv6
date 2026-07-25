@@ -4,7 +4,6 @@ package crawler
 
 import (
 	"context"
-	"log/slog"
 	"testing"
 	"time"
 
@@ -23,7 +22,7 @@ func TestShutdown(t *testing.T) {
 	ctx := context.Background()
 	seedDue(t, pool, 40)
 
-	committer := NewCommitter(pool, testCommitCfg(false), slog.Default())
+	committer := NewCommitter(pool, testCommitCfg(false))
 	metrics := NewMetrics(pool, uuid.New(), "shutdown-test:1")
 
 	rootCtx := context.Background()

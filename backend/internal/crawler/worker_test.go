@@ -180,29 +180,23 @@ func TestProcessPivotGate(t *testing.T) {
 	}
 }
 
-// TestProcessRecoveryMetric: the step-R recovery counter rides the same
-// success gate as the pivots and requires a dead-disabled snapshot with a
-// definitive base.
+// TestProcessRecoveryMetric: the step-R recovery counter follows the commit
+// result — the pure machine decides, the edge only tallies — and rides the
+// same success gate as the pivots.
 func TestProcessRecoveryMetric(t *testing.T) {
-	dead := domain.DisabledDead
-	deadSnap := claimed()
-	deadSnap.Disabled = true
-	deadSnap.DisabledReason = &dead
-
 	cases := []struct {
 		name string
-		snap ClaimedDomain
 		res  CommitResult
 		want int
 	}{
-		{"recovered", deadSnap, CommitResult{}, 1},
-		{"not disabled", claimed(), CommitResult{}, 0},
-		{"lease lost", deadSnap, CommitResult{LeaseLost: true}, 0},
+		{"recovered", CommitResult{Recovered: true}, 1},
+		{"no step R", CommitResult{}, 0},
+		{"lease lost", CommitResult{LeaseLost: true, Recovered: true}, 0},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			w := testWorker(&fakeSink{res: tc.res}, nil, scanOK())
-			w.Process(context.Background(), tc.snap)
+			w.Process(context.Background(), claimed())
 			if got := w.Metrics.recovered; got != tc.want {
 				t.Errorf("recovered = %d, want %d", got, tc.want)
 			}

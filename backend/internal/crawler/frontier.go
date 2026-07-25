@@ -68,10 +68,6 @@ type Frontier struct {
 	// Process handles one claimed domain inside a worker slot (engine run →
 	// map → schedule → commit → metrics).
 	Process func(ctx context.Context, d ClaimedDomain)
-
-	// OnIdle fires after an empty claim, before the empty-poll sleep
-	// (the §15 idle-checkpoint hook).
-	OnIdle func()
 }
 
 // NewFrontier builds the claim loop. claim.order is read once at startup —
@@ -150,9 +146,6 @@ func (f *Frontier) Run(ctx context.Context) {
 			continue
 		}
 		if len(batch) == 0 {
-			if f.OnIdle != nil {
-				f.OnIdle()
-			}
 			if !sleepCtx(ctx, f.cfg.EmptyPoll) {
 				return
 			}

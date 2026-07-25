@@ -19,9 +19,6 @@ const (
 	sweepEmptyPoll = 60 * time.Second
 )
 
-// sweepOutcome is one host's mapped lookup result; empty = non-definitive.
-type sweepOutcome string
-
 // ResourceSweeper is the per-process resource-host sweep goroutine
 // (06 §5.2–§5.4). Runs in every crawler process; SKIP LOCKED makes the
 // concurrency safe without singleton gating. Not started while
@@ -34,8 +31,8 @@ type ResourceSweeper struct {
 type sweptHost struct {
 	ID           int64
 	Host         string
-	Status       *string
-	Pending      *string
+	Status       *domain.IPv6Status
+	Pending      *domain.IPv6Status
 	PendingCount int16
 }
 
@@ -70,41 +67,33 @@ func (s *ResourceSweeper) claim(ctx context.Context) ([]sweptHost, error) {
 	for i, r := range rows {
 		out[i] = sweptHost{
 			ID: r.ID, Host: r.Host,
-			Status:       statusStr(r.AaaaStatus),
-			Pending:      statusStr(r.AaaaPending),
+			Status:       statusPtr(r.AaaaStatus),
+			Pending:      statusPtr(r.AaaaPending),
 			PendingCount: r.AaaaPendingCount,
 		}
 	}
 	return out, nil
 }
 
-func statusStr(v *db.Ipv6Status) *string {
-	if v == nil {
-		return nil
-	}
-	s := string(*v)
-	return &s
-}
-
-// lookup maps one bulk-resolver AAAA answer to a sweep outcome (06 §5.3).
-// The sweep never produces not_applicable.
-func (s *ResourceSweeper) lookup(ctx context.Context, host string) sweepOutcome {
+// lookup maps one bulk-resolver AAAA answer to a sweep outcome (06 §5.3);
+// ok=false is non-definitive. The sweep never produces not_applicable.
+func (s *ResourceSweeper) lookup(ctx context.Context, host string) (domain.IPv6Status, bool) {
 	ips, _, _, rcode, err := s.Bulk.LookupAAAA(ctx, host)
 	if err != nil {
-		return "" // timeout / network error → non-definitive
+		return "", false // timeout / network error → non-definitive
 	}
 	switch rcode {
 	case checker.RcodeNXDomain:
-		return sweepOutcome(domain.StatusNoRecord)
+		return domain.StatusNoRecord, true
 	case checker.RcodeNoError:
 		for _, ip := range ips {
 			if checker.IsGloballyRoutableIPv6(ip) {
-				return sweepOutcome(domain.StatusSupported)
+				return domain.StatusSupported, true
 			}
 		}
-		return sweepOutcome(domain.StatusUnsupported)
+		return domain.StatusUnsupported, true
 	default: // SERVFAIL etc.
-		return ""
+		return "", false
 	}
 }
 
@@ -112,25 +101,24 @@ func (s *ResourceSweeper) lookup(ctx context.Context, host string) sweepOutcome 
 // single-row transaction per host; non-definitive touches nothing (the
 // claim already bumped next_check_at 2h out).
 func (s *ResourceSweeper) sweepHost(ctx context.Context, h *sweptHost) {
-	outcome := s.lookup(ctx, h.Host)
-	if outcome == "" {
+	v, ok := s.lookup(ctx, h.Host)
+	if !ok {
 		return
 	}
-	o := string(outcome)
 
 	status, pending, pendingCount := h.Status, h.Pending, h.PendingCount
 	switch {
 	case status == nil: // first-ever definitive value commits immediately
-		status, pending, pendingCount = &o, nil, 0
-	case o == *status: // agreement: clear any candidate
+		status, pending, pendingCount = &v, nil, 0
+	case v == *status: // agreement: clear any candidate
 		pending, pendingCount = nil, 0
-	case pending != nil && o == *pending: // consecutive candidate sighting
+	case pending != nil && v == *pending: // consecutive candidate sighting
 		pendingCount++
 		if pendingCount >= 2 { // N=2
-			status, pending, pendingCount = &o, nil, 0
+			status, pending, pendingCount = &v, nil, 0
 		}
 	default: // new candidate
-		pending, pendingCount = &o, 1
+		pending, pendingCount = &v, 1
 	}
 
 	err := db.New(s.Pool).ResourceSweepCommit(ctx, db.ResourceSweepCommitParams{
@@ -144,7 +132,7 @@ func (s *ResourceSweeper) sweepHost(ctx context.Context, h *sweptHost) {
 	}
 }
 
-func statusEnum(v *string) *db.Ipv6Status {
+func statusEnum(v *domain.IPv6Status) *db.Ipv6Status {
 	if v == nil {
 		return nil
 	}

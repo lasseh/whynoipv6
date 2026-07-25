@@ -4,7 +4,6 @@ package crawler
 
 import (
 	"context"
-	"log/slog"
 	"strings"
 	"testing"
 	"time"
@@ -50,7 +49,7 @@ func TestLeaseFenceChaos(t *testing.T) {
 	if err != nil || len(batchB) != n {
 		t.Fatalf("worker B reclaim: n=%d err=%v", len(batchB), err)
 	}
-	committer := NewCommitter(pool, testCommitCfg(false), slog.Default())
+	committer := NewCommitter(pool, testCommitCfg(false))
 	obs := stableObs(domain.DimBase, domain.ObsUnsupported)
 	for _, d := range batchB {
 		res, err := committer.Commit(ctx, &CommitInput{

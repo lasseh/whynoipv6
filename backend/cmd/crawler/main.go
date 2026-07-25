@@ -87,7 +87,7 @@ func run() error {
 		return err
 	}
 
-	committer := crawler.NewCommitter(pool, crawler.CommitConfigFrom(cfg), log)
+	committer := crawler.NewCommitter(pool, crawler.CommitConfigFrom(cfg))
 
 	runID := uuid.New()
 	hostname, _ := os.Hostname()
@@ -123,7 +123,6 @@ func run() error {
 		notifier.HeartbeatFail(ctx)
 		return false
 	}
-	frontier.OnIdle = func() {} // idle checkpoints ride the metrics loop
 
 	campaignCfg := campaign.ConfigFrom(cfg)
 	campaignCfg.Pull, campaignCfg.Push = true, true
@@ -167,7 +166,7 @@ func run() error {
 
 	// The resource-host sweep (06 §5.2): only when the dimension is on —
 	// the registry is empty otherwise; flag changes apply on restart.
-	if cfg.Bool("crawler.resources.enabled") {
+	if resourcesEnabled {
 		sweeper := &crawler.ResourceSweeper{Pool: pool, Bulk: bulk}
 		go sweeper.Run(claimCtx)
 	}

@@ -10,6 +10,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/lasseh/whynoipv6/internal/domain"
 	"github.com/lasseh/whynoipv6/internal/postgres"
 	"github.com/lasseh/whynoipv6/internal/postgres/pgtest"
 )
@@ -156,7 +157,7 @@ func TestResourceSweepMachine(t *testing.T) {
 	// Drive the confirmation machine directly through sweepHost outcomes
 	// by simulating lookups: apply the same transitions via the state
 	// machine copy. First definitive commits immediately.
-	apply := func(h *sweptHost, outcome string) {
+	apply := func(h *sweptHost, outcome domain.IPv6Status) {
 		// mirror of sweepHost's write path without the DNS lookup
 		o := outcome
 		status, pending, pendingCount := h.Status, h.Pending, h.PendingCount

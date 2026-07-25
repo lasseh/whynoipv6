@@ -4,7 +4,6 @@ package crawler
 
 import (
 	"context"
-	"log/slog"
 	"testing"
 	"time"
 
@@ -32,7 +31,7 @@ func claimOne(t *testing.T, pool *pgxpool.Pool) ClaimedDomain {
 func TestCommitTxn(t *testing.T) {
 	pool := pgtest.NewDB(t)
 	ctx := context.Background()
-	c := NewCommitter(pool, testCommitCfg(false), slog.Default())
+	c := NewCommitter(pool, testCommitCfg(false))
 
 	snap := claimOne(t, pool)
 	obs := stableObs(domain.DimBase, domain.ObsSupported)
@@ -95,7 +94,7 @@ func TestCommitTxn(t *testing.T) {
 func TestCommitTxnFence(t *testing.T) {
 	pool := pgtest.NewDB(t)
 	ctx := context.Background()
-	c := NewCommitter(pool, testCommitCfg(false), slog.Default())
+	c := NewCommitter(pool, testCommitCfg(false))
 
 	snap := claimOne(t, pool)
 
@@ -133,7 +132,7 @@ func TestCommitTxnFence(t *testing.T) {
 func TestCommitTxnChangelog(t *testing.T) {
 	pool := pgtest.NewDB(t)
 	ctx := context.Background()
-	c := NewCommitter(pool, testCommitCfg(false), slog.Default())
+	c := NewCommitter(pool, testCommitCfg(false))
 
 	snap := claimOne(t, pool)
 	commit := func(dt time.Duration, o domain.Observation) {

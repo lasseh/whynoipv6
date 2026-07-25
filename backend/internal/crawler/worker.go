@@ -127,7 +127,7 @@ func (w *Worker) Process(ctx context.Context, d ClaimedDomain) { //nolint:gocrit
 		if w.Enrich != nil {
 			w.Enrich.StampPivots(ctx, &d, sr)
 		}
-		if wasStepR(&d, &obs) {
+		if res.Recovered {
 			w.Metrics.RecordRecovered()
 		}
 	}
@@ -268,12 +268,6 @@ func discoveredHosts(sr checker.ScanResult) []string {
 		}
 	}
 	return out
-}
-
-// wasStepR detects a dead-recovery commit for the metrics counter.
-func wasStepR(d *ClaimedDomain, obs *observe.Observations) bool {
-	return d.Disabled && d.DisabledReason != nil &&
-		*d.DisabledReason == domain.DisabledDead && obs.Base.Definitive()
 }
 
 // buildDetails assembles the scan_detail payload (03 §14.2): the engine

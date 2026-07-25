@@ -68,6 +68,7 @@ type CommitResult struct {
 	LeaseLost   bool
 	Transitions []Transition
 	Bootstraps  int
+	Recovered   bool // step R ran: a dead-disabled domain was re-enabled
 }
 
 // commitUnit is the computed write unit: the typed postgres.CommitUnit the
@@ -77,6 +78,7 @@ type commitUnit struct {
 	host        string
 	transitions []Transition
 	bootstraps  int
+	recovered   bool
 }
 
 // dimWork is one dimension's working confirm/pending state during step 2.
@@ -124,6 +126,7 @@ func ComputeCommit(in *CommitInput, cfg *CommitConfig) (*commitUnit, error) {
 
 	// Step 1 — lifecycle: dead detection & recovery.
 	var deadStreak int16
+	recovered := false
 	if in.Unresolvable {
 		deadStreak = min(s.DeadStreak+1, cfg.DeadStreak)
 	} else {
@@ -135,6 +138,7 @@ func ComputeCommit(in *CommitInput, cfg *CommitConfig) (*commitUnit, error) {
 			disabled = false
 			disabledReason = nil
 			disabledAt = nil
+			recovered = true
 			for _, d := range domain.Dimensions {
 				work[d] = &dimWork{}
 			}
@@ -303,6 +307,7 @@ func ComputeCommit(in *CommitInput, cfg *CommitConfig) (*commitUnit, error) {
 		host:        s.Host,
 		transitions: transitions,
 		bootstraps:  bootstraps,
+		recovered:   recovered,
 	}
 	if cfg.ResourcesEnabled && in.DiscoveryOK {
 		u.Resources = in.Discovered
@@ -351,7 +356,6 @@ func tstzPtr(t *time.Time) pgtype.Timestamptz {
 type Committer struct {
 	flush func(ctx context.Context, u *postgres.CommitUnit) (leaseLost bool, err error)
 	cfg   *CommitConfig
-	log   *slog.Logger
 
 	// Counters consumed by the metrics checkpointer (03 §15).
 	LeaseLost    atomic.Int64
@@ -359,13 +363,12 @@ type Committer struct {
 }
 
 // NewCommitter builds the committer over the postgres flush adapter.
-func NewCommitter(pool *pgxpool.Pool, cfg *CommitConfig, log *slog.Logger) *Committer {
+func NewCommitter(pool *pgxpool.Pool, cfg *CommitConfig) *Committer {
 	return &Committer{
 		flush: func(ctx context.Context, u *postgres.CommitUnit) (bool, error) {
 			return postgres.FlushCommit(ctx, pool, u)
 		},
 		cfg: cfg,
-		log: log,
 	}
 }
 
@@ -375,21 +378,21 @@ func (c *Committer) Commit(ctx context.Context, in *CommitInput) (CommitResult, 
 	u, err := ComputeCommit(in, c.cfg)
 	if err != nil {
 		c.CommitErrors.Add(1)
-		c.log.Error("commit compute failed", "domain", in.Snapshot.Host, "err", err.Error())
+		slog.Error("commit compute failed", "domain", in.Snapshot.Host, "err", err.Error())
 		return CommitResult{}, err
 	}
 	leaseLost, err := c.flush(ctx, &u.CommitUnit)
 	if err != nil {
 		c.CommitErrors.Add(1)
-		c.log.Error("commit flush failed", "domain", in.Snapshot.Host, "err", err.Error())
+		slog.Error("commit flush failed", "domain", in.Snapshot.Host, "err", err.Error())
 		return CommitResult{}, err
 	}
 	if leaseLost {
 		c.LeaseLost.Add(1)
-		c.log.Warn("lease lost, commit discarded", "domain", u.host)
+		slog.Warn("lease lost, commit discarded", "domain", u.host)
 		return CommitResult{LeaseLost: true}, nil
 	}
-	return CommitResult{Transitions: u.transitions, Bootstraps: u.bootstraps}, nil
+	return CommitResult{Transitions: u.transitions, Bootstraps: u.bootstraps, Recovered: u.recovered}, nil
 }
 
 // Unresolvable computes the dead signal U from raw engine/consensus
