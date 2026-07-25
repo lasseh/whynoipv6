@@ -131,6 +131,11 @@ func (s *Server) getCampaign(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	limit, err := ParseLimit(r.URL.Query())
+	if err != nil {
+		InvalidParameter(w, r, err.Error())
+		return
+	}
 	generation, asOf, err := s.generation(r.Context())
 	if err != nil {
 		InternalError(w, r, err)
@@ -140,11 +145,6 @@ func (s *Server) getCampaign(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	limit, err := ParseLimit(r.URL.Query())
-	if err != nil {
-		InvalidParameter(w, r, err.Error())
-		return
-	}
 	members, page, err := s.campaignMembersPage(r, row.ID, generation, limit)
 	if err != nil {
 		if errors.Is(err, ErrCursorInvalid) {
@@ -183,17 +183,17 @@ func (s *Server) listCampaignDomains(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	limit, err := ParseLimit(r.URL.Query())
+	if err != nil {
+		InvalidParameter(w, r, err.Error())
+		return
+	}
 	generation, asOf, err := s.generation(r.Context())
 	if err != nil {
 		InternalError(w, r, err)
 		return
 	}
 	if CacheList(w, r, generation) {
-		return
-	}
-	limit, err := ParseLimit(r.URL.Query())
-	if err != nil {
-		InvalidParameter(w, r, err.Error())
 		return
 	}
 	members, page, err := s.campaignMembersPage(r, row.ID, generation, limit)

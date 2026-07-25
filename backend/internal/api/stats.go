@@ -41,6 +41,23 @@ func weeklySample(days []time.Time) []int {
 	return idx
 }
 
+// sampleWeekly applies the §4.10 weekly interval to any point series: the
+// points survive unchanged on the daily interval, otherwise weeklySample
+// selects them via the parallel days slice.
+// Callers build points and days in lockstep from the same rows; a length
+// mismatch is a caller bug and indexes out of range rather than silently
+// serving the daily series under the weekly contract.
+func sampleWeekly[T any](points []T, days []time.Time, weekly bool) []T {
+	if !weekly {
+		return points
+	}
+	sampled := make([]T, 0, len(points))
+	for _, i := range weeklySample(days) {
+		sampled = append(sampled, points[i])
+	}
+	return sampled
+}
+
 // statsWindow parses the one §4.10 query contract; shared with history.
 func statsWindow(r *http.Request) (from, to time.Time, weekly bool, err error) {
 	return parseHistoryWindow(r.URL.Query())
@@ -114,14 +131,7 @@ func (s *Server) getStatsOverview(w http.ResponseWriter, r *http.Request) {
 			TopHeroes: rows[i].TopHeroes, TopNameserver: rows[i].TopNameserver,
 		}
 	}
-	if weekly {
-		sampled := make([]GlobalStatsPoint, 0, len(points))
-		for _, i := range weeklySample(days) {
-			sampled = append(sampled, points[i])
-		}
-		points = sampled
-	}
-	WriteJSON(w, http.StatusOK, PointsEnvelope{Points: points, Meta: meta})
+	WriteJSON(w, http.StatusOK, PointsEnvelope{Points: sampleWeekly(points, days, weekly), Meta: meta})
 }
 
 // CountryStatsPoint mirrors stats_country_daily.
@@ -181,14 +191,7 @@ func (s *Server) getCountryStats(w http.ResponseWriter, r *http.Request) {
 			Heroes: rows[i].Heroes, BaseSupported: rows[i].BaseSupported, ConnSupported: rows[i].ConnSupported,
 		}
 	}
-	if weekly {
-		sampled := make([]CountryStatsPoint, 0, len(points))
-		for _, i := range weeklySample(days) {
-			sampled = append(sampled, points[i])
-		}
-		points = sampled
-	}
-	WriteJSON(w, http.StatusOK, PointsEnvelope{Points: points, Meta: meta})
+	WriteJSON(w, http.StatusOK, PointsEnvelope{Points: sampleWeekly(points, days, weekly), Meta: meta})
 }
 
 // CampaignStatsPoint mirrors stats_campaign_daily incl. the v6_ready track.
@@ -250,14 +253,7 @@ func (s *Server) getCampaignStats(w http.ResponseWriter, r *http.Request) {
 			ConnSupported: rows[i].ConnSupported,
 		}
 	}
-	if weekly {
-		sampled := make([]CampaignStatsPoint, 0, len(points))
-		for _, i := range weeklySample(days) {
-			sampled = append(sampled, points[i])
-		}
-		points = sampled
-	}
-	WriteJSON(w, http.StatusOK, PointsEnvelope{Points: points, Meta: meta})
+	WriteJSON(w, http.StatusOK, PointsEnvelope{Points: sampleWeekly(points, days, weekly), Meta: meta})
 }
 
 // ASNStatsPoint maps stats_asn_daily onto the canonical §4.6 wire names:
@@ -319,14 +315,7 @@ func (s *Server) getASNStats(w http.ResponseWriter, r *http.Request) {
 			Sinners: rows[i].Sinners, Heroes: rows[i].Heroes,
 		}
 	}
-	if weekly {
-		sampled := make([]ASNStatsPoint, 0, len(points))
-		for _, i := range weeklySample(days) {
-			sampled = append(sampled, points[i])
-		}
-		points = sampled
-	}
-	WriteJSON(w, http.StatusOK, PointsEnvelope{Points: points, Meta: meta})
+	WriteJSON(w, http.StatusOK, PointsEnvelope{Points: sampleWeekly(points, days, weekly), Meta: meta})
 }
 
 func pgDate(t time.Time) pgtype.Date {

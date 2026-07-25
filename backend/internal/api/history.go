@@ -8,7 +8,6 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/lasseh/whynoipv6/internal/domain"
 	db "github.com/lasseh/whynoipv6/internal/postgres/db"
@@ -157,15 +156,14 @@ func (s *Server) getDomainHistory(w http.ResponseWriter, r *http.Request) {
 	// domain row's confirmed (value, *_since) pair (done per-dimension in
 	// dimTrack.valueAt). Only a domain with neither changelog transitions nor
 	// any confirmed status has nothing to render → points:[].
-	seedable := func(st *db.Ipv6Status, since pgtype.Timestamptz) bool {
-		return st != nil && since.Valid
+	sextet := row.Confirmed()
+	hasSeed := false
+	for i, st := range sextet.Status {
+		if st != nil && sextet.Since[i].Valid {
+			hasSeed = true
+			break
+		}
 	}
-	hasSeed := seedable(row.BaseStatus, row.BaseSince) ||
-		seedable(row.WwwStatus, row.WwwSince) ||
-		seedable(row.NsStatus, row.NsSince) ||
-		seedable(row.MxStatus, row.MxSince) ||
-		seedable(row.ConnStatus, row.ConnSince) ||
-		seedable(row.ResourcesStatus, row.ResourcesSince)
 	if len(replay) == 0 && !hasSeed {
 		WriteJSON(w, http.StatusOK, out)
 		return
@@ -187,16 +185,11 @@ func (s *Server) getDomainHistory(w http.ResponseWriter, r *http.Request) {
 			t.events = append(t.events, replay[i])
 		}
 	}
-	setCurrent := func(dim string, cur *db.Ipv6Status, since pgtype.Timestamptz) {
-		tracks[dim].current = cur
-		tracks[dim].since, tracks[dim].hasSince = since.Time.UTC(), since.Valid
+	for i, dim := range statusDims {
+		t := tracks[dim]
+		t.current = sextet.Status[i]
+		t.since, t.hasSince = sextet.Since[i].Time.UTC(), sextet.Since[i].Valid
 	}
-	setCurrent("base", row.BaseStatus, row.BaseSince)
-	setCurrent("www", row.WwwStatus, row.WwwSince)
-	setCurrent("ns", row.NsStatus, row.NsSince)
-	setCurrent("mx", row.MxStatus, row.MxSince)
-	setCurrent("conn", row.ConnStatus, row.ConnSince)
-	setCurrent("resources", row.ResourcesStatus, row.ResourcesSince)
 
 	latency, err := s.q.ScanLatencyDaily(r.Context(), db.ScanLatencyDailyParams{
 		DomainID: row.ID, FromTs: pgTS(from), ToTs: pgTS(to.AddDate(0, 0, 1)),

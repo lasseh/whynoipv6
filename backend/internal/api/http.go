@@ -110,38 +110,54 @@ func WriteProblem(w http.ResponseWriter, r *http.Request, p Problem) { //nolint:
 
 // The fixed problem constructors (07 §2.5 — the complete type set).
 
+// NotFound emits the 404 not-found problem: an unknown or uncanonicalizable
+// domain, country, asn, provider, campaign or resource (07 §2.5).
 func NotFound(w http.ResponseWriter, r *http.Request, title, detail string) {
 	WriteProblem(w, r, Problem{Type: problemBase + "not-found", Title: title, Status: http.StatusNotFound, Detail: detail})
 }
 
+// InvalidParameter emits the 400 invalid-parameter problem: a malformed
+// cursor, format, host or request field (07 §2.5).
 func InvalidParameter(w http.ResponseWriter, r *http.Request, detail string) {
 	WriteProblem(w, r, Problem{Type: problemBase + "invalid-parameter", Title: "Invalid parameter", Status: http.StatusBadRequest, Detail: detail})
 }
 
+// ValidationError emits the 422 validation-error problem: a filter value
+// outside its closed enum, with the per-field reasons (07 §2.5).
 func ValidationError(w http.ResponseWriter, r *http.Request, errs []FieldError) {
 	WriteProblem(w, r, Problem{Type: problemBase + "validation-error", Title: "Validation error",
 		Status: http.StatusUnprocessableEntity, Errors: errs})
 }
 
+// ScopeRequired emits the 422 scope-required problem: a valid filter value
+// that needs an indexed companion scope, named in the detail (07 §3.3).
 func ScopeRequired(w http.ResponseWriter, r *http.Request, detail string) {
 	WriteProblem(w, r, Problem{Type: problemBase + "scope-required", Title: "Filter requires an indexed scope",
 		Status: http.StatusUnprocessableEntity, Detail: detail})
 }
 
+// RateLimited emits the 429 rate-limited problem, carrying retry_after in
+// the body and the Retry-After header (07 §2.5, §6.3).
 func RateLimited(w http.ResponseWriter, r *http.Request, retryAfter int) {
 	WriteProblem(w, r, Problem{Type: problemBase + "rate-limited", Title: "Rate limit exceeded",
 		Status: http.StatusTooManyRequests, RetryAfter: &retryAfter})
 }
 
+// NotAcceptable emits the 406 not-acceptable problem: an Accept header a
+// JSON endpoint cannot satisfy (07 §2.5).
 func NotAcceptable(w http.ResponseWriter, r *http.Request) {
 	WriteProblem(w, r, Problem{Type: problemBase + "not-acceptable", Title: "Not acceptable", Status: http.StatusNotAcceptable})
 }
 
+// UnsupportedMediaType emits the 415 unsupported-media-type problem: a
+// POST /check body that is not JSON (07 §2.5).
 func UnsupportedMediaType(w http.ResponseWriter, r *http.Request) {
 	WriteProblem(w, r, Problem{Type: problemBase + "unsupported-media-type", Title: "Unsupported media type",
 		Status: http.StatusUnsupportedMediaType})
 }
 
+// ManifestUnavailable emits the 503 manifest-unavailable problem: the
+// /datasets manifest is missing or unparseable — the only 503 (07 §2.5).
 func ManifestUnavailable(w http.ResponseWriter, r *http.Request) {
 	WriteProblem(w, r, Problem{Type: problemBase + "manifest-unavailable", Title: "Dataset manifest unavailable",
 		Status: http.StatusServiceUnavailable})

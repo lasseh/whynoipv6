@@ -40,17 +40,20 @@ type StatusBlock struct {
 	Resources StatusObject `json:"resources"`
 }
 
+// statusEnum lifts a wire status value back onto the typed enum the domain
+// predicates take; nil stays nil (never confirmed).
+func statusEnum(v *string) *domain.IPv6Status {
+	if v == nil {
+		return nil
+	}
+	s := domain.IPv6Status(*v)
+	return &s
+}
+
 // ipv6OnlyOf derives the ipv6_only fold (03 §10 — domain.IPv6Only) from an
 // assembled status block, so summary and detail cannot disagree.
 func ipv6OnlyOf(st *StatusBlock) *string {
-	conv := func(v *string) *domain.IPv6Status {
-		if v == nil {
-			return nil
-		}
-		s := domain.IPv6Status(*v)
-		return &s
-	}
-	if v := domain.IPv6Only(conv(st.Conn.Value), conv(st.Resources.Value)); v != nil {
+	if v := domain.IPv6Only(statusEnum(st.Conn.Value), statusEnum(st.Resources.Value)); v != nil {
 		s := string(*v)
 		return &s
 	}
@@ -62,28 +65,23 @@ func ipv6OnlyOf(st *StatusBlock) *string {
 // aggregates, so highlighted rows and adoption percentages cannot
 // disagree. Stamped only on campaign membership rows.
 func v6ReadyOf(st *StatusBlock) bool {
-	conv := func(v *string) *domain.IPv6Status {
-		if v == nil {
-			return nil
-		}
-		s := domain.IPv6Status(*v)
-		return &s
-	}
-	return domain.V6Ready(conv(st.Base.Value), conv(st.NS.Value), conv(st.WWW.Value))
+	return domain.V6Ready(statusEnum(st.Base.Value), statusEnum(st.NS.Value), statusEnum(st.WWW.Value))
 }
 
-// CountryRef / ASNRef / ProviderRef are the embedded pivot objects (07 §4.2).
+// CountryRef is the embedded country pivot object (07 §4.2).
 type CountryRef struct {
 	Code string  `json:"code"`
 	Name string  `json:"name"`
 	TLD  *string `json:"tld,omitempty"` // detail representation only
 }
 
+// ASNRef is the embedded ASN pivot object (07 §4.2).
 type ASNRef struct {
 	Number int64  `json:"number"`
 	Name   string `json:"name"`
 }
 
+// ProviderRef is the embedded DNS-provider pivot object (07 §4.2).
 type ProviderRef struct {
 	ID   int64  `json:"id"`
 	Name string `json:"name"`
@@ -503,6 +501,59 @@ func domainKey(sortKey string) func(*postgres.DomainRow) []any {
 		}
 		return []any{*row.Rank, row.ID}
 	}
+}
+
+// listSubdomains is GET /domains/{host}/subdomains — a native
+// sub-collection (07 §4.3): host-ordered, exact count, rank-NULL rows
+// visible (sub-collection visibility, §2.2).
+func (s *Server) listSubdomains(w http.ResponseWriter, r *http.Request) {
+	host, err := domain.Canonicalize(chi.URLParam(r, "host"))
+	if err != nil {
+		NotFound(w, r, "Domain not found", "The host is not a valid public domain name.")
+		return
+	}
+	d, err := s.q.DomainByHost(r.Context(), host)
+	if errors.Is(err, pgx.ErrNoRows) {
+		NotFound(w, r, "Domain not found", "No such domain: "+host)
+		return
+	}
+	if err != nil {
+		InternalError(w, r, err)
+		return
+	}
+	q := r.URL.Query()
+	limit, err := ParseLimit(q)
+	if err != nil {
+		InvalidParameter(w, r, err.Error())
+		return
+	}
+	generation, asOf, err := s.generation(r.Context())
+	if err != nil {
+		InternalError(w, r, err)
+		return
+	}
+	if CacheList(w, r, generation) {
+		return
+	}
+
+	filter := postgres.DomainListFilter{ParentID: &d.ID}
+	items, page, err := s.hostOrderedPage(r, &filter, generation, limit)
+	if err != nil {
+		if errors.Is(err, ErrCursorInvalid) {
+			InvalidParameter(w, r, err.Error())
+			return
+		}
+		InternalError(w, r, err)
+		return
+	}
+	count, err := s.q.SubdomainExactCount(r.Context(), &d.ID)
+	if err != nil {
+		InternalError(w, r, err)
+		return
+	}
+	meta := NewMeta(asOf, generation)
+	meta.Count = &count
+	WriteJSON(w, http.StatusOK, ListEnvelope{Items: items, Page: page, Meta: meta})
 }
 
 // trimFields applies the ?fields= sparse fieldset (07 §3.3) by re-projecting
