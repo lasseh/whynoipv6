@@ -21,6 +21,7 @@ describe('DomainDetail page', () => {
       routes: [
         { path: '/', component: { template: '<div />' } },
         { path: '/domains', component: { template: '<div />' } },
+        { path: '/faq', component: { template: '<div />' } },
         {
           path: '/domains/:domain([^/]+)/not-found',
           name: 'DomainNotFound',

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import type { Dimension, HistoryPoint } from '@/api'
-import { statusBlockClass } from '@/utils/status'
+import type { Dimension, HistoryPoint, StatusValue } from '@/api'
+import { statusBlockClass, statusLabel, statusTextClass } from '@/utils/status'
 import { formatDate } from '@/utils/date'
 
 // The uptime timeline (§7.3): one block per day from /domains/{host}/history,
@@ -20,6 +20,7 @@ const props = withDefaults(
 
 interface Block {
   day: string | null
+  status: StatusValue
   colorClass: string
 }
 
@@ -31,15 +32,53 @@ const blocks = computed<Block[]>(() => {
     .reverse()
   const padded: Block[] = sorted.map((p) => ({
     day: p.day,
+    status: p[props.dimension],
     colorClass: statusBlockClass(p[props.dimension]),
   }))
   while (padded.length < props.days) {
-    padded.push({ day: null, colorClass: 'bg-gray-800' })
+    padded.push({ day: null, status: null, colorClass: 'bg-gray-800' })
   }
   return padded
 })
 
 const openIndex = ref<number | null>(null)
+
+const openBlock = computed(() =>
+  openIndex.value !== null ? (blocks.value[openIndex.value] ?? null) : null,
+)
+
+// Hover is mouse-only (pointerenter with pointerType); touch goes through
+// click-to-toggle so a synthesized mouseenter can't leave the bubble stuck.
+function hoverBlock(e: PointerEvent, index: number, day: string | null): void {
+  if (e.pointerType === 'mouse') openIndex.value = day ? index : null
+}
+
+function leaveBlock(e: PointerEvent): void {
+  if (e.pointerType === 'mouse') openIndex.value = null
+}
+
+function tapBlock(index: number, day: string | null): void {
+  if (!day) return
+  openIndex.value = openIndex.value === index ? null : index
+}
+
+// The bubble anchors over the hovered block (blocks are equal-width, so the
+// center is pure arithmetic — index 0 renders rightmost), clamped so ~230px
+// of tooltip never escapes the tracker at the outer blocks.
+const tooltipStyle = computed(() => {
+  if (openIndex.value === null) return {}
+  const n = blocks.value.length
+  const centerPct = ((n - 1 - openIndex.value + 0.5) / n) * 100
+  return {
+    top: '-3rem',
+    left: `clamp(115px, ${centerPct}%, calc(100% - 115px))`,
+    transform: 'translateX(-50%)',
+  }
+})
+
+function blockAria(block: Block): string | undefined {
+  return block.day ? `${formatDate(block.day)} — ${statusLabel(block.status)}` : undefined
+}
 </script>
 
 <template>
@@ -50,27 +89,33 @@ const openIndex = ref<number | null>(null)
         v-for="(block, index) in blocks"
         :key="index"
         class="size-full overflow-hidden px-[0.5px] transition first:rounded-r-[4px] first:pr-0 last:rounded-l-[4px] last:pl-0 sm:px-px min-w-2 max-w-3 flex-1 opacity-80"
+        @pointerenter="hoverEffect && hoverBlock($event, index, block.day)"
+        @pointerleave="hoverEffect && leaveBlock($event)"
+        @click="hoverEffect && tapBlock(index, block.day)"
       >
         <!-- Block -->
         <div
+          role="img"
+          :aria-label="blockAria(block)"
           :class="[
             'size-full rounded-[1px]',
             block.colorClass,
             hoverEffect && block.day ? 'hover:opacity-50' : '',
           ]"
-          @mouseenter="openIndex = block.day ? index : null"
-          @mouseleave="openIndex = null"
         ></div>
-
-        <!-- Tooltip -->
-        <div
-          v-if="openIndex === index && block.day"
-          class="absolute z-10 w-auto rounded-md px-2 py-1 text-sm text-fuchsia-600 bg-gray-800 border-slate-200 normal-case"
-          style="top: -3rem; left: 50%; transform: translateX(-50%)"
-        >
-          {{ formatDate(block.day) }}
-        </div>
       </div>
+    </div>
+
+    <!-- Day tooltip: anchored over the hovered block, clamped to the card -->
+    <div
+      v-if="openBlock?.day"
+      class="absolute z-10 w-auto whitespace-nowrap rounded-md px-2 py-1 text-sm bg-gray-900 border border-gray-700 shadow-lg normal-case"
+      :style="tooltipStyle"
+    >
+      <span class="inline-block size-2 rounded-full mr-1.5" :class="openBlock.colorClass"></span>
+      <span class="text-gray-200">{{ formatDate(openBlock.day) }}</span>
+      <span class="text-gray-500"> — </span>
+      <span :class="statusTextClass(openBlock.status)">{{ statusLabel(openBlock.status) }}</span>
     </div>
 
     <!-- Timeline Labels -->

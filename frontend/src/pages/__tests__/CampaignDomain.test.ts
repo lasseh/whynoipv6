@@ -28,6 +28,7 @@ describe('CampaignDomain page', () => {
       history: createMemoryHistory(),
       routes: [
         { path: '/', component: { template: '<div />' } },
+        { path: '/faq', component: { template: '<div />' } },
         { path: '/campaigns', component: { template: '<div />' } },
         { path: '/campaigns/:uuid', component: { template: '<div />' } },
         {

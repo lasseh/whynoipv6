@@ -39,7 +39,7 @@ interface Row {
   label: string
   value: DomainDetail['ipv6_only']
   /** Tracker dimensions shown when expanded; labeled when more than one. */
-  dims: { dim: Dimension; label?: string }[]
+  dims: { dim: Dimension; label?: string; desc: string }[]
 }
 
 // The four §7.1 rows (Apex / WWW / Nameserver / E-Mail) plus the derived
@@ -47,22 +47,57 @@ interface Row {
 const rows = computed<Row[]>(() => {
   const status = props.domain.status
   return [
-    { key: 'base', label: props.domain.host, value: status.base.value, dims: [{ dim: 'base' }] },
+    {
+      key: 'base',
+      label: props.domain.host,
+      value: status.base.value,
+      dims: [
+        {
+          dim: 'base',
+          desc: 'The domain publishes an IPv6 (AAAA) address, confirmed by three independent resolvers.',
+        },
+      ],
+    },
     {
       key: 'www',
       label: `www.${props.domain.host}`,
       value: status.www.value,
-      dims: [{ dim: 'www' }],
+      dims: [{ dim: 'www', desc: 'The www hostname publishes an IPv6 (AAAA) address.' }],
     },
-    { key: 'ns', label: 'Nameserver', value: status.ns.value, dims: [{ dim: 'ns' }] },
-    { key: 'mx', label: 'E-Mail', value: status.mx.value, dims: [{ dim: 'mx' }] },
+    {
+      key: 'ns',
+      label: 'Nameserver',
+      value: status.ns.value,
+      dims: [
+        { dim: 'ns', desc: 'The domain’s DNS is served by at least one IPv6-capable nameserver.' },
+      ],
+    },
+    {
+      key: 'mx',
+      label: 'E-Mail',
+      value: status.mx.value,
+      dims: [
+        {
+          dim: 'mx',
+          desc: 'Mail servers (MX) are reachable over IPv6 — or no mail is configured.',
+        },
+      ],
+    },
     {
       key: 'ipv6_only',
       label: 'IPv6 Only',
       value: props.domain.ipv6_only,
       dims: [
-        { dim: 'conn', label: 'Reachability' },
-        { dim: 'resources', label: 'Page resources' },
+        {
+          dim: 'conn',
+          label: 'Reachability',
+          desc: 'The site answers a real HTTP request made over an IPv6-only connection.',
+        },
+        {
+          dim: 'resources',
+          label: 'Page resources',
+          desc: 'Scripts, fonts, and images load from IPv6-capable hosts.',
+        },
       ],
     },
   ]
@@ -137,6 +172,7 @@ const formattedTsCheck = computed(() =>
       >
         <div v-for="d in row.dims" :key="d.dim">
           <div v-if="d.label" class="mt-2 text-xs font-medium text-gray-400">{{ d.label }}</div>
+          <div class="mt-1 text-xs text-gray-500">{{ d.desc }}</div>
           <Tracker
             :points="history"
             :dimension="d.dim"
@@ -163,8 +199,14 @@ const formattedTsCheck = computed(() =>
     </li>
   </ul>
 
-  <div class="inline-flex items-center text-xs font-normal text-gray-400">
-    Last checked: {{ formattedTsCheck }}
+  <div class="flex items-center justify-between text-xs font-normal text-gray-400">
+    <span>Last checked: {{ formattedTsCheck }}</span>
+    <RouterLink
+      to="/faq?page=2"
+      class="text-gray-400 hover:text-fuchsia-500 underline underline-offset-2"
+    >
+      How these checks work →
+    </RouterLink>
   </div>
   <!-- End Domain Status Card -->
 </template>

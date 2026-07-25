@@ -67,6 +67,46 @@ describe('Tracker', () => {
     expect(new Set(classes)).toEqual(new Set(['bg-gray-800']))
   })
 
+  it('hover tooltip shows the day AND its status, colored by the block hue', async () => {
+    const wrapper = mount(Tracker, {
+      props: {
+        points: [point('2026-07-24', 'unsupported')],
+        dimension: 'www',
+        days: 1,
+        hoverEffect: true,
+      },
+    })
+    await wrapper.find('.group > div').trigger('pointerenter', { pointerType: 'mouse' })
+    const tooltip = wrapper.find('.absolute.z-10')
+    expect(tooltip.exists()).toBe(true)
+    expect(tooltip.text()).toContain('24 July 2026')
+    expect(tooltip.text()).toContain('Missing')
+    expect(tooltip.find('.rounded-full').classes()).toContain('bg-pink-600')
+
+    await wrapper.find('.group > div').trigger('pointerleave', { pointerType: 'mouse' })
+    expect(wrapper.find('.absolute.z-10').exists()).toBe(false)
+  })
+
+  it('tap toggles the tooltip; padded null days stay silent', async () => {
+    const wrapper = mount(Tracker, {
+      props: {
+        points: [point('2026-07-24', 'supported')],
+        dimension: 'www',
+        days: 2,
+        hoverEffect: true,
+      },
+    })
+    const dayBlock = wrapper.findAll('.group > div')[0]!
+    await dayBlock.trigger('click')
+    expect(wrapper.find('.absolute.z-10').exists()).toBe(true)
+    await dayBlock.trigger('click')
+    expect(wrapper.find('.absolute.z-10').exists()).toBe(false)
+
+    const padBlock = wrapper.findAll('.group > div')[1]!
+    await padBlock.trigger('click')
+    expect(wrapper.find('.absolute.z-10').exists()).toBe(false)
+  })
+
   it('keeps only the newest `days` points', () => {
     const points = [
       point('2026-07-01', 'unsupported'),
