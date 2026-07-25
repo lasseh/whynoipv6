@@ -1,5 +1,11 @@
 # Local scratch / issue-tracker area (see CLAUDE.md)
 .scratch/
+# Local Playwright MCP output: its own directory, plus the a11y dumps and
+# screenshots that land at the root. Root-anchored so docs/ and
+# frontend/public/ assets are never hidden.
+.playwright-mcp/
+/*-recheck.md
+/*.png
 # Local compose secrets (IPINFO_TOKEN, etc.)
 .env
 backend/bin/

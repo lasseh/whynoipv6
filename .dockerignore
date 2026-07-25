@@ -1,6 +1,23 @@
-# Root-context builds (frontend/Dockerfile). The backend build uses its own
-# context (./backend) and is unaffected.
+# Two builds use the root context: frontend/Dockerfile and
+# deploy/unbound/dev/stats-scraper.Dockerfile (which COPYs backend/ and
+# deploy/unbound/dev/ — so neither tree may be excluded here). The api/crawler
+# build uses its own context (./backend) and is unaffected.
 .git
+.github
 frontend/node_modules
 frontend/dist
 frontend/*.tsbuildinfo
+# Secrets must never reach the build daemon.
+.env
+.env.*
+# Build output neither root-context build COPYs.
+backend/bin
+backend/dist
+backend/coverage.out
+backend/coverage.html
+# Trees neither root-context build COPYs.
+docs
+.scratch
+.playwright-mcp
+*.md
+*.png

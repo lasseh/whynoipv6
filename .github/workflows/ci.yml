@@ -9,9 +9,9 @@ jobs:
   ci:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version: stable
           cache-dependency-path: backend/go.sum
@@ -47,3 +47,27 @@ jobs:
 
       - name: Release build
         run: make build-linux
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: lts/*
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install deps
+        run: npm ci
+        working-directory: frontend
+
+      - name: Lint (type-check + eslint + prettier)
+        run: make frontend-lint
+
+      - name: Unit tests
+        run: make frontend-test
+
+      - name: Build
+        run: make frontend-build
