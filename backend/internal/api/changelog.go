@@ -165,12 +165,12 @@ func (s *Server) serveChangelogFeed(w http.ResponseWriter, r *http.Request, doma
 		Fetch: func(ctx context.Context, seek *Seek, lim int, backward bool) ([]postgres.ChangelogRow, error) {
 			var cs *postgres.ChangelogSeek
 			if seek != nil {
-				cs = &postgres.ChangelogSeek{TS: time.Unix(0, seek.TS).UTC(), Domain: seek.ID, Field: seek.Field}
+				cs = &postgres.ChangelogSeek{TS: time.Unix(0, seek.TS).UTC(), DomainID: seek.ID, Field: seek.Field}
 			}
 			return postgres.ListChangelog(ctx, s.pool, &filter, cs, lim, backward)
 		},
 		Key: func(row *postgres.ChangelogRow) []any {
-			return []any{row.Ts.UnixNano(), row.DomainID, row.Field}
+			return []any{row.TS.UnixNano(), row.DomainID, row.Field}
 		},
 	})
 	if errors.Is(err, ErrCursorInvalid) {
@@ -199,7 +199,7 @@ func (s *Server) serveChangelogFeed(w http.ResponseWriter, r *http.Request, doma
 
 func changelogItem(r *postgres.ChangelogRow) ChangelogItem {
 	return ChangelogItem{
-		TS:       r.Ts.UTC(),
+		TS:       r.TS.UTC(),
 		Host:     r.Host,
 		Field:    r.Field,
 		OldValue: r.OldValue,

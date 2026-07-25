@@ -1,8 +1,3 @@
-// Package postgres holds the hand-written adapters over the sqlc-generated
-// db/ subpackage. domainlist.go is the ONE builder-built slice (05-schema.md
-// §10.2 carve-out): the /domains list family, whose filter grammar would
-// need 150–300 sqlc texts and whose partial indexes demand literal
-// predicates. Every other query stays sqlc.
 package postgres
 
 import (
@@ -13,7 +8,6 @@ import (
 	"time"
 
 	sq "github.com/Masterminds/squirrel"
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -133,9 +127,12 @@ func baseDomainSelect(extraColumns ...string) sq.SelectBuilder {
 		PlaceholderFormat(sq.Dollar)
 }
 
-// buildDomainList assembles the leaderboard query. The publicly-ranked
-// predicate is spelled verbatim as a literal (05-schema §1.7).
-func buildDomainList(f *DomainListFilter, sortKey ListSort, seek *DomainSeek, afterRank *int32, limit int, backward bool) (sqlText string, args []any, err error) {
+// buildDomainList assembles the leaderboard query. The /domains list family
+// is the ONE builder-built slice (05-schema.md §10.2 carve-out): its filter
+// grammar would need 150–300 sqlc texts and its partial indexes demand
+// literal predicates. The publicly-ranked predicate is spelled verbatim as a
+// literal (05-schema §1.7).
+func buildDomainList(f *DomainListFilter, sortKey ListSort, seek *DomainSeek, afterRank *int32, backward bool) sq.SelectBuilder {
 	q := baseDomainSelect()
 
 	// The literal public scope — verbatim for partial-index implication.
@@ -234,38 +231,16 @@ func buildDomainList(f *DomainListFilter, sortKey ListSort, seek *DomainSeek, af
 		q = q.OrderBy(order...)
 	}
 
-	return q.Limit(uint64(limit + 1)).ToSql() // N+1 fetch
+	return q
 }
 
 // ListDomains runs the built query and returns limit+1 rows at most.
 func ListDomains(ctx context.Context, pool *pgxpool.Pool, f *DomainListFilter,
 	sortKey ListSort, seek *DomainSeek, afterRank *int32, limit int, backward bool,
 ) ([]DomainRow, error) {
-	sqlText, args, err := buildDomainList(f, sortKey, seek, afterRank, limit, backward)
-	if err != nil {
-		return nil, fmt.Errorf("domain list build: %w", err)
-	}
-	rows, err := pool.Query(ctx, sqlText, args...)
-	if err != nil {
-		return nil, fmt.Errorf("domain list: %w", err)
-	}
-	out, err := pgx.CollectRows(rows, pgx.RowToStructByName[DomainRow])
-	if err != nil {
-		return nil, fmt.Errorf("domain list scan: %w", err)
-	}
-	if backward {
-		reverseRows(out)
-	}
-	return out, nil
-}
-
-// reverseRows restores display order after a backward (prev_cursor) fetch;
-// the N+1 overflow row sits at index 0 afterwards, so callers trim the
-// FRONT on backward pages.
-func reverseRows[T any](rows []T) {
-	for i, j := 0, len(rows)-1; i < j; i, j = i+1, j-1 {
-		rows[i], rows[j] = rows[j], rows[i]
-	}
+	q := buildDomainList(f, sortKey, seek, afterRank, backward)
+	return collectKeysetRows[DomainRow](ctx, pool,
+		q.Limit(uint64(limit+1)), backward, "domain list") // N+1 fetch
 }
 
 // ListDomainsAround is the §3.2 centered-window deep link: the ⌈limit/2⌉
@@ -312,12 +287,11 @@ func ListDomainsAround(ctx context.Context, pool *pgxpool.Pool, f *DomainListFil
 // EstimateDomainListCount returns the plan-row estimate for the filtered
 // list (07 §3.4 — never an exact count on the hot path).
 func EstimateDomainListCount(ctx context.Context, pool *pgxpool.Pool, f *DomainListFilter) (int64, error) {
-	sqlText, args, err := buildDomainList(f, ListSortRank, nil, nil, 0, false)
+	// No LIMIT: the estimate covers the whole scope.
+	sqlText, args, err := buildDomainList(f, ListSortRank, nil, nil, false).ToSql()
 	if err != nil {
 		return 0, err
 	}
-	// Strip the LIMIT so the estimate covers the whole scope.
-	sqlText = sqlText[:strings.LastIndex(sqlText, " LIMIT ")]
 	var raw []byte
 	if err := pool.QueryRow(ctx, "EXPLAIN (FORMAT JSON) "+sqlText, args...).Scan(&raw); err != nil {
 		return 0, fmt.Errorf("count estimate: %w", err)
@@ -375,25 +349,8 @@ func ListDependents(ctx context.Context, pool *pgxpool.Pool, resourceHostID int6
 			"((d.rank IS NULL), COALESCE(d.rank, 0), d.id) %s (%t, %d, %d)",
 			cmp, seek.RankNull, rank, seek.ID)))
 	}
-	sqlText, args, err := q.
-		OrderBy(order...).
-		Limit(uint64(limit + 1)).
-		ToSql()
-	if err != nil {
-		return nil, fmt.Errorf("dependents build: %w", err)
-	}
-	rows, err := pool.Query(ctx, sqlText, args...)
-	if err != nil {
-		return nil, fmt.Errorf("dependents: %w", err)
-	}
-	out, err := pgx.CollectRows(rows, pgx.RowToStructByName[DependentRow])
-	if err != nil {
-		return nil, fmt.Errorf("dependents scan: %w", err)
-	}
-	if backward {
-		reverseRows(out)
-	}
-	return out, nil
+	return collectKeysetRows[DependentRow](ctx, pool,
+		q.OrderBy(order...).Limit(uint64(limit+1)), backward, "dependents")
 }
 
 // MaxRank is the O(1) global-list count estimate (07 §3.4).

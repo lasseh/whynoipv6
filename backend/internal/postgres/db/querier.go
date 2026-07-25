@@ -49,13 +49,14 @@ type Querier interface {
 	// index. Same latest-50 recent-window cap as the other scoped feeds.
 	ChangelogAnyCampaign(ctx context.Context) ([]ChangelogAnyCampaignRow, error)
 	ChangelogByCampaign(ctx context.Context, campaignID int32) ([]ChangelogByCampaignRow, error)
-	// Changelog read surface (07 §4.8). The paginating global + per-domain
-	// feeds are builder-built in internal/postgres/changeloglist.go (05-schema
-	// §10.2 — one seek builder derives both walk directions); the scoped
-	// country/campaign feeds below are capped to the latest-50 recent window
-	// (OPEN-15 guardrail) and stay sqlc. The 90-day ts floor makes the window
-	// real: without it a sparse scope walks past the 60d columnstore boundary
-	// (no btree there) and can decompress the whole forever-retained table.
+	// db/query/changelog.sql — changelog read surface (07-api.md §4.8).
+	// The paginating global + per-domain feeds are builder-built in
+	// internal/postgres/changeloglist.go (05-schema §10.2 — one seek builder
+	// derives both walk directions); the scoped country/campaign feeds below
+	// are capped to the latest-50 recent window (OPEN-15 guardrail) and stay
+	// sqlc. The 90-day ts floor makes the window real: without it a sparse
+	// scope walks past the 60d columnstore boundary (no btree there) and can
+	// decompress the whole forever-retained table.
 	ChangelogByCountry(ctx context.Context, countryID int32) ([]ChangelogByCountryRow, error)
 	ChangelogMaxTS(ctx context.Context) (pgtype.Timestamptz, error)
 	// The §4.9 confirmed-trajectory replay: the full transition history of one
@@ -122,9 +123,9 @@ type Querier interface {
 	// host rides along so the caller can fold this scan's discovery output D
 	// without double-counting already-persisted links.
 	DomainRequiredLinks(ctx context.Context, domainID int64) ([]DomainRequiredLinksRow, error)
-	// Resource-dependency reads (07 §4.11). Forward list is bounded small
-	// (exact count, no cursor); the reverse dependents list is served by the
-	// domainlist builder.
+	// db/query/resource.sql — resource-dependency reads (07-api.md §4.11).
+	// Forward list is bounded small (exact count, no cursor); the reverse
+	// dependents list is served by the domainlist builder.
 	DomainResourceList(ctx context.Context, domainID int64) ([]DomainResourceListRow, error)
 	// The attribution stamp: touches ONLY the pivot column, never the
 	// commit/trust machine's columns (06-ingest.md §6.10).
@@ -169,11 +170,12 @@ type Querier interface {
 	RecomputeASNCounters(ctx context.Context) error
 	RecomputeCountryCounters(ctx context.Context) error
 	RecomputeProviderCounters(ctx context.Context) error
-	// Tick step 3 — ASN + DNS-provider counter recompute (06-ingest.md §10.6).
+	// Tick step 3 — ASN counter recompute (06-ingest.md §10.6).
 	ResetASNCounters(ctx context.Context) error
 	// Tick step 3 — country counter recompute (06-ingest.md §10.6): reset, then
 	// recompute over the publicly-ranked scope.
 	ResetCountryCounters(ctx context.Context) error
+	// Tick step 3 — DNS-provider counter recompute (06-ingest.md §10.6).
 	ResetProviderCounters(ctx context.Context) error
 	ResourceHostByHost(ctx context.Context, host string) (ResourceHostByHostRow, error)
 	ResourceHostIDByHost(ctx context.Context, host string) (int64, error)

@@ -1,10 +1,11 @@
--- Changelog read surface (07 §4.8). The paginating global + per-domain
--- feeds are builder-built in internal/postgres/changeloglist.go (05-schema
--- §10.2 — one seek builder derives both walk directions); the scoped
--- country/campaign feeds below are capped to the latest-50 recent window
--- (OPEN-15 guardrail) and stay sqlc. The 90-day ts floor makes the window
--- real: without it a sparse scope walks past the 60d columnstore boundary
--- (no btree there) and can decompress the whole forever-retained table.
+-- db/query/changelog.sql — changelog read surface (07-api.md §4.8).
+-- The paginating global + per-domain feeds are builder-built in
+-- internal/postgres/changeloglist.go (05-schema §10.2 — one seek builder
+-- derives both walk directions); the scoped country/campaign feeds below
+-- are capped to the latest-50 recent window (OPEN-15 guardrail) and stay
+-- sqlc. The 90-day ts floor makes the window real: without it a sparse
+-- scope walks past the 60d columnstore boundary (no btree there) and can
+-- decompress the whole forever-retained table.
 
 -- name: ChangelogByCountry :many
 SELECT cl.ts, d.host, cl.field, cl.old_value, cl.new_value

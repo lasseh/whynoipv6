@@ -49,8 +49,8 @@ ON CONFLICT (domain_id, ts) DO NOTHING;
 INSERT INTO resource_host (host) VALUES (@rhost)
 ON CONFLICT (host) DO NOTHING;
 
--- UpsertDomainResource and PruneDomainResources live as Go constants in
--- internal/crawler/commit.go: their multi-CTE shape (insert + conditional
--- counter bump + refresh) exceeds sqlc's analyzer (the 05-schema.md §10.2
--- escape hatch). The SQL text there is the one owned by 03-state-machine.md
--- §12.3.
+-- SQLUpsertDomainResource and SQLPruneDomainResources live as Go constants
+-- in internal/postgres/commitflush.go: their multi-CTE shape (insert +
+-- conditional counter bump + refresh) exceeds sqlc's analyzer (the
+-- 05-schema.md §10.2 escape hatch). The SQL text there is the one owned by
+-- 03-state-machine.md §12.3.

@@ -31,3 +31,12 @@ func collectKeysetRows[T any](ctx context.Context, pool *pgxpool.Pool,
 	}
 	return out, nil
 }
+
+// reverseRows restores display order after a backward (prev_cursor) fetch;
+// the N+1 overflow row sits at index 0 afterwards, so callers trim the
+// FRONT on backward pages.
+func reverseRows[T any](rows []T) {
+	for i, j := 0, len(rows)-1; i < j; i, j = i+1, j-1 {
+		rows[i], rows[j] = rows[j], rows[i]
+	}
+}

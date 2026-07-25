@@ -19,14 +19,14 @@ type ChangelogFilter struct {
 
 // ChangelogSeek is the decoded (ts, domain_id, field) cursor tuple.
 type ChangelogSeek struct {
-	TS     time.Time
-	Domain int64
-	Field  string
+	TS       time.Time
+	DomainID int64
+	Field    string
 }
 
 // ChangelogRow is the feed row scanned via RowToStructByName.
 type ChangelogRow struct {
-	Ts       time.Time `db:"ts"`
+	TS       time.Time `db:"ts"`
 	Host     string    `db:"host"`
 	Field    string    `db:"field"`
 	OldValue string    `db:"old_value"`
@@ -66,7 +66,7 @@ func ListChangelog(ctx context.Context, pool *pgxpool.Pool, f *ChangelogFilter,
 	}
 	if seek != nil {
 		q = q.Where(fmt.Sprintf("(cl.ts, cl.domain_id, cl.field) %s (?, ?, ?)", cmp),
-			seek.TS, seek.Domain, seek.Field)
+			seek.TS, seek.DomainID, seek.Field)
 	}
 
 	return collectKeysetRows[ChangelogRow](ctx, pool,

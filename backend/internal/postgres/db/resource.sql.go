@@ -65,9 +65,9 @@ type DomainResourceListRow struct {
 	LastCheckedAt pgtype.Timestamptz `json:"last_checked_at"`
 }
 
-// Resource-dependency reads (07 §4.11). Forward list is bounded small
-// (exact count, no cursor); the reverse dependents list is served by the
-// domainlist builder.
+// db/query/resource.sql — resource-dependency reads (07-api.md §4.11).
+// Forward list is bounded small (exact count, no cursor); the reverse
+// dependents list is served by the domainlist builder.
 func (q *Queries) DomainResourceList(ctx context.Context, domainID int64) ([]DomainResourceListRow, error) {
 	rows, err := q.db.Query(ctx, DomainResourceList, domainID)
 	if err != nil {

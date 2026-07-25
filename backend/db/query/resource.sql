@@ -1,6 +1,6 @@
--- Resource-dependency reads (07 §4.11). Forward list is bounded small
--- (exact count, no cursor); the reverse dependents list is served by the
--- domainlist builder.
+-- db/query/resource.sql — resource-dependency reads (07-api.md §4.11).
+-- Forward list is bounded small (exact count, no cursor); the reverse
+-- dependents list is served by the domainlist builder.
 
 -- name: DomainResourceList :many
 SELECT rh.host, rh.aaaa_status, dr.source, dr.required, dr.first_seen, dr.last_seen, rh.last_checked_at
