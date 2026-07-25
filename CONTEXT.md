@@ -9,7 +9,10 @@ crystallized *after* the spec was frozen.
 ## Terms
 
 - **Check detail.** The typed per-check payload on an engine `checker.Result` — one
-  struct per check (e.g. `AAAABaseDetail`), all embedding `CommonDetail{Error, Reason}`
+  struct per check *family* (12 detail structs over the 15 check names: `AAAADetail`
+  is shared by `dns_aaaa_base`/`dns_aaaa_www`, `HTTPDetail` by `http_ipv6`/`https_ipv6`,
+  `LatencyDetail` by `latency_ipv4`/`latency_ipv6`), keyed by the `newDetail` dispatch
+  in `checker/detail.go`, all embedding `CommonDetail{Error, Reason}`
   and satisfying the unexported-marker `Detail` interface. It is the single
   compiler-checked contract for what a check reports beyond its status; the
   `scan_detail` JSON stored per scan (03 §14.2) is its serialization plus the

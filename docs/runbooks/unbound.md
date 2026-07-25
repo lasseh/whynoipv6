@@ -18,12 +18,13 @@ resource sweep, preflight) do.
 
 1. `systemctl status unbound@1 unbound@2` — both must be active; the
    crawler units order `After=unbound@1.service unbound@2.service`.
-2. `unbound-control -c /etc/unbound/unbound-1.conf stats_noreset | grep
-   -E 'total.num|answer.rcode.SERVFAIL'` — SERVFAIL ratio over ~5% means
-   upstream/network trouble, not Unbound.
+2. `unbound-control -c /etc/unbound/instances/1.conf stats_noreset | grep
+   -E 'total.num|answer.rcode.SERVFAIL'` (use `2.conf` for the second
+   instance) — SERVFAIL ratio over ~5% means upstream/network trouble,
+   not Unbound.
 3. `dig @127.0.0.1 -p 53 AAAA one.one.one.one` and the same against
    `-p 5353` — one failing instance implicates that instance only.
-4. Check the hourly `unbound_stats` rows (`v6ctl ops unbound-stats`
+4. Check the per-minute `unbound_stats` rows (`v6ctl ops unbound-stats`
    writes them; Grafana panel) for cache-hit-rate trends.
 
 ## Recovery
@@ -41,6 +42,7 @@ resource sweep, preflight) do.
 
 ## Notes
 
-- The resetting `stats` variant is used by the hourly collector — do
-  not run `unbound-control stats` by hand between collector runs or
-  that hour's row under-reports; use `stats_noreset` interactively.
+- The resetting `stats` variant is used by the per-minute collector
+  (`whynoipv6-unbound-stats.timer`, `OnCalendar=*:*:00`) — do not run
+  `unbound-control stats` by hand between collector runs or that
+  minute's row under-reports; use `stats_noreset` interactively.

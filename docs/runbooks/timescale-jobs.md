@@ -1,10 +1,12 @@
 # Runbook — TimescaleDB background jobs
 
 The hypertables (`scan`, `scan_detail`, `changelog`, `crawler_metrics`,
-`unbound_stats`) rely on Timescale policies: columnstore/compression,
-retention, and (if configured) continuous-aggregate refresh. A stuck
-policy shows up as unbounded disk growth or stale caggs, not as an
-application error.
+`unbound_stats`, `stats_asn_daily`) rely on Timescale policies:
+columnstore/compression and retention. The `scan_daily_adoption`
+continuous aggregate refreshes hourly (`start_offset` 3d, `end_offset`
+1h) and has its own columnstore policy after 90d. A stuck policy shows
+up as unbounded disk growth or a stale cagg, not as an application
+error.
 
 ## Triggers
 

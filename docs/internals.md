@@ -36,7 +36,7 @@ in `backend/`, `frontend-*` targets in `frontend/`.
 
 | Package | Responsibility |
 | --- | --- |
-| `domain` | The core vocabulary, zero non-stdlib deps: `Dimension`, `IPv6Status` (public 4-value), `Observation` (internal 7-value), `Classification`, `Kind`, `Canonicalize()` (PSL host normalization), the classification ladder (`Classify`), anti-flap thresholds (`ConfirmN`). Mirrors the DB enums exactly. |
+| `domain` | The core vocabulary, bottom of the import graph (no `internal/` imports; `golang.org/x/net` idna/publicsuffix is its only non-stdlib dep): `Dimension`, `IPv6Status` (public 4-value), `Observation` (internal 7-value), `Classification`, `Kind`, `Canonicalize()` (PSL host normalization), the classification ladder (`Classify`), anti-flap thresholds (`ConfirmN`). Mirrors the DB enums exactly. |
 | `checker` | The scan engine lifted from v6audit: 15 checks (AAAA base/www, NS, MX, PTR, DNSSEC, HTTP/HTTPS/TLS over v6, response parity, SMTP, SPF, latency, resource discovery), two-phase conditional execution, SSRF-pinned `SafeDialer`, IPv6 self-preflight. All scoring deleted. |
 | `consensus` | The 2-of-3 quorum resolver (Cloudflare/Google/Quad9) used only for the two classification-critical AAAA lookups; per-provider rate caps and circuit breakers, plus a fast-lane breaker. |
 | `observe` | The neutral seam between the engine and its two consumers: `MapObservations` (crawler commit path) and `MapLiveResult` (API live-check path) guarantee identical mapping; also the `LinkSet` constructors for the resources roll-up. The API never imports the crawler — they meet here. |
@@ -44,9 +44,7 @@ in `backend/`, `frontend-*` targets in `frontend/`.
 | `ingest` | Tranco fetch/parse/upsert with sanity guards (≥950k rows, ≤2% delist), and the DNS-provider / hosting-provider attribution mappings. |
 | `campaign` | Campaign-YAML parse, validation (also used DB-less by CI), and the idempotent `Sync` into the DB. |
 | `geoip` | IPinfo Lite mmdb reader with hourly hot-reload and insert-time country/ASN attribution (ccTLD beats GeoIP). |
-| `repository` | Consumer-defined port interfaces. |
-| `postgres` | The DB adapter: sqlc-generated code in `postgres/db/` (~118-method `Querier`), hand-written keyset-pagination runner, and the one squirrel query builder (`domainlist.go`, see below). `pgtest/` is the testcontainers harness. |
-| `service` | Use-case layer the API handlers call. |
+| `postgres` | The DB adapter: sqlc-generated code in `postgres/db/` (~118-method `Querier`), and the three squirrel keyset builders (`domainlist.go`, `asnlist.go`, `changeloglist.go`) over the shared runner in `keysetquery.go` (see below). `pgtest/` is the testcontainers harness. |
 | `api` | chi router + one handler file per resource; keyset pagination, `{items,page,meta}` envelopes, RFC 9457 problems, feeds/badges/CSV/datasets serializers; `gen/` is oapi-codegen output. |
 | `export` | Nightly static dataset snapshots: 3 size tiers × CSV.gz + Parquet, self-describing (datapackage.json, SHA256SUMS), atomic manifest rewrite. |
 | `config` | Two-tier viper loader (defaults < `/etc/whynoipv6/config.yaml` < env) shared by all three binaries; slog installer; startup key dump with secrets redacted. |
@@ -93,23 +91,33 @@ so a live result can never disagree in shape with a stored one.
   (forever), `crawler_metrics` (90d), `unbound_stats` (30d), `stats_asn_daily`;
   plus the `scan_daily_adoption` continuous aggregate. Modern columnstore API only.
 - **sqlc-first:** all static SQL lives in `backend/db/query/*.sql` (15 files) and
-  generates into `internal/postgres/db`. Exactly two escape hatches: the `/domains`
-  list family (a squirrel builder in `postgres/domainlist.go` — its filter grammar
-  would need hundreds of sqlc variants) and two multi-CTE resource statements as Go
-  constants in `crawler/commit.go`.
+  generates into `internal/postgres/db`. Three documented escape hatches, all
+  sanctioned by 05-schema.md §10.2: (a) the keyset list builders
+  `postgres/{domainlist,asnlist,changeloglist}.go` — the `/domains` filter grammar
+  alone would need hundreds of sqlc variants — plus `MaxRank`/`EXPLAIN` in
+  `domainlist.go`; (b) the two multi-CTE resource statements
+  `SQLUpsertDomainResource` / `SQLPruneDomainResources` as Go constants in
+  `postgres/commitflush.go`; (c) the Tranco staging statements in `ingest/tranco.go`
+  (a session temp table sqlc cannot type).
 - **Testing:** `internal/postgres/pgtest` spins a real PG18+Timescale container and
   template-clones a freshly-migrated database per test; integration tests are
   `//go:build integration` files run by `make test-integration`.
 
 ## Config
 
-One registry (`internal/config/defaults.go`) is the source of truth; env-var names
+The registry is a **pair**: `internal/config/defaults.go` holds the compiled-in
+default and `docs/spec/09-ops.md` §2 holds the documented row — `TestRegistryCompleteness`
+(`internal/config/registry_test.go`) fails if either side is missing. Adding a key =
+one entry in `registryDefaults` **plus** one row in the matching 09-ops §2.x
+subsection, using that subsection's column layout (dotted keys:
+`` | `key` | `ENV_VAR` | Type | Default | From | Meaning | ``). Env-var names
 derive mechanically from the dotted key (`anti_flap.min_confirm_spacing` →
-`ANTI_FLAP_MIN_CONFIRM_SPACING`). Globals: `DATABASE_URL` (required), `API_LISTEN`,
-`GEOIP_PATH`, `DATASETS_DIR`, `PUBLIC_BASE_URL`, `LOG_LEVEL`. Tuning keys cover
-claiming, cadence bands, anti-flap spacing, consensus QPS/breakers, lifecycle
-streaks, Tranco guards, live-check budgets, and ops URLs — every key is logged at
-startup with secrets redacted.
+`ANTI_FLAP_MIN_CONFIRM_SPACING`) and are never spelled by hand. Globals:
+`DATABASE_URL` (required), `API_LISTEN`, `GEOIP_PATH`, `DATASETS_DIR`,
+`PUBLIC_BASE_URL`, `LOG_LEVEL`. Tuning keys cover claiming, cadence bands,
+anti-flap spacing, consensus QPS/breakers, lifecycle streaks, Tranco guards,
+live-check budgets, and ops URLs — every key is logged at startup with secrets
+redacted.
 
 ## Codegen & CI gates
 
@@ -117,7 +125,8 @@ startup with secrets redacted.
 `internal/api/gen/api.gen.go`), and the frontend types (openapi-typescript →
 `openapi/schema.ts`), then **fails if the tree changed** — the drift gate CI runs on
 every PR, alongside `make lint`, `make spec-lint` (Spectral on `openapi.yaml`),
-`make test`, `make test-integration`, `make vulncheck`, and `make build-linux`
+`make test`, `make test-integration`, `make vulncheck`, `make build-linux`, and the
+frontend gates `make frontend-test` / `frontend-lint` / `frontend-build`
 (see `.github/workflows/ci.yml`).
 
 ## Conventions to keep
@@ -130,6 +139,11 @@ every PR, alongside `make lint`, `make spec-lint` (Spectral on `openapi.yaml`),
   typed accessors (`AAAABase()`, `NS()`, …).
 - **Pure compute, fenced I/O** — state math belongs in pure functions
   (`ComputeCommit`, `Classify`, `schedule`); the I/O edge is thin and lease-fenced.
+- **Ports are declared by their consumer** — there is no central `repository` or
+  `service` layer (05-schema.md §10.3 records both as deleted); each consumer package
+  declares the narrow interface it needs (`crawler.Scanner`/`PreflightState`/
+  `CommitSink`/`Enricher`, `checker.AAAAResolver`, the per-package `ConfigSource`s),
+  and `postgres` supplies the concrete adapter.
 - **New singleton jobs need an advisory-lock key** in `internal/lock` — both crawler
   processes run every schedule.
 - **Cite the spec** — new exported types/functions carry a comment pointing at the
@@ -155,7 +169,7 @@ state lives in composables.
 - `utils/` — status icon/label/tooltip mapping, changelog wording, date formatting.
 - Tests are Vitest; DOM tests opt into jsdom per-file with
   `// @vitest-environment jsdom`. `make frontend-test` / `frontend-lint` /
-  `frontend-build` are the gates.
+  `frontend-build` are the gates, and CI runs all three.
 
 ## Where to start reading
 

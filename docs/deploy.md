@@ -12,16 +12,22 @@ Everything dev-related runs from the repo root `compose.yaml`.
 ### Prerequisites
 
 - Docker with the compose plugin.
-- A free [IPinfo](https://ipinfo.io/) token for the GeoIP database. Put it in a
-  gitignored `.env` at the repo root:
-
-  ```
-  IPINFO_TOKEN=your_token_here
-  ```
-
+- A free [IPinfo](https://ipinfo.io/signup) token for the GeoIP database. Copy the
+  tracked `.env.example` to a gitignored `.env` at the repo root and fill in
+  `IPINFO_TOKEN` — the `geoip-init` service uses it to fetch `ipinfo_lite.mmdb`.
 - **Working IPv6 on the host.** The crawler preflights IPv6 egress before claiming
   any work; without v6 connectivity it will start but sit idle, retrying the
   preflight every 60s.
+
+The same `.env` carries the four compose tuning knobs (all optional — compose
+falls back to the defaults below):
+
+| Variable | Default | What it changes |
+| --- | --- | --- |
+| `UNBOUND_DEV_PROFILE` | `dev` | which `deploy/unbound/<profile>/` config both recursors mount; `dev` caps fan-out for OrbStack laptops, `dev-fast` uses the prod numbers (`outgoing-range` 256 → 8192) |
+| `CRAWLER_REPLICAS` | `1` | crawler processes; the prod shape is `2` |
+| `CRAWLER_WORKER_SLOTS` | `4` | per-process fan-out; `4` on laptops (OrbStack's 16k UDP conntrack limit), `64` on native-netfilter hosts |
+| `FRONTEND_API_URL` | `http://localhost:8080` | host-visible API origin baked into the frontend bundle at build time |
 
 ### Start the stack
 
@@ -33,19 +39,23 @@ This brings up, in dependency order:
 
 | Service | What it is |
 | --- | --- |
-| `db` | `timescale/timescaledb:latest-pg18`, port `5432`, user/pass/db `whynoipv6` |
+| `db` | `timescale/timescaledb:latest-pg18`, host port `15432` → container `5432` (15432 because the dev host runs a native postgres on 5432), user/pass/db `whynoipv6` |
 | `unbound1`, `unbound2` | bulk recursors, host ports `5301`/`5302` |
 | `migrate` | init container: `v6ctl migrate up`, then exits |
-| `geoip-init` | init container: `v6ctl geoip update` → fetches `ipinfo_lite.mmdb` into the `geoip` volume |
 | `api` | the API on `http://localhost:8080` |
+| `frontend` | nginx-served production bundle on `http://localhost:8081` |
+| `geoip-init` | init container: `v6ctl geoip update` → fetches `ipinfo_lite.mmdb` into the `geoip` volume |
 | `crawler` | the scanning daemon (starts after `migrate` + `geoip-init` succeed) |
+| `unbound-stats` | sidecar scraping both recursors into `unbound_stats` every 60s |
+| `grafana` | dashboards + alert rules A1–A5 from `deploy/grafana/`, `http://127.0.0.1:3000` (admin/admin) |
 
 Useful daily commands:
 
 ```sh
 docker compose logs -f crawler            # watch the crawler work
 docker compose logs -f api
-docker compose exec db psql -U whynoipv6  # poke the database
+docker compose exec db psql -U whynoipv6  # poke the database (container-internal)
+psql -h localhost -p 15432 -U whynoipv6   # ...or from the host, on the published port
 docker compose up -d --build api crawler  # rebuild + restart after a code change
 make compose-down                         # stop everything AND delete the volumes
 ```
@@ -138,6 +148,10 @@ make build-linux         # static linux/amd64 binaries in backend/dist/
   (`ipinfo_lite.mmdb` — provision once with `v6ctl geoip update` before first
   crawler start; a missing mmdb is fatal).
 - Migrations: `v6ctl migrate up` (also the rollout step for schema changes).
+- Frontend bundle: `make frontend-build` (reads `frontend/.env.production` for
+  `VITE_API_URL`), then copy the contents of `frontend/dist/` to
+  `/var/www/whynoipv6.com/` — the root `deploy/nginx/whynoipv6.com.conf` serves.
+  There is no Make target for the copy; it is a manual rsync today.
 
 ### systemd units ([`deploy/systemd/`](../deploy/systemd/))
 
@@ -173,8 +187,11 @@ across processes by Postgres advisory locks.
 
 - `api.whynoipv6.com.conf` — proxies to the api on loopback `[::1]:8080`, serves
   `/datasets` as static files straight from the export directory.
-- `whynoipv6.com.conf` — serves the built frontend (`frontend/dist/`) as a SPA,
-  including the legacy singular→plural 301 map (`/domain/x` → `/domains/x`).
+- `whynoipv6.com.conf` — serves the production frontend bundle from
+  `/var/www/whynoipv6.com` (the deploy target of `frontend/dist/`) as a SPA,
+  including the legacy singular→plural 301 map (`/domain/x` → `/domains/x`). The
+  umami `/script.js` + `/api/send` proxy blocks are still commented out pending the
+  real umami host.
 
 ### Backups ([`deploy/pgbackrest/`](../deploy/pgbackrest/))
 

@@ -47,7 +47,7 @@ FROM domain WHERE NOT disabled GROUP BY 1 ORDER BY 1 LIMIT 14;
   `CLAIM_ORDER=age` on one crawler process (env override) and revert
   once `min(next_check_at)` recovers.
 - **Never** hand-edit confirmed-state columns (`*_status`, `*_since`,
-  `classification`, `gold`) — those belong to the commit machine; a
+  `classification`, `saint`) — those belong to the commit machine; a
   wrong value self-heals only after N confirmations and pollutes the
   changelog.
 

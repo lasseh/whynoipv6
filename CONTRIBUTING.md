@@ -24,7 +24,8 @@ make frontend-lint     # type-check + eslint + prettier
 
 1. **Run the gates**: `make test && make lint` (backend) and/or
    `make frontend-test && make frontend-lint && make frontend-build` (frontend).
-   CI runs these plus `make generate` and `make spec-lint`.
+   CI runs both sets plus `make generate` (the drift gate), `make spec-lint`,
+   `make test-integration`, `make vulncheck` and `make build-linux`.
 2. **Generated code is a build artifact.** Never hand-edit
    `backend/internal/api/gen/`, `backend/internal/postgres/db/`, or
    `openapi/schema.ts`. Change the source (`openapi/openapi.yaml` or

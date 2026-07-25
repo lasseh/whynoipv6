@@ -127,7 +127,9 @@ cmd/{api,crawler,v6ctl}          process wiring only
         internal/domain          pure vocabulary: enums, Canonicalize, the ladder
 ```
 
-`internal/domain` has zero non-stdlib dependencies and mirrors the DB enums — every
+`internal/domain` sits at the bottom of the import graph — it imports no other
+`internal/` package, depends on nothing outside the stdlib but
+`golang.org/x/net` (idna, publicsuffix), and mirrors the DB enums — every
 layer speaks its types. The API never imports the crawler; both meet only in
 `observe`, which guarantees a live re-check and a stored scan map to identical public
 shapes. See [`internals.md`](internals.md) for the full package map.
