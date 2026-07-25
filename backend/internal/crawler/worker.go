@@ -76,12 +76,22 @@ func (w *Worker) Process(ctx context.Context, d ClaimedDomain) { //nolint:gocrit
 	sr := w.Scanner.Run(ctx, d.Host, d.Kind)
 
 	var links []observe.LinkedResource
+	var discovered []string
+	discoveryOK := false
 	if w.ResourcesEnabled {
+		if st, _, ok := sr.ResourceDiscovery(); ok && st == checker.StatusSupported {
+			discoveryOK = true
+			discovered = discoveredHosts(sr)
+		}
 		if w.Links != nil {
 			links = w.Links(ctx, d.ID)
 		} else {
 			links = observe.PersistedLinks(ctx, w.Pool, d.ID, true)
 		}
+		// The 02 §6 D-fold: hosts discovered this scan but not yet persisted
+		// enter the roll-up as NULL entries, deferring the resources
+		// dimension instead of confirming a vacuous not_applicable.
+		links = observe.FoldDiscovered(links, discovered)
 	}
 	obs := observe.MapObservations(d.Kind, sr, w.Preflight.LastPass(), t, links, w.ResourcesEnabled)
 
@@ -107,11 +117,9 @@ func (w *Worker) Process(ctx context.Context, d ClaimedDomain) { //nolint:gocrit
 		DurationMS:   int32(time.Since(start).Milliseconds()),
 		T:            t,
 	}
-	if w.ResourcesEnabled {
-		if st, _, ok := sr.ResourceDiscovery(); ok && st == checker.StatusSupported {
-			in.DiscoveryOK = true
-			in.Discovered = discoveredHosts(sr)
-		}
+	if discoveryOK {
+		in.DiscoveryOK = true
+		in.Discovered = discovered
 	}
 
 	res, err := w.Committer.Commit(ctx, in)

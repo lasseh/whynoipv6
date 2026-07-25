@@ -21,7 +21,7 @@ const (
 type Config struct {
 	MaxNSLookups            int  // checks.max_ns_lookups, default 4
 	MaxMXLookups            int  // checks.max_mx_lookups, default 5
-	EnableResourceDiscovery bool // crawler.resources.enabled, default false
+	EnableResourceDiscovery bool // crawler.resources.enabled, default true
 }
 
 // Runner executes a set of checks against a host.

@@ -13,9 +13,11 @@ ORDER BY rh.host;
 SELECT id, host, aaaa_status, dependent_count, last_checked_at
 FROM resource_host WHERE host = @host;
 
--- The worker's pre-commit roll-up input (02 §6): required links only.
+-- The worker's pre-commit roll-up input (02 §6): required links only. The
+-- host rides along so the caller can fold this scan's discovery output D
+-- without double-counting already-persisted links.
 -- name: DomainRequiredLinks :many
-SELECT rh.aaaa_status
+SELECT rh.host, rh.aaaa_status
 FROM domain_resource dr
 JOIN resource_host rh ON rh.id = dr.resource_host_id
 WHERE dr.domain_id = @domain_id AND dr.required;

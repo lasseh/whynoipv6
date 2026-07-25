@@ -118,8 +118,10 @@ type Querier interface {
 	// Lifecycle re-entry (07 §5.1.6): every POST /check on an existing host.
 	DomainLiveCheckReentry(ctx context.Context, host string) error
 	DomainMembershipReEntry(ctx context.Context, id int64) error
-	// The worker's pre-commit roll-up input (02 §6): required links only.
-	DomainRequiredLinks(ctx context.Context, domainID int64) ([]*Ipv6Status, error)
+	// The worker's pre-commit roll-up input (02 §6): required links only. The
+	// host rides along so the caller can fold this scan's discovery output D
+	// without double-counting already-persisted links.
+	DomainRequiredLinks(ctx context.Context, domainID int64) ([]DomainRequiredLinksRow, error)
 	// Resource-dependency reads (07 §4.11). Forward list is bounded small
 	// (exact count, no cursor); the reverse dependents list is served by the
 	// domainlist builder.

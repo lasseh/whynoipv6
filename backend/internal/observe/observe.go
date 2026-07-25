@@ -36,6 +36,7 @@ const preflightFreshness = 5 * time.Minute
 // required-host set (persisted pre-upsert links ∪ folded discovery output D;
 // 02 §6).
 type LinkedResource struct {
+	Host       string             // canonical resource host (dedup key for the D-fold)
 	AAAAStatus *domain.IPv6Status // nil = host never swept, or a D-folded host
 }
 
@@ -397,16 +398,38 @@ func MapLiveResult(
 // convention — a missing or NULL status stays nil and defers the resources
 // dimension in rollupResources. The pure folds below are the tested core.
 
-// linksFromStatuses normalizes the persisted required-link statuses (02 §6).
-func linksFromStatuses(statuses []*db.Ipv6Status) []LinkedResource {
-	links := make([]LinkedResource, 0, len(statuses))
-	for _, status := range statuses {
-		var l LinkedResource
-		if status != nil {
-			s := domain.IPv6Status(*status)
+// linksFromRows normalizes the persisted required-link rows (02 §6).
+func linksFromRows(rows []db.DomainRequiredLinksRow) []LinkedResource {
+	links := make([]LinkedResource, 0, len(rows))
+	for _, row := range rows {
+		l := LinkedResource{Host: row.Host}
+		if row.AaaaStatus != nil {
+			s := domain.IPv6Status(*row.AaaaStatus)
 			l.AAAAStatus = &s
 		}
 		links = append(links, l)
+	}
+	return links
+}
+
+// FoldDiscovered appends this scan's discovery output D to the persisted
+// link set as NULL-status entries — the 02 §6 D-fold. A discovered host not
+// yet among the persisted links contributes a nil status, which defers the
+// roll-up (error) until its swept status is persisted; it can never falsely
+// advance. Hosts already persisted keep their real status.
+func FoldDiscovered(links []LinkedResource, discovered []string) []LinkedResource {
+	if len(discovered) == 0 {
+		return links
+	}
+	seen := make(map[string]bool, len(links))
+	for _, l := range links {
+		seen[l.Host] = true
+	}
+	for _, h := range discovered {
+		if !seen[h] {
+			seen[h] = true
+			links = append(links, LinkedResource{Host: h})
+		}
 	}
 	return links
 }
@@ -417,9 +440,9 @@ func linksForHosts(rawHosts []string, byHost map[string]domain.IPv6Status) []Lin
 	links := make([]LinkedResource, 0, len(rawHosts))
 	for _, h := range rawHosts {
 		if s, ok := byHost[h]; ok {
-			links = append(links, LinkedResource{AAAAStatus: &s})
+			links = append(links, LinkedResource{Host: h, AAAAStatus: &s})
 		} else {
-			links = append(links, LinkedResource{}) // missing/unswept → error in the roll-up
+			links = append(links, LinkedResource{Host: h}) // missing/unswept → error in the roll-up
 		}
 	}
 	return links
@@ -431,12 +454,12 @@ func PersistedLinks(ctx context.Context, pool *pgxpool.Pool, domainID int64, ena
 	if !enabled {
 		return nil
 	}
-	statuses, err := db.New(pool).DomainRequiredLinks(ctx, domainID)
+	rows, err := db.New(pool).DomainRequiredLinks(ctx, domainID)
 	if err != nil {
 		slog.Warn("resource link read failed", "err", err.Error())
 		return nil
 	}
-	return linksFromStatuses(statuses)
+	return linksFromRows(rows)
 }
 
 // LiveLinks resolves the run's discovered resource hosts against the

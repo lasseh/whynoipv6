@@ -12,26 +12,33 @@ import (
 )
 
 const DomainRequiredLinks = `-- name: DomainRequiredLinks :many
-SELECT rh.aaaa_status
+SELECT rh.host, rh.aaaa_status
 FROM domain_resource dr
 JOIN resource_host rh ON rh.id = dr.resource_host_id
 WHERE dr.domain_id = $1 AND dr.required
 `
 
-// The worker's pre-commit roll-up input (02 §6): required links only.
-func (q *Queries) DomainRequiredLinks(ctx context.Context, domainID int64) ([]*Ipv6Status, error) {
+type DomainRequiredLinksRow struct {
+	Host       string      `json:"host"`
+	AaaaStatus *Ipv6Status `json:"aaaa_status"`
+}
+
+// The worker's pre-commit roll-up input (02 §6): required links only. The
+// host rides along so the caller can fold this scan's discovery output D
+// without double-counting already-persisted links.
+func (q *Queries) DomainRequiredLinks(ctx context.Context, domainID int64) ([]DomainRequiredLinksRow, error) {
 	rows, err := q.db.Query(ctx, DomainRequiredLinks, domainID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []*Ipv6Status{}
+	items := []DomainRequiredLinksRow{}
 	for rows.Next() {
-		var aaaa_status *Ipv6Status
-		if err := rows.Scan(&aaaa_status); err != nil {
+		var i DomainRequiredLinksRow
+		if err := rows.Scan(&i.Host, &i.AaaaStatus); err != nil {
 			return nil, err
 		}
-		items = append(items, aaaa_status)
+		items = append(items, i)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

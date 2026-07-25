@@ -123,6 +123,25 @@ func TestProcessCommitInput(t *testing.T) {
 	if !sink.in.DiscoveryOK || len(sink.in.Discovered) != 1 || sink.in.Discovered[0] != "cdn.example" {
 		t.Errorf("discovery = %t/%v, want open with cdn.example", sink.in.DiscoveryOK, sink.in.Discovered)
 	}
+	// The D-fold (02 §6): the freshly discovered host has no persisted
+	// status, so resources defers instead of confirming not_applicable.
+	if sink.in.Obs.Resources != domain.ObsError {
+		t.Errorf("resources = %s, want error (D-fold defer)", sink.in.Obs.Resources)
+	}
+
+	// Once the discovered host is persisted with a swept status, the
+	// roll-up advances on the persisted link, not the fold.
+	sink.in = nil
+	sup := domain.StatusSupported
+	w3 := testWorker(sink, &fakeEnricher{}, scanOK())
+	w3.ResourcesEnabled = true
+	w3.Links = func(context.Context, int64) []observe.LinkedResource {
+		return []observe.LinkedResource{{Host: "cdn.example", AAAAStatus: &sup}}
+	}
+	w3.Process(context.Background(), claimed())
+	if sink.in.Obs.Resources != domain.ObsSupported {
+		t.Errorf("resources = %s, want supported once the link is persisted", sink.in.Obs.Resources)
+	}
 }
 
 // TestProcessNilEnricher: without an enricher, attribution defers (nil) and

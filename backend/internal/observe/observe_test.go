@@ -314,27 +314,64 @@ func TestLinkSetConstructorsAgree(t *testing.T) {
 	sup := db.Ipv6StatusSupported
 	rows := []struct {
 		name      string
-		persisted []*db.Ipv6Status
+		persisted []db.DomainRequiredLinksRow
 		hosts     []string
 		byHost    map[string]domain.IPv6Status
 		want      domain.Observation
 	}{
-		{"all_known", []*db.Ipv6Status{&sup, &sup}, []string{"a", "b"},
+		{"all_known", []db.DomainRequiredLinksRow{{Host: "a", AaaaStatus: &sup}, {Host: "b", AaaaStatus: &sup}},
+			[]string{"a", "b"},
 			map[string]domain.IPv6Status{"a": domain.StatusSupported, "b": domain.StatusSupported},
 			domain.ObsSupported},
-		{"unswept_defers", []*db.Ipv6Status{&sup, nil}, []string{"a", "b"},
+		{"unswept_defers", []db.DomainRequiredLinksRow{{Host: "a", AaaaStatus: &sup}, {Host: "b"}},
+			[]string{"a", "b"},
 			map[string]domain.IPv6Status{"a": domain.StatusSupported},
 			domain.ObsError},
 	}
 	for _, tc := range rows {
 		t.Run(tc.name, func(t *testing.T) {
-			p := rollupResources(domain.ObsSupported, linksFromStatuses(tc.persisted))
+			p := rollupResources(domain.ObsSupported, linksFromRows(tc.persisted))
 			l := rollupResources(domain.ObsSupported, linksForHosts(tc.hosts, tc.byHost))
 			if p != l || p != tc.want {
 				t.Errorf("persisted=%s live=%s, want both %s", p, l, tc.want)
 			}
 		})
 	}
+}
+
+// TestFoldDiscovered pins the 02 §6 D-fold: a discovered host not among the
+// persisted links joins the set as a NULL entry (deferring the roll-up), an
+// already-persisted host is not double-counted, and an empty D is a no-op.
+func TestFoldDiscovered(t *testing.T) {
+	sup := domain.StatusSupported
+	persisted := []LinkedResource{{Host: "a", AAAAStatus: &sup}}
+
+	t.Run("new_host_defers", func(t *testing.T) {
+		folded := FoldDiscovered(persisted, []string{"a", "b"})
+		if len(folded) != 2 || folded[1].Host != "b" || folded[1].AAAAStatus != nil {
+			t.Fatalf("folded = %+v, want persisted a + NULL b", folded)
+		}
+		if got := rollupResources(domain.ObsSupported, folded); got != domain.ObsError {
+			t.Errorf("rollup = %s, want error (defer)", got)
+		}
+	})
+	t.Run("persisted_host_not_duplicated", func(t *testing.T) {
+		folded := FoldDiscovered(persisted, []string{"a"})
+		if len(folded) != 1 {
+			t.Fatalf("folded = %+v, want unchanged persisted set", folded)
+		}
+	})
+	t.Run("first_scan_all_null", func(t *testing.T) {
+		folded := FoldDiscovered(nil, []string{"a", "b"})
+		if got := rollupResources(domain.ObsSupported, folded); got != domain.ObsError {
+			t.Errorf("rollup = %s, want error (defer), not a vacuous not_applicable", got)
+		}
+	})
+	t.Run("empty_discovery_noop", func(t *testing.T) {
+		if folded := FoldDiscovered(persisted, nil); len(folded) != 1 {
+			t.Errorf("folded = %+v, want persisted set unchanged", folded)
+		}
+	})
 }
 
 // TestBridgeTotality pins every per-dimension bridge over the complete
