@@ -3,6 +3,7 @@ package checker
 import (
 	"context"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/miekg/dns"
@@ -62,18 +63,33 @@ func zoneDialer(t *testing.T, z *fakeZone) *SafeDialer {
 	return NewSafeDialer(NewResolver([]string{addr}))
 }
 
-// scriptAAAA is a canned AAAAResolver: it returns a pre-set answer (and
-// optional error) per queried name, driving the two consensus-seam checks
-// (dns_aaaa_base, dns_aaaa_www) without any DNS I/O.
+// scriptAAAA is the canned AAAAResolver: a pre-set answer (and optional
+// error) per queried name, plus a per-name lookup count. It drives the two
+// consensus-seam checks (dns_aaaa_base, dns_aaaa_www) and the Runner
+// without any DNS I/O.
 type scriptAAAA struct {
-	ans map[string]AAAAAnswer
-	err map[string]error
+	mu    sync.Mutex
+	ans   map[string]AAAAAnswer
+	err   map[string]error
+	calls map[string]int
 }
 
 func newScriptAAAA() *scriptAAAA {
-	return &scriptAAAA{ans: map[string]AAAAAnswer{}, err: map[string]error{}}
+	return &scriptAAAA{ans: map[string]AAAAAnswer{}, err: map[string]error{}, calls: map[string]int{}}
 }
 
 func (s *scriptAAAA) LookupAAAA(_ context.Context, name string) (AAAAAnswer, error) {
-	return s.ans[name], s.err[name]
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.calls[name]++
+	if a, ok := s.ans[name]; ok {
+		return a, s.err[name]
+	}
+	return AAAAAnswer{Rcode: "NOERROR"}, s.err[name] // NOERROR-empty default
+}
+
+func (s *scriptAAAA) callCount(name string) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.calls[name]
 }

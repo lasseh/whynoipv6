@@ -10,7 +10,8 @@ import (
 
 const maxPTRAddresses = 3
 
-// DNSPTRIPv6 checks reverse DNS (PTR) records for the domain's IPv6 addresses.
+// DNSPTRIPv6 checks reverse DNS (PTR) records for the domain's IPv6 addresses
+// (01-engine.md §11.12).
 type DNSPTRIPv6 struct {
 	dialer *SafeDialer
 }
@@ -31,7 +32,7 @@ func (c *DNSPTRIPv6) Check(ctx context.Context, domain string, kind Kind) (Resul
 	// Resolve AAAA records.
 	ips, _, _, _, err := c.dialer.Resolver().LookupAAAA(ctx, domain)
 	if err != nil || len(ips) == 0 {
-		d.Reason = "no AAAA record"
+		d.Reason = errNoAAAARecord
 		return Result{
 			Status:  StatusNotApplicable,
 			Detail:  d,

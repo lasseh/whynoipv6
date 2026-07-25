@@ -7,7 +7,8 @@ import (
 	"time"
 )
 
-// DNSNSIPv6 checks whether the domain's authoritative nameservers have AAAA records.
+// DNSNSIPv6 checks whether the domain's authoritative nameservers have AAAA
+// records (01-engine.md §11.3).
 type DNSNSIPv6 struct {
 	dialer     *SafeDialer
 	maxLookups int // config checks.max_ns_lookups (01-engine.md §11.3)

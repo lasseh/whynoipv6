@@ -15,7 +15,7 @@ const (
 	latencyTimeout      = 10 * time.Second
 )
 
-// LatencyIPv4 measures HTTP response time over IPv4.
+// LatencyIPv4 measures HTTP response time over IPv4 (01-engine.md §11.14).
 type LatencyIPv4 struct {
 	dialer *SafeDialer
 }
@@ -52,7 +52,7 @@ func (c *LatencyIPv4) Check(ctx context.Context, domain string, kind Kind) (Resu
 	return measureLatency(ctx, c.dialer, domain, ip, "tcp4", start)
 }
 
-// LatencyIPv6 measures HTTP response time over IPv6.
+// LatencyIPv6 measures HTTP response time over IPv6 (01-engine.md §11.14).
 type LatencyIPv6 struct {
 	dialer *SafeDialer
 }
@@ -72,7 +72,7 @@ func (c *LatencyIPv6) Check(ctx context.Context, domain string, kind Kind) (Resu
 	if err != nil || len(ips) == 0 {
 		return Result{
 			Status:  StatusNotApplicable,
-			Detail:  &LatencyDetail{CommonDetail: CommonDetail{Reason: "no AAAA record"}},
+			Detail:  &LatencyDetail{CommonDetail: CommonDetail{Reason: errNoAAAARecord}},
 			Latency: time.Since(start),
 		}, nil
 	}

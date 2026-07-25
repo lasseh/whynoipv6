@@ -10,7 +10,8 @@ import (
 	"time"
 )
 
-// HTTPSIPv6 checks whether the domain responds to HTTPS over IPv6.
+// HTTPSIPv6 checks whether the domain responds to HTTPS over IPv6
+// (01-engine.md §11.7).
 type HTTPSIPv6 struct {
 	dialer *SafeDialer
 }

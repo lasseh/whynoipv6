@@ -12,7 +12,8 @@ import (
 
 const userAgent = "WhyNoIPv6Bot/1.0 (+https://whynoipv6.com/bot)"
 
-// HTTPIPv6 checks whether the domain responds to HTTP over IPv6.
+// HTTPIPv6 checks whether the domain responds to HTTP over IPv6
+// (01-engine.md §11.6).
 type HTTPIPv6 struct {
 	dialer *SafeDialer
 }

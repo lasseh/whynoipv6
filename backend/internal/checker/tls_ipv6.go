@@ -10,7 +10,9 @@ import (
 
 const expirySoonDays = 30
 
-// TLSIPv6 checks TLS certificate validity over an IPv6 connection.
+// TLSIPv6 checks TLS certificate validity over an IPv6 connection
+// (01-engine.md §11 summary table, row 9 — tls_ipv6 has no dedicated §11.x
+// subsection).
 type TLSIPv6 struct {
 	dialer *SafeDialer
 }

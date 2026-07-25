@@ -8,7 +8,6 @@ import (
 	"net"
 	"net/url"
 	"strings"
-	"sync"
 	"syscall"
 	"testing"
 	"time"
@@ -37,33 +36,6 @@ func emptyNoError(w dns.ResponseWriter, r *dns.Msg) {
 	_ = w.WriteMsg(m)
 }
 
-// fakeSeam scripts the consensus AAAAResolver and counts lookups per name.
-type fakeSeam struct {
-	mu      sync.Mutex
-	answers map[string]AAAAAnswer
-	calls   map[string]int
-}
-
-func newFakeSeam() *fakeSeam {
-	return &fakeSeam{answers: map[string]AAAAAnswer{}, calls: map[string]int{}}
-}
-
-func (f *fakeSeam) LookupAAAA(_ context.Context, name string) (AAAAAnswer, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	f.calls[name]++
-	if a, ok := f.answers[name]; ok {
-		return a, nil
-	}
-	return AAAAAnswer{Rcode: "NOERROR"}, nil // NOERROR-empty
-}
-
-func (f *fakeSeam) callCount(name string) int {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	return f.calls[name]
-}
-
 func testRunner(t *testing.T, seam AAAAResolver, resources bool) *Runner {
 	t.Helper()
 	addr := startFakeDNS(t, emptyNoError)
@@ -76,7 +48,7 @@ func testRunner(t *testing.T, seam AAAAResolver, resources bool) *Runner {
 // for phase-1 only; all eight phase-2 checks land not_applicable with the
 // exact skip reasons, latency_ipv4 among them.
 func TestRunnerNoAAAA(t *testing.T) {
-	r := testRunner(t, newFakeSeam(), false)
+	r := testRunner(t, newScriptAAAA(), false)
 	res := r.Run(context.Background(), "v4only.example", KindApex)
 
 	if len(res.Results) != 14 {
@@ -117,8 +89,8 @@ func TestRunnerNoAAAA(t *testing.T) {
 // no DNS query; a no-MX subdomain yields not_applicable without the
 // implicit-MX fallback.
 func TestRunnerSubdomain(t *testing.T) {
-	seam := newFakeSeam()
-	seam.answers["api.dnb.no"] = AAAAAnswer{Rcode: "NOERROR"} // NOERROR-empty
+	seam := newScriptAAAA()
+	seam.ans["api.dnb.no"] = AAAAAnswer{Rcode: "NOERROR"} // NOERROR-empty
 	r := testRunner(t, seam, false)
 
 	res := r.Run(context.Background(), "api.dnb.no", KindSubdomain)
@@ -154,7 +126,7 @@ func (panicChecker) Check(context.Context, string, Kind) (Result, error) {
 // TestCheckPanicIsolation (01 §14.5): a panicking check yields error for
 // itself; every other check is unaffected and the process survives.
 func TestCheckPanicIsolation(t *testing.T) {
-	r := testRunner(t, newFakeSeam(), false)
+	r := testRunner(t, newScriptAAAA(), false)
 	r.Register(panicChecker{})
 
 	res := r.Run(context.Background(), "v4only.example", KindApex)

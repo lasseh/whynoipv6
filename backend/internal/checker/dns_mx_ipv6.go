@@ -7,7 +7,8 @@ import (
 	"time"
 )
 
-// DNSMXIPv6 checks whether the domain's MX records have AAAA records.
+// DNSMXIPv6 checks whether the domain's MX records have AAAA records
+// (01-engine.md §11.4).
 type DNSMXIPv6 struct {
 	dialer     *SafeDialer
 	maxLookups int // config checks.max_mx_lookups (01-engine.md §11.4)

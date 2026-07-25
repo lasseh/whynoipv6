@@ -12,7 +12,8 @@ import (
 
 const maxSMTPAttempts = 3
 
-// SMTPIPv6 checks whether the domain's MX accepts SMTP over IPv6.
+// SMTPIPv6 checks whether the domain's MX accepts SMTP over IPv6
+// (01-engine.md §11.10).
 type SMTPIPv6 struct {
 	dialer *SafeDialer
 }

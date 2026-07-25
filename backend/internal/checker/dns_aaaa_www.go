@@ -22,21 +22,21 @@ var knownCDNPatterns = []string{
 	"googleapis.com",
 }
 
-// DNSAAAAWww checks whether www.<host> has at least one AAAA record,
+// DNSAAAAWWW checks whether www.<host> has at least one AAAA record,
 // resolved through the consensus AAAAResolver seam (01-engine.md §11.2).
 // For kind=subdomain the runner skips this check entirely.
-type DNSAAAAWww struct {
+type DNSAAAAWWW struct {
 	res AAAAResolver
 }
 
 // NewDNSAAAAWWW creates a new dns_aaaa_www checker.
-func NewDNSAAAAWWW(res AAAAResolver) *DNSAAAAWww {
-	return &DNSAAAAWww{res: res}
+func NewDNSAAAAWWW(res AAAAResolver) *DNSAAAAWWW {
+	return &DNSAAAAWWW{res: res}
 }
 
-func (c *DNSAAAAWww) Name() string { return NameDNSAAAAWWW }
+func (c *DNSAAAAWWW) Name() string { return NameDNSAAAAWWW }
 
-func (c *DNSAAAAWww) Check(ctx context.Context, host string, _ Kind) (Result, error) {
+func (c *DNSAAAAWWW) Check(ctx context.Context, host string, _ Kind) (Result, error) {
 	start := time.Now()
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()

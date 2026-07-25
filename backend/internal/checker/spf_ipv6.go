@@ -8,7 +8,8 @@ import (
 
 const maxSPFLookups = 10
 
-// SPFIPv6 checks whether the domain's SPF record authorizes IPv6 senders.
+// SPFIPv6 checks whether the domain's SPF record authorizes IPv6 senders
+// (01-engine.md §11.11).
 type SPFIPv6 struct {
 	dialer *SafeDialer
 }
@@ -18,7 +19,7 @@ func NewSPFIPv6(dialer *SafeDialer) *SPFIPv6 {
 	return &SPFIPv6{dialer: dialer}
 }
 
-func (c *SPFIPv6) Name() string { return "spf_ipv6" }
+func (c *SPFIPv6) Name() string { return NameSPF }
 
 // spfQualifier represents an SPF qualifier (+, -, ~, ?).
 type spfQualifier byte

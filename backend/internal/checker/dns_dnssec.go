@@ -3,13 +3,13 @@ package checker
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/miekg/dns"
 )
 
-// DNSSEC checks whether the domain has a valid DNSSEC chain of trust.
+// DNSSEC checks whether the domain has a valid DNSSEC chain of trust
+// (01-engine.md §11.5; transport note §11.13).
 // Uses the AD (Authenticated Data) flag from a validating resolver to determine
 // whether the full chain of trust from root to zone is intact, rather than
 // manually checking individual DS/DNSKEY/RRSIG records.
@@ -33,9 +33,9 @@ func (c *DNSSEC) Check(ctx context.Context, domain string, kind Kind) (Result, e
 	fqdn := dns.Fqdn(domain)
 	resolver := c.dialer.Resolver()
 
-	// Step 1: Check for DS record in parent zone to determine if domain is signed.
-	parentZone := parentZoneOf(fqdn)
-	dsRecords, err := c.queryDS(ctx, resolver, fqdn, parentZone)
+	// Step 1: ask the validating resolver for the DS RRset at the child name —
+	// its presence means the zone is signed.
+	dsRecords, err := c.queryDS(ctx, resolver, fqdn)
 	if err != nil {
 		d.Error = fmt.Sprintf("DS lookup failed: %v", err)
 		return Result{
@@ -100,18 +100,8 @@ func (c *DNSSEC) Check(ctx context.Context, domain string, kind Kind) (Result, e
 	}, nil
 }
 
-// parentZoneOf returns the parent zone of a FQDN.
-// For "example.com.", it returns "com.".
-func parentZoneOf(fqdn string) string {
-	labels := dns.SplitDomainName(fqdn)
-	if len(labels) <= 1 {
-		return "."
-	}
-	return dns.Fqdn(strings.Join(labels[1:], "."))
-}
-
-// queryDS queries the parent zone for DS records of the domain.
-func (c *DNSSEC) queryDS(ctx context.Context, resolver *Resolver, fqdn, _ string) ([]*dns.DS, error) {
+// queryDS asks the validating resolver for the DS RRset at fqdn.
+func (c *DNSSEC) queryDS(ctx context.Context, resolver *Resolver, fqdn string) ([]*dns.DS, error) {
 	msg := new(dns.Msg)
 	msg.SetQuestion(fqdn, dns.TypeDS)
 	msg.RecursionDesired = true

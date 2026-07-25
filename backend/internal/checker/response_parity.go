@@ -18,7 +18,8 @@ const (
 	parityTolerance = 0.10    // 10%
 )
 
-// ResponseParity compares HTTP responses over IPv4 and IPv6.
+// ResponseParity compares HTTP responses over IPv4 and IPv6
+// (01-engine.md §11.8).
 type ResponseParity struct {
 	dialer *SafeDialer
 }
@@ -49,7 +50,7 @@ func (c *ResponseParity) Check(ctx context.Context, domain string, kind Kind) (R
 
 	v6IPs, _, _, _, err := c.dialer.Resolver().LookupAAAA(ctx, domain)
 	if err != nil || len(v6IPs) == 0 {
-		d.Reason = "no AAAA record"
+		d.Reason = errNoAAAARecord
 		return Result{
 			Status:  StatusNotApplicable,
 			Detail:  d,

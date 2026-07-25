@@ -226,7 +226,7 @@ func (r *Runner) runCheck(ctx context.Context, host string, kind Kind, c Checker
 		r.logger.Error("check failed",
 			"domain", host,
 			"check", c.Name(),
-			"error", err,
+			"err", err.Error(),
 			"duration", time.Since(start),
 		)
 		results.Store(c.Name(), Result{
@@ -245,7 +245,7 @@ func (r *Runner) runCheck(ctx context.Context, host string, kind Kind, c Checker
 	}
 	if result.Status == StatusError && result.Detail != nil {
 		if errMsg := result.Detail.common().Error; errMsg != "" {
-			attrs = append(attrs, "error", errMsg)
+			attrs = append(attrs, "err", errMsg)
 		}
 	}
 	r.logger.Debug("check completed", attrs...)
