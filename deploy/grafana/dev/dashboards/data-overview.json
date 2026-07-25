@@ -1,0 +1,224 @@
+{
+  "uid": "wni6-data",
+  "title": "WhyNoIPv6 — Data Overview",
+  "description": "What the collected data represents: dataset shape, confirmation coverage, adoption trends, crawler output, and campaign progress.",
+  "tags": ["whynoipv6", "data"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "refresh": "5m",
+  "time": {"from": "now-30d", "to": "now"},
+  "panels": [
+    {
+      "type": "stat", "title": "Domains tracked", "gridPos": {"x": 0, "y": 0, "w": 4, "h": 4},
+      "description": "Active (non-disabled) domains in the registry — the population every other number on this dashboard describes.",
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "table",
+        "rawSql": "SELECT count(*) AS domains FROM domain WHERE NOT disabled"}],
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []}
+    },
+    {
+      "type": "stat", "title": "Heroes", "gridPos": {"x": 4, "y": 0, "w": 4, "h": 4},
+      "description": "Full IPv6: apex + www + nameservers + mail, and the site answers over an IPv6-only connection.",
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "table",
+        "rawSql": "SELECT count(*) AS heroes FROM domain WHERE classification = 'hero' AND NOT disabled"}],
+      "fieldConfig": {"defaults": {"unit": "short", "color": {"mode": "fixed", "fixedColor": "green"}}, "overrides": []}
+    },
+    {
+      "type": "stat", "title": "Saints", "gridPos": {"x": 8, "y": 0, "w": 4, "h": 4},
+      "description": "Heroes whose page resources (scripts, fonts, images) also load from IPv6-capable hosts — usable end-to-end IPv6-only.",
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "table",
+        "rawSql": "SELECT count(*) AS saints FROM domain WHERE saint AND NOT disabled"}],
+      "fieldConfig": {"defaults": {"unit": "short", "color": {"mode": "fixed", "fixedColor": "super-light-green"}}, "overrides": []}
+    },
+    {
+      "type": "stat", "title": "Sinners", "gridPos": {"x": 12, "y": 0, "w": 4, "h": 4},
+      "description": "Confirmed no IPv6 on the apex at all (A record only).",
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "table",
+        "rawSql": "SELECT count(*) AS sinners FROM domain WHERE classification = 'sinner' AND NOT disabled"}],
+      "fieldConfig": {"defaults": {"unit": "short", "color": {"mode": "fixed", "fixedColor": "red"}}, "overrides": []}
+    },
+    {
+      "type": "stat", "title": "Partial", "gridPos": {"x": 16, "y": 0, "w": 4, "h": 4},
+      "description": "Some IPv6 but the hero bar not met (e.g. v4-only nameservers, broken v6 connect, or unverified dimensions).",
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "table",
+        "rawSql": "SELECT count(*) AS partial FROM domain WHERE classification = 'partial' AND NOT disabled"}],
+      "fieldConfig": {"defaults": {"unit": "short", "color": {"mode": "fixed", "fixedColor": "yellow"}}, "overrides": []}
+    },
+    {
+      "type": "stat", "title": "Apex IPv6 adoption", "gridPos": {"x": 20, "y": 0, "w": 4, "h": 4},
+      "description": "Share of domains with a confirmed apex verdict that publish AAAA — the headline adoption number.",
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "table",
+        "rawSql": "SELECT count(*) FILTER (WHERE base_status = 'supported')::float / nullif(count(base_status), 0) AS adoption FROM domain WHERE NOT disabled"}],
+      "fieldConfig": {"defaults": {"unit": "percentunit", "decimals": 1, "thresholds": {"mode": "absolute", "steps": [{"value": null, "color": "red"}, {"value": 0.2, "color": "yellow"}, {"value": 0.4, "color": "green"}]}}, "overrides": []}
+    },
+    {
+      "type": "piechart", "title": "Classification breakdown", "gridPos": {"x": 0, "y": 4, "w": 6, "h": 8},
+      "description": "Every active domain lands in exactly one tier. unknown = never confirmed; inactive = apex has no A/AAAA at all (parked/empty zone).",
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "table",
+        "rawSql": "SELECT count(*) FILTER (WHERE classification = 'hero') AS hero, count(*) FILTER (WHERE classification = 'partial') AS partial, count(*) FILTER (WHERE classification = 'sinner') AS sinner, count(*) FILTER (WHERE classification = 'inactive') AS inactive, count(*) FILTER (WHERE classification = 'unknown') AS unknown FROM domain WHERE NOT disabled"}],
+      "options": {"reduceOptions": {"values": false, "calcs": ["lastNotNull"]}, "legend": {"displayMode": "table", "placement": "right", "values": ["value", "percent"]}},
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": [
+        {"matcher": {"id": "byName", "options": "hero"}, "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "green"}}]},
+        {"matcher": {"id": "byName", "options": "partial"}, "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "yellow"}}]},
+        {"matcher": {"id": "byName", "options": "sinner"}, "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "red"}}]},
+        {"matcher": {"id": "byName", "options": "inactive"}, "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "orange"}}]},
+        {"matcher": {"id": "byName", "options": "unknown"}, "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "text"}}]}
+      ]}
+    },
+    {
+      "type": "bargauge", "title": "Confirmed coverage per dimension", "gridPos": {"x": 6, "y": 4, "w": 6, "h": 8},
+      "description": "How much of the dataset each check has actually confirmed (non-NULL after anti-flap). Low resources coverage is expected while the registry re-confirms.",
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "table",
+        "rawSql": "SELECT count(base_status)::float / count(*) AS base, count(www_status)::float / count(*) AS www, count(ns_status)::float / count(*) AS ns, count(mx_status)::float / count(*) AS mx, count(conn_status)::float / count(*) AS conn, count(resources_status)::float / count(*) AS resources FROM domain WHERE NOT disabled"}],
+      "options": {"reduceOptions": {"values": false, "calcs": ["lastNotNull"]}, "displayMode": "gradient", "orientation": "horizontal"},
+      "fieldConfig": {"defaults": {"unit": "percentunit", "min": 0, "max": 1, "thresholds": {"mode": "absolute", "steps": [{"value": null, "color": "red"}, {"value": 0.5, "color": "yellow"}, {"value": 0.9, "color": "green"}]}}, "overrides": []}
+    },
+    {
+      "type": "bargauge", "title": "IPv6 support per dimension", "gridPos": {"x": 12, "y": 4, "w": 6, "h": 8},
+      "description": "Of the domains with a confirmed verdict on each dimension, how many are IPv6-supported. This is the adoption story per check.",
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "table",
+        "rawSql": "SELECT count(*) FILTER (WHERE base_status = 'supported')::float / nullif(count(base_status), 0) AS base, count(*) FILTER (WHERE www_status = 'supported')::float / nullif(count(www_status), 0) AS www, count(*) FILTER (WHERE ns_status = 'supported')::float / nullif(count(ns_status), 0) AS ns, count(*) FILTER (WHERE mx_status = 'supported')::float / nullif(count(mx_status), 0) AS mx, count(*) FILTER (WHERE conn_status = 'supported')::float / nullif(count(conn_status), 0) AS conn, count(*) FILTER (WHERE resources_status = 'supported')::float / nullif(count(resources_status), 0) AS resources FROM domain WHERE NOT disabled"}],
+      "options": {"reduceOptions": {"values": false, "calcs": ["lastNotNull"]}, "displayMode": "gradient", "orientation": "horizontal"},
+      "fieldConfig": {"defaults": {"unit": "percentunit", "min": 0, "max": 1, "thresholds": {"mode": "absolute", "steps": [{"value": null, "color": "red"}, {"value": 0.2, "color": "yellow"}, {"value": 0.4, "color": "green"}]}}, "overrides": []}
+    },
+    {
+      "type": "bargauge", "title": "Scan freshness", "gridPos": {"x": 18, "y": 4, "w": 6, "h": 8},
+      "description": "When each active domain was last scanned. The daily cadence should keep nearly everything under 24h; a growing 48h+ bucket means the crawler is falling behind.",
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "table",
+        "rawSql": "SELECT count(*) FILTER (WHERE last_checked_at > now() - interval '24 hours') AS \"< 24h\", count(*) FILTER (WHERE last_checked_at <= now() - interval '24 hours' AND last_checked_at > now() - interval '48 hours') AS \"24-48h\", count(*) FILTER (WHERE last_checked_at <= now() - interval '48 hours') AS \"> 48h\", count(*) FILTER (WHERE last_checked_at IS NULL) AS never FROM domain WHERE NOT disabled"}],
+      "options": {"reduceOptions": {"values": false, "calcs": ["lastNotNull"]}, "displayMode": "gradient", "orientation": "horizontal"},
+      "fieldConfig": {"defaults": {"unit": "short", "thresholds": {"mode": "absolute", "steps": [{"value": null, "color": "blue"}]}}, "overrides": []}
+    },
+    {
+      "type": "timeseries", "title": "IPv6 support per dimension over time", "gridPos": {"x": 0, "y": 12, "w": 12, "h": 8},
+      "description": "Daily confirmed-state snapshot (stats_global_daily, written by the daily tick). Counts of domains supported per dimension.",
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "time_series",
+        "rawSql": "SELECT day::timestamptz AS time, base_supported, www_supported, ns_supported, mx_supported, conn_supported, resources_supported FROM stats_global_daily WHERE $__timeFilter(day::timestamptz) ORDER BY 1"}],
+      "fieldConfig": {"defaults": {"unit": "short", "custom": {"drawStyle": "line", "fillOpacity": 10}}, "overrides": []}
+    },
+    {
+      "type": "timeseries", "title": "Tiers over time", "gridPos": {"x": 12, "y": 12, "w": 12, "h": 8},
+      "description": "Daily tier counts. Saints dropped to ~0 on 2026-07-25 when the confirmed resources columns were reset post D-fold fix; the rebuild curve is the re-confirmation.",
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "time_series",
+        "rawSql": "SELECT day::timestamptz AS time, heroes, saints, partial, sinners, inactive FROM stats_global_daily WHERE $__timeFilter(day::timestamptz) ORDER BY 1"}],
+      "fieldConfig": {"defaults": {"unit": "short", "custom": {"drawStyle": "line", "fillOpacity": 10}}, "overrides": [
+        {"matcher": {"id": "byName", "options": "heroes"}, "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "green"}}]},
+        {"matcher": {"id": "byName", "options": "sinners"}, "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "red"}}]},
+        {"matcher": {"id": "byName", "options": "partial"}, "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "yellow"}}]}
+      ]}
+    },
+    {
+      "type": "timeseries", "title": "IPv6 gained vs lost (per day)", "gridPos": {"x": 0, "y": 20, "w": 8, "h": 8},
+      "description": "Confirmed transitions from the changelog: dimensions that flipped to supported (gained) vs away from supported (lost). The net direction of the internet's IPv6 story.",
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "time_series",
+        "rawSql": "SELECT $__timeGroup(ts, '1d') AS time, count(*) FILTER (WHERE new_value = 'supported') AS gained, count(*) FILTER (WHERE old_value = 'supported') AS lost FROM changelog WHERE $__timeFilter(ts) GROUP BY 1 ORDER BY 1"}],
+      "fieldConfig": {"defaults": {"unit": "short", "custom": {"drawStyle": "bars", "fillOpacity": 60}}, "overrides": [
+        {"matcher": {"id": "byName", "options": "gained"}, "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "green"}}]},
+        {"matcher": {"id": "byName", "options": "lost"}, "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "red"}}]}
+      ]}
+    },
+    {
+      "type": "timeseries", "title": "Scans recorded (per day)", "gridPos": {"x": 8, "y": 20, "w": 8, "h": 8},
+      "description": "Rows written to the scan hypertable (via the scan_daily_adoption continuous aggregate, ~1h behind). Roughly one scan per active domain per day.",
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "time_series",
+        "rawSql": "SELECT day AS time, sum(scanned) AS scans, sum(base_v6) AS base_supported, sum(conn_v6) AS conn_supported FROM scan_daily_adoption WHERE $__timeFilter(day) GROUP BY 1 ORDER BY 1"}],
+      "fieldConfig": {"defaults": {"unit": "short", "custom": {"drawStyle": "line", "fillOpacity": 10}}, "overrides": []}
+    },
+    {
+      "type": "stat", "title": "Mid-confirmation", "gridPos": {"x": 16, "y": 20, "w": 4, "h": 4},
+      "description": "Domains with a pending value on any dimension — observed change waiting for the 3-consecutive-scans anti-flap confirmation.",
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "table",
+        "rawSql": "SELECT count(*) AS pending FROM domain WHERE NOT disabled AND (base_pending IS NOT NULL OR www_pending IS NOT NULL OR ns_pending IS NOT NULL OR mx_pending IS NOT NULL OR conn_pending IS NOT NULL OR resources_pending IS NOT NULL)"}],
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []}
+    },
+    {
+      "type": "stat", "title": "Changelog rows (total)", "gridPos": {"x": 20, "y": 20, "w": 4, "h": 4},
+      "description": "All confirmed transitions ever recorded — the credibility surface, kept forever.",
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "table",
+        "rawSql": "SELECT count(*) AS changes FROM changelog"}],
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []}
+    },
+    {
+      "type": "table", "title": "Disabled domains by reason", "gridPos": {"x": 16, "y": 24, "w": 8, "h": 4},
+      "description": "Rows hidden from public output: dead = confirmed non-existent DNS; delisted = dropped off the Tranco list past the grace window.",
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "table",
+        "rawSql": "SELECT coalesce(disabled_reason::text, 'unspecified') AS reason, count(*) AS domains FROM domain WHERE disabled GROUP BY 1 ORDER BY 2 DESC"}],
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []}
+    },
+    {
+      "type": "stat", "title": "Campaigns", "gridPos": {"x": 0, "y": 28, "w": 4, "h": 4},
+      "description": "Active curated domain lists (government, banks, ISPs, …) imported from the campaign YAML repo.",
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "table",
+        "rawSql": "SELECT count(*) AS campaigns FROM campaign WHERE NOT disabled"}],
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []}
+    },
+    {
+      "type": "stat", "title": "Campaign domains", "gridPos": {"x": 0, "y": 32, "w": 4, "h": 4},
+      "description": "Domain-campaign memberships (a domain can be in several campaigns).",
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "table",
+        "rawSql": "SELECT count(*) AS members FROM campaign_domain"}],
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []}
+    },
+    {
+      "type": "table", "title": "Campaign league table (latest snapshot)", "gridPos": {"x": 4, "y": 28, "w": 20, "h": 8},
+      "description": "Per-campaign confirmed state from the latest daily snapshot. v6_ready = apex + nameservers supported, www supported or absent — the campaign readiness bar.",
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "table",
+        "rawSql": "SELECT c.name AS campaign, s.domains, s.v6_ready, round(100.0 * s.v6_ready / nullif(s.domains, 0), 1) AS \"ready %\", s.heroes, s.partial, s.sinners FROM stats_campaign_daily s JOIN campaign c ON c.id = s.campaign_id WHERE s.day = (SELECT max(day) FROM stats_campaign_daily) ORDER BY 4 DESC NULLS LAST"}],
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": [
+        {"matcher": {"id": "byName", "options": "ready %"}, "properties": [
+          {"id": "unit", "value": "percent"},
+          {"id": "custom.cellOptions", "value": {"type": "color-background", "mode": "gradient"}},
+          {"id": "thresholds", "value": {"mode": "absolute", "steps": [{"value": null, "color": "red"}, {"value": 50, "color": "yellow"}, {"value": 80, "color": "green"}]}}
+        ]}
+      ]}
+    },
+    {
+      "type": "timeseries", "title": "Campaign readiness over time (top 10 by size)", "gridPos": {"x": 0, "y": 36, "w": 12, "h": 8},
+      "description": "v6_ready share per campaign from the daily snapshots — the advocacy progress curve.",
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "time_series",
+        "rawSql": "SELECT s.day::timestamptz AS time, c.name AS metric, 100.0 * s.v6_ready / nullif(s.domains, 0) AS ready_pct FROM stats_campaign_daily s JOIN campaign c ON c.id = s.campaign_id WHERE $__timeFilter(s.day::timestamptz) AND s.campaign_id IN (SELECT campaign_id FROM stats_campaign_daily WHERE day = (SELECT max(day) FROM stats_campaign_daily) ORDER BY domains DESC LIMIT 10) ORDER BY 1"}],
+      "fieldConfig": {"defaults": {"unit": "percent", "min": 0, "max": 100, "custom": {"drawStyle": "line", "fillOpacity": 5}}, "overrides": []}
+    },
+    {
+      "type": "piechart", "title": "Resource-host registry", "gridPos": {"x": 12, "y": 36, "w": 6, "h": 8},
+      "description": "Third-party hosts discovered on crawled pages (deduped globally), by confirmed AAAA status from the daily sweep. Feeds the saint rule and the resources dimension.",
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "table",
+        "rawSql": "SELECT count(*) FILTER (WHERE aaaa_status = 'supported') AS supported, count(*) FILTER (WHERE aaaa_status = 'unsupported') AS unsupported, count(*) FILTER (WHERE aaaa_status IN ('no_record', 'not_applicable')) AS dead_ref, count(*) FILTER (WHERE aaaa_status IS NULL) AS unswept FROM resource_host"}],
+      "options": {"reduceOptions": {"values": false, "calcs": ["lastNotNull"]}, "legend": {"displayMode": "table", "placement": "right", "values": ["value", "percent"]}},
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": [
+        {"matcher": {"id": "byName", "options": "supported"}, "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "green"}}]},
+        {"matcher": {"id": "byName", "options": "unsupported"}, "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "red"}}]},
+        {"matcher": {"id": "byName", "options": "unswept"}, "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "text"}}]}
+      ]}
+    },
+    {
+      "type": "table", "title": "Most-depended-on v4-only resources", "gridPos": {"x": 18, "y": 36, "w": 6, "h": 8},
+      "description": "IPv4-only third-party hosts blocking the most domains from saint status — the highest-leverage advocacy targets.",
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "table",
+        "rawSql": "SELECT host, dependent_count AS dependents FROM resource_host WHERE aaaa_status = 'unsupported' ORDER BY dependent_count DESC LIMIT 15"}],
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []}
+    }
+  ]
+}
