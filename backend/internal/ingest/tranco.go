@@ -77,6 +77,8 @@ type TrancoImporter struct {
 	etag string // process memory only (§2.2 step 3)
 }
 
+// NewTrancoImporter builds the importer over one pool, list source and set of
+// sanity-guard knobs (06-ingest.md §2.2).
 func NewTrancoImporter(pool *pgxpool.Pool, src TrancoSource, cfg TrancoConfig) *TrancoImporter {
 	return &TrancoImporter{pool: pool, src: src, cfg: cfg}
 }

@@ -360,12 +360,14 @@ type Manifest struct {
 	Snapshots     []ManifestEntry `json:"snapshots"`
 }
 
+// ManifestLatest duplicates the newest complete snapshot's entry (07 §5.3).
 type ManifestLatest struct {
 	Date           string `json:"date"`
 	Path           string `json:"path"`
 	DatapackageURL string `json:"datapackage_url"`
 }
 
+// ManifestEntry is one retained snapshot in the newest-first index (07 §5.3).
 type ManifestEntry struct {
 	Date           string   `json:"date"`
 	Path           string   `json:"path"`
@@ -509,7 +511,6 @@ func writeJSONFile(path string, v any) error {
 	return os.WriteFile(path, append(b, '\n'), 0o644)
 }
 
-// dictionaryMD documents columns + status semantics for bulk consumers.
 // dictionaryText renders DICTIONARY.md with the rank provenance line
 // (07 §5.3 — the list ID is cited in every attribution surface).
 func dictionaryText(listID string) string {
@@ -520,6 +521,7 @@ func dictionaryText(listID string) string {
 	return dictionaryMD + "\n" + ranks + "\n"
 }
 
+// dictionaryMD documents columns + status semantics for bulk consumers.
 const dictionaryMD = `# WhyNoIPv6 dataset dictionary
 
 Snapshots of confirmed IPv6 adoption state for the Tranco-ranked web,

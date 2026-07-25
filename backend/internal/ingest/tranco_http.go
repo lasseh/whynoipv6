@@ -20,10 +20,14 @@ type HTTPTrancoSource struct {
 	Client *http.Client
 }
 
+// NewHTTPTrancoSource builds the production source with the 60 s per-request
+// timeout (06-ingest.md §2.2).
 func NewHTTPTrancoSource() *HTTPTrancoSource {
 	return &HTTPTrancoSource{Client: &http.Client{Timeout: 60 * time.Second}}
 }
 
+// ListID fetches the current list ID and rejects a malformed one — non-empty,
+// ≤16 chars, alphanumeric (06-ingest.md §2.2 step 2).
 func (s *HTTPTrancoSource) ListID(ctx context.Context) (string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, trancoListIDURL, http.NoBody)
 	if err != nil {
@@ -48,6 +52,8 @@ func (s *HTTPTrancoSource) ListID(ctx context.Context) (string, error) {
 	return id, nil
 }
 
+// List downloads the zip artifact with a conditional GET on etag; a 304 comes
+// back as an archive marked NotModified (06-ingest.md §2.2 step 3).
 func (s *HTTPTrancoSource) List(ctx context.Context, etag string) (*TrancoArchive, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, trancoListURL, http.NoBody)
 	if err != nil {

@@ -2,7 +2,6 @@ package config
 
 import (
 	"bufio"
-	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -129,7 +128,16 @@ func TestEnvOverrides(t *testing.T) {
 	if got := cfg.StringSlice("resolver.bulk_upstreams"); len(got) != 2 || got[0] != "127.0.0.1:5300" {
 		t.Errorf("RESOLVER_BULK_UPSTREAMS override: %v", got)
 	}
-	_ = fmt.Sprintf("%v", cfg) // the summary path is exercised by LogSummary in Load callers
+
+	// The comma spelling of a list override (09-ops §1).
+	t.Setenv("RESOLVER_BULK_UPSTREAMS", "10.0.0.1:53,10.0.0.2:5353")
+	cfg, err = Load("crawler")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := cfg.StringSlice("resolver.bulk_upstreams"); len(got) != 2 || got[1] != "10.0.0.2:5353" {
+		t.Errorf("RESOLVER_BULK_UPSTREAMS comma-separated override: %v", got)
+	}
 }
 
 // TestUnregisteredKeyPanics pins the fail-fast getter contract: a key
