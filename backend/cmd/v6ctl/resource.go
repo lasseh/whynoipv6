@@ -33,7 +33,7 @@ func resourceCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			pool, _, err := newPool(cmd)
+			pool, err := newPool(cmd)
 			if err != nil {
 				return err
 			}
@@ -86,7 +86,7 @@ func resourceCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			pool, _, err := newPool(cmd)
+			pool, err := newPool(cmd)
 			if err != nil {
 				return err
 			}

@@ -4,22 +4,11 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/spf13/cobra"
 
-	"github.com/lasseh/whynoipv6/internal/config"
 	"github.com/lasseh/whynoipv6/internal/ingest"
 	db "github.com/lasseh/whynoipv6/internal/postgres/db"
 )
-
-func newPool(cmd *cobra.Command) (*pgxpool.Pool, *config.Config, error) {
-	cfg := cfgFromCmd(cmd)
-	pool, err := pgxpool.New(cmd.Context(), cfg.DatabaseURL)
-	if err != nil {
-		return nil, nil, fmt.Errorf("connect: %w", err)
-	}
-	return pool, cfg, nil
-}
 
 func trancoCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -33,7 +22,8 @@ func trancoCmd() *cobra.Command {
 		Short: "Run one Tranco import attempt (break-glass; the crawler coordinator is the scheduled trigger)",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			pool, cfg, err := newPool(cmd)
+			cfg := cfgFromCmd(cmd)
+			pool, err := newPool(cmd)
 			if err != nil {
 				return err
 			}
@@ -60,7 +50,8 @@ func trancoCmd() *cobra.Command {
 		Short: "Show the 10 most recent tranco_import rows and staleness",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			pool, cfg, err := newPool(cmd)
+			cfg := cfgFromCmd(cmd)
+			pool, err := newPool(cmd)
 			if err != nil {
 				return err
 			}

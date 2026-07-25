@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/spf13/cobra"
 
 	"github.com/lasseh/whynoipv6/internal/config"
@@ -16,6 +17,15 @@ type ctxKey struct{}
 // cfgFromCmd returns the config loaded by the root PersistentPreRunE.
 func cfgFromCmd(cmd *cobra.Command) *config.Config {
 	return cmd.Context().Value(ctxKey{}).(*config.Config)
+}
+
+// newPool opens the pgx pool from the config loaded by the root PersistentPreRunE.
+func newPool(cmd *cobra.Command) (*pgxpool.Pool, error) {
+	pool, err := pgxpool.New(cmd.Context(), cfgFromCmd(cmd).DatabaseURL)
+	if err != nil {
+		return nil, fmt.Errorf("connect: %w", err)
+	}
+	return pool, nil
 }
 
 func main() {

@@ -29,7 +29,7 @@ func shameCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			pool, _, err := newPool(cmd)
+			pool, err := newPool(cmd)
 			if err != nil {
 				return err
 			}
@@ -70,7 +70,7 @@ func shameCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			pool, _, err := newPool(cmd)
+			pool, err := newPool(cmd)
 			if err != nil {
 				return err
 			}
@@ -93,7 +93,7 @@ func shameCmd() *cobra.Command {
 		Short: "List all picks with computed visibility",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			pool, _, err := newPool(cmd)
+			pool, err := newPool(cmd)
 			if err != nil {
 				return err
 			}
@@ -109,10 +109,7 @@ func shameCmd() *cobra.Command {
 				if r.Reason != nil {
 					reason = *r.Reason
 				}
-				rank := "-"
-				if r.Rank != nil {
-					rank = fmt.Sprintf("%d", *r.Rank)
-				}
+				rank := fmtPtr(r.Rank)
 				fmt.Printf("%s\t%s\t%s\t%t\t%s\t%s\n", r.Host, rank, r.Classification,
 					derefBool(r.Visible), reason, r.AddedAt.Time.Format("2006-01-02"))
 			}

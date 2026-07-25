@@ -21,7 +21,8 @@ func exportCmd() *cobra.Command {
 		Short: "Export the daily static dataset snapshot (tiers × CSV.gz + Parquet)",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			pool, cfg, err := newPool(cmd)
+			cfg := cfgFromCmd(cmd)
+			pool, err := newPool(cmd)
 			if err != nil {
 				return err
 			}

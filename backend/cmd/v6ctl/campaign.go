@@ -22,7 +22,8 @@ func campaignCmd() *cobra.Command {
 		Short: "Sync the campaign YAML checkout into the database",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			pool, cfg, err := newPool(cmd)
+			cfg := cfgFromCmd(cmd)
+			pool, err := newPool(cmd)
 			if err != nil {
 				return err
 			}

@@ -13,10 +13,12 @@ import (
 	db "github.com/lasseh/whynoipv6/internal/postgres/db"
 )
 
+// serviceCandidatesCmd triages auto-detected service domains
+// (04-lifecycle-scheduling.md — service lifecycle).
 func serviceCandidatesCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "service-candidates",
-		Short: "Triage detected service-domain candidates (04 — service lifecycle)",
+		Short: "Triage detected service-domain candidates",
 	}
 
 	cmd.AddCommand(&cobra.Command{
@@ -24,7 +26,7 @@ func serviceCandidatesCmd() *cobra.Command {
 		Short: "List open (undismissed) candidates",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			pool, _, err := newPool(cmd)
+			pool, err := newPool(cmd)
 			if err != nil {
 				return err
 			}
@@ -51,7 +53,7 @@ func serviceCandidatesCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			pool, _, err := newPool(cmd)
+			pool, err := newPool(cmd)
 			if err != nil {
 				return err
 			}
@@ -65,7 +67,9 @@ func serviceCandidatesCmd() *cobra.Command {
 			if n == 0 {
 				return fmt.Errorf("%s not found or already disabled", host)
 			}
-			_, _ = q.ServiceCandidateResolve(cmd.Context(), host)
+			if _, err := q.ServiceCandidateResolve(cmd.Context(), host); err != nil {
+				return fmt.Errorf("%s disabled (service), but closing the candidate failed — re-run `v6ctl service-candidates dismiss %s`: %w", host, host, err)
+			}
 			fmt.Printf("%s disabled (service); it leaves the frontier\n", host)
 			return nil
 		},
@@ -80,7 +84,7 @@ func serviceCandidatesCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			pool, _, err := newPool(cmd)
+			pool, err := newPool(cmd)
 			if err != nil {
 				return err
 			}
@@ -107,7 +111,7 @@ func disableCmd() *cobra.Command {
 		Short: "Operator disable: manual for one host, or --service-list for a curated batch",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			pool, _, err := newPool(cmd)
+			pool, err := newPool(cmd)
 			if err != nil {
 				return err
 			}
@@ -185,7 +189,7 @@ func enableCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			pool, _, err := newPool(cmd)
+			pool, err := newPool(cmd)
 			if err != nil {
 				return err
 			}
@@ -203,6 +207,8 @@ func enableCmd() *cobra.Command {
 	}
 }
 
+// statsCmd re-runs the daily stats rollup on demand (06-ingest.md §10.7):
+// idempotent, and deliberately without JobDailyTick.
 func statsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "stats",
@@ -210,10 +216,10 @@ func statsCmd() *cobra.Command {
 	}
 	cmd.AddCommand(&cobra.Command{
 		Use:   "recalc",
-		Short: "Re-run today's stats snapshots + counter recomputes (idempotent; no tick lock — 06 §10.7)",
+		Short: "Re-run today's stats snapshots + counter recomputes (idempotent; no tick lock)",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			pool, _, err := newPool(cmd)
+			pool, err := newPool(cmd)
 			if err != nil {
 				return err
 			}

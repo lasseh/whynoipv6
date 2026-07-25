@@ -21,7 +21,7 @@ func providerCmd() *cobra.Command {
 		Short: "Upsert a provider and append nameserver-host suffixes",
 		Args:  cobra.MinimumNArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			pool, _, err := newPool(cmd)
+			pool, err := newPool(cmd)
 			if err != nil {
 				return err
 			}
@@ -39,7 +39,7 @@ func providerCmd() *cobra.Command {
 		Short: "Delete a provider (stamped domains self-heal on the next scan commit)",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			pool, _, err := newPool(cmd)
+			pool, err := newPool(cmd)
 			if err != nil {
 				return err
 			}
@@ -67,7 +67,7 @@ func providerCmd() *cobra.Command {
 		Short: "List providers with suffix sets and mapped-domain counts",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			pool, _, err := newPool(cmd)
+			pool, err := newPool(cmd)
 			if err != nil {
 				return err
 			}

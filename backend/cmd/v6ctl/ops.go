@@ -13,6 +13,7 @@ import (
 	db "github.com/lasseh/whynoipv6/internal/postgres/db"
 )
 
+// opsCmd holds the operational helpers (09-ops.md §8).
 func opsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "ops",
@@ -21,10 +22,11 @@ func opsCmd() *cobra.Command {
 
 	cmd.AddCommand(&cobra.Command{
 		Use:   "unbound-stats",
-		Short: "Scrape `unbound-control stats` (resetting) into unbound_stats (09-ops §8)",
+		Short: "Scrape `unbound-control stats` (resetting) into unbound_stats",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			pool, cfg, err := newPool(cmd)
+			cfg := cfgFromCmd(cmd)
+			pool, err := newPool(cmd)
 			if err != nil {
 				return err
 			}
