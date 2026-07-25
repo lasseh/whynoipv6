@@ -1,0 +1,101 @@
+{
+  "uid": "wni6-perf",
+  "title": "WhyNoIPv6 — Dual-Stack Performance",
+  "description": "Is IPv6 slower? TTFB over v4 vs v6 for dual-stacked sites, the penalty distribution, and content parity — measurement data nobody else publishes at this scale.",
+  "tags": ["whynoipv6", "data"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "refresh": "15m",
+  "time": {"from": "now-30d", "to": "now"},
+  "panels": [
+    {
+      "type": "stat", "title": "Median TTFB v4 / v6 / delta", "gridPos": {"x": 0, "y": 0, "w": 8, "h": 4},
+      "description": "Median time-to-first-byte across dual-stacked domains (latest confirmed scan values). delta = v6 − v4: positive means IPv6 is slower.",
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "table",
+        "rawSql": "SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY latency_v4_ms) AS v4, percentile_cont(0.5) WITHIN GROUP (ORDER BY latency_v6_ms) AS v6, percentile_cont(0.5) WITHIN GROUP (ORDER BY latency_v6_ms - latency_v4_ms) AS delta FROM domain WHERE latency_v4_ms IS NOT NULL AND latency_v6_ms IS NOT NULL AND NOT disabled"}],
+      "options": {"reduceOptions": {"values": false, "calcs": ["lastNotNull"]}},
+      "fieldConfig": {"defaults": {"unit": "ms", "decimals": 0}, "overrides": [
+        {"matcher": {"id": "byName", "options": "delta"}, "properties": [{"id": "thresholds", "value": {"mode": "absolute", "steps": [{"value": null, "color": "green"}, {"value": 5, "color": "yellow"}, {"value": 20, "color": "red"}]}}]}
+      ]}
+    },
+    {
+      "type": "stat", "title": "IPv6 faster", "gridPos": {"x": 8, "y": 0, "w": 4, "h": 4},
+      "description": "Dual-stacked domains where v6 beats v4 by more than 20 ms.",
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "table",
+        "rawSql": "SELECT count(*) FILTER (WHERE latency_v6_ms < latency_v4_ms - 20)::float / nullif(count(*), 0) AS share FROM domain WHERE latency_v4_ms IS NOT NULL AND latency_v6_ms IS NOT NULL AND NOT disabled"}],
+      "fieldConfig": {"defaults": {"unit": "percentunit", "decimals": 1, "color": {"mode": "fixed", "fixedColor": "green"}}, "overrides": []}
+    },
+    {
+      "type": "stat", "title": "IPv6 slower", "gridPos": {"x": 12, "y": 0, "w": 4, "h": 4},
+      "description": "Dual-stacked domains where v6 trails v4 by more than 20 ms — the real-world penalty story.",
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "table",
+        "rawSql": "SELECT count(*) FILTER (WHERE latency_v6_ms > latency_v4_ms + 20)::float / nullif(count(*), 0) AS share FROM domain WHERE latency_v4_ms IS NOT NULL AND latency_v6_ms IS NOT NULL AND NOT disabled"}],
+      "fieldConfig": {"defaults": {"unit": "percentunit", "decimals": 1, "color": {"mode": "fixed", "fixedColor": "red"}}, "overrides": []}
+    },
+    {
+      "type": "stat", "title": "Measured domains", "gridPos": {"x": 16, "y": 0, "w": 4, "h": 4},
+      "description": "Domains with both v4 and v6 TTFB samples — the population behind every number here.",
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "table",
+        "rawSql": "SELECT count(*) AS measured FROM domain WHERE latency_v4_ms IS NOT NULL AND latency_v6_ms IS NOT NULL AND NOT disabled"}],
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []}
+    },
+    {
+      "type": "stat", "title": "Content parity failures", "gridPos": {"x": 20, "y": 0, "w": 4, "h": 4},
+      "description": "Dual-stacked domains serving observably different content over v6 than v4 (parity check unsupported).",
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "table",
+        "rawSql": "SELECT count(*) AS mismatches FROM domain WHERE parity_observed = 'unsupported' AND NOT disabled"}],
+      "fieldConfig": {"defaults": {"unit": "short", "thresholds": {"mode": "absolute", "steps": [{"value": null, "color": "green"}, {"value": 1000, "color": "yellow"}, {"value": 10000, "color": "red"}]}}, "overrides": []}
+    },
+    {
+      "type": "bargauge", "title": "v6 − v4 TTFB delta distribution", "gridPos": {"x": 0, "y": 4, "w": 12, "h": 8},
+      "description": "Where dual-stacked domains land on the penalty spectrum. A healthy internet clusters in ±10 ms.",
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "table",
+        "rawSql": "SELECT count(*) FILTER (WHERE latency_v6_ms - latency_v4_ms < -100) AS \"v6 faster >100ms\", count(*) FILTER (WHERE latency_v6_ms - latency_v4_ms >= -100 AND latency_v6_ms - latency_v4_ms < -10) AS \"v6 faster 10-100ms\", count(*) FILTER (WHERE latency_v6_ms - latency_v4_ms >= -10 AND latency_v6_ms - latency_v4_ms <= 10) AS \"parity ±10ms\", count(*) FILTER (WHERE latency_v6_ms - latency_v4_ms > 10 AND latency_v6_ms - latency_v4_ms <= 100) AS \"v6 slower 10-100ms\", count(*) FILTER (WHERE latency_v6_ms - latency_v4_ms > 100) AS \"v6 slower >100ms\" FROM domain WHERE latency_v4_ms IS NOT NULL AND latency_v6_ms IS NOT NULL AND NOT disabled"}],
+      "options": {"reduceOptions": {"values": false, "calcs": ["lastNotNull"]}, "displayMode": "gradient", "orientation": "horizontal"},
+      "fieldConfig": {"defaults": {"unit": "short", "thresholds": {"mode": "absolute", "steps": [{"value": null, "color": "blue"}]}}, "overrides": []}
+    },
+    {
+      "type": "timeseries", "title": "Average TTFB over time", "gridPos": {"x": 12, "y": 4, "w": 12, "h": 8},
+      "description": "Daily averages from the scan hypertable (scans where the respective latency check ran). Keep the range modest — this scans raw scan rows.",
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "time_series",
+        "rawSql": "SELECT $__timeGroup(ts, '1d') AS time, avg(latency_v4_ms) AS v4, avg(latency_v6_ms) AS v6 FROM scan WHERE $__timeFilter(ts) AND latency_v4_ms IS NOT NULL AND latency_v6_ms IS NOT NULL GROUP BY 1 ORDER BY 1"}],
+      "fieldConfig": {"defaults": {"unit": "ms", "custom": {"drawStyle": "line", "fillOpacity": 10}}, "overrides": []}
+    },
+    {
+      "type": "table", "title": "v6 penalty by country (≥1000 measured)", "gridPos": {"x": 0, "y": 12, "w": 8, "h": 9},
+      "description": "Median v6 − v4 delta per attributed country. Big positive medians usually mean tunneled or under-peered v6 in that region.",
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "table",
+        "rawSql": "SELECT c.name AS country, count(*) AS measured, round(percentile_cont(0.5) WITHIN GROUP (ORDER BY d.latency_v6_ms - d.latency_v4_ms)::numeric, 1) AS \"median delta ms\" FROM domain d JOIN country c ON c.id = d.country_id WHERE d.latency_v4_ms IS NOT NULL AND d.latency_v6_ms IS NOT NULL AND NOT d.disabled GROUP BY c.name HAVING count(*) >= 1000 ORDER BY 3 DESC LIMIT 20"}],
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []}
+    },
+    {
+      "type": "table", "title": "v6 penalty by hosting (≥1000 measured)", "gridPos": {"x": 8, "y": 12, "w": 8, "h": 9},
+      "description": "Median delta per hosting/CDN tag. CDNs should sit at ~0; a platform with a consistent positive delta has a v6 routing problem worth publishing.",
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "table",
+        "rawSql": "SELECT coalesce(d.hosting_provider, 'unattributed') AS hosting, count(*) AS measured, round(percentile_cont(0.5) WITHIN GROUP (ORDER BY d.latency_v6_ms - d.latency_v4_ms)::numeric, 1) AS \"median delta ms\" FROM domain d WHERE d.latency_v4_ms IS NOT NULL AND d.latency_v6_ms IS NOT NULL AND NOT d.disabled GROUP BY 1 HAVING count(*) >= 1000 ORDER BY 3 DESC LIMIT 20"}],
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []}
+    },
+    {
+      "type": "piechart", "title": "Response parity", "gridPos": {"x": 16, "y": 12, "w": 8, "h": 9},
+      "description": "Does the site serve the same content over v6 as v4? partial = minor differences (headers/redirects), unsupported = observably different response.",
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "table",
+        "rawSql": "SELECT count(*) FILTER (WHERE parity_observed = 'supported') AS same, count(*) FILTER (WHERE parity_observed = 'partial') AS minor_diff, count(*) FILTER (WHERE parity_observed = 'unsupported') AS different FROM domain WHERE parity_observed IS NOT NULL AND NOT disabled"}],
+      "options": {"reduceOptions": {"values": false, "calcs": ["lastNotNull"]}, "legend": {"displayMode": "table", "placement": "right", "values": ["value", "percent"]}},
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": [
+        {"matcher": {"id": "byName", "options": "same"}, "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "green"}}]},
+        {"matcher": {"id": "byName", "options": "minor_diff"}, "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "yellow"}}]},
+        {"matcher": {"id": "byName", "options": "different"}, "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "red"}}]}
+      ]}
+    }
+  ]
+}

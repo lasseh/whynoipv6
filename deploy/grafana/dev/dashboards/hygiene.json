@@ -1,0 +1,83 @@
+{
+  "uid": "wni6-hygiene",
+  "title": "WhyNoIPv6 — Beyond AAAA (DNSSEC, PTR, SMTP)",
+  "description": "The informational dimensions collected on every scan but not shown on the site: DNSSEC validation, reverse DNS, and whether mail actually answers over IPv6.",
+  "tags": ["whynoipv6", "data"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "refresh": "15m",
+  "time": {"from": "now-30d", "to": "now"},
+  "panels": [
+    {
+      "type": "stat", "title": "DNSSEC adoption", "gridPos": {"x": 0, "y": 0, "w": 6, "h": 4},
+      "description": "Domains with a validating DNSSEC chain, of those where the check produced a verdict. Informational only — never gates classification.",
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "table",
+        "rawSql": "SELECT count(*) FILTER (WHERE dnssec_observed = 'supported')::float / nullif(count(*) FILTER (WHERE dnssec_observed IN ('supported', 'unsupported')), 0) AS share FROM domain WHERE NOT disabled"}],
+      "fieldConfig": {"defaults": {"unit": "percentunit", "decimals": 1}, "overrides": []}
+    },
+    {
+      "type": "stat", "title": "PTR coverage (v6 hosts)", "gridPos": {"x": 6, "y": 0, "w": 6, "h": 4},
+      "description": "Domains whose apex AAAA addresses have reverse DNS. partial (some addresses) counts as covered.",
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "table",
+        "rawSql": "SELECT count(*) FILTER (WHERE ptr_observed IN ('supported', 'partial'))::float / nullif(count(*) FILTER (WHERE ptr_observed IN ('supported', 'partial', 'unsupported')), 0) AS share FROM domain WHERE base_status = 'supported' AND NOT disabled"}],
+      "fieldConfig": {"defaults": {"unit": "percentunit", "decimals": 1}, "overrides": []}
+    },
+    {
+      "type": "stat", "title": "SMTP answers over v6", "gridPos": {"x": 12, "y": 0, "w": 6, "h": 4},
+      "description": "Of domains whose MX publishes AAAA, how many mail servers actually complete an SMTP handshake over IPv6.",
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "table",
+        "rawSql": "SELECT count(*) FILTER (WHERE smtp_observed = 'supported')::float / nullif(count(*) FILTER (WHERE smtp_observed IN ('supported', 'unsupported')), 0) AS share FROM domain WHERE mx_status = 'supported' AND NOT disabled"}],
+      "fieldConfig": {"defaults": {"unit": "percentunit", "decimals": 1}, "overrides": []}
+    },
+    {
+      "type": "stat", "title": "Paper-v6 mail", "gridPos": {"x": 18, "y": 0, "w": 6, "h": 4},
+      "description": "MX publishes AAAA but SMTP does not answer over IPv6 — mail that looks v6-ready on paper and is not.",
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "table",
+        "rawSql": "SELECT count(*) AS paper FROM domain WHERE mx_status = 'supported' AND smtp_observed = 'unsupported' AND NOT disabled"}],
+      "fieldConfig": {"defaults": {"unit": "short", "thresholds": {"mode": "absolute", "steps": [{"value": null, "color": "green"}, {"value": 1000, "color": "yellow"}, {"value": 10000, "color": "red"}]}}, "overrides": []}
+    },
+    {
+      "type": "bargauge", "title": "DNSSEC by tier", "gridPos": {"x": 0, "y": 4, "w": 8, "h": 8},
+      "description": "Validating-chain share within each classification. Do IPv6 heroes also do DNSSEC, or are the hygiene populations disjoint?",
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "table",
+        "rawSql": "SELECT count(*) FILTER (WHERE classification = 'hero' AND dnssec_observed = 'supported')::float / nullif(count(*) FILTER (WHERE classification = 'hero' AND dnssec_observed IN ('supported', 'unsupported')), 0) AS hero, count(*) FILTER (WHERE classification = 'partial' AND dnssec_observed = 'supported')::float / nullif(count(*) FILTER (WHERE classification = 'partial' AND dnssec_observed IN ('supported', 'unsupported')), 0) AS partial, count(*) FILTER (WHERE classification = 'sinner' AND dnssec_observed = 'supported')::float / nullif(count(*) FILTER (WHERE classification = 'sinner' AND dnssec_observed IN ('supported', 'unsupported')), 0) AS sinner FROM domain WHERE NOT disabled"}],
+      "options": {"reduceOptions": {"values": false, "calcs": ["lastNotNull"]}, "displayMode": "gradient", "orientation": "horizontal"},
+      "fieldConfig": {"defaults": {"unit": "percentunit", "min": 0, "max": 1}, "overrides": []}
+    },
+    {
+      "type": "piechart", "title": "SMTP over IPv6 (MX with AAAA)", "gridPos": {"x": 8, "y": 4, "w": 8, "h": 8},
+      "description": "Handshake outcomes for mail servers that advertise AAAA on their MX hosts.",
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "table",
+        "rawSql": "SELECT count(*) FILTER (WHERE smtp_observed = 'supported') AS answers, count(*) FILTER (WHERE smtp_observed = 'unsupported') AS refuses, count(*) FILTER (WHERE smtp_observed NOT IN ('supported', 'unsupported') OR smtp_observed IS NULL) AS untested FROM domain WHERE mx_status = 'supported' AND NOT disabled"}],
+      "options": {"reduceOptions": {"values": false, "calcs": ["lastNotNull"]}, "legend": {"displayMode": "table", "placement": "right", "values": ["value", "percent"]}},
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": [
+        {"matcher": {"id": "byName", "options": "answers"}, "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "green"}}]},
+        {"matcher": {"id": "byName", "options": "refuses"}, "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "red"}}]},
+        {"matcher": {"id": "byName", "options": "untested"}, "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "text"}}]}
+      ]}
+    },
+    {
+      "type": "bargauge", "title": "PTR verdicts (v6-enabled apexes)", "gridPos": {"x": 16, "y": 4, "w": 8, "h": 8},
+      "description": "Reverse-DNS state of apex AAAA addresses: full, partial (some addresses), or none.",
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "table",
+        "rawSql": "SELECT count(*) FILTER (WHERE ptr_observed = 'supported') AS full, count(*) FILTER (WHERE ptr_observed = 'partial') AS partial, count(*) FILTER (WHERE ptr_observed = 'unsupported') AS none FROM domain WHERE base_status = 'supported' AND NOT disabled"}],
+      "options": {"reduceOptions": {"values": false, "calcs": ["lastNotNull"]}, "displayMode": "gradient", "orientation": "horizontal"},
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []}
+    },
+    {
+      "type": "timeseries", "title": "Hygiene trends (share of scans per day)", "gridPos": {"x": 0, "y": 12, "w": 24, "h": 8},
+      "description": "Daily supported-share of each informational check across all scans that produced a verdict. Scans the raw hypertable — keep the range modest.",
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "time_series",
+        "rawSql": "SELECT $__timeGroup(ts, '1d') AS time, count(*) FILTER (WHERE dnssec = 'supported')::float / nullif(count(*) FILTER (WHERE dnssec IN ('supported', 'unsupported')), 0) AS dnssec, count(*) FILTER (WHERE ptr IN ('supported', 'partial'))::float / nullif(count(*) FILTER (WHERE ptr IN ('supported', 'partial', 'unsupported')), 0) AS ptr, count(*) FILTER (WHERE smtp = 'supported')::float / nullif(count(*) FILTER (WHERE smtp IN ('supported', 'unsupported')), 0) AS smtp FROM scan WHERE $__timeFilter(ts) GROUP BY 1 ORDER BY 1"}],
+      "fieldConfig": {"defaults": {"unit": "percentunit", "min": 0, "custom": {"drawStyle": "line", "fillOpacity": 10}}, "overrides": []}
+    }
+  ]
+}

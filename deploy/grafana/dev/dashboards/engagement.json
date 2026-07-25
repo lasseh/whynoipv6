@@ -1,0 +1,71 @@
+{
+  "uid": "wni6-engagement",
+  "title": "WhyNoIPv6 — Public Engagement",
+  "description": "What visitors do with the on-demand /check endpoint: volume, outcomes, popular hosts, and requester concentration. Mostly dormant until the site is public.",
+  "tags": ["whynoipv6", "engagement"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "refresh": "5m",
+  "time": {"from": "now-30d", "to": "now"},
+  "panels": [
+    {
+      "type": "stat", "title": "Checks (30d)", "gridPos": {"x": 0, "y": 0, "w": 6, "h": 4},
+      "description": "On-demand live checks requested in the last 30 days.",
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "table",
+        "rawSql": "SELECT count(*) AS checks FROM check_job WHERE created_at > now() - interval '30 days'"}],
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []}
+    },
+    {
+      "type": "stat", "title": "Unique hosts (30d)", "gridPos": {"x": 6, "y": 0, "w": 6, "h": 4},
+      "description": "Distinct domains people asked about.",
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "table",
+        "rawSql": "SELECT count(DISTINCT host) AS hosts FROM check_job WHERE created_at > now() - interval '30 days'"}],
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []}
+    },
+    {
+      "type": "stat", "title": "Failure rate (30d)", "gridPos": {"x": 12, "y": 0, "w": 6, "h": 4},
+      "description": "Share of completed check jobs that failed.",
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "table",
+        "rawSql": "SELECT count(*) FILTER (WHERE status = 'failed')::float / nullif(count(*) FILTER (WHERE status IN ('done', 'failed')), 0) AS ratio FROM check_job WHERE created_at > now() - interval '30 days'"}],
+      "fieldConfig": {"defaults": {"unit": "percentunit", "decimals": 1, "thresholds": {"mode": "absolute", "steps": [{"value": null, "color": "green"}, {"value": 0.05, "color": "yellow"}, {"value": 0.2, "color": "red"}]}}, "overrides": []}
+    },
+    {
+      "type": "stat", "title": "p95 completion (7d)", "gridPos": {"x": 18, "y": 0, "w": 6, "h": 4},
+      "description": "95th-percentile wall time from request to result for completed checks.",
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "table",
+        "rawSql": "SELECT percentile_cont(0.95) WITHIN GROUP (ORDER BY extract(epoch FROM completed_at - created_at)) AS p95 FROM check_job WHERE status = 'done' AND created_at > now() - interval '7 days'"}],
+      "fieldConfig": {"defaults": {"unit": "s", "decimals": 1, "thresholds": {"mode": "absolute", "steps": [{"value": null, "color": "green"}, {"value": 30, "color": "yellow"}, {"value": 90, "color": "red"}]}}, "overrides": []}
+    },
+    {
+      "type": "timeseries", "title": "Checks per day by outcome", "gridPos": {"x": 0, "y": 4, "w": 12, "h": 8},
+      "description": "Request volume and outcomes over time — the engagement curve to watch after launch.",
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "time_series",
+        "rawSql": "SELECT $__timeGroup(created_at, '1d') AS time, count(*) FILTER (WHERE status = 'done') AS done, count(*) FILTER (WHERE status = 'failed') AS failed, count(*) FILTER (WHERE status IN ('pending', 'processing')) AS in_flight FROM check_job WHERE $__timeFilter(created_at) GROUP BY 1 ORDER BY 1"}],
+      "fieldConfig": {"defaults": {"unit": "short", "custom": {"drawStyle": "bars", "fillOpacity": 60, "stacking": {"mode": "normal"}}}, "overrides": [
+        {"matcher": {"id": "byName", "options": "done"}, "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "green"}}]},
+        {"matcher": {"id": "byName", "options": "failed"}, "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "red"}}]}
+      ]}
+    },
+    {
+      "type": "table", "title": "Most-checked hosts (30d)", "gridPos": {"x": 12, "y": 4, "w": 6, "h": 8},
+      "description": "What people actually care about — repeat subjects are outreach targets.",
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "table",
+        "rawSql": "SELECT host, count(*) AS checks FROM check_job WHERE created_at > now() - interval '30 days' GROUP BY 1 ORDER BY 2 DESC LIMIT 20"}],
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []}
+    },
+    {
+      "type": "table", "title": "Top requesters (30d)", "gridPos": {"x": 18, "y": 4, "w": 6, "h": 8},
+      "description": "Requester-IP concentration — informs the rate-limit tuning. One IP dominating the table is a bot.",
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "table",
+        "rawSql": "SELECT requester_ip::text AS requester, count(*) AS checks FROM check_job WHERE created_at > now() - interval '30 days' GROUP BY 1 ORDER BY 2 DESC LIMIT 20"}],
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []}
+    }
+  ]
+}

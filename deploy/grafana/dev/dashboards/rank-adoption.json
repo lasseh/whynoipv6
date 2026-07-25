@@ -1,0 +1,86 @@
+{
+  "uid": "wni6-rank",
+  "title": "WhyNoIPv6 — Rank-Weighted Adoption",
+  "description": "Does the web that matters adopt IPv6? Adoption by Tranco rank band, the top-1000 trend, and the highest-ranked offenders.",
+  "tags": ["whynoipv6", "data"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "refresh": "15m",
+  "time": {"from": "now-90d", "to": "now"},
+  "panels": [
+    {
+      "type": "stat", "title": "Top-1000 web IPv6", "gridPos": {"x": 0, "y": 0, "w": 6, "h": 4},
+      "description": "Tranco top-1000 domains with web-facing IPv6 (stats_global_daily.top_heroes, latest snapshot). The number journalists would quote.",
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "table",
+        "rawSql": "SELECT top_heroes / 10.0 AS pct FROM stats_global_daily WHERE top_heroes IS NOT NULL ORDER BY day DESC LIMIT 1"}],
+      "fieldConfig": {"defaults": {"unit": "percent", "decimals": 1, "thresholds": {"mode": "absolute", "steps": [{"value": null, "color": "red"}, {"value": 30, "color": "yellow"}, {"value": 50, "color": "green"}]}}, "overrides": []}
+    },
+    {
+      "type": "stat", "title": "Top-1000 v6 nameservers", "gridPos": {"x": 6, "y": 0, "w": 6, "h": 4},
+      "description": "Tranco top-1000 domains whose DNS is served over IPv6 (stats_global_daily.top_nameserver, latest snapshot).",
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "table",
+        "rawSql": "SELECT top_nameserver / 10.0 AS pct FROM stats_global_daily WHERE top_nameserver IS NOT NULL ORDER BY day DESC LIMIT 1"}],
+      "fieldConfig": {"defaults": {"unit": "percent", "decimals": 1, "thresholds": {"mode": "absolute", "steps": [{"value": null, "color": "red"}, {"value": 30, "color": "yellow"}, {"value": 50, "color": "green"}]}}, "overrides": []}
+    },
+    {
+      "type": "stat", "title": "Ranked domains", "gridPos": {"x": 12, "y": 0, "w": 6, "h": 4},
+      "description": "Active domains carrying a Tranco rank (the rest are subdomains, campaign extras, or delist-grace rows).",
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "table",
+        "rawSql": "SELECT count(*) AS ranked FROM domain WHERE rank IS NOT NULL AND NOT disabled"}],
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []}
+    },
+    {
+      "type": "stat", "title": "Top-100 sinners", "gridPos": {"x": 18, "y": 0, "w": 6, "h": 4},
+      "description": "Domains in the Tranco top 100 with confirmed no IPv6 at all. Every one of these is a headline.",
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "table",
+        "rawSql": "SELECT count(*) AS sinners FROM domain WHERE rank <= 100 AND classification = 'sinner' AND NOT disabled"}],
+      "fieldConfig": {"defaults": {"unit": "short", "thresholds": {"mode": "absolute", "steps": [{"value": null, "color": "green"}, {"value": 1, "color": "orange"}, {"value": 10, "color": "red"}]}}, "overrides": []}
+    },
+    {
+      "type": "bargauge", "title": "Apex IPv6 adoption by rank band (cumulative top-N)", "gridPos": {"x": 0, "y": 4, "w": 12, "h": 8},
+      "description": "Share of confirmed apexes publishing AAAA within each cumulative Tranco band. If the top of the web leads, the bars descend.",
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "table",
+        "rawSql": "SELECT count(*) FILTER (WHERE rank <= 100 AND base_status = 'supported')::float / nullif(count(*) FILTER (WHERE rank <= 100 AND base_status IS NOT NULL), 0) AS \"top 100\", count(*) FILTER (WHERE rank <= 1000 AND base_status = 'supported')::float / nullif(count(*) FILTER (WHERE rank <= 1000 AND base_status IS NOT NULL), 0) AS \"top 1k\", count(*) FILTER (WHERE rank <= 10000 AND base_status = 'supported')::float / nullif(count(*) FILTER (WHERE rank <= 10000 AND base_status IS NOT NULL), 0) AS \"top 10k\", count(*) FILTER (WHERE rank <= 100000 AND base_status = 'supported')::float / nullif(count(*) FILTER (WHERE rank <= 100000 AND base_status IS NOT NULL), 0) AS \"top 100k\", count(*) FILTER (WHERE base_status = 'supported')::float / nullif(count(*) FILTER (WHERE base_status IS NOT NULL), 0) AS \"top 1M\" FROM domain WHERE rank IS NOT NULL AND NOT disabled"}],
+      "options": {"reduceOptions": {"values": false, "calcs": ["lastNotNull"]}, "displayMode": "gradient", "orientation": "horizontal"},
+      "fieldConfig": {"defaults": {"unit": "percentunit", "min": 0, "max": 1, "thresholds": {"mode": "absolute", "steps": [{"value": null, "color": "red"}, {"value": 0.3, "color": "yellow"}, {"value": 0.5, "color": "green"}]}}, "overrides": []}
+    },
+    {
+      "type": "bargauge", "title": "Hero share by rank band", "gridPos": {"x": 12, "y": 4, "w": 12, "h": 8},
+      "description": "Full-stack IPv6 (hero classification) share per cumulative band — the stricter bar than apex AAAA alone.",
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "table",
+        "rawSql": "SELECT count(*) FILTER (WHERE rank <= 100 AND classification = 'hero')::float / nullif(count(*) FILTER (WHERE rank <= 100), 0) AS \"top 100\", count(*) FILTER (WHERE rank <= 1000 AND classification = 'hero')::float / nullif(count(*) FILTER (WHERE rank <= 1000), 0) AS \"top 1k\", count(*) FILTER (WHERE rank <= 10000 AND classification = 'hero')::float / nullif(count(*) FILTER (WHERE rank <= 10000), 0) AS \"top 10k\", count(*) FILTER (WHERE rank <= 100000 AND classification = 'hero')::float / nullif(count(*) FILTER (WHERE rank <= 100000), 0) AS \"top 100k\", count(*) FILTER (WHERE classification = 'hero')::float / count(*) AS \"top 1M\" FROM domain WHERE rank IS NOT NULL AND NOT disabled"}],
+      "options": {"reduceOptions": {"values": false, "calcs": ["lastNotNull"]}, "displayMode": "gradient", "orientation": "horizontal"},
+      "fieldConfig": {"defaults": {"unit": "percentunit", "min": 0, "max": 1, "thresholds": {"mode": "absolute", "steps": [{"value": null, "color": "red"}, {"value": 0.15, "color": "yellow"}, {"value": 0.3, "color": "green"}]}}, "overrides": []}
+    },
+    {
+      "type": "timeseries", "title": "Top-1000 adoption over time", "gridPos": {"x": 0, "y": 12, "w": 12, "h": 8},
+      "description": "top_heroes / top_nameserver from the daily snapshots, as a share of 1000.",
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "time_series",
+        "rawSql": "SELECT day::timestamptz AS time, top_heroes / 10.0 AS \"web v6 %\", top_nameserver / 10.0 AS \"ns v6 %\" FROM stats_global_daily WHERE $__timeFilter(day::timestamptz) ORDER BY 1"}],
+      "fieldConfig": {"defaults": {"unit": "percent", "min": 0, "max": 100, "custom": {"drawStyle": "line", "fillOpacity": 10}}, "overrides": []}
+    },
+    {
+      "type": "table", "title": "Highest-ranked sinners", "gridPos": {"x": 12, "y": 12, "w": 6, "h": 8},
+      "description": "The most prominent domains with confirmed zero IPv6 — the shame list, ordered by importance.",
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "table",
+        "rawSql": "SELECT rank, host FROM domain WHERE classification = 'sinner' AND rank IS NOT NULL AND NOT disabled ORDER BY rank LIMIT 25"}],
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []}
+    },
+    {
+      "type": "table", "title": "Editorial top shame", "gridPos": {"x": 18, "y": 12, "w": 6, "h": 8},
+      "description": "Hand-picked offenders from v6ctl shame add — the curated wall of shame.",
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "table",
+        "rawSql": "SELECT d.rank, d.host, t.reason FROM top_shame t JOIN domain d ON d.id = t.domain_id ORDER BY d.rank NULLS LAST LIMIT 25"}],
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []}
+    }
+  ]
+}
