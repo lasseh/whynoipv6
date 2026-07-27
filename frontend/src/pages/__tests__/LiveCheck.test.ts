@@ -52,9 +52,10 @@ const doneEnvelope: CheckEnvelope = {
   confirmed: null,
 }
 
-async function mountPage() {
-  const router = await makeRouter('/check', LiveCheck)
-  return mount(LiveCheck, { global: { plugins: [router], stubs: layoutStubs } })
+async function mountPage(initial = '/check') {
+  const router = await makeRouter('/check/:id(\\d+)?', LiveCheck, initial)
+  const wrapper = mount(LiveCheck, { global: { plugins: [router], stubs: layoutStubs } })
+  return Object.assign(wrapper, { router })
 }
 
 async function submitHost(wrapper: Awaited<ReturnType<typeof mountPage>>, host: string) {
@@ -166,6 +167,58 @@ describe('LiveCheck page', () => {
     await vi.advanceTimersByTimeAsync(30_000)
     await flushPromises()
     expect(wrapper.find('button').attributes('disabled')).toBeUndefined()
+  })
+
+  it('reflects the job id into the URL so the result is linkable', async () => {
+    createCheck.mockResolvedValue(accepted)
+    getCheck.mockResolvedValue(doneEnvelope)
+
+    const wrapper = await mountPage()
+    await submitHost(wrapper, 'example.com')
+    await flushPromises()
+
+    expect(wrapper.router.currentRoute.value.path).toBe('/check/42')
+
+    await vi.advanceTimersByTimeAsync(2_000)
+    await flushPromises()
+    expect(wrapper.text()).toContain('Copy link')
+  })
+
+  it('loads a shared /check/{id} link without submitting', async () => {
+    getCheck.mockResolvedValue(doneEnvelope)
+
+    const wrapper = await mountPage('/check/42')
+    await flushPromises()
+
+    expect(createCheck).not.toHaveBeenCalled()
+    expect(getCheck).toHaveBeenCalledWith(42, expect.anything())
+    expect(wrapper.text()).toContain('Live observation')
+    expect(wrapper.find('input').element.value).toBe('example.com')
+  })
+
+  it('resumes polling on a shared in-flight link', async () => {
+    getCheck
+      .mockResolvedValueOnce({ ...doneEnvelope, status: 'processing', result: null })
+      .mockResolvedValueOnce(doneEnvelope)
+
+    const wrapper = await mountPage('/check/42')
+    await flushPromises()
+    expect(wrapper.text()).toContain('Scanning')
+
+    await vi.advanceTimersByTimeAsync(2_000)
+    await flushPromises()
+    expect(wrapper.text()).toContain('Live observation')
+  })
+
+  it('shows the expiry note for a reaped job id', async () => {
+    getCheck.mockRejectedValue(
+      new ApiProblem({ type: 'https://whynoipv6.com/problems/not-found', title: 'Not found' }, 404),
+    )
+
+    const wrapper = await mountPage('/check/999')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('expired')
   })
 
   it('renders the confirmed block with a link to the tracked domain', async () => {

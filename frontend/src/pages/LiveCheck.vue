@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 
 import PageShell from '@/components/PageShell.vue'
 import ApiError from '@/components/ApiError.vue'
@@ -18,6 +19,9 @@ import { formatDateTime } from '@/utils/date'
 // 2 s to a terminal done|failed; a 200 on the POST is a dedupe envelope.
 const POLL_MS = 2_000
 const POLL_LIMIT = 60 // ~2 min; the engine's whole-scan budget is 90 s
+
+const route = useRoute()
+const router = useRouter()
 
 const host = ref('')
 const envelope = ref<CheckEnvelope | null>(null)
@@ -53,6 +57,14 @@ const latency = computed(
 )
 const done = computed(() => envelope.value?.status === 'done')
 const failed = computed(() => envelope.value?.status === 'failed')
+
+const copied = ref(false)
+async function copyLink() {
+  if (envelope.value?.id == null) return
+  await navigator.clipboard.writeText(`${location.origin}/check/${envelope.value.id}`)
+  copied.value = true
+  setTimeout(() => (copied.value = false), 2_000)
+}
 
 // One controller + token per submission: a new submit (or unmount) cancels
 // the in-flight fetch and orphans the old poll loop.
@@ -120,6 +132,22 @@ function poll(id: number, attempt: number) {
   }, POLL_MS)
 }
 
+// The shareable-link contract: once a job id exists, it IS the URL
+// (/check/{id}) — the address bar always links to this exact result.
+// Domain-side dedupe envelopes have id: null and stay unlinkable.
+// activeID marks the job this instance is already handling, so the id
+// watcher ignores our own router.replace and only reacts to real
+// navigation (shared links, back/forward).
+let activeID: number | null = null
+
+function reflectID(id: number | null | undefined) {
+  if (id == null) return
+  activeID = id
+  if (route.params.id !== String(id)) {
+    void router.replace(`/check/${id}`)
+  }
+}
+
 async function submit() {
   const target = host.value.trim()
   if (!target || running.value || retryLeft.value > 0) return
@@ -130,6 +158,7 @@ async function submit() {
   running.value = true
   try {
     const res = await createCheck(target, controller.signal)
+    reflectID(res.id)
     if (isCheckEnvelope(res)) {
       // Dedupe hit: a cached done envelope, no job to poll.
       envelope.value = res
@@ -141,6 +170,63 @@ async function submit() {
     fail(e)
   }
 }
+
+// A shared /check/{id} link: load the job immediately — render a terminal
+// result as-is, resume the 2 s poll on an in-flight one, and translate the
+// 404 of a reaped job (30 d retention) into a friendly nudge.
+async function loadShared(id: number) {
+  stopPolling()
+  activeID = id
+  controller = new AbortController()
+  envelope.value = null
+  problem.value = null
+  running.value = true
+  try {
+    const env = await getCheck(id, controller.signal)
+    envelope.value = env
+    host.value = env.host
+    if (env.status === 'done' || env.status === 'failed') {
+      running.value = false
+      return
+    }
+    poll(id, 1)
+  } catch (e) {
+    const p = ApiProblem.from(e)
+    if (p.code === 'not-found') {
+      running.value = false
+      problem.value = new ApiProblem(
+        {
+          title: 'Check not found',
+          detail:
+            'This check link has expired (results are kept for 30 days) or never existed — run a fresh check above.',
+        },
+        404,
+      )
+      return
+    }
+    fail(e)
+  }
+}
+
+function sharedID(): number | null {
+  const raw = route.params.id
+  return typeof raw === 'string' && raw !== '' ? Number(raw) : null
+}
+
+onMounted(() => {
+  const id = sharedID()
+  if (id !== null) void loadShared(id)
+})
+
+// Back/forward between two result links re-loads the target job; navigating
+// to the bare /check (nav link) keeps whatever is on screen.
+watch(
+  () => route.params.id,
+  () => {
+    const id = sharedID()
+    if (id !== null && id !== activeID) void loadShared(id)
+  },
+)
 </script>
 
 <template>
@@ -222,10 +308,20 @@ async function submit() {
           <div v-else-if="done && envelope" class="mt-8">
             <div class="flex items-center justify-between mb-3">
               <h2 class="text-xl font-bold text-pink-600 font-mono">{{ envelope.host }}</h2>
-              <span
-                class="text-xs uppercase tracking-wide text-gray-400 border border-gray-700 rounded px-2 py-0.5"
-                >Live observation</span
-              >
+              <span class="inline-flex items-center gap-2">
+                <button
+                  v-if="envelope.id != null"
+                  type="button"
+                  class="text-xs text-gray-400 hover:text-fuchsia-400 underline underline-offset-2 cursor-pointer"
+                  @click="copyLink"
+                >
+                  {{ copied ? 'Copied!' : 'Copy link' }}
+                </button>
+                <span
+                  class="text-xs uppercase tracking-wide text-gray-400 border border-gray-700 rounded px-2 py-0.5"
+                  >Live observation</span
+                >
+              </span>
             </div>
 
             <p v-if="envelope.cached" class="mb-4 text-sm text-gray-400">

@@ -59,7 +59,7 @@ const routes: RouteRecordRaw[] = [
     },
   },
   {
-    path: '/check',
+    path: '/check/:id(\\d+)?',
     name: 'LiveCheck',
     component: () => import('@/pages/LiveCheck.vue'),
     meta: {
