@@ -119,6 +119,22 @@ describe('LiveCheck page', () => {
     expect(wrapper.text()).toContain('Live observation')
   })
 
+  it('strips pasted URLs down to the hostname', async () => {
+    createCheck.mockResolvedValue(accepted)
+    getCheck.mockResolvedValue(doneEnvelope)
+
+    const wrapper = await mountPage()
+    await submitHost(wrapper, 'http://vg.no/')
+
+    expect(createCheck).toHaveBeenCalledWith('vg.no', expect.anything())
+    expect(wrapper.find('input').element.value).toBe('vg.no')
+
+    createCheck.mockClear()
+    const w2 = await mountPage()
+    await submitHost(w2, 'https://www.vg.no:8443/some/path?q=1#frag')
+    expect(createCheck).toHaveBeenCalledWith('www.vg.no', expect.anything())
+  })
+
   it('narrates queue state and advances the stage messages over time', async () => {
     createCheck.mockResolvedValue(accepted)
     getCheck.mockResolvedValue({ ...doneEnvelope, status: 'pending', result: null })
