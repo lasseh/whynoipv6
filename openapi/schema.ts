@@ -738,6 +738,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/check/latest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Freshest stored check result for a host (shareable-link read side)
+         * @description The read side of /check/{domain} links: the newest stored result for the host inside `live_check.link_ttl` (default 7 d), from either the latest crawl of a tracked domain or the newest done live-check job. Read-only and never rate-limited; on a 404 the client may enqueue a fresh check via POST /check.
+         */
+        get: operations["getLatestCheck"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/check/{id}": {
         parameters: {
             query?: never;
@@ -2644,6 +2664,30 @@ export interface operations {
             400: components["responses"]["InvalidParameter"];
             415: components["responses"]["UnsupportedMediaType"];
             429: components["responses"]["RateLimited"];
+        };
+    };
+    getLatestCheck: {
+        parameters: {
+            query: {
+                host: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A cached done envelope. `Cache-Control public, max-age=60`. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CheckEnvelope"];
+                };
+            };
+            400: components["responses"]["InvalidParameter"];
+            404: components["responses"]["NotFound"];
         };
     };
     getCheck: {

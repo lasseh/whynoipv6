@@ -294,6 +294,80 @@ func TestLiveCheckDedupeAndRule0(t *testing.T) {
 	}
 }
 
+// TestLatestCheck (§5.1.7): the /check/{domain} link read side — domain-side
+// then job-side lookup inside link_ttl, 404 beyond it, 400 on junk hosts.
+func TestLatestCheck(t *testing.T) {
+	srv, pool := newCheckAPI(t, api.Options{LinkTTL: 7 * 24 * time.Hour})
+	ctx := context.Background()
+
+	// Fixture 1: a tracked domain crawled 2 days ago (inside the TTL but
+	// far outside the 1h POST dedupe window — this endpoint must still hit).
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO domain (host, kind, rank, created_by, asn_id, country_id, tld,
+		                     classification, base_status, base_since, last_checked_at)
+		 VALUES ('tracked.no', 'apex', 10, 'tranco', (SELECT id FROM asn WHERE number = 0),
+		         (SELECT id FROM country WHERE code = 'NO'), 'no', 'partial',
+		         'supported', now() - interval '30 days', now() - interval '2 days')`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO scan_detail (domain_id, ts, details)
+		 SELECT id, now() - interval '2 days', $1 FROM domain WHERE host = 'tracked.no'`,
+		fakeScanResult("tracked.no")); err != nil {
+		t.Fatal(err)
+	}
+	// Fixture 2: an untracked host with a done job 3 days old, plus an
+	// expired one far outside the TTL.
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO check_job (host, requester_ip, status, result, completed_at, created_at)
+		 VALUES ('jobonly.no', '192.0.2.1', 'done', '{"checks":{}}', now() - interval '3 days', now() - interval '3 days'),
+		        ('expired.no', '192.0.2.1', 'done', '{"checks":{}}', now() - interval '20 days', now() - interval '20 days')`); err != nil {
+		t.Fatal(err)
+	}
+
+	var env struct {
+		ID     *int64 `json:"id"`
+		Host   string `json:"host"`
+		Status string `json:"status"`
+		Cached bool   `json:"cached"`
+	}
+
+	// Domain-side hit: synthetic envelope, id null, cacheable.
+	r := getJSON(t, srv.URL+"/check/latest?host=tracked.no", &env)
+	if r.StatusCode != 200 || r.Header.Get("Cache-Control") != "public, max-age=60" {
+		t.Fatalf("tracked: %d cc=%q", r.StatusCode, r.Header.Get("Cache-Control"))
+	}
+	if env.ID != nil || !env.Cached || env.Status != "done" || env.Host != "tracked.no" {
+		t.Errorf("tracked envelope = %+v", env)
+	}
+
+	// Job-side hit: the stored job replays, cached, id present.
+	r = getJSON(t, srv.URL+"/check/latest?host=jobonly.no", &env)
+	if r.StatusCode != 200 {
+		t.Fatalf("jobonly: %d", r.StatusCode)
+	}
+	if env.ID == nil || !env.Cached || env.Status != "done" {
+		t.Errorf("jobonly envelope = %+v", env)
+	}
+
+	// Beyond the TTL and unknown hosts → 404; junk → 400. No job rows were
+	// created by any of these reads.
+	var problem struct{ Type string }
+	if r := getJSON(t, srv.URL+"/check/latest?host=expired.no", &problem); r.StatusCode != 404 {
+		t.Errorf("expired: %d, want 404", r.StatusCode)
+	}
+	if r := getJSON(t, srv.URL+"/check/latest?host=never.no", &problem); r.StatusCode != 404 {
+		t.Errorf("unknown: %d, want 404", r.StatusCode)
+	}
+	if r := getJSON(t, srv.URL+"/check/latest?host=not%20a%20host", &problem); r.StatusCode != 400 {
+		t.Errorf("junk host: %d, want 400", r.StatusCode)
+	}
+	var jobs int
+	if err := pool.QueryRow(ctx, "SELECT count(*) FROM check_job").Scan(&jobs); err != nil || jobs != 2 {
+		t.Errorf("read side must create no job rows (n=%d)", jobs)
+	}
+}
+
 // TestLiveCheckReaper: stale pending/processing jobs flip to failed.
 func TestLiveCheckReaper(t *testing.T) {
 	srv, pool := newCheckAPI(t, api.Options{})

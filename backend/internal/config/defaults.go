@@ -76,6 +76,7 @@ func registryDefaults(binary string) map[string]any {
 		"live_check.rate_ip_per_hour":     10,
 		"live_check.rate_global_per_hour": 500,
 		"live_check.dedupe_window":        "1h",
+		"live_check.link_ttl":             "168h",
 
 		// §2.8 Ops / observability.
 		"ops.webhook_url":              "",

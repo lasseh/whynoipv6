@@ -110,3 +110,6 @@ export const createCheck = (host: string, signal?: AbortSignal) =>
 
 export const getCheck = (id: number, signal?: AbortSignal) =>
   get('/check/{id}', { path: { id }, signal })
+
+export const getLatestCheck = (host: string, signal?: AbortSignal) =>
+  get('/check/latest', { query: { host }, signal })

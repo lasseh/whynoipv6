@@ -221,6 +221,7 @@ Provider names/addresses (`1.1.1.1`, `8.8.8.8`, `9.9.9.9` + their v6 forms), the
 | `live_check.rate_ip_per_hour` | `LIVE_CHECK_RATE_IP_PER_HOUR` | int | `10` | api | 07 | Per-IP `POST /check` rate limit. |
 | `live_check.rate_global_per_hour` | `LIVE_CHECK_RATE_GLOBAL_PER_HOUR` | int | `500` | api | 07 | Global `POST /check` rate limit. |
 | `live_check.dedupe_window` | `LIVE_CHECK_DEDUPE_WINDOW` | duration | `1h` | api | 07 | Collapse duplicate `POST /check` for the same host. |
+| `live_check.link_ttl` | `LIVE_CHECK_LINK_TTL` | duration | `168h` | api | 07 | Freshness horizon for `GET /check/latest` (the `/check/{domain}` shareable-link read side, 07 §5.1.7); older results 404 and the frontend enqueues a recheck. |
 
 ### 2.8 Ops / observability (all binaries)
 

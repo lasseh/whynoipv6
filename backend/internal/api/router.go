@@ -25,6 +25,7 @@ type Options struct {
 	RateIPPerHour     int           // live_check.rate_ip_per_hour; default 10
 	RateGlobalPerHour int           // live_check.rate_global_per_hour; default 500
 	DedupeWindow      time.Duration // live_check.dedupe_window; default 1h
+	LinkTTL           time.Duration // live_check.link_ttl; default 168h (§5.1.7)
 	ResourcesEnabled  bool          // crawler.resources.enabled
 }
 
@@ -40,7 +41,7 @@ type Server struct {
 // NewRouter builds the chi router with the 07 §1.7 middleware order
 // (outermost first): RealIP → RequestID → slog access log → Recoverer →
 // Timeout(30s) → CORS → security headers. No trailing-slash redirection.
-func NewRouter(pool *pgxpool.Pool, opts Options) http.Handler {
+func NewRouter(pool *pgxpool.Pool, opts Options) http.Handler { //nolint:gocritic // one-shot config bag at startup; by-value keeps call sites simple
 	s := &Server{pool: pool, q: db.New(pool), opts: opts}
 	if s.opts.PublicBaseURL == "" {
 		s.opts.PublicBaseURL = "https://api.whynoipv6.com"
@@ -59,6 +60,9 @@ func NewRouter(pool *pgxpool.Pool, opts Options) http.Handler {
 	}
 	if s.opts.DedupeWindow == 0 {
 		s.opts.DedupeWindow = time.Hour
+	}
+	if s.opts.LinkTTL == 0 {
+		s.opts.LinkTTL = 168 * time.Hour
 	}
 	r := chi.NewRouter()
 
@@ -140,6 +144,7 @@ func NewRouter(pool *pgxpool.Pool, opts Options) http.Handler {
 
 	// The live check (§5.1) — the only write path: async enqueue + poll.
 	r.Post("/check", s.postCheck)
+	r.Get("/check/latest", s.getLatestCheck) // static beats the {id} pattern in chi
 	r.Get("/check/{id}", s.getCheck)
 
 	// Stats / adoption-over-time (§4.10) — confirmed-state snapshots only.

@@ -8,10 +8,12 @@ import { layoutStubs, makeRouter } from './test-utils'
 
 const createCheck = vi.fn()
 const getCheck = vi.fn()
+const getLatestCheck = vi.fn()
 
 vi.mock('@/api', () => ({
   createCheck: (...args: unknown[]) => createCheck(...args),
   getCheck: (...args: unknown[]) => getCheck(...args),
+  getLatestCheck: (...args: unknown[]) => getLatestCheck(...args),
   isCheckEnvelope: (r: object) => 'cached' in r,
 }))
 
@@ -53,7 +55,7 @@ const doneEnvelope: CheckEnvelope = {
 }
 
 async function mountPage(initial = '/check') {
-  const router = await makeRouter('/check/:id(\\d+)?', LiveCheck, initial)
+  const router = await makeRouter('/check/:target?', LiveCheck, initial)
   const wrapper = mount(LiveCheck, { global: { plugins: [router], stubs: layoutStubs } })
   return Object.assign(wrapper, { router })
 }
@@ -69,6 +71,7 @@ describe('LiveCheck page', () => {
     vi.useFakeTimers()
     createCheck.mockReset()
     getCheck.mockReset()
+    getLatestCheck.mockReset()
   })
   afterEach(() => {
     vi.useRealTimers()
@@ -94,7 +97,7 @@ describe('LiveCheck page', () => {
     expect(wrapper.text()).toContain('Missing') // mx unsupported
     expect(wrapper.text()).not.toContain('Resolvers disagreed')
     expect(wrapper.text()).toContain('IPv6 29 ms')
-    expect(wrapper.text()).not.toContain('checked recently')
+    expect(wrapper.text()).not.toContain('stored result')
   })
 
   it('keeps polling while the job is processing', async () => {
@@ -123,7 +126,7 @@ describe('LiveCheck page', () => {
     await submitHost(wrapper, 'example.com')
 
     expect(getCheck).not.toHaveBeenCalled()
-    expect(wrapper.text()).toContain('checked recently')
+    expect(wrapper.text()).toContain('stored result')
     expect(wrapper.text()).toContain('Live observation')
   })
 
@@ -169,7 +172,7 @@ describe('LiveCheck page', () => {
     expect(wrapper.find('button').attributes('disabled')).toBeUndefined()
   })
 
-  it('reflects the job id into the URL so the result is linkable', async () => {
+  it('reflects the host into the URL so the result is linkable', async () => {
     createCheck.mockResolvedValue(accepted)
     getCheck.mockResolvedValue(doneEnvelope)
 
@@ -177,14 +180,44 @@ describe('LiveCheck page', () => {
     await submitHost(wrapper, 'example.com')
     await flushPromises()
 
-    expect(wrapper.router.currentRoute.value.path).toBe('/check/42')
+    expect(wrapper.router.currentRoute.value.path).toBe('/check/example.com')
 
     await vi.advanceTimersByTimeAsync(2_000)
     await flushPromises()
     expect(wrapper.text()).toContain('Copy link')
   })
 
-  it('loads a shared /check/{id} link without submitting', async () => {
+  it('serves a /check/{domain} link from the stored result without a recheck', async () => {
+    getLatestCheck.mockResolvedValue({ ...doneEnvelope, cached: true })
+
+    const wrapper = await mountPage('/check/example.com')
+    await flushPromises()
+
+    expect(getLatestCheck).toHaveBeenCalledWith('example.com', expect.anything())
+    expect(createCheck).not.toHaveBeenCalled()
+    expect(wrapper.text()).toContain('stored result')
+    expect(wrapper.text()).toContain('Live observation')
+    expect(wrapper.find('input').element.value).toBe('example.com')
+  })
+
+  it('auto-rechecks a /check/{domain} link with nothing stored in 7 days', async () => {
+    getLatestCheck.mockRejectedValue(
+      new ApiProblem({ type: 'https://whynoipv6.com/problems/not-found', title: 'Not found' }, 404),
+    )
+    createCheck.mockResolvedValue(accepted)
+    getCheck.mockResolvedValue(doneEnvelope)
+
+    const wrapper = await mountPage('/check/example.com')
+    await flushPromises()
+
+    expect(createCheck).toHaveBeenCalledWith('example.com', expect.anything())
+
+    await vi.advanceTimersByTimeAsync(2_000)
+    await flushPromises()
+    expect(wrapper.text()).toContain('Live observation')
+  })
+
+  it('loads a legacy /check/{id} link and upgrades the URL to the domain', async () => {
     getCheck.mockResolvedValue(doneEnvelope)
 
     const wrapper = await mountPage('/check/42')
@@ -194,6 +227,7 @@ describe('LiveCheck page', () => {
     expect(getCheck).toHaveBeenCalledWith(42, expect.anything())
     expect(wrapper.text()).toContain('Live observation')
     expect(wrapper.find('input').element.value).toBe('example.com')
+    expect(wrapper.router.currentRoute.value.path).toBe('/check/example.com')
   })
 
   it('resumes polling on a shared in-flight link', async () => {

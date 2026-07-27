@@ -190,6 +190,52 @@ func (s *Server) getCheck(w http.ResponseWriter, r *http.Request) {
 	WriteJSON(w, http.StatusOK, env)
 }
 
+// getLatestCheck is GET /check/latest?host= — the read side of the
+// shareable /check/{domain} links (§5.1.7): the freshest stored result for a
+// host within live_check.link_ttl, from either source the POST dedupe uses —
+// the latest crawl of a tracked domain, or the newest done job. Read-only,
+// never rate-limited; a miss is 404 and the client decides whether to
+// enqueue a fresh check.
+func (s *Server) getLatestCheck(w http.ResponseWriter, r *http.Request) {
+	host, err := domain.Canonicalize(r.URL.Query().Get("host"))
+	if err != nil {
+		InvalidParameter(w, r, "not a valid domain name")
+		return
+	}
+
+	// Source 1 — tracked domain with a crawl inside the TTL (daily cadence
+	// means every active tracked domain hits this branch).
+	confirmedRow, confErr := s.q.DomainConfirmed(r.Context(), host)
+	if confErr == nil && confirmedRow.LastCheckedAt.Valid &&
+		time.Since(confirmedRow.LastCheckedAt.Time) < s.opts.LinkTTL {
+		if env, ok := s.dedupeEnvelope(r, &confirmedRow, host); ok {
+			w.Header().Set("Cache-Control", "public, max-age=60")
+			WriteJSON(w, http.StatusOK, env)
+			return
+		}
+	}
+	if confErr != nil && !errors.Is(confErr, pgx.ErrNoRows) {
+		InternalError(w, r, confErr)
+		return
+	}
+
+	// Source 2 — the newest done live-check job inside the TTL.
+	if job, err := s.q.CheckJobDedupe(r.Context(), db.CheckJobDedupeParams{
+		Host: host, DedupeWindow: pgInterval(s.opts.LinkTTL),
+	}); err == nil {
+		env := s.jobEnvelope(r, &jobFields{
+			ID: job.ID, Host: job.Host, Status: string(job.Status), Result: job.Result,
+			Error: job.Error, CreatedAt: job.CreatedAt, CompletedAt: job.CompletedAt,
+		})
+		env.Cached = true
+		w.Header().Set("Cache-Control", "public, max-age=60")
+		WriteJSON(w, http.StatusOK, env)
+		return
+	}
+
+	NotFound(w, r, "No recent check", "No stored result for this host inside the retention window.")
+}
+
 type jobFields struct {
 	ID          int64
 	Host        string

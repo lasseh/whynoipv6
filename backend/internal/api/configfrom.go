@@ -19,6 +19,7 @@ func OptionsFrom(src ConfigSource) Options {
 		RateIPPerHour:     src.Int("live_check.rate_ip_per_hour"),
 		RateGlobalPerHour: src.Int("live_check.rate_global_per_hour"),
 		DedupeWindow:      src.Duration("live_check.dedupe_window"),
+		LinkTTL:           src.Duration("live_check.link_ttl"),
 		ResourcesEnabled:  src.Bool("crawler.resources.enabled"),
 	}
 }

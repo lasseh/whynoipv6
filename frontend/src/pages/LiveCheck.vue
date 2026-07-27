@@ -9,7 +9,7 @@ import CheckIcon from '@/components/icons/Check.vue'
 import CrossIcon from '@/components/icons/Cross.vue'
 import MinusIcon from '@/components/icons/Minus.vue'
 
-import { createCheck, getCheck, isCheckEnvelope } from '@/api'
+import { createCheck, getCheck, getLatestCheck, isCheckEnvelope } from '@/api'
 import type { CheckEnvelope } from '@/api'
 import { ApiProblem } from '@/api/problem'
 import { liveStatus } from '@/utils/status'
@@ -60,8 +60,8 @@ const failed = computed(() => envelope.value?.status === 'failed')
 
 const copied = ref(false)
 async function copyLink() {
-  if (envelope.value?.id == null) return
-  await navigator.clipboard.writeText(`${location.origin}/check/${envelope.value.id}`)
+  if (!envelope.value) return
+  await navigator.clipboard.writeText(`${location.origin}/check/${envelope.value.host}`)
   copied.value = true
   setTimeout(() => (copied.value = false), 2_000)
 }
@@ -132,33 +132,36 @@ function poll(id: number, attempt: number) {
   }, POLL_MS)
 }
 
-// The shareable-link contract: once a job id exists, it IS the URL
-// (/check/{id}) — the address bar always links to this exact result.
-// Domain-side dedupe envelopes have id: null and stay unlinkable.
-// activeID marks the job this instance is already handling, so the id
-// watcher ignores our own router.replace and only reacts to real
-// navigation (shared links, back/forward).
-let activeID: number | null = null
+// The shareable-link contract: the canonical URL is /check/{domain} — the
+// address bar always links to the host's result. Opening such a link serves
+// the freshest stored result inside live_check.link_ttl (7 d) via
+// GET /check/latest, and auto-runs a fresh check past that. Legacy numeric
+// /check/{id} links still load and upgrade to the domain URL. activeTarget
+// marks what this instance already handles, so the watcher ignores our own
+// router.replace and only reacts to real navigation (back/forward, links).
+let activeTarget: string | null = null
 
-function reflectID(id: number | null | undefined) {
-  if (id == null) return
-  activeID = id
-  if (route.params.id !== String(id)) {
-    void router.replace(`/check/${id}`)
+function reflectHost(h: string) {
+  activeTarget = h
+  if (route.params.target !== h) {
+    void router.replace(`/check/${h}`)
   }
 }
 
-async function submit() {
-  const target = host.value.trim()
-  if (!target || running.value || retryLeft.value > 0) return
+function beginRequest() {
   stopPolling()
   controller = new AbortController()
   envelope.value = null
   problem.value = null
   running.value = true
+}
+
+async function submit(target = host.value.trim()) {
+  if (!target || running.value || retryLeft.value > 0) return
+  beginRequest()
   try {
-    const res = await createCheck(target, controller.signal)
-    reflectID(res.id)
+    const res = await createCheck(target, controller!.signal)
+    reflectHost(res.host)
     if (isCheckEnvelope(res)) {
       // Dedupe hit: a cached done envelope, no job to poll.
       envelope.value = res
@@ -171,20 +174,35 @@ async function submit() {
   }
 }
 
-// A shared /check/{id} link: load the job immediately — render a terminal
-// result as-is, resume the 2 s poll on an in-flight one, and translate the
-// 404 of a reaped job (30 d retention) into a friendly nudge.
-async function loadShared(id: number) {
-  stopPolling()
-  activeID = id
-  controller = new AbortController()
-  envelope.value = null
-  problem.value = null
-  running.value = true
+// A /check/{domain} link: stored result inside the TTL, else recheck.
+async function loadByHost(h: string) {
+  activeTarget = h
+  host.value = h
+  beginRequest()
   try {
-    const env = await getCheck(id, controller.signal)
+    const env = await getLatestCheck(h, controller!.signal)
     envelope.value = env
     host.value = env.host
+    reflectHost(env.host) // canonicalized form may differ from the URL
+    running.value = false
+  } catch (e) {
+    if (ApiProblem.from(e).code === 'not-found') {
+      running.value = false
+      void submit(h) // nothing stored within 7 days — recheck now
+      return
+    }
+    fail(e)
+  }
+}
+
+// A legacy /check/{id} link: load the job, then upgrade to the domain URL.
+async function loadByID(id: number) {
+  beginRequest()
+  try {
+    const env = await getCheck(id, controller!.signal)
+    envelope.value = env
+    host.value = env.host
+    reflectHost(env.host)
     if (env.status === 'done' || env.status === 'failed') {
       running.value = false
       return
@@ -197,8 +215,7 @@ async function loadShared(id: number) {
       problem.value = new ApiProblem(
         {
           title: 'Check not found',
-          detail:
-            'This check link has expired (results are kept for 30 days) or never existed — run a fresh check above.',
+          detail: 'This check link has expired or never existed — run a fresh check above.',
         },
         404,
       )
@@ -208,23 +225,32 @@ async function loadShared(id: number) {
   }
 }
 
-function sharedID(): number | null {
-  const raw = route.params.id
-  return typeof raw === 'string' && raw !== '' ? Number(raw) : null
+function loadTarget(raw: string) {
+  activeTarget = raw
+  if (/^\d+$/.test(raw)) {
+    void loadByID(Number(raw))
+  } else {
+    void loadByHost(raw)
+  }
+}
+
+function routeTarget(): string | null {
+  const raw = route.params.target
+  return typeof raw === 'string' && raw !== '' ? raw : null
 }
 
 onMounted(() => {
-  const id = sharedID()
-  if (id !== null) void loadShared(id)
+  const target = routeTarget()
+  if (target !== null) loadTarget(target)
 })
 
-// Back/forward between two result links re-loads the target job; navigating
-// to the bare /check (nav link) keeps whatever is on screen.
+// Back/forward between two result links re-loads the target; navigating to
+// the bare /check (nav link) keeps whatever is on screen.
 watch(
-  () => route.params.id,
+  () => route.params.target,
   () => {
-    const id = sharedID()
-    if (id !== null && id !== activeID) void loadShared(id)
+    const target = routeTarget()
+    if (target !== null && target !== activeTarget) loadTarget(target)
   },
 )
 </script>
@@ -243,7 +269,7 @@ watch(
           </div>
 
           <!-- Input -->
-          <form @submit.prevent="submit">
+          <form @submit.prevent="submit()">
             <label for="check-host" class="mb-2 text-sm font-medium sr-only text-white"
               >Domain</label
             >
@@ -310,7 +336,6 @@ watch(
               <h2 class="text-xl font-bold text-pink-600 font-mono">{{ envelope.host }}</h2>
               <span class="inline-flex items-center gap-2">
                 <button
-                  v-if="envelope.id != null"
                   type="button"
                   class="text-xs text-gray-400 hover:text-fuchsia-400 underline underline-offset-2 cursor-pointer"
                   @click="copyLink"
@@ -325,7 +350,8 @@ watch(
             </div>
 
             <p v-if="envelope.cached" class="mb-4 text-sm text-gray-400">
-              This domain was checked recently — showing the cached result.
+              Showing a stored result — a fresh check runs automatically once it is older than 7
+              days.
             </p>
 
             <!-- Core dimensions -->

@@ -716,6 +716,30 @@ paths:
         "400": { $ref: "#/components/responses/InvalidParameter" }
         "415": { $ref: "#/components/responses/UnsupportedMediaType" }
         "429": { $ref: "#/components/responses/RateLimited" }
+  /check/latest:
+    get:
+      operationId: getLatestCheck
+      tags: [check]
+      summary: Freshest stored check result for a host (shareable-link read side)
+      description: >
+        The read side of /check/{domain} links: the newest stored result for
+        the host inside `live_check.link_ttl` (default 7 d), from either the
+        latest crawl of a tracked domain or the newest done live-check job.
+        Read-only and never rate-limited; on a 404 the client may enqueue a
+        fresh check via POST /check.
+      parameters:
+        - name: host
+          in: query
+          required: true
+          schema: { type: string, example: example.com }
+      responses:
+        "200":
+          description: A cached done envelope. `Cache-Control public, max-age=60`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CheckEnvelope" }
+        "400": { $ref: "#/components/responses/InvalidParameter" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /check/{id}:
     get:
       operationId: getCheck

@@ -822,9 +822,19 @@ Every `POST /check` for an existing host sets `last_requested_at = now()` — th
 - `disabled_reason = 'dead'` → leave disabled but set `next_check_at = now()`: recovery happens via the pulled-in frontier scan.
 - `disabled_reason IN ('service','manual')` → the live check runs and returns its result, but never re-enables.
 
-Config keys (crawler config; registry: 09-ops.md): `live_check.workers`, `live_check.job_budget`, `live_check.reclaim_after`, `live_check.fail_after`, `live_check.retention`, `live_check.rate_ip_per_hour`, `live_check.rate_global_per_hour`, `live_check.dedupe_window`.
+Config keys (crawler config; registry: 09-ops.md): `live_check.workers`, `live_check.job_budget`, `live_check.reclaim_after`, `live_check.fail_after`, `live_check.retention`, `live_check.rate_ip_per_hour`, `live_check.rate_global_per_hour`, `live_check.dedupe_window`, `live_check.link_ttl`.
 
 *Rejected — synchronous inline check:* a full engine run can take 60–90 s; holding an anonymous request open that long invites trivial resource-exhaustion abuse. Job + poll matches ready.chair6.net-class tools.
+
+#### 5.1.7 `GET /check/latest?host=` — the shareable-link read side
+
+The frontend's shareable check URLs are `/check/{domain}` (12-frontend §10.1); this endpoint is their read side: the freshest stored result for a canonical host **within `live_check.link_ttl`** (duration, default `168h`; registry: 09-ops.md). Lookup order mirrors the POST dedupe pair, with the TTL replacing the dedupe window:
+
+1. **Domain-side** — a `domain` row with `last_checked_at >= now() - link_ttl`: the §5.1.1-step-4 synthetic done envelope from the latest `scan_detail` (tracked domains crawl daily, so this branch serves virtually all of them).
+2. **Job-side** — else the newest `check_job` with `status='done' AND completed_at >= now() - link_ttl`, `cached` overridden to `true`.
+3. Neither → `404 not-found`. The client decides whether to enqueue a fresh check via `POST /check` — the frontend does so automatically, which is what makes an expired link self-heal into a recheck.
+
+Read-only, never rate-limited, `Cache-Control: public, max-age=60`. An invalid host → `400 invalid-parameter`. The route is the static `/check/latest`, registered alongside `/check/{id}` (static wins).
 
 ### 5.2 Embeddable SVG badge
 
