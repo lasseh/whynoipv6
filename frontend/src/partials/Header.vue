@@ -97,6 +97,16 @@ onBeforeUnmount(() => {
             </li>
             <li>
               <router-link
+                to="/check"
+                :class="[
+                  isActiveRoute('/check') ? 'underline' : '',
+                  'text-gray-300 hover:text-gray-200 px-4 py-2 flex items-center transition duration-150 ease-in-out font-bold',
+                ]"
+                >Live Check</router-link
+              >
+            </li>
+            <li>
+              <router-link
                 to="/metrics"
                 :class="[
                   isActiveRoute('/metrics') ? 'underline' : '',
@@ -188,6 +198,13 @@ onBeforeUnmount(() => {
                   to="/countries"
                   class="flex font-medium text-gray-200 hover:text-gray-200 py-2"
                   >Countries</router-link
+                >
+              </li>
+              <li>
+                <router-link
+                  to="/check"
+                  class="flex font-medium text-gray-200 hover:text-gray-200 py-2"
+                  >Live Check</router-link
                 >
               </li>
               <li>

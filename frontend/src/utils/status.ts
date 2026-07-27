@@ -131,6 +131,31 @@ export function statusLabel(value: StatusValue): string {
   }
 }
 
+// The live-check raw-observation vocabulary (§10.1): the 4 public statuses
+// plus partial/error/inconsistent, which never appear in confirmed state.
+// Same hue families as §7.2; the three extra states stay deliberately muted.
+export interface LiveStatusView {
+  icon: StatusIconKind
+  class: string
+  label: string
+}
+
+const LIVE_STATUS: Record<string, LiveStatusView> = {
+  supported: { icon: 'check', class: 'text-emerald-500', label: 'Supported' },
+  partial: { icon: 'check', class: 'text-amber-500', label: 'Partial' },
+  unsupported: { icon: 'cross', class: 'text-pink-500', label: 'Missing' },
+  no_record: { icon: 'minus', class: 'text-amber-500', label: 'No record' },
+  not_applicable: { icon: 'minus', class: 'text-zinc-600', label: 'Not applicable' },
+  error: { icon: 'minus', class: 'text-zinc-600', label: 'Check error' },
+  inconsistent: { icon: 'minus', class: 'text-amber-500', label: 'Resolvers disagreed' },
+}
+
+export function liveStatus(value: string | undefined): LiveStatusView {
+  return (
+    (value && LIVE_STATUS[value]) || { icon: 'minus', class: 'text-zinc-600', label: 'Not checked' }
+  )
+}
+
 /** Hover tooltip on status icons — the old wording for the legacy three states. */
 export function statusTooltip(value: StatusValue): string {
   switch (value) {

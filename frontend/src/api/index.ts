@@ -1,7 +1,7 @@
 // Narrow per-resource call helpers (§6.2) — the one seam pages call and tests
 // stub. Envelopes are uniform (07 §2.4): item collections are
 // { items, page, meta }, time series are { points, meta }.
-import { get } from '@/api/client'
+import { get, post } from '@/api/client'
 import type { GetQuery } from '@/api/client'
 import type { components } from '@openapi/schema'
 
@@ -95,3 +95,18 @@ export const listASNs = (query?: GetQuery<'/asns'>, signal?: AbortSignal) =>
   get('/asns', { query, signal })
 
 export const getVisitorIP = (signal?: AbortSignal) => get('/ip', { signal })
+
+// The live-check flow (§10.1): enqueue returns either a 202 accepted stub or
+// a cached done envelope (dedupe); poll to a terminal done/failed status.
+export type CheckAccepted = Schemas['CheckAccepted']
+export type CheckEnvelope = Schemas['CheckEnvelope']
+
+/** Discriminates the two createCheck success shapes; `cached` only exists on the envelope. */
+export const isCheckEnvelope = (r: CheckAccepted | CheckEnvelope): r is CheckEnvelope =>
+  'cached' in r
+
+export const createCheck = (host: string, signal?: AbortSignal) =>
+  post('/check', { host }, { signal })
+
+export const getCheck = (id: number, signal?: AbortSignal) =>
+  get('/check/{id}', { path: { id }, signal })

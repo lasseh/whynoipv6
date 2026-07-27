@@ -59,6 +59,15 @@ const routes: RouteRecordRaw[] = [
     },
   },
   {
+    path: '/check',
+    name: 'LiveCheck',
+    component: () => import('@/pages/LiveCheck.vue'),
+    meta: {
+      title: 'Live IPv6 Check - Why No IPv6?',
+      description: 'Run a live IPv6 check on any domain — DNS, mail, and real connectivity.',
+    },
+  },
+  {
     path: '/metrics',
     name: 'Metrics',
     component: () => import('@/pages/Metrics.vue'),

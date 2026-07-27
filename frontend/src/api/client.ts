@@ -66,5 +66,35 @@ export async function get<P extends GetPath>(
   return handle(res)
 }
 
-// The phase-2 live-check flow (POST /check, §10.1) adds a `post()` sibling
-// here when it lands — nothing in the phase-1 surface writes.
+// The live-check flow (§10.1) — the API's one write path. The success type
+// unions every application/json response (202 accepted + 200 dedupe
+// envelope for /check); problem+json failures throw ApiProblem via handle().
+type PostOp<P extends keyof paths> = paths[P] extends { post: infer O } ? O : never
+
+export type PostPath = {
+  [P in keyof paths]: PostOp<P> extends never ? never : P
+}[keyof paths]
+
+type JsonBody<O> = O extends { requestBody: { content: { 'application/json': infer B } } }
+  ? B
+  : never
+
+type PostJson<O> = O extends { responses: infer R }
+  ? {
+      [S in keyof R]: R[S] extends { content: { 'application/json': infer J } } ? J : never
+    }[keyof R]
+  : never
+
+export async function post<P extends PostPath>(
+  path: P,
+  body: JsonBody<PostOp<P>>,
+  opts?: { signal?: AbortSignal | undefined },
+): Promise<PostJson<PostOp<P>>> {
+  const res = await fetch(buildURL(path), {
+    method: 'POST',
+    headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    signal: withTimeout(opts?.signal),
+  })
+  return handle(res)
+}
