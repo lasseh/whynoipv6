@@ -84,8 +84,8 @@ describe('LiveCheck page', () => {
     const wrapper = await mountPage()
     await submitHost(wrapper, 'example.com')
 
-    // In flight: queued message, no result yet.
-    expect(wrapper.text()).toContain('Queued')
+    // In flight: staged progress narration, no result yet.
+    expect(wrapper.text()).toContain('Resolving DNS records')
     expect(getCheck).not.toHaveBeenCalled()
 
     await vi.advanceTimersByTimeAsync(2_000)
@@ -111,12 +111,48 @@ describe('LiveCheck page', () => {
 
     await vi.advanceTimersByTimeAsync(2_000)
     await flushPromises()
-    expect(wrapper.text()).toContain('Scanning')
+    expect(wrapper.text()).toContain('Resolving DNS records')
 
     await vi.advanceTimersByTimeAsync(2_000)
     await flushPromises()
     expect(getCheck).toHaveBeenCalledTimes(2)
     expect(wrapper.text()).toContain('Live observation')
+  })
+
+  it('narrates queue state and advances the stage messages over time', async () => {
+    createCheck.mockResolvedValue(accepted)
+    getCheck.mockResolvedValue({ ...doneEnvelope, status: 'pending', result: null })
+
+    const wrapper = await mountPage()
+    await submitHost(wrapper, 'example.com')
+
+    await vi.advanceTimersByTimeAsync(2_000)
+    await flushPromises()
+    expect(wrapper.text()).toContain('Waiting in queue')
+
+    getCheck.mockResolvedValue({ ...doneEnvelope, status: 'processing', result: null })
+    await vi.advanceTimersByTimeAsync(8_000) // elapsed ≥ 9s
+    await flushPromises()
+    expect(wrapper.text()).toContain('Connecting to the site over IPv6 only')
+    expect(wrapper.text()).toContain('example.com')
+    expect(wrapper.find('[role="progressbar"]').exists()).toBe(true)
+  })
+
+  it('cancel aborts the poll and unlocks the form', async () => {
+    createCheck.mockResolvedValue(accepted)
+    getCheck.mockResolvedValue({ ...doneEnvelope, status: 'processing', result: null })
+
+    const wrapper = await mountPage()
+    await submitHost(wrapper, 'example.com')
+
+    await wrapper.find('button[type="button"]').trigger('click') // Cancel
+    expect(wrapper.find('[role="progressbar"]').exists()).toBe(false)
+    expect(wrapper.find('button[type="submit"]').attributes('disabled')).toBeUndefined()
+
+    const polls = getCheck.mock.calls.length
+    await vi.advanceTimersByTimeAsync(10_000)
+    await flushPromises()
+    expect(getCheck.mock.calls.length).toBe(polls) // polling stopped
   })
 
   it('renders a dedupe hit immediately with the checked-recently note', async () => {
@@ -237,7 +273,7 @@ describe('LiveCheck page', () => {
 
     const wrapper = await mountPage('/check/42')
     await flushPromises()
-    expect(wrapper.text()).toContain('Scanning')
+    expect(wrapper.find('[role="progressbar"]').exists()).toBe(true)
 
     await vi.advanceTimersByTimeAsync(2_000)
     await flushPromises()
