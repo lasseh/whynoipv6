@@ -49,6 +49,10 @@ services:
       # Dev-only: the prod default (10/h per IP) makes live-check testing
       # impossible from a single machine.
       LIVE_CHECK_RATE_IP_PER_HOUR: "1000"
+      # Taillight shipping (09-ops §13): empty (laptop default) = disabled;
+      # the dev host sets both in its .env.
+      TAILLIGHT_URL: ${TAILLIGHT_URL:-}
+      TAILLIGHT_API_KEY: ${TAILLIGHT_API_KEY:-}
     volumes: ["datasets:/var/lib/whynoipv6/datasets"]
     depends_on:
       migrate: {condition: service_completed_successfully}
@@ -93,7 +97,11 @@ services:
       # ~/.zshenv (native netfilter, no such limit).
       WORKER_SLOTS: "${CRAWLER_WORKER_SLOTS:-4}"
       GEOIP_PATH: /var/lib/GeoIP
-      LOG_LEVEL: debug
+      # info, not debug: the shipper's MinLevel follows LOG_LEVEL, and the
+      # crawler logs per-domain at debug — shipping that floods Taillight.
+      LOG_LEVEL: info
+      TAILLIGHT_URL: ${TAILLIGHT_URL:-}
+      TAILLIGHT_API_KEY: ${TAILLIGHT_API_KEY:-}
     volumes:
       - "geoip:/var/lib/GeoIP:ro"
       - "datasets:/var/lib/whynoipv6/datasets"
