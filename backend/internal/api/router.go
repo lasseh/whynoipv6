@@ -200,7 +200,9 @@ func securityHeaders(next http.Handler) http.Handler {
 }
 
 // accessLog is the small custom slog request logger (09-ops §13); the health
-// endpoints are excluded.
+// endpoints are excluded. Debug per request — the full access log is noise at
+// the default info level (and would flood the Taillight shipper) — with 5xx
+// raised to warn so server errors stay visible.
 func accessLog(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/livez" || r.URL.Path == "/readyz" {
@@ -210,7 +212,11 @@ func accessLog(next http.Handler) http.Handler {
 		start := time.Now()
 		ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
 		next.ServeHTTP(ww, r)
-		slog.Info("request",
+		level := slog.LevelDebug
+		if ww.Status() >= 500 {
+			level = slog.LevelWarn
+		}
+		slog.Log(r.Context(), level, "request",
 			"request_id", middleware.GetReqID(r.Context()),
 			"method", r.Method,
 			"path", r.URL.Path,

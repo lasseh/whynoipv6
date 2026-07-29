@@ -45,7 +45,9 @@ services:
       DATABASE_URL: postgres://whynoipv6:whynoipv6@db:5432/whynoipv6?sslmode=disable
       API_LISTEN: ":8080"                      # dev override: non-loopback so host can reach it
       DATASETS_DIR: /var/lib/whynoipv6/datasets
-      LOG_LEVEL: debug
+      # info, not debug: per-request access-log lines are debug-level, and the
+      # Taillight shipper's MinLevel follows LOG_LEVEL — debug would ship them.
+      LOG_LEVEL: info
       # Dev-only: the prod default (10/h per IP) makes live-check testing
       # impossible from a single machine.
       LIVE_CHECK_RATE_IP_PER_HOUR: "1000"

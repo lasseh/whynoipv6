@@ -1033,7 +1033,8 @@ rate limiting (`RateLimitBurst=10000`/30s) irrelevant even at 1M domains/day.
 **API access log.** chi stack order (07-api.md — Middleware order, §1.7): `RealIP` → `RequestID` → **slog
 access-log middleware** (a small custom one — do **not** use chi's default text logger) →
 `Recoverer` → `Timeout(30s)` → CORS → security headers → per-route Cache-Control. One
-`info` line per request with `request_id`, `method`, `path`, `status`, `bytes`,
+`debug` line per request (`warn` for 5xx responses, so server errors survive the default
+`info` level) with `request_id`, `method`, `path`, `status`, `bytes`,
 `duration_ms`, `remote_ip`. **Exclude the health endpoints** (`GET /livez`, `GET /readyz` — 07-api.md §2.7) from the access log.
 
 ---
