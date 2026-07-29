@@ -98,6 +98,28 @@ describe('LiveCheck page', () => {
     expect(wrapper.text()).not.toContain('Resolvers disagreed')
     expect(wrapper.text()).toContain('IPv6 29 ms')
     expect(wrapper.text()).not.toContain('stored result')
+    // resources not_applicable + conn supported → the vacuous-pass wording
+    expect(wrapper.text()).toContain('no resources from external hosts')
+  })
+
+  it('explains resources not_applicable as not evaluated when the site has no IPv6', async () => {
+    createCheck.mockResolvedValue({
+      ...doneEnvelope,
+      cached: true,
+      result: {
+        ...doneEnvelope.result!,
+        checks: {
+          ...doneEnvelope.result!.checks,
+          conn: { status: 'unsupported' },
+          resources: { status: 'not_applicable' },
+        },
+      },
+    })
+
+    const wrapper = await mountPage()
+    await submitHost(wrapper, 'example.com')
+
+    expect(wrapper.text()).toContain('page resources can’t be evaluated')
   })
 
   it('keeps polling while the job is processing', async () => {

@@ -57,6 +57,16 @@ const latency = computed(
 const done = computed(() => envelope.value?.status === 'done')
 const failed = computed(() => envelope.value?.status === 'failed')
 
+// "Not applicable" on resources is ambiguous (mirrors DomainStatusCard):
+// discovery only runs when the site loads over IPv6, so the same value means
+// either "no external dependencies" or "couldn't evaluate".
+const resourcesNote = computed(() => {
+  if (checks.value.resources?.status !== 'not_applicable') return null
+  return checks.value.conn?.status === 'supported'
+    ? 'The page pulls no resources from external hosts.'
+    : 'The site isn’t reachable over IPv6, so page resources can’t be evaluated.'
+})
+
 // The waiting state (Nielsen H1/H2): narrate the scan's real phases with an
 // elapsed counter and an asymptotic progress bar instead of a static line.
 // Stage timings approximate the engine's two-phase run; the sequencing is
@@ -436,19 +446,24 @@ watch(
               <li
                 v-for="[key, label] in CORE_CHECKS"
                 :key="key"
-                class="flex items-center justify-between p-3 rounded bg-gray-800 text-sm"
+                class="p-3 rounded bg-gray-800 text-sm"
               >
-                <span class="text-gray-200">{{ label }}</span>
-                <span
-                  class="inline-flex items-center gap-2"
-                  :class="liveStatus(checks[key]?.status).class"
-                >
-                  <component
-                    :is="glyphs[liveStatus(checks[key]?.status).icon]"
-                    aria-hidden="true"
-                  />
-                  {{ liveStatus(checks[key]?.status).label }}
-                </span>
+                <div class="flex items-center justify-between">
+                  <span class="text-gray-200">{{ label }}</span>
+                  <span
+                    class="inline-flex items-center gap-2"
+                    :class="liveStatus(checks[key]?.status).class"
+                  >
+                    <component
+                      :is="glyphs[liveStatus(checks[key]?.status).icon]"
+                      aria-hidden="true"
+                    />
+                    {{ liveStatus(checks[key]?.status).label }}
+                  </span>
+                </div>
+                <p v-if="key === 'resources' && resourcesNote" class="mt-1 text-xs text-gray-500">
+                  {{ resourcesNote }}
+                </p>
               </li>
             </ul>
 
