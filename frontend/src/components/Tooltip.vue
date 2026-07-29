@@ -17,7 +17,7 @@ withDefaults(defineProps<{ text: string; center?: boolean; disabled?: boolean }>
     <span
       v-if="!disabled"
       class="tooltip rounded border border-slate-700 shadow-lg p-1 bg-gray-800 text-fuchsia-600 normal-case"
-      :class="center ? 'center' : 'top-full mt-1 right-0 w-max max-w-72'"
+      :class="center ? 'center' : 'top-full mt-1 right-0 w-max max-w-72 whitespace-normal'"
       >{{ text }}</span
     >
     <slot />
