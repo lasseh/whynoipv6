@@ -42,6 +42,19 @@ interface Row {
   dims: { dim: Dimension; label?: string; desc: string }[]
 }
 
+// "Not applicable" on resources means two different things: a vacuous pass
+// (page loads over IPv6, no external dependencies) or "couldn't evaluate"
+// (site unreachable over IPv6, so discovery never ran) — disambiguate by
+// the connection check, since discovery only runs when the site loads.
+function resourcesDesc(status: DomainDetail['status']): string {
+  if (status.resources.value !== 'not_applicable') {
+    return 'Scripts, fonts, and images load from IPv6-capable hosts.'
+  }
+  return status.conn.value === 'supported'
+    ? 'Not applicable: the page pulls no resources from external hosts.'
+    : 'Not applicable: the site isn’t reachable over IPv6, so page resources can’t be evaluated.'
+}
+
 // The four §7.1 rows (Apex / WWW / Nameserver / E-Mail) plus the derived
 // IPv6 Only fold (ADR 0002), which expands to its two source trackers.
 const rows = computed<Row[]>(() => {
@@ -96,7 +109,7 @@ const rows = computed<Row[]>(() => {
         {
           dim: 'resources',
           label: 'Page resources',
-          desc: 'Scripts, fonts, and images load from IPv6-capable hosts.',
+          desc: resourcesDesc(status),
         },
       ],
     },
