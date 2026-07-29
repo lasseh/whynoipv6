@@ -10,13 +10,14 @@ vi.mock('@/api', () => ({
 }))
 
 describe('Search (smoke)', () => {
-  it('mounts without fetching when q is absent', async () => {
+  it('shows the search prompt without fetching when q is absent', async () => {
     const router = await makeRouter('/search', Search)
     const wrapper = mount(Search, {
       global: { plugins: [router], stubs: layoutStubs },
     })
     await flushPromises()
-    expect(wrapper.text()).toContain('Domains')
+    expect(wrapper.text()).toContain('Search the domain index')
+    expect(wrapper.text()).not.toContain('No domains found')
     expect(searchDomains).not.toHaveBeenCalled()
   })
 
@@ -33,5 +34,8 @@ describe('Search (smoke)', () => {
       expect.anything(),
     )
     expect(wrapper.find('input#search').element).toBeTruthy()
+    expect(wrapper.text()).toContain('Results for “example”')
+    // Zero results: the live-check escape hatch replaces a dead end.
+    expect(wrapper.find('a[href="/check/example"]').exists()).toBe(true)
   })
 })

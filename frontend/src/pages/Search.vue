@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
 import PageShell from '@/components/PageShell.vue'
@@ -28,6 +28,10 @@ const { items, page, loading, error, next, prev, setFilter } = useCursorList<Dom
 })
 
 const searchString = ref(typeof route.query.q === 'string' ? route.query.q : '')
+
+// The submitted query (URL-synced by useCursorList) — the input model alone
+// must not flip the page between its prompt and results states while typing.
+const activeQuery = computed(() => (typeof route.query.q === 'string' ? route.query.q : ''))
 
 watch(
   () => route.query.q,
@@ -90,10 +94,36 @@ function submitSearch() {
           <!-- Error state -->
           <ApiError v-if="error" :problem="error" />
 
+          <!-- Prompt state: nothing searched yet -->
+          <div v-else-if="!activeQuery" class="py-16 text-center">
+            <svg
+              aria-hidden="true"
+              class="w-10 h-10 mx-auto mb-4 text-gray-600"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+              ></path>
+            </svg>
+            <div class="text-xl font-medium">Search the domain index</div>
+            <p class="mt-2 text-gray-400">
+              Look up any tracked domain to see its IPv6 status — try
+              <router-link to="/search?q=google" class="text-fuchsia-500 hover:underline"
+                >google</router-link
+              >.
+            </p>
+          </div>
+
           <div v-else>
             <header class="mb-4">
               <div class="text-left">
-                <h1 class="h4 mb-4">Domains</h1>
+                <h1 class="h4 mb-4">Results for &ldquo;{{ activeQuery }}&rdquo;</h1>
               </div>
             </header>
             <!-- Domains -->
@@ -101,6 +131,14 @@ function submitSearch() {
               <DomainTable :domains="items" :loading="loading" />
               <LoadingSpinner v-if="loading" />
             </div>
+
+            <!-- Zero results: offer the live check as the escape hatch -->
+            <p v-if="!loading && items.length === 0" class="mt-4 text-center text-gray-400">
+              Not in the index yet?
+              <router-link :to="`/check/${activeQuery}`" class="text-fuchsia-500 hover:underline"
+                >Run a live check on {{ activeQuery }}</router-link
+              >.
+            </p>
 
             <!-- Pagination -->
             <div class="mt-6">
