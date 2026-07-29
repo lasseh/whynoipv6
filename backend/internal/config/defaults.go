@@ -65,6 +65,8 @@ func registryDefaults(binary string) map[string]any {
 		// §2.6 Campaign sync.
 		"campaign.repo_path":            "/srv/whynoipv6-campaign",
 		"campaign.git_remote":           "origin",
+		"campaign.pull":                 true,
+		"campaign.push":                 true,
 		"campaign.max_domains_per_file": 1000,
 
 		// §2.7 Live check.

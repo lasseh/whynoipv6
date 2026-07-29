@@ -207,6 +207,8 @@ Provider names/addresses (`1.1.1.1`, `8.8.8.8`, `9.9.9.9` + their v6 forms), the
 |---|---|---|---|---|---|
 | `campaign.repo_path` | `CAMPAIGN_REPO_PATH` | string (dir) | `/srv/whynoipv6-campaign` | 06 | Shared checkout owned by the service user (git pull + write-back). |
 | `campaign.git_remote` | `CAMPAIGN_GIT_REMOTE` | string | `origin` | 06 | Push target for the bot UUID write-back commit (deploy key). |
+| `campaign.pull` | `CAMPAIGN_PULL` | bool | `true` | 06 | `git pull --ff-only` before parsing. `false` in containers: the distroless image has no git — the checkout is a volume refreshed by `campaign-init`. |
+| `campaign.push` | `CAMPAIGN_PUSH` | bool | `true` | 06 | Commit + push the bot UUID write-back. `false` wherever no git/deploy key (containers); generated uuids are still written to files when the mount allows. |
 | `campaign.max_domains_per_file` | `CAMPAIGN_MAX_DOMAINS_PER_FILE` | int | `1000` | 06 | Per-YAML-file domain cap (schema validation). |
 
 ### 2.7 Live check (api rate-limiter + crawler consumer)

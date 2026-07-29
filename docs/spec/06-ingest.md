@@ -224,7 +224,7 @@ Files considered: every `*.yml` / `*.yaml` at the repository **root** only (no s
 
 ### 3.3 Sync algorithm (normative)
 
-After acquiring the lock, run `git -C <campaign.repo_path> pull --ff-only <campaign.git_remote>`. **Decision:** a git failure (network, non-fast-forward, corrupt checkout) aborts the sync before any DB work: ops-webhook ERROR + exit 1; the checkout is never auto-repaired.
+After acquiring the lock, run `git -C <campaign.repo_path> pull --ff-only <campaign.git_remote>` (skipped when `campaign.pull=false` — containerized deployments, where the distroless image has no git and the checkout is a volume cloned/refreshed by the `campaign-init` compose service). **Decision:** a git failure (network, non-fast-forward, corrupt checkout) aborts the sync before any DB work: ops-webhook ERROR + exit 1; the checkout is never auto-repaired.
 
 1. **Parse** every root-level `*.yml`/`*.yaml` per §3.2. Every domain entry goes through `Canonicalize` (§1) **before** entity lookup/creation and membership diff; entries failing it are skipped and counted under `rejected + reasons`. Then hosts are **deduped within each file** (first occurrence wins). The importer must never fail or warn on a host present in multiple campaign files: that is N legitimate membership rows for one domain row (membership model, 05-schema.md — campaign tables). Files failing schema/hostname/size validation (§4.2 checks, minus the git-diff UUID check) are rejected and reported; a rejected file **never partially imports**.
 2. **Duplicate-uuid guard:** if one uuid appears in >1 file, keep the file whose path equals the DB's `campaign.source_file` for that uuid and reject the others; if none matches, reject all of them. (This defeats a copied-uuid file coexisting with the original.)
@@ -278,6 +278,8 @@ Classification is per-entity; children never change a parent's tier. **There is 
 campaign:
   repo_path: /srv/whynoipv6-campaign   # string; shared checkout, owned by the service user
   git_remote: origin                   # string; push target for the bot commit (deploy key)
+  pull: true                           # bool; git pull before parsing — false in containers (no git in the distroless image)
+  push: true                           # bool; commit+push the uuid write-back — false in containers
   max_domains_per_file: 1000           # int; PR-validation size cap (§4)
 ```
 
@@ -676,6 +678,8 @@ All keys below are introduced here and consolidated in the registry (09-ops.md),
 | `tranco.stale_warn_after` | duration | 48h | crawler |
 | `campaign.repo_path` | string | `/srv/whynoipv6-campaign` | crawler + v6ctl |
 | `campaign.git_remote` | string | `origin` | crawler + v6ctl |
+| `campaign.pull` | bool | true | crawler + v6ctl |
+| `campaign.push` | bool | true | crawler + v6ctl |
 | `campaign.max_domains_per_file` | int | 1000 | v6ctl (validate) |
 | `crawler.resources.enabled` | bool | false | crawler |
 | `GEOIP_PATH` | string | `/var/lib/GeoIP` | crawler |

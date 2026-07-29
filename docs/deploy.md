@@ -121,10 +121,10 @@ docker compose run --rm geoip-init
 # export — needs the datasets volume, so base it on the api service:
 docker compose run --rm --entrypoint /v6ctl api export
 
-# campaign sync — needs a checkout of whynoipv6-campaign mounted at the configured
-# repo path (default /srv/whynoipv6-campaign):
-docker compose run --rm --entrypoint /v6ctl \
-  -v ~/code/whynoipv6-campaign:/srv/whynoipv6-campaign migrate campaign sync
+# campaign sync — the campaign volume (cloned/refreshed by campaign-init) is
+# mounted on the crawler service, which also sets CAMPAIGN_PULL/PUSH=false
+# (the distroless image has no git):
+docker compose run --rm --entrypoint /v6ctl crawler campaign sync
 ```
 
 ## 3. Production deployment

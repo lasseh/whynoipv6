@@ -83,6 +83,22 @@ services:
       GEOIP_PATH: /var/lib/GeoIP
     volumes: ["geoip:/var/lib/GeoIP"]
 
+  # Init container: clone/refresh the campaign repo into the campaign volume.
+  # The distroless crawler image has no git, so it runs campaign sync with
+  # CAMPAIGN_PULL/PUSH=false against this checkout; freshness comes from stack
+  # (re)starts. A failed pull keeps the existing clone (offline `up` works).
+  campaign-init:
+    image: alpine/git:latest
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        if [ -d /repo/.git ]; then
+          git -C /repo pull --ff-only || echo "campaign pull failed; keeping existing checkout"
+        else
+          git clone --depth 1 https://github.com/lasseh/whynoipv6-campaign.git /repo
+        fi
+    volumes: ["campaign:/repo"]
+
   crawler:
     build: {context: ./backend, dockerfile: Dockerfile}
     entrypoint: ["/crawler"]
@@ -102,12 +118,17 @@ services:
       LOG_LEVEL: info
       TAILLIGHT_URL: ${TAILLIGHT_URL:-}
       TAILLIGHT_API_KEY: ${TAILLIGHT_API_KEY:-}
+      # No git in the distroless image — campaign-init owns clone/refresh.
+      CAMPAIGN_PULL: "false"
+      CAMPAIGN_PUSH: "false"
     volumes:
       - "geoip:/var/lib/GeoIP:ro"
       - "datasets:/var/lib/whynoipv6/datasets"
+      - "campaign:/srv/whynoipv6-campaign:ro"
     depends_on:
       migrate: {condition: service_completed_successfully}
       geoip-init: {condition: service_completed_successfully}
+      campaign-init: {condition: service_completed_successfully}
 
   # Scrapes `unbound-control stats` from both resolvers into unbound_stats
   # every 60s (feeds the Grafana panels and keeps alert A5 quiet). The prod
@@ -149,6 +170,7 @@ volumes:
   datasets:
   geoip:
   grafana:
+  campaign:
 
 # Docker networks are IPv4-only by default — without this the crawler's v6
 # preflight fails with "network is unreachable" even on a v6-enabled host.

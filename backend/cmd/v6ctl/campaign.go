@@ -55,11 +55,10 @@ func campaignCmd() *cobra.Command {
 	return cmd
 }
 
-// campaignConfig binds the registry keys and applies v6ctl's invocation
-// policy: interactive syncs always pull and push.
+// campaignConfig binds the registry keys (pull/push included — default
+// true) and applies v6ctl's one invocation-policy flag.
 func campaignConfig(cfg *config.Config, adopt bool) campaign.Config {
 	c := campaign.ConfigFrom(cfg)
 	c.AdoptUnknownUUIDs = adopt
-	c.Pull, c.Push = true, true
 	return c
 }

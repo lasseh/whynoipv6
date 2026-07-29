@@ -124,12 +124,10 @@ func run() error {
 		return false
 	}
 
-	campaignCfg := campaign.ConfigFrom(cfg)
-	campaignCfg.Pull, campaignCfg.Push = true, true
 	tick := &crawler.Tick{
 		Pool:     pool,
 		Cfg:      crawler.TickConfigFrom(cfg),
-		Campaign: campaignCfg,
+		Campaign: campaign.ConfigFrom(cfg),
 		Notify:   notifier.Webhook,
 		PingTick: notifier.PingTick,
 	}
