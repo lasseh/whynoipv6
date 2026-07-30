@@ -156,6 +156,22 @@ watch(
                   </p>
                 </li>
                 <li class="py-4">
+                  <h4 class="text-xl font-medium mb-2">What does “Not applicable” mean?</h4>
+                  <p class="text-md text-gray-400 mb-2">
+                    There was nothing to grade — it never counts against a domain.
+                  </p>
+                  <p class="text-md text-gray-400 mb-2">
+                    For E-Mail it means the domain publishes no MX records: no mail service, nothing
+                    to check. A domain without mail can still become a hero.
+                  </p>
+                  <p class="text-md text-gray-400">
+                    For Page resources it means one of two things: the page loads over IPv6 and
+                    pulls no resources from external hosts, or the site isn't reachable over IPv6 at
+                    all — then its resources can't be evaluated. The domain status card and the live
+                    check both spell out which one applies.
+                  </p>
+                </li>
+                <li class="py-4">
                   <h4 class="text-xl font-medium mb-2">Crawler Errors</h4>
                   <p class="text-md text-gray-400">
                     Did you find any errors from the crawler? PR's are welcome
