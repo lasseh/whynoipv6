@@ -16,19 +16,20 @@ import (
 // for the planner's partial-index predicate-implication check; free-text
 // values (tld, hosting, q) ride bind parameters.
 type DomainListFilter struct {
-	Class     string // validated classification literal; "" = none
-	Saint     bool
-	CountryID *int32 // resolved from the ISO code by the caller
-	ASNID     *int32 // resolved from the AS number
-	Provider  *int64 // dns_provider.id
-	TLD       string // free text (bound)
-	Hosting   string // free text (bound)
-	Flag      string // validated class_flags literal
-	StatusDim string // validated dimension name (base/www/ns/mx/conn/resources)
-	StatusVal string // validated ipv6_status literal
-	RankMin   *int32
-	RankMax   *int32
-	Query     string // ?q= substring (bound; forces the host ordering)
+	Class      string // validated classification literal; "" = none
+	Saint      bool
+	AlmostHero bool   // hero in every dimension except the apex AAAA (07 §4.4)
+	CountryID  *int32 // resolved from the ISO code by the caller
+	ASNID      *int32 // resolved from the AS number
+	Provider   *int64 // dns_provider.id
+	TLD        string // free text (bound)
+	Hosting    string // free text (bound)
+	Flag       string // validated class_flags literal
+	StatusDim  string // validated dimension name (base/www/ns/mx/conn/resources)
+	StatusVal  string // validated ipv6_status literal
+	RankMin    *int32
+	RankMax    *int32
+	Query      string // ?q= substring (bound; forces the host ordering)
 
 	// Sub-collection scopes. Either drops the public rank-IS-NOT-NULL half
 	// of the visibility predicate: campaign members and subdomains are
@@ -159,6 +160,13 @@ func buildDomainList(f *DomainListFilter, sortKey ListSort, seek *DomainSeek, af
 	}
 	if f.Saint {
 		q = q.Where(sq.Expr("d.saint"))
+	}
+	if f.AlmostHero {
+		// One DNS record from hero: everything passes except the apex AAAA.
+		// conn is excluded — it cannot pass without the apex record.
+		q = q.Where(sq.Expr("d.www_status = 'supported' AND d.ns_status = 'supported'" +
+			" AND d.mx_status IN ('supported','not_applicable')" +
+			" AND d.base_status IN ('unsupported','no_record')"))
 	}
 	if f.CountryID != nil {
 		q = q.Where(sq.Expr(fmt.Sprintf("d.country_id = %d", *f.CountryID)))

@@ -103,6 +103,7 @@ func NewRouter(pool *pgxpool.Pool, opts Options) http.Handler { //nolint:gocriti
 	r.Get("/heroes", s.listHeroes)
 	r.Get("/sinners", s.listSinners)
 	r.Get("/saints", s.listSaints)
+	r.Get("/almost-heroes", s.listAlmostHeroes)
 	r.Get("/shame", s.listShame)
 
 	// Country / ASN / DNS-provider pivots (§4.5/§4.6).

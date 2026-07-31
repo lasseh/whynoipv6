@@ -203,6 +203,12 @@ func (s *Server) parseDomainFilter(r *http.Request, q url.Values) (postgres.Doma
 		}
 		f.Saint = true
 	}
+	if v := q.Get("almost_hero"); v != "" {
+		if v != "true" {
+			return f, validationError{"almost_hero", "the only accepted value is true"}
+		}
+		f.AlmostHero = true
+	}
 	if v := q.Get(paramCountry); v != "" {
 		id, err := s.q.CountryIDByCode(r.Context(), strings.ToUpper(v))
 		switch {
@@ -274,7 +280,7 @@ func (s *Server) parseDomainFilter(r *http.Request, q url.Values) (postgres.Doma
 
 // isUnfiltered reports whether the global max(rank) count shortcut applies.
 func isUnfiltered(f *postgres.DomainListFilter) bool {
-	return f.Class == "" && !f.Saint && f.CountryID == nil && f.ASNID == nil &&
+	return f.Class == "" && !f.Saint && !f.AlmostHero && f.CountryID == nil && f.ASNID == nil &&
 		f.Provider == nil && f.TLD == "" && f.Hosting == "" && f.Flag == "" &&
 		f.StatusDim == "" && f.RankMin == nil && f.RankMax == nil && f.Query == ""
 }
@@ -295,6 +301,10 @@ func (s *Server) listSinners(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) listSaints(w http.ResponseWriter, r *http.Request) {
 	s.serveDomainList(w, r, url.Values{"saint": {"true"}})
+}
+
+func (s *Server) listAlmostHeroes(w http.ResponseWriter, r *http.Request) {
+	s.serveDomainList(w, r, url.Values{"almost_hero": {"true"}})
 }
 
 // serveDomainList is the shared /domains* engine: preset params override the

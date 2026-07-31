@@ -4,2786 +4,2869 @@
  */
 
 export interface paths {
-    "/domains": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** The general filterable domain leaderboard */
-        get: operations["listDomains"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+  "/domains": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/domains/{host}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Domain detail with masked informational dimensions */
-        get: operations["getDomain"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** The general filterable domain leaderboard */
+    get: operations["listDomains"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/domains/{host}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/domains/{host}/subdomains": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** An apex's non-disabled children, host-ordered */
-        get: operations["listSubdomains"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Domain detail with masked informational dimensions */
+    get: operations["getDomain"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/domains/{host}/subdomains": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/domains/{host}/resources": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Forward resource dependencies: what this domain depends on */
-        get: operations["listDomainResources"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** An apex's non-disabled children, host-ordered */
+    get: operations["listSubdomains"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/domains/{host}/resources": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/domains/{host}/changelog": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Per-domain confirmed-transition feed */
-        get: operations["listDomainChangelog"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Forward resource dependencies: what this domain depends on */
+    get: operations["listDomainResources"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/domains/{host}/changelog": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/domains/{host}/changelog.atom": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Per-domain Atom feed (latest 50) */
-        get: operations["getDomainChangelogAtom"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Per-domain confirmed-transition feed */
+    get: operations["listDomainChangelog"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/domains/{host}/changelog.atom": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/domains/{host}/changelog.feed.json": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Per-domain JSON Feed 1.1 (latest 50) */
-        get: operations["getDomainChangelogJSONFeed"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Per-domain Atom feed (latest 50) */
+    get: operations["getDomainChangelogAtom"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/domains/{host}/changelog.feed.json": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/domains/{host}/history": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Per-domain confirmed trajectory, changelog-reconstructed */
-        get: operations["getDomainHistory"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Per-domain JSON Feed 1.1 (latest 50) */
+    get: operations["getDomainChangelogJSONFeed"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/domains/{host}/history": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/heroes": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Tier preset: class=hero */
-        get: operations["listHeroes"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Per-domain confirmed trajectory, changelog-reconstructed */
+    get: operations["getDomainHistory"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/heroes": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/sinners": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Tier preset: class=sinner */
-        get: operations["listSinners"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Tier preset: class=hero */
+    get: operations["listHeroes"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/sinners": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/saints": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Tier preset: saint=true */
-        get: operations["listSaints"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Tier preset: class=sinner */
+    get: operations["listSinners"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/saints": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/shame": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** The curated editorial shame list */
-        get: operations["listShame"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Tier preset: saint=true */
+    get: operations["listSaints"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/almost-heroes": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/countries": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Country adoption leaderboard */
-        get: operations["listCountries"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Tier preset: almost_hero=true (one DNS record away from hero) */
+    get: operations["listAlmostHeroes"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/shame": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/countries/{code}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Country detail */
-        get: operations["getCountry"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** The curated editorial shame list */
+    get: operations["listShame"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/countries": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/countries/{code}/domains": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** The country-scoped leaderboard (≡ /domains?country=) */
-        get: operations["listCountryDomains"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Country adoption leaderboard */
+    get: operations["listCountries"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/countries/{code}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/countries/{code}/stats": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Country adoption time series */
-        get: operations["getCountryStats"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Country detail */
+    get: operations["getCountry"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/countries/{code}/domains": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/countries/{code}/changelog": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Per-country feed (latest-50 recent window) */
-        get: operations["listCountryChangelog"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** The country-scoped leaderboard (≡ /domains?country=) */
+    get: operations["listCountryDomains"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/countries/{code}/stats": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/countries/{code}/changelog.atom": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Per-country Atom feed (latest 50) */
-        get: operations["getCountryChangelogAtom"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Country adoption time series */
+    get: operations["getCountryStats"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/countries/{code}/changelog": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/countries/{code}/changelog.feed.json": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Per-country JSON Feed 1.1 (latest 50) */
-        get: operations["getCountryChangelogJSONFeed"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Per-country feed (latest-50 recent window) */
+    get: operations["listCountryChangelog"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/countries/{code}/changelog.atom": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/asns": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** The hosting-ASN league table */
-        get: operations["listASNs"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Per-country Atom feed (latest 50) */
+    get: operations["getCountryChangelogAtom"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/countries/{code}/changelog.feed.json": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/asns/{number}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Network detail (count_v4 synthesized) */
-        get: operations["getASN"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Per-country JSON Feed 1.1 (latest 50) */
+    get: operations["getCountryChangelogJSONFeed"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/asns": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/asns/{number}/domains": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** The network-scoped leaderboard (≡ /domains?asn=) */
-        get: operations["listASNDomains"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** The hosting-ASN league table */
+    get: operations["listASNs"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/asns/{number}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/asns/{number}/stats": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Network adoption time series (canonical count_v6/count_total wire names) */
-        get: operations["getASNStats"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Network detail (count_v4 synthesized) */
+    get: operations["getASN"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/asns/{number}/domains": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/providers": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** The DNS-provider league table (exact stored counters) */
-        get: operations["listProviders"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** The network-scoped leaderboard (≡ /domains?asn=) */
+    get: operations["listASNDomains"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/asns/{number}/stats": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/providers/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** DNS-provider detail */
-        get: operations["getProvider"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Network adoption time series (canonical count_v6/count_total wire names) */
+    get: operations["getASNStats"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/providers": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/providers/{id}/domains": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** The provider-scoped leaderboard (the path form is its own indexed scope) */
-        get: operations["listProviderDomains"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** The DNS-provider league table (exact stored counters) */
+    get: operations["listProviders"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/providers/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/campaigns": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Campaign index */
-        get: operations["listCampaigns"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** DNS-provider detail */
+    get: operations["getProvider"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/providers/{id}/domains": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/mandates": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** The government-mandate view (≡ /campaigns?tag=mandate) */
-        get: operations["listMandates"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** The provider-scoped leaderboard (the path form is its own indexed scope) */
+    get: operations["listProviderDomains"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/campaigns": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/campaigns/{uuid}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Composite campaign detail: metadata + paged members + adoption */
-        get: operations["getCampaign"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Campaign index */
+    get: operations["listCampaigns"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/mandates": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/campaigns/{uuid}/domains": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Campaign members, host-ordered (rank-NULL rows visible) */
-        get: operations["listCampaignDomains"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** The government-mandate view (≡ /campaigns?tag=mandate) */
+    get: operations["listMandates"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/campaigns/{uuid}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/campaigns/{uuid}/stats": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Campaign adoption time series (incl. v6_ready) */
-        get: operations["getCampaignStats"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Composite campaign detail: metadata + paged members + adoption */
+    get: operations["getCampaign"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/campaigns/{uuid}/domains": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/campaigns/{uuid}/changelog": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Campaign-wide feed (latest-50 recent window) */
-        get: operations["listCampaignChangelog"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Campaign members, host-ordered (rank-NULL rows visible) */
+    get: operations["listCampaignDomains"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/campaigns/{uuid}/stats": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/campaigns/{uuid}/domains/{host}/changelog": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** One member's feed (404 for non-members) */
-        get: operations["listCampaignDomainChangelog"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Campaign adoption time series (incl. v6_ready) */
+    get: operations["getCampaignStats"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/campaigns/{uuid}/changelog": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/campaigns/{uuid}/changelog.atom": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Per-campaign Atom feed (latest 50) */
-        get: operations["getCampaignChangelogAtom"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Campaign-wide feed (latest-50 recent window) */
+    get: operations["listCampaignChangelog"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/campaigns/{uuid}/domains/{host}/changelog": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/campaigns/{uuid}/changelog.feed.json": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Per-campaign JSON Feed 1.1 (latest 50) */
-        get: operations["getCampaignChangelogJSONFeed"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** One member's feed (404 for non-members) */
+    get: operations["listCampaignDomainChangelog"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/campaigns/{uuid}/changelog.atom": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/resources/{host}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Resource-host headline (dependent_count) */
-        get: operations["getResource"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Per-campaign Atom feed (latest 50) */
+    get: operations["getCampaignChangelogAtom"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/campaigns/{uuid}/changelog.feed.json": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/resources/{host}/dependents": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Reverse dependents: the advocacy surface */
-        get: operations["listResourceDependents"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Per-campaign JSON Feed 1.1 (latest 50) */
+    get: operations["getCampaignChangelogJSONFeed"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/resources/{host}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/changelog": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Global recent-transitions feed
-         * @description With `scope=campaign` the feed is restricted to transitions of domains that are members of any campaign, served as the fixed latest-50 recent window (no pagination — `page` cursors are null); the other query parameters are ignored in that mode.
-         */
-        get: operations["listChangelog"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Resource-host headline (dependent_count) */
+    get: operations["getResource"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/resources/{host}/dependents": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/changelog.atom": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Global Atom feed (latest 50) */
-        get: operations["getChangelogAtom"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Reverse dependents: the advocacy surface */
+    get: operations["listResourceDependents"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/changelog": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/changelog.feed.json": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Global JSON Feed 1.1 (latest 50) */
-        get: operations["getChangelogJSONFeed"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /**
+     * Global recent-transitions feed
+     * @description With `scope=campaign` the feed is restricted to transitions of domains that are members of any campaign, served as the fixed latest-50 recent window (no pagination — `page` cursors are null); the other query parameters are ignored in that mode.
+     */
+    get: operations["listChangelog"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/changelog.atom": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/stats/overview": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** The headline adoption dashboard series */
-        get: operations["getStatsOverview"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Global Atom feed (latest 50) */
+    get: operations["getChangelogAtom"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/changelog.feed.json": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/datasets": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** The static-dataset manifest */
-        get: operations["getDatasets"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Global JSON Feed 1.1 (latest 50) */
+    get: operations["getChangelogJSONFeed"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/stats/overview": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/check": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Enqueue an anonymous live check (async job + poll) */
-        post: operations["createCheck"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** The headline adoption dashboard series */
+    get: operations["getStatsOverview"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/datasets": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/check/latest": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Freshest stored check result for a host (shareable-link read side)
-         * @description The read side of /check/{domain} links: the newest stored result for the host inside `live_check.link_ttl` (default 7 d), from either the latest crawl of a tracked domain or the newest done live-check job. Read-only and never rate-limited; on a 404 the client may enqueue a fresh check via POST /check.
-         */
-        get: operations["getLatestCheck"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** The static-dataset manifest */
+    get: operations["getDatasets"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/check": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/check/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Poll a live-check job to a terminal state */
-        get: operations["getCheck"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    /** Enqueue an anonymous live check (async job + poll) */
+    post: operations["createCheck"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/check/latest": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/badge/{host}.svg": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Embeddable shields-flat status badge */
-        get: operations["getBadgeSVG"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /**
+     * Freshest stored check result for a host (shareable-link read side)
+     * @description The read side of /check/{domain} links: the newest stored result for the host inside `live_check.link_ttl` (default 7 d), from either the latest crawl of a tracked domain or the newest done live-check job. Read-only and never rate-limited; on a 404 the client may enqueue a fresh check via POST /check.
+     */
+    get: operations["getLatestCheck"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/check/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/badge/{host}.json": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** shields.io endpoint-JSON badge variant */
-        get: operations["getBadgeJSON"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Poll a live-check job to a terminal state */
+    get: operations["getCheck"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/badge/{host}.svg": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/ip": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Client-IP echo (the visitor banner source) */
-        get: operations["getIP"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Embeddable shields-flat status badge */
+    get: operations["getBadgeSVG"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/badge/{host}.json": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
+    /** shields.io endpoint-JSON badge variant */
+    get: operations["getBadgeJSON"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/ip": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Client-IP echo (the visitor banner source) */
+    get: operations["getIP"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
-    schemas: {
-        /** @enum {string} */
-        Classification: "unknown" | "inactive" | "sinner" | "partial" | "hero";
-        /** @enum {string} */
-        IPv6Status: "supported" | "unsupported" | "no_record" | "not_applicable";
-        /** @enum {string} */
-        Dimension: "base" | "www" | "ns" | "mx" | "conn" | "resources";
-        /** @enum {string} */
-        ClassFlag: "broken_v6" | "www_missing" | "ns_missing" | "mail_missing" | "resources_v4only";
-        /** @description Uniform pagination block; cursors are null when absent. */
-        Page: {
-            next_cursor: string | null;
-            prev_cursor: string | null;
-            has_more: boolean;
-        };
-        Meta: {
-            /** Format: date-time */
-            as_of: string;
-            /**
-             * @description YYYYMMDD of the newest stats day
-             * @example 20260707
-             */
-            generation: number;
-            /**
-             * Format: int64
-             * @description Exact — bounded curated sets only.
-             */
-            count?: number;
-            /**
-             * Format: int64
-             * @description Approximate — everything else.
-             */
-            count_estimate?: number;
-            /** @example CC-BY-NC-4.0 */
-            license: string;
-            /** @description `confirmed_state` on every time series. */
-            source?: string;
-        };
-        DetailMeta: {
-            /** Format: date-time */
-            as_of: string;
-            generation: number;
-        };
-        /** @description RFC 9457. `status` always equals the HTTP status line. */
-        Problem: {
-            /** @example https://whynoipv6.com/problems/not-found */
-            type: string;
-            title: string;
-            status: number;
-            detail?: string;
-            instance?: string;
-        };
-        ValidationProblem: components["schemas"]["Problem"] & {
-            errors?: {
-                field: string;
-                reason: string;
-            }[];
-        };
-        RateLimitProblem: components["schemas"]["Problem"] & {
-            /** @description Seconds until the window frees. */
-            retry_after?: number;
-        };
-        /** @description Per-dimension confirmed status with provenance. `value` is null when the dimension has never been confirmed. */
-        StatusObject: {
-            value: components["schemas"]["IPv6Status"] | null;
-            /** Format: date-time */
-            since: string | null;
-        };
-        StatusBlock: {
-            base: components["schemas"]["StatusObject"];
-            www: components["schemas"]["StatusObject"];
-            ns: components["schemas"]["StatusObject"];
-            mx: components["schemas"]["StatusObject"];
-            conn: components["schemas"]["StatusObject"];
-            resources: components["schemas"]["StatusObject"];
-        };
-        CountryRef: {
-            /** @example NO */
-            code: string;
-            /** @example Norway */
-            name: string;
-            /** @description Detail representation only. */
-            tld?: string | null;
-        };
-        ASNRef: {
-            /**
-             * Format: int64
-             * @example 2119
-             */
-            number: number;
-            /** @example Telenor Norge AS */
-            name: string;
-        };
-        ProviderRef: {
-            /** Format: int64 */
-            id: number;
-            /** @example Cloudflare */
-            name: string;
-        };
-        /** @description The §4.2 list row served by every /domains* collection. */
-        DomainSummary: {
-            /** @example example.com */
-            host: string;
-            /** @description Never the legacy 0 — null when unranked. */
-            rank: number | null;
-            /** @enum {string} */
-            kind: "apex" | "subdomain";
-            parent: string | null;
-            classification: components["schemas"]["Classification"];
-            class_flags: components["schemas"]["ClassFlag"][];
-            saint: boolean;
-            /** @description Derived conn+resources fold — whether the site presents the same over an IPv6-only connection. Null until both dimensions are confirmed. */
-            ipv6_only: components["schemas"]["IPv6Status"] | null;
-            /** @description Campaign membership rows only (listCampaignDomains) — confirmed base and ns supported with www supported-or-not_applicable; the same predicate the campaign stats v6_ready counter aggregates. Absent on every other /domains* collection. */
-            v6_ready?: boolean;
-            status: components["schemas"]["StatusBlock"];
-            tld: string | null;
-            country: components["schemas"]["CountryRef"];
-            asn: components["schemas"]["ASNRef"];
-            dns_provider: components["schemas"]["ProviderRef"] | null;
-            hosting_provider: string | null;
-            /** Format: date-time */
-            last_checked_at: string | null;
-        };
-        /** @description Advisory dimensions with the public-masking rule applied — `error` and `inconsistent` never reach the wire; `partial` survives only on ptr/parity. */
-        Informational: {
-            /** @enum {string|null} */
-            dnssec: "supported" | "unsupported" | "no_record" | "not_applicable" | null;
-            /** @enum {string|null} */
-            ptr: "supported" | "unsupported" | "no_record" | "not_applicable" | "partial" | null;
-            /** @enum {string|null} */
-            smtp: "supported" | "unsupported" | "no_record" | "not_applicable" | null;
-            /** @enum {string|null} */
-            parity: "supported" | "unsupported" | "no_record" | "not_applicable" | "partial" | null;
-            latency_v4_ms: number | null;
-            latency_v6_ms: number | null;
-        };
-        DomainDetail: {
-            host: string;
-            rank: number | null;
-            /** @enum {string} */
-            kind: "apex" | "subdomain";
-            parent: string | null;
-            classification: components["schemas"]["Classification"];
-            class_flags: components["schemas"]["ClassFlag"][];
-            saint: boolean;
-            /** @description Derived conn+resources fold — whether the site presents the same over an IPv6-only connection. Null until both dimensions are confirmed. */
-            ipv6_only: components["schemas"]["IPv6Status"] | null;
-            status: components["schemas"]["StatusBlock"];
-            informational: components["schemas"]["Informational"];
-            tld: string | null;
-            country: components["schemas"]["CountryRef"];
-            asn: components["schemas"]["ASNRef"];
-            dns_provider: components["schemas"]["ProviderRef"] | null;
-            hosting_provider: string | null;
-            /** Format: int64 */
-            subdomain_count: number;
-            disabled: boolean;
-            /** Format: date-time */
-            last_checked_at: string | null;
-            /** Format: date-time */
-            created_at: string;
-            /** @description Latest scan_detail payload (the §5.1.3 result shape); only with `?include=evidence`. */
-            evidence?: {
-                [key: string]: unknown;
-            };
-            meta: components["schemas"]["DetailMeta"];
-        };
-        DomainList: {
-            items: components["schemas"]["DomainSummary"][];
-            page: components["schemas"]["Page"];
-            meta: components["schemas"]["Meta"];
-        };
-        ShameItem: {
-            host: string;
-            reason: string | null;
-            /** Format: date-time */
-            added_at: string;
-        };
-        ShameList: {
-            items: components["schemas"]["ShameItem"][];
-            page: components["schemas"]["Page"];
-            meta: components["schemas"]["Meta"];
-        };
-        Country: {
-            /** @example NO */
-            code: string;
-            name: string;
-            /** @example .NO */
-            tld: string | null;
-            sites: number;
-            v6_sites: number;
-            /**
-             * Format: double
-             * @example 24.97
-             */
-            percent: number;
-            meta?: components["schemas"]["DetailMeta"];
-        };
-        CountryList: {
-            items: components["schemas"]["Country"][];
-            page: components["schemas"]["Page"];
-            meta: components["schemas"]["Meta"];
-        };
-        /** @description `count_v4` is synthesized server-side (count_total − count_v6). */
-        ASN: {
-            /** Format: int64 */
-            number: number;
-            name: string;
-            count_total: number;
-            count_v6: number;
-            count_v4: number;
-            meta?: components["schemas"]["DetailMeta"];
-        };
-        ASNList: {
-            items: components["schemas"]["ASN"][];
-            page: components["schemas"]["Page"];
-            meta: components["schemas"]["Meta"];
-        };
-        Provider: {
-            /** Format: int64 */
-            id: number;
-            name: string;
-            count_total: number;
-            count_v6: number;
-            count_v4: number;
-            meta?: components["schemas"]["DetailMeta"];
-        };
-        ProviderList: {
-            items: components["schemas"]["Provider"][];
-            page: components["schemas"]["Page"];
-            meta: components["schemas"]["Meta"];
-        };
-        CampaignListItem: {
-            /** Format: uuid */
-            uuid: string;
-            name: string;
-            description: string;
-            source_file: string | null;
-            tags: string[];
-            /** Format: int64 */
-            domain_count: number;
-            adoption: components["schemas"]["CampaignAdoption"] | null;
-        };
-        CampaignList: {
-            items: components["schemas"]["CampaignListItem"][];
-            page: components["schemas"]["Page"];
-            meta: components["schemas"]["Meta"];
-        };
-        CampaignAdoption: {
-            /**
-             * Format: double
-             * @example 41.7
-             */
-            v6_ready_percent: number;
-            /** Format: date */
-            day: string;
-        };
-        CampaignDetail: {
-            /** Format: uuid */
-            uuid: string;
-            name: string;
-            description: string;
-            source_file: string | null;
-            tags: string[];
-            disabled: boolean;
-            adoption: components["schemas"]["CampaignAdoption"] | null;
-            domains: {
-                items: components["schemas"]["DomainSummary"][];
-                page: components["schemas"]["Page"];
-            };
-            meta: components["schemas"]["Meta"];
-        };
-        /** @description One confirmed dimension transition — old/new are always non-null and distinct. */
-        ChangelogItem: {
-            /** Format: date-time */
-            ts: string;
-            host: string;
-            field: components["schemas"]["Dimension"];
-            old_value: components["schemas"]["IPv6Status"];
-            new_value: components["schemas"]["IPv6Status"];
-        };
-        ChangelogList: {
-            items: components["schemas"]["ChangelogItem"][];
-            page: components["schemas"]["Page"];
-            meta: components["schemas"]["Meta"];
-        };
-        HistoryPoint: {
-            /** Format: date */
-            day: string;
-            base: components["schemas"]["IPv6Status"] | null;
-            www: components["schemas"]["IPv6Status"] | null;
-            ns: components["schemas"]["IPv6Status"] | null;
-            mx: components["schemas"]["IPv6Status"] | null;
-            conn: components["schemas"]["IPv6Status"] | null;
-            resources: components["schemas"]["IPv6Status"] | null;
-            classification: components["schemas"]["Classification"];
-            latency_v4_ms: number | null;
-            latency_v6_ms: number | null;
-        };
-        HistoryResponse: {
-            host: string;
-            points: components["schemas"]["HistoryPoint"][];
-            meta: {
-                /** @example 730 */
-                retention_days: number;
-                /** Format: date-time */
-                as_of: string;
-            };
-        };
-        GlobalStatsPoint: {
-            /** Format: date */
-            day: string;
-            domains?: number | null;
-            heroes?: number | null;
-            partial?: number | null;
-            sinners?: number | null;
-            inactive?: number | null;
-            unknown?: number | null;
-            saints?: number | null;
-            disabled?: number | null;
-            base_supported?: number | null;
-            www_supported?: number | null;
-            ns_supported?: number | null;
-            mx_supported?: number | null;
-            conn_supported?: number | null;
-            resources_supported?: number | null;
-            top_heroes?: number | null;
-            top_nameserver?: number | null;
-        };
-        GlobalStatsSeries: {
-            points: components["schemas"]["GlobalStatsPoint"][];
-            meta: components["schemas"]["Meta"];
-        };
-        CountryStatsPoint: {
-            /** Format: date */
-            day: string;
-            domains?: number | null;
-            sinners?: number | null;
-            partial?: number | null;
-            heroes?: number | null;
-            base_supported?: number | null;
-            conn_supported?: number | null;
-        };
-        CountryStatsSeries: {
-            points: components["schemas"]["CountryStatsPoint"][];
-            meta: components["schemas"]["Meta"];
-        };
-        CampaignStatsPoint: {
-            /** Format: date */
-            day: string;
-            domains?: number | null;
-            v6_ready?: number | null;
-            sinners?: number | null;
-            partial?: number | null;
-            heroes?: number | null;
-            base_supported?: number | null;
-            www_supported?: number | null;
-            ns_supported?: number | null;
-            mx_supported?: number | null;
-            conn_supported?: number | null;
-        };
-        CampaignStatsSeries: {
-            points: components["schemas"]["CampaignStatsPoint"][];
-            meta: components["schemas"]["Meta"];
-        };
-        /** @description `v6_domains`/`domains` mapped onto the canonical count_v6/count_total wire names. */
-        ASNStatsPoint: {
-            /** Format: date */
-            day: string;
-            count_total?: number | null;
-            count_v6?: number | null;
-            sinners?: number | null;
-            heroes?: number | null;
-        };
-        ASNStatsSeries: {
-            points: components["schemas"]["ASNStatsPoint"][];
-            meta: components["schemas"]["Meta"];
-        };
-        ResourceLink: {
-            /** @example fonts.googleapis.com */
-            host: string;
-            aaaa_status: components["schemas"]["IPv6Status"] | null;
-            /** @enum {string} */
-            source: "discovered" | "manual";
-            required: boolean;
-            /** Format: date */
-            first_seen: string;
-            /** Format: date */
-            last_seen: string;
-            /** Format: date-time */
-            last_checked_at: string | null;
-        };
-        ResourceLinkList: {
-            items: components["schemas"]["ResourceLink"][];
-            page: components["schemas"]["Page"];
-            meta: components["schemas"]["Meta"];
-        };
-        ResourceHost: {
-            host: string;
-            aaaa_status: components["schemas"]["IPv6Status"] | null;
-            dependent_count: number;
-            /** Format: date-time */
-            last_checked_at: string | null;
-        };
-        ResourceHostDetail: components["schemas"]["ResourceHost"] & {
-            meta: components["schemas"]["DetailMeta"];
-        };
-        Dependent: components["schemas"]["DomainSummary"] & {
-            /** @enum {string} */
-            source: "discovered" | "manual";
-            required: boolean;
-        };
-        DependentsResponse: {
-            resource: components["schemas"]["ResourceHost"];
-            items: components["schemas"]["Dependent"][];
-            page: components["schemas"]["Page"];
-            meta: components["schemas"]["Meta"];
-        };
-        /** @description Exactly these four keys on a 202. */
-        CheckAccepted: {
-            /** Format: int64 */
-            id: number;
-            host: string;
-            /** @enum {string} */
-            status: "pending";
-            /** Format: date-time */
-            created_at: string;
-        };
-        CheckConfirmed: {
-            classification: components["schemas"]["Classification"];
-            class_flags: components["schemas"]["ClassFlag"][];
-            saint: boolean;
-            status: components["schemas"]["StatusBlock"];
-            /** Format: date-time */
-            as_of: string | null;
-        };
-        /** @description The §5.1.2 job body. `id` is null only on the domain-side dedupe envelope. `result` statuses are raw observations (incl. `inconsistent` on base/www), explicitly NOT confirmed state. */
-        CheckEnvelope: {
-            /** Format: int64 */
-            id: number | null;
-            host: string;
-            /** @enum {string} */
-            status: "pending" | "processing" | "done" | "failed";
-            cached: boolean;
-            /** Format: date-time */
-            created_at: string;
-            /** Format: date-time */
-            completed_at: string | null;
-            error: string | null;
-            result: ({
-                /** Format: date-time */
-                checked_at?: string;
-                /** Format: int64 */
-                duration_ms?: number;
-                checks?: {
-                    [key: string]: {
-                        status?: string;
-                    };
-                };
-                latency?: {
-                    v4_ms?: number | null;
-                    v6_ms?: number | null;
-                };
-            } & {
-                [key: string]: unknown;
-            }) | null;
-            confirmed: components["schemas"]["CheckConfirmed"] | null;
-        };
-        /** @description shields.io endpoint schema — the one sanctioned camelCase exception. */
-        ShieldsBadge: {
-            /** @enum {integer} */
-            schemaVersion: 1;
-            /** @enum {string} */
-            label: "IPv6";
-            /** @enum {string} */
-            message: "supported" | "full" | "partial" | "no IPv6" | "inactive" | "unknown";
-            /** @enum {string} */
-            color: "brightgreen" | "yellow" | "red" | "lightgrey";
-            /** @example 86400 */
-            cacheSeconds: number;
-            isError: boolean;
-        };
-        JSONFeed: {
-            /** @enum {string} */
-            version: "https://jsonfeed.org/version/1.1";
-            title: string;
-            home_page_url: string;
-            feed_url: string;
-            items: {
-                /** @description The composite (host, ts, field) as a stable IRI. */
-                id: string;
-                url?: string;
-                title: string;
-                content_text: string;
-                /** Format: date-time */
-                date_published: string;
-            }[];
-        };
-        ManifestLatest: {
-            /** Format: date */
-            date: string;
-            path: string;
-            datapackage_url: string;
-        };
-        ManifestEntry: {
-            /** Format: date */
-            date: string;
-            path: string;
-            tiers: ("top100k" | "top1m" | "full")[];
-            formats: ("csv.gz" | "parquet")[];
-            datapackage_url: string;
-            sha256sums_url: string;
-        };
-        /** @description The pinned datasets index (schema_version bumps with the column set). */
-        Manifest: {
-            /** @example 1 */
-            schema_version: number;
-            /** Format: date-time */
-            generated_at: string;
-            generation: number;
-            license: string;
-            attribution: string;
-            latest: components["schemas"]["ManifestLatest"];
-            snapshots: components["schemas"]["ManifestEntry"][];
-        };
+  schemas: {
+    /** @enum {string} */
+    Classification: "unknown" | "inactive" | "sinner" | "partial" | "hero";
+    /** @enum {string} */
+    IPv6Status: "supported" | "unsupported" | "no_record" | "not_applicable";
+    /** @enum {string} */
+    Dimension: "base" | "www" | "ns" | "mx" | "conn" | "resources";
+    /** @enum {string} */
+    ClassFlag:
+      | "broken_v6"
+      | "www_missing"
+      | "ns_missing"
+      | "mail_missing"
+      | "resources_v4only";
+    /** @description Uniform pagination block; cursors are null when absent. */
+    Page: {
+      next_cursor: string | null;
+      prev_cursor: string | null;
+      has_more: boolean;
     };
-    responses: {
-        /** @description The `{items,page,meta}` envelope of §4.2 summary rows. */
-        DomainList: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["DomainList"];
-                "text/csv": string;
-            };
-        };
-        /** @description The `{items,page,meta}` envelope of §4.8 events. */
-        ChangelogList: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ChangelogList"];
-                "text/csv": string;
-            };
-        };
-        /** @description RFC 4287 Atom, latest-50 window. */
-        AtomFeed: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/atom+xml": string;
-            };
-        };
-        /** @description JSON Feed 1.1, latest-50 window. */
-        JSONFeed: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/feed+json": components["schemas"]["JSONFeed"];
-            };
-        };
-        /** @description Unknown or uncanonicalizable resource key. */
-        NotFound: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/problem+json": components["schemas"]["Problem"];
-            };
-        };
-        /** @description Malformed cursor, bad format, malformed badge host, bad window. */
-        InvalidParameter: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/problem+json": components["schemas"]["Problem"];
-            };
-        };
-        /** @description A filter value outside its enum; carries `errors[]`. */
-        ValidationError: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/problem+json": components["schemas"]["ValidationProblem"];
-            };
-        };
-        /** @description A valid residual filter that needs an indexed companion scope (class, country, or asn), or more than one residual was stacked. */
-        ScopeRequired: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/problem+json": components["schemas"]["Problem"];
-            };
-        };
-        /** @description Over the per-/64 or global hourly quota; carries `retry_after` + Retry-After. */
-        RateLimited: {
-            headers: {
-                "Retry-After"?: number;
-                RateLimit?: string;
-                "RateLimit-Policy"?: string;
-                [name: string]: unknown;
-            };
-            content: {
-                "application/problem+json": components["schemas"]["RateLimitProblem"];
-            };
-        };
-        /** @description The POST body is not JSON. */
-        UnsupportedMediaType: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/problem+json": components["schemas"]["Problem"];
-            };
-        };
-        /** @description The dataset manifest is missing or unparseable — the API's only 503. */
-        ManifestUnavailable: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/problem+json": components["schemas"]["Problem"];
-            };
-        };
+    Meta: {
+      /** Format: date-time */
+      as_of: string;
+      /**
+       * @description YYYYMMDD of the newest stats day
+       * @example 20260707
+       */
+      generation: number;
+      /**
+       * Format: int64
+       * @description Exact — bounded curated sets only.
+       */
+      count?: number;
+      /**
+       * Format: int64
+       * @description Approximate — everything else.
+       */
+      count_estimate?: number;
+      /** @example CC-BY-NC-4.0 */
+      license: string;
+      /** @description `confirmed_state` on every time series. */
+      source?: string;
     };
-    parameters: {
-        /** @description eTLD+1 or subdomain; canonicalized before lookup. */
-        host: string;
-        /** @description ISO 3166-1 alpha-2, case-insensitive; `UN` is the sentinel. */
-        countryCode: string;
-        asnNumber: number;
-        providerID: number;
-        /** @description The raw campaign UUID. */
-        campaignUUID: string;
-        /** @description Opaque keyset cursor from `page.next_cursor`. */
-        cursor: string;
-        /** @description Page size; default 50, cap 200 (CSV raises the cap to `export.csv_max_rows`). */
-        limit: number;
-        /** @description Stateless deep link; rank-ordered views only. */
-        afterRank: number;
-        sort: "rank" | "-rank" | "host";
-        class: components["schemas"]["Classification"];
-        /** @description The only accepted value is true (saint ⊂ hero). */
-        saint: boolean;
-        /** @description ISO code scope; composes with class + rank order. */
-        country: string;
-        /** @description AS-number scope. */
-        asn: number;
-        /** @description eTLD-suffix pivot; scope-required. */
-        tld: string;
-        /** @description dns_provider id pivot; scope-required as a query filter. */
-        provider: number;
-        /** @description Hosting/CDN text-tag pivot; scope-required. */
-        hosting: string;
-        /** @description class_flags residual; scope-required. */
-        flag: components["schemas"]["ClassFlag"];
-        /** @description Per-dimension confirmed-status residual; scope-required. */
-        dimBase: components["schemas"]["IPv6Status"];
-        dimWWW: components["schemas"]["IPv6Status"];
-        dimNS: components["schemas"]["IPv6Status"];
-        dimMX: components["schemas"]["IPv6Status"];
-        dimConn: components["schemas"]["IPv6Status"];
-        dimResources: components["schemas"]["IPv6Status"];
-        rankMin: number;
-        rankMax: number;
-        /** @description Substring search; forces the host ordering. */
-        q: string;
-        /** @description Sparse fieldset (comma-separated top-level keys). */
-        fields: string;
-        format: "json" | "csv";
-        /** @description Restrict the feed to campaign-member domains (recent-window capped). */
-        changelogScope: "campaign";
-        changelogField: components["schemas"]["Dimension"];
-        /** @description Window start (YYYY-MM-DD or RFC 3339). */
-        changelogFrom: string;
-        /** @description Window end (YYYY-MM-DD or RFC 3339). */
-        changelogTo: string;
-        /** @description Window start (YYYY-MM-DD); default `to − 90d`. */
-        statsFrom: string;
-        /** @description Window end (YYYY-MM-DD); default today UTC. */
-        statsTo: string;
-        /** @description `weekly` keeps the latest snapshot per ISO week — a sample, never an average. */
-        interval: "daily" | "weekly";
+    DetailMeta: {
+      /** Format: date-time */
+      as_of: string;
+      generation: number;
     };
-    requestBodies: never;
-    headers: never;
-    pathItems: never;
+    /** @description RFC 9457. `status` always equals the HTTP status line. */
+    Problem: {
+      /** @example https://whynoipv6.com/problems/not-found */
+      type: string;
+      title: string;
+      status: number;
+      detail?: string;
+      instance?: string;
+    };
+    ValidationProblem: components["schemas"]["Problem"] & {
+      errors?: {
+        field: string;
+        reason: string;
+      }[];
+    };
+    RateLimitProblem: components["schemas"]["Problem"] & {
+      /** @description Seconds until the window frees. */
+      retry_after?: number;
+    };
+    /** @description Per-dimension confirmed status with provenance. `value` is null when the dimension has never been confirmed. */
+    StatusObject: {
+      value: components["schemas"]["IPv6Status"] | null;
+      /** Format: date-time */
+      since: string | null;
+    };
+    StatusBlock: {
+      base: components["schemas"]["StatusObject"];
+      www: components["schemas"]["StatusObject"];
+      ns: components["schemas"]["StatusObject"];
+      mx: components["schemas"]["StatusObject"];
+      conn: components["schemas"]["StatusObject"];
+      resources: components["schemas"]["StatusObject"];
+    };
+    CountryRef: {
+      /** @example NO */
+      code: string;
+      /** @example Norway */
+      name: string;
+      /** @description Detail representation only. */
+      tld?: string | null;
+    };
+    ASNRef: {
+      /**
+       * Format: int64
+       * @example 2119
+       */
+      number: number;
+      /** @example Telenor Norge AS */
+      name: string;
+    };
+    ProviderRef: {
+      /** Format: int64 */
+      id: number;
+      /** @example Cloudflare */
+      name: string;
+    };
+    /** @description The §4.2 list row served by every /domains* collection. */
+    DomainSummary: {
+      /** @example example.com */
+      host: string;
+      /** @description Never the legacy 0 — null when unranked. */
+      rank: number | null;
+      /** @enum {string} */
+      kind: "apex" | "subdomain";
+      parent: string | null;
+      classification: components["schemas"]["Classification"];
+      class_flags: components["schemas"]["ClassFlag"][];
+      saint: boolean;
+      /** @description Derived conn+resources fold — whether the site presents the same over an IPv6-only connection. Null until both dimensions are confirmed. */
+      ipv6_only: components["schemas"]["IPv6Status"] | null;
+      /** @description Campaign membership rows only (listCampaignDomains) — confirmed base and ns supported with www supported-or-not_applicable; the same predicate the campaign stats v6_ready counter aggregates. Absent on every other /domains* collection. */
+      v6_ready?: boolean;
+      status: components["schemas"]["StatusBlock"];
+      tld: string | null;
+      country: components["schemas"]["CountryRef"];
+      asn: components["schemas"]["ASNRef"];
+      dns_provider: components["schemas"]["ProviderRef"] | null;
+      hosting_provider: string | null;
+      /** Format: date-time */
+      last_checked_at: string | null;
+    };
+    /** @description Advisory dimensions with the public-masking rule applied — `error` and `inconsistent` never reach the wire; `partial` survives only on ptr/parity. */
+    Informational: {
+      /** @enum {string|null} */
+      dnssec:
+        "supported" | "unsupported" | "no_record" | "not_applicable" | null;
+      /** @enum {string|null} */
+      ptr:
+        | "supported"
+        | "unsupported"
+        | "no_record"
+        | "not_applicable"
+        | "partial"
+        | null;
+      /** @enum {string|null} */
+      smtp: "supported" | "unsupported" | "no_record" | "not_applicable" | null;
+      /** @enum {string|null} */
+      parity:
+        | "supported"
+        | "unsupported"
+        | "no_record"
+        | "not_applicable"
+        | "partial"
+        | null;
+      latency_v4_ms: number | null;
+      latency_v6_ms: number | null;
+    };
+    DomainDetail: {
+      host: string;
+      rank: number | null;
+      /** @enum {string} */
+      kind: "apex" | "subdomain";
+      parent: string | null;
+      classification: components["schemas"]["Classification"];
+      class_flags: components["schemas"]["ClassFlag"][];
+      saint: boolean;
+      /** @description Derived conn+resources fold — whether the site presents the same over an IPv6-only connection. Null until both dimensions are confirmed. */
+      ipv6_only: components["schemas"]["IPv6Status"] | null;
+      status: components["schemas"]["StatusBlock"];
+      informational: components["schemas"]["Informational"];
+      tld: string | null;
+      country: components["schemas"]["CountryRef"];
+      asn: components["schemas"]["ASNRef"];
+      dns_provider: components["schemas"]["ProviderRef"] | null;
+      hosting_provider: string | null;
+      /** Format: int64 */
+      subdomain_count: number;
+      disabled: boolean;
+      /** Format: date-time */
+      last_checked_at: string | null;
+      /** Format: date-time */
+      created_at: string;
+      /** @description Latest scan_detail payload (the §5.1.3 result shape); only with `?include=evidence`. */
+      evidence?: {
+        [key: string]: unknown;
+      };
+      meta: components["schemas"]["DetailMeta"];
+    };
+    DomainList: {
+      items: components["schemas"]["DomainSummary"][];
+      page: components["schemas"]["Page"];
+      meta: components["schemas"]["Meta"];
+    };
+    ShameItem: {
+      host: string;
+      reason: string | null;
+      /** Format: date-time */
+      added_at: string;
+    };
+    ShameList: {
+      items: components["schemas"]["ShameItem"][];
+      page: components["schemas"]["Page"];
+      meta: components["schemas"]["Meta"];
+    };
+    Country: {
+      /** @example NO */
+      code: string;
+      name: string;
+      /** @example .NO */
+      tld: string | null;
+      sites: number;
+      v6_sites: number;
+      /**
+       * Format: double
+       * @example 24.97
+       */
+      percent: number;
+      meta?: components["schemas"]["DetailMeta"];
+    };
+    CountryList: {
+      items: components["schemas"]["Country"][];
+      page: components["schemas"]["Page"];
+      meta: components["schemas"]["Meta"];
+    };
+    /** @description `count_v4` is synthesized server-side (count_total − count_v6). */
+    ASN: {
+      /** Format: int64 */
+      number: number;
+      name: string;
+      count_total: number;
+      count_v6: number;
+      count_v4: number;
+      meta?: components["schemas"]["DetailMeta"];
+    };
+    ASNList: {
+      items: components["schemas"]["ASN"][];
+      page: components["schemas"]["Page"];
+      meta: components["schemas"]["Meta"];
+    };
+    Provider: {
+      /** Format: int64 */
+      id: number;
+      name: string;
+      count_total: number;
+      count_v6: number;
+      count_v4: number;
+      meta?: components["schemas"]["DetailMeta"];
+    };
+    ProviderList: {
+      items: components["schemas"]["Provider"][];
+      page: components["schemas"]["Page"];
+      meta: components["schemas"]["Meta"];
+    };
+    CampaignListItem: {
+      /** Format: uuid */
+      uuid: string;
+      name: string;
+      description: string;
+      source_file: string | null;
+      tags: string[];
+      /** Format: int64 */
+      domain_count: number;
+      adoption: components["schemas"]["CampaignAdoption"] | null;
+    };
+    CampaignList: {
+      items: components["schemas"]["CampaignListItem"][];
+      page: components["schemas"]["Page"];
+      meta: components["schemas"]["Meta"];
+    };
+    CampaignAdoption: {
+      /**
+       * Format: double
+       * @example 41.7
+       */
+      v6_ready_percent: number;
+      /** Format: date */
+      day: string;
+    };
+    CampaignDetail: {
+      /** Format: uuid */
+      uuid: string;
+      name: string;
+      description: string;
+      source_file: string | null;
+      tags: string[];
+      disabled: boolean;
+      adoption: components["schemas"]["CampaignAdoption"] | null;
+      domains: {
+        items: components["schemas"]["DomainSummary"][];
+        page: components["schemas"]["Page"];
+      };
+      meta: components["schemas"]["Meta"];
+    };
+    /** @description One confirmed dimension transition — old/new are always non-null and distinct. */
+    ChangelogItem: {
+      /** Format: date-time */
+      ts: string;
+      host: string;
+      field: components["schemas"]["Dimension"];
+      old_value: components["schemas"]["IPv6Status"];
+      new_value: components["schemas"]["IPv6Status"];
+    };
+    ChangelogList: {
+      items: components["schemas"]["ChangelogItem"][];
+      page: components["schemas"]["Page"];
+      meta: components["schemas"]["Meta"];
+    };
+    HistoryPoint: {
+      /** Format: date */
+      day: string;
+      base: components["schemas"]["IPv6Status"] | null;
+      www: components["schemas"]["IPv6Status"] | null;
+      ns: components["schemas"]["IPv6Status"] | null;
+      mx: components["schemas"]["IPv6Status"] | null;
+      conn: components["schemas"]["IPv6Status"] | null;
+      resources: components["schemas"]["IPv6Status"] | null;
+      classification: components["schemas"]["Classification"];
+      latency_v4_ms: number | null;
+      latency_v6_ms: number | null;
+    };
+    HistoryResponse: {
+      host: string;
+      points: components["schemas"]["HistoryPoint"][];
+      meta: {
+        /** @example 730 */
+        retention_days: number;
+        /** Format: date-time */
+        as_of: string;
+      };
+    };
+    GlobalStatsPoint: {
+      /** Format: date */
+      day: string;
+      domains?: number | null;
+      heroes?: number | null;
+      partial?: number | null;
+      sinners?: number | null;
+      inactive?: number | null;
+      unknown?: number | null;
+      saints?: number | null;
+      disabled?: number | null;
+      base_supported?: number | null;
+      www_supported?: number | null;
+      ns_supported?: number | null;
+      mx_supported?: number | null;
+      conn_supported?: number | null;
+      resources_supported?: number | null;
+      top_heroes?: number | null;
+      top_nameserver?: number | null;
+    };
+    GlobalStatsSeries: {
+      points: components["schemas"]["GlobalStatsPoint"][];
+      meta: components["schemas"]["Meta"];
+    };
+    CountryStatsPoint: {
+      /** Format: date */
+      day: string;
+      domains?: number | null;
+      sinners?: number | null;
+      partial?: number | null;
+      heroes?: number | null;
+      base_supported?: number | null;
+      conn_supported?: number | null;
+    };
+    CountryStatsSeries: {
+      points: components["schemas"]["CountryStatsPoint"][];
+      meta: components["schemas"]["Meta"];
+    };
+    CampaignStatsPoint: {
+      /** Format: date */
+      day: string;
+      domains?: number | null;
+      v6_ready?: number | null;
+      sinners?: number | null;
+      partial?: number | null;
+      heroes?: number | null;
+      base_supported?: number | null;
+      www_supported?: number | null;
+      ns_supported?: number | null;
+      mx_supported?: number | null;
+      conn_supported?: number | null;
+    };
+    CampaignStatsSeries: {
+      points: components["schemas"]["CampaignStatsPoint"][];
+      meta: components["schemas"]["Meta"];
+    };
+    /** @description `v6_domains`/`domains` mapped onto the canonical count_v6/count_total wire names. */
+    ASNStatsPoint: {
+      /** Format: date */
+      day: string;
+      count_total?: number | null;
+      count_v6?: number | null;
+      sinners?: number | null;
+      heroes?: number | null;
+    };
+    ASNStatsSeries: {
+      points: components["schemas"]["ASNStatsPoint"][];
+      meta: components["schemas"]["Meta"];
+    };
+    ResourceLink: {
+      /** @example fonts.googleapis.com */
+      host: string;
+      aaaa_status: components["schemas"]["IPv6Status"] | null;
+      /** @enum {string} */
+      source: "discovered" | "manual";
+      required: boolean;
+      /** Format: date */
+      first_seen: string;
+      /** Format: date */
+      last_seen: string;
+      /** Format: date-time */
+      last_checked_at: string | null;
+    };
+    ResourceLinkList: {
+      items: components["schemas"]["ResourceLink"][];
+      page: components["schemas"]["Page"];
+      meta: components["schemas"]["Meta"];
+    };
+    ResourceHost: {
+      host: string;
+      aaaa_status: components["schemas"]["IPv6Status"] | null;
+      dependent_count: number;
+      /** Format: date-time */
+      last_checked_at: string | null;
+    };
+    ResourceHostDetail: components["schemas"]["ResourceHost"] & {
+      meta: components["schemas"]["DetailMeta"];
+    };
+    Dependent: components["schemas"]["DomainSummary"] & {
+      /** @enum {string} */
+      source: "discovered" | "manual";
+      required: boolean;
+    };
+    DependentsResponse: {
+      resource: components["schemas"]["ResourceHost"];
+      items: components["schemas"]["Dependent"][];
+      page: components["schemas"]["Page"];
+      meta: components["schemas"]["Meta"];
+    };
+    /** @description Exactly these four keys on a 202. */
+    CheckAccepted: {
+      /** Format: int64 */
+      id: number;
+      host: string;
+      /** @enum {string} */
+      status: "pending";
+      /** Format: date-time */
+      created_at: string;
+    };
+    CheckConfirmed: {
+      classification: components["schemas"]["Classification"];
+      class_flags: components["schemas"]["ClassFlag"][];
+      saint: boolean;
+      status: components["schemas"]["StatusBlock"];
+      /** Format: date-time */
+      as_of: string | null;
+    };
+    /** @description The §5.1.2 job body. `id` is null only on the domain-side dedupe envelope. `result` statuses are raw observations (incl. `inconsistent` on base/www), explicitly NOT confirmed state. */
+    CheckEnvelope: {
+      /** Format: int64 */
+      id: number | null;
+      host: string;
+      /** @enum {string} */
+      status: "pending" | "processing" | "done" | "failed";
+      cached: boolean;
+      /** Format: date-time */
+      created_at: string;
+      /** Format: date-time */
+      completed_at: string | null;
+      error: string | null;
+      result:
+        | ({
+            /** Format: date-time */
+            checked_at?: string;
+            /** Format: int64 */
+            duration_ms?: number;
+            checks?: {
+              [key: string]: {
+                status?: string;
+              };
+            };
+            latency?: {
+              v4_ms?: number | null;
+              v6_ms?: number | null;
+            };
+          } & {
+            [key: string]: unknown;
+          })
+        | null;
+      confirmed: components["schemas"]["CheckConfirmed"] | null;
+    };
+    /** @description shields.io endpoint schema — the one sanctioned camelCase exception. */
+    ShieldsBadge: {
+      /** @enum {integer} */
+      schemaVersion: 1;
+      /** @enum {string} */
+      label: "IPv6";
+      /** @enum {string} */
+      message:
+        "supported" | "full" | "partial" | "no IPv6" | "inactive" | "unknown";
+      /** @enum {string} */
+      color: "brightgreen" | "yellow" | "red" | "lightgrey";
+      /** @example 86400 */
+      cacheSeconds: number;
+      isError: boolean;
+    };
+    JSONFeed: {
+      /** @enum {string} */
+      version: "https://jsonfeed.org/version/1.1";
+      title: string;
+      home_page_url: string;
+      feed_url: string;
+      items: {
+        /** @description The composite (host, ts, field) as a stable IRI. */
+        id: string;
+        url?: string;
+        title: string;
+        content_text: string;
+        /** Format: date-time */
+        date_published: string;
+      }[];
+    };
+    ManifestLatest: {
+      /** Format: date */
+      date: string;
+      path: string;
+      datapackage_url: string;
+    };
+    ManifestEntry: {
+      /** Format: date */
+      date: string;
+      path: string;
+      tiers: ("top100k" | "top1m" | "full")[];
+      formats: ("csv.gz" | "parquet")[];
+      datapackage_url: string;
+      sha256sums_url: string;
+    };
+    /** @description The pinned datasets index (schema_version bumps with the column set). */
+    Manifest: {
+      /** @example 1 */
+      schema_version: number;
+      /** Format: date-time */
+      generated_at: string;
+      generation: number;
+      license: string;
+      attribution: string;
+      latest: components["schemas"]["ManifestLatest"];
+      snapshots: components["schemas"]["ManifestEntry"][];
+    };
+  };
+  responses: {
+    /** @description The `{items,page,meta}` envelope of §4.2 summary rows. */
+    DomainList: {
+      headers: {
+        [name: string]: unknown;
+      };
+      content: {
+        "application/json": components["schemas"]["DomainList"];
+        "text/csv": string;
+      };
+    };
+    /** @description The `{items,page,meta}` envelope of §4.8 events. */
+    ChangelogList: {
+      headers: {
+        [name: string]: unknown;
+      };
+      content: {
+        "application/json": components["schemas"]["ChangelogList"];
+        "text/csv": string;
+      };
+    };
+    /** @description RFC 4287 Atom, latest-50 window. */
+    AtomFeed: {
+      headers: {
+        [name: string]: unknown;
+      };
+      content: {
+        "application/atom+xml": string;
+      };
+    };
+    /** @description JSON Feed 1.1, latest-50 window. */
+    JSONFeed: {
+      headers: {
+        [name: string]: unknown;
+      };
+      content: {
+        "application/feed+json": components["schemas"]["JSONFeed"];
+      };
+    };
+    /** @description Unknown or uncanonicalizable resource key. */
+    NotFound: {
+      headers: {
+        [name: string]: unknown;
+      };
+      content: {
+        "application/problem+json": components["schemas"]["Problem"];
+      };
+    };
+    /** @description Malformed cursor, bad format, malformed badge host, bad window. */
+    InvalidParameter: {
+      headers: {
+        [name: string]: unknown;
+      };
+      content: {
+        "application/problem+json": components["schemas"]["Problem"];
+      };
+    };
+    /** @description A filter value outside its enum; carries `errors[]`. */
+    ValidationError: {
+      headers: {
+        [name: string]: unknown;
+      };
+      content: {
+        "application/problem+json": components["schemas"]["ValidationProblem"];
+      };
+    };
+    /** @description A valid residual filter that needs an indexed companion scope (class, country, or asn), or more than one residual was stacked. */
+    ScopeRequired: {
+      headers: {
+        [name: string]: unknown;
+      };
+      content: {
+        "application/problem+json": components["schemas"]["Problem"];
+      };
+    };
+    /** @description Over the per-/64 or global hourly quota; carries `retry_after` + Retry-After. */
+    RateLimited: {
+      headers: {
+        "Retry-After"?: number;
+        RateLimit?: string;
+        "RateLimit-Policy"?: string;
+        [name: string]: unknown;
+      };
+      content: {
+        "application/problem+json": components["schemas"]["RateLimitProblem"];
+      };
+    };
+    /** @description The POST body is not JSON. */
+    UnsupportedMediaType: {
+      headers: {
+        [name: string]: unknown;
+      };
+      content: {
+        "application/problem+json": components["schemas"]["Problem"];
+      };
+    };
+    /** @description The dataset manifest is missing or unparseable — the API's only 503. */
+    ManifestUnavailable: {
+      headers: {
+        [name: string]: unknown;
+      };
+      content: {
+        "application/problem+json": components["schemas"]["Problem"];
+      };
+    };
+  };
+  parameters: {
+    /** @description eTLD+1 or subdomain; canonicalized before lookup. */
+    host: string;
+    /** @description ISO 3166-1 alpha-2, case-insensitive; `UN` is the sentinel. */
+    countryCode: string;
+    asnNumber: number;
+    providerID: number;
+    /** @description The raw campaign UUID. */
+    campaignUUID: string;
+    /** @description Opaque keyset cursor from `page.next_cursor`. */
+    cursor: string;
+    /** @description Page size; default 50, cap 200 (CSV raises the cap to `export.csv_max_rows`). */
+    limit: number;
+    /** @description Stateless deep link; rank-ordered views only. */
+    afterRank: number;
+    sort: "rank" | "-rank" | "host";
+    class: components["schemas"]["Classification"];
+    /** @description The only accepted value is true (saint ⊂ hero). */
+    saint: boolean;
+    /** @description The only accepted value is true. Hero in every dimension except the apex AAAA — www and ns supported, mx supported or not applicable, base unsupported or no_record. One DNS record away. */
+    almostHero: boolean;
+    /** @description ISO code scope; composes with class + rank order. */
+    country: string;
+    /** @description AS-number scope. */
+    asn: number;
+    /** @description eTLD-suffix pivot; scope-required. */
+    tld: string;
+    /** @description dns_provider id pivot; scope-required as a query filter. */
+    provider: number;
+    /** @description Hosting/CDN text-tag pivot; scope-required. */
+    hosting: string;
+    /** @description class_flags residual; scope-required. */
+    flag: components["schemas"]["ClassFlag"];
+    /** @description Per-dimension confirmed-status residual; scope-required. */
+    dimBase: components["schemas"]["IPv6Status"];
+    dimWWW: components["schemas"]["IPv6Status"];
+    dimNS: components["schemas"]["IPv6Status"];
+    dimMX: components["schemas"]["IPv6Status"];
+    dimConn: components["schemas"]["IPv6Status"];
+    dimResources: components["schemas"]["IPv6Status"];
+    rankMin: number;
+    rankMax: number;
+    /** @description Substring search; forces the host ordering. */
+    q: string;
+    /** @description Sparse fieldset (comma-separated top-level keys). */
+    fields: string;
+    format: "json" | "csv";
+    /** @description Restrict the feed to campaign-member domains (recent-window capped). */
+    changelogScope: "campaign";
+    changelogField: components["schemas"]["Dimension"];
+    /** @description Window start (YYYY-MM-DD or RFC 3339). */
+    changelogFrom: string;
+    /** @description Window end (YYYY-MM-DD or RFC 3339). */
+    changelogTo: string;
+    /** @description Window start (YYYY-MM-DD); default `to − 90d`. */
+    statsFrom: string;
+    /** @description Window end (YYYY-MM-DD); default today UTC. */
+    statsTo: string;
+    /** @description `weekly` keeps the latest snapshot per ISO week — a sample, never an average. */
+    interval: "daily" | "weekly";
+  };
+  requestBodies: never;
+  headers: never;
+  pathItems: never;
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    listDomains: {
-        parameters: {
-            query?: {
-                class?: components["parameters"]["class"];
-                /** @description The only accepted value is true (saint ⊂ hero). */
-                saint?: components["parameters"]["saint"];
-                /** @description ISO code scope; composes with class + rank order. */
-                country?: components["parameters"]["country"];
-                /** @description AS-number scope. */
-                asn?: components["parameters"]["asn"];
-                /** @description eTLD-suffix pivot; scope-required. */
-                tld?: components["parameters"]["tld"];
-                /** @description dns_provider id pivot; scope-required as a query filter. */
-                provider?: components["parameters"]["provider"];
-                /** @description Hosting/CDN text-tag pivot; scope-required. */
-                hosting?: components["parameters"]["hosting"];
-                /** @description class_flags residual; scope-required. */
-                flag?: components["parameters"]["flag"];
-                /** @description Per-dimension confirmed-status residual; scope-required. */
-                base?: components["parameters"]["dimBase"];
-                www?: components["parameters"]["dimWWW"];
-                ns?: components["parameters"]["dimNS"];
-                mx?: components["parameters"]["dimMX"];
-                conn?: components["parameters"]["dimConn"];
-                resources?: components["parameters"]["dimResources"];
-                rank_min?: components["parameters"]["rankMin"];
-                rank_max?: components["parameters"]["rankMax"];
-                /** @description Substring search; forces the host ordering. */
-                q?: components["parameters"]["q"];
-                sort?: components["parameters"]["sort"];
-                /** @description Sparse fieldset (comma-separated top-level keys). */
-                fields?: components["parameters"]["fields"];
-                format?: components["parameters"]["format"];
-                /** @description Opaque keyset cursor from `page.next_cursor`. */
-                cursor?: components["parameters"]["cursor"];
-                /** @description Page size; default 50, cap 200 (CSV raises the cap to `export.csv_max_rows`). */
-                limit?: components["parameters"]["limit"];
-                /** @description Stateless deep link; rank-ordered views only. */
-                after_rank?: components["parameters"]["afterRank"];
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: components["responses"]["DomainList"];
-            400: components["responses"]["InvalidParameter"];
-            422: components["responses"]["ScopeRequired"];
-        };
+  listDomains: {
+    parameters: {
+      query?: {
+        class?: components["parameters"]["class"];
+        /** @description The only accepted value is true (saint ⊂ hero). */
+        saint?: components["parameters"]["saint"];
+        /** @description The only accepted value is true. Hero in every dimension except the apex AAAA — www and ns supported, mx supported or not applicable, base unsupported or no_record. One DNS record away. */
+        almost_hero?: components["parameters"]["almostHero"];
+        /** @description ISO code scope; composes with class + rank order. */
+        country?: components["parameters"]["country"];
+        /** @description AS-number scope. */
+        asn?: components["parameters"]["asn"];
+        /** @description eTLD-suffix pivot; scope-required. */
+        tld?: components["parameters"]["tld"];
+        /** @description dns_provider id pivot; scope-required as a query filter. */
+        provider?: components["parameters"]["provider"];
+        /** @description Hosting/CDN text-tag pivot; scope-required. */
+        hosting?: components["parameters"]["hosting"];
+        /** @description class_flags residual; scope-required. */
+        flag?: components["parameters"]["flag"];
+        /** @description Per-dimension confirmed-status residual; scope-required. */
+        base?: components["parameters"]["dimBase"];
+        www?: components["parameters"]["dimWWW"];
+        ns?: components["parameters"]["dimNS"];
+        mx?: components["parameters"]["dimMX"];
+        conn?: components["parameters"]["dimConn"];
+        resources?: components["parameters"]["dimResources"];
+        rank_min?: components["parameters"]["rankMin"];
+        rank_max?: components["parameters"]["rankMax"];
+        /** @description Substring search; forces the host ordering. */
+        q?: components["parameters"]["q"];
+        sort?: components["parameters"]["sort"];
+        /** @description Sparse fieldset (comma-separated top-level keys). */
+        fields?: components["parameters"]["fields"];
+        format?: components["parameters"]["format"];
+        /** @description Opaque keyset cursor from `page.next_cursor`. */
+        cursor?: components["parameters"]["cursor"];
+        /** @description Page size; default 50, cap 200 (CSV raises the cap to `export.csv_max_rows`). */
+        limit?: components["parameters"]["limit"];
+        /** @description Stateless deep link; rank-ordered views only. */
+        after_rank?: components["parameters"]["afterRank"];
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    getDomain: {
-        parameters: {
-            query?: {
-                /** @description `evidence` attaches the latest scan_detail payload */
-                include?: "evidence";
-            };
-            header?: never;
-            path: {
-                /** @description eTLD+1 or subdomain; canonicalized before lookup. */
-                host: components["parameters"]["host"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The §4.3 detail representation. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DomainDetail"];
-                };
-            };
-            404: components["responses"]["NotFound"];
-        };
+    requestBody?: never;
+    responses: {
+      200: components["responses"]["DomainList"];
+      400: components["responses"]["InvalidParameter"];
+      422: components["responses"]["ScopeRequired"];
     };
-    listSubdomains: {
-        parameters: {
-            query?: {
-                /** @description Opaque keyset cursor from `page.next_cursor`. */
-                cursor?: components["parameters"]["cursor"];
-                /** @description Page size; default 50, cap 200 (CSV raises the cap to `export.csv_max_rows`). */
-                limit?: components["parameters"]["limit"];
-            };
-            header?: never;
-            path: {
-                /** @description eTLD+1 or subdomain; canonicalized before lookup. */
-                host: components["parameters"]["host"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: components["responses"]["DomainList"];
-            404: components["responses"]["NotFound"];
-        };
+  };
+  getDomain: {
+    parameters: {
+      query?: {
+        /** @description `evidence` attaches the latest scan_detail payload */
+        include?: "evidence";
+      };
+      header?: never;
+      path: {
+        /** @description eTLD+1 or subdomain; canonicalized before lookup. */
+        host: components["parameters"]["host"];
+      };
+      cookie?: never;
     };
-    listDomainResources: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description eTLD+1 or subdomain; canonicalized before lookup. */
-                host: components["parameters"]["host"];
-            };
-            cookie?: never;
+    requestBody?: never;
+    responses: {
+      /** @description The §4.3 detail representation. */
+      200: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody?: never;
-        responses: {
-            /** @description Bounded small; exact `meta.count`, trivial page. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ResourceLinkList"];
-                };
-            };
-            404: components["responses"]["NotFound"];
+        content: {
+          "application/json": components["schemas"]["DomainDetail"];
         };
+      };
+      404: components["responses"]["NotFound"];
     };
-    listDomainChangelog: {
-        parameters: {
-            query?: {
-                field?: components["parameters"]["changelogField"];
-                /** @description Window start (YYYY-MM-DD or RFC 3339). */
-                from?: components["parameters"]["changelogFrom"];
-                /** @description Window end (YYYY-MM-DD or RFC 3339). */
-                to?: components["parameters"]["changelogTo"];
-                format?: components["parameters"]["format"];
-                /** @description Opaque keyset cursor from `page.next_cursor`. */
-                cursor?: components["parameters"]["cursor"];
-                /** @description Page size; default 50, cap 200 (CSV raises the cap to `export.csv_max_rows`). */
-                limit?: components["parameters"]["limit"];
-            };
-            header?: never;
-            path: {
-                /** @description eTLD+1 or subdomain; canonicalized before lookup. */
-                host: components["parameters"]["host"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: components["responses"]["ChangelogList"];
-            404: components["responses"]["NotFound"];
-            422: components["responses"]["ValidationError"];
-        };
+  };
+  listSubdomains: {
+    parameters: {
+      query?: {
+        /** @description Opaque keyset cursor from `page.next_cursor`. */
+        cursor?: components["parameters"]["cursor"];
+        /** @description Page size; default 50, cap 200 (CSV raises the cap to `export.csv_max_rows`). */
+        limit?: components["parameters"]["limit"];
+      };
+      header?: never;
+      path: {
+        /** @description eTLD+1 or subdomain; canonicalized before lookup. */
+        host: components["parameters"]["host"];
+      };
+      cookie?: never;
     };
-    getDomainChangelogAtom: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description eTLD+1 or subdomain; canonicalized before lookup. */
-                host: components["parameters"]["host"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: components["responses"]["AtomFeed"];
-            404: components["responses"]["NotFound"];
-        };
+    requestBody?: never;
+    responses: {
+      200: components["responses"]["DomainList"];
+      404: components["responses"]["NotFound"];
     };
-    getDomainChangelogJSONFeed: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description eTLD+1 or subdomain; canonicalized before lookup. */
-                host: components["parameters"]["host"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: components["responses"]["JSONFeed"];
-            404: components["responses"]["NotFound"];
-        };
+  };
+  listDomainResources: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description eTLD+1 or subdomain; canonicalized before lookup. */
+        host: components["parameters"]["host"];
+      };
+      cookie?: never;
     };
-    getDomainHistory: {
-        parameters: {
-            query?: {
-                /** @description Window start (YYYY-MM-DD); default `to − 90d`. */
-                from?: components["parameters"]["statsFrom"];
-                /** @description Window end (YYYY-MM-DD); default today UTC. */
-                to?: components["parameters"]["statsTo"];
-                /** @description `weekly` keeps the latest snapshot per ISO week — a sample, never an average. */
-                interval?: components["parameters"]["interval"];
-            };
-            header?: never;
-            path: {
-                /** @description eTLD+1 or subdomain; canonicalized before lookup. */
-                host: components["parameters"]["host"];
-            };
-            cookie?: never;
+    requestBody?: never;
+    responses: {
+      /** @description Bounded small; exact `meta.count`, trivial page. */
+      200: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody?: never;
-        responses: {
-            /** @description Reconstructed confirmed state per day; `error`/`inconsistent` never appear. Empty changelog → `points: []` (day-1 rule). */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HistoryResponse"];
-                };
-            };
-            400: components["responses"]["InvalidParameter"];
-            404: components["responses"]["NotFound"];
+        content: {
+          "application/json": components["schemas"]["ResourceLinkList"];
         };
+      };
+      404: components["responses"]["NotFound"];
     };
-    listHeroes: {
-        parameters: {
-            query?: {
-                /** @description ISO code scope; composes with class + rank order. */
-                country?: components["parameters"]["country"];
-                /** @description AS-number scope. */
-                asn?: components["parameters"]["asn"];
-                /** @description eTLD-suffix pivot; scope-required. */
-                tld?: components["parameters"]["tld"];
-                /** @description dns_provider id pivot; scope-required as a query filter. */
-                provider?: components["parameters"]["provider"];
-                /** @description Hosting/CDN text-tag pivot; scope-required. */
-                hosting?: components["parameters"]["hosting"];
-                /** @description class_flags residual; scope-required. */
-                flag?: components["parameters"]["flag"];
-                mx?: components["parameters"]["dimMX"];
-                rank_min?: components["parameters"]["rankMin"];
-                rank_max?: components["parameters"]["rankMax"];
-                /** @description Substring search; forces the host ordering. */
-                q?: components["parameters"]["q"];
-                sort?: components["parameters"]["sort"];
-                /** @description Sparse fieldset (comma-separated top-level keys). */
-                fields?: components["parameters"]["fields"];
-                format?: components["parameters"]["format"];
-                /** @description Opaque keyset cursor from `page.next_cursor`. */
-                cursor?: components["parameters"]["cursor"];
-                /** @description Page size; default 50, cap 200 (CSV raises the cap to `export.csv_max_rows`). */
-                limit?: components["parameters"]["limit"];
-                /** @description Stateless deep link; rank-ordered views only. */
-                after_rank?: components["parameters"]["afterRank"];
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: components["responses"]["DomainList"];
-            422: components["responses"]["ScopeRequired"];
-        };
+  };
+  listDomainChangelog: {
+    parameters: {
+      query?: {
+        field?: components["parameters"]["changelogField"];
+        /** @description Window start (YYYY-MM-DD or RFC 3339). */
+        from?: components["parameters"]["changelogFrom"];
+        /** @description Window end (YYYY-MM-DD or RFC 3339). */
+        to?: components["parameters"]["changelogTo"];
+        format?: components["parameters"]["format"];
+        /** @description Opaque keyset cursor from `page.next_cursor`. */
+        cursor?: components["parameters"]["cursor"];
+        /** @description Page size; default 50, cap 200 (CSV raises the cap to `export.csv_max_rows`). */
+        limit?: components["parameters"]["limit"];
+      };
+      header?: never;
+      path: {
+        /** @description eTLD+1 or subdomain; canonicalized before lookup. */
+        host: components["parameters"]["host"];
+      };
+      cookie?: never;
     };
-    listSinners: {
-        parameters: {
-            query?: {
-                /** @description ISO code scope; composes with class + rank order. */
-                country?: components["parameters"]["country"];
-                /** @description AS-number scope. */
-                asn?: components["parameters"]["asn"];
-                /** @description eTLD-suffix pivot; scope-required. */
-                tld?: components["parameters"]["tld"];
-                /** @description dns_provider id pivot; scope-required as a query filter. */
-                provider?: components["parameters"]["provider"];
-                /** @description Hosting/CDN text-tag pivot; scope-required. */
-                hosting?: components["parameters"]["hosting"];
-                /** @description class_flags residual; scope-required. */
-                flag?: components["parameters"]["flag"];
-                mx?: components["parameters"]["dimMX"];
-                rank_min?: components["parameters"]["rankMin"];
-                rank_max?: components["parameters"]["rankMax"];
-                /** @description Substring search; forces the host ordering. */
-                q?: components["parameters"]["q"];
-                sort?: components["parameters"]["sort"];
-                /** @description Sparse fieldset (comma-separated top-level keys). */
-                fields?: components["parameters"]["fields"];
-                format?: components["parameters"]["format"];
-                /** @description Opaque keyset cursor from `page.next_cursor`. */
-                cursor?: components["parameters"]["cursor"];
-                /** @description Page size; default 50, cap 200 (CSV raises the cap to `export.csv_max_rows`). */
-                limit?: components["parameters"]["limit"];
-                /** @description Stateless deep link; rank-ordered views only. */
-                after_rank?: components["parameters"]["afterRank"];
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: components["responses"]["DomainList"];
-            422: components["responses"]["ScopeRequired"];
-        };
+    requestBody?: never;
+    responses: {
+      200: components["responses"]["ChangelogList"];
+      404: components["responses"]["NotFound"];
+      422: components["responses"]["ValidationError"];
     };
-    listSaints: {
-        parameters: {
-            query?: {
-                /** @description ISO code scope; composes with class + rank order. */
-                country?: components["parameters"]["country"];
-                /** @description AS-number scope. */
-                asn?: components["parameters"]["asn"];
-                /** @description eTLD-suffix pivot; scope-required. */
-                tld?: components["parameters"]["tld"];
-                /** @description dns_provider id pivot; scope-required as a query filter. */
-                provider?: components["parameters"]["provider"];
-                /** @description Hosting/CDN text-tag pivot; scope-required. */
-                hosting?: components["parameters"]["hosting"];
-                /** @description class_flags residual; scope-required. */
-                flag?: components["parameters"]["flag"];
-                mx?: components["parameters"]["dimMX"];
-                rank_min?: components["parameters"]["rankMin"];
-                rank_max?: components["parameters"]["rankMax"];
-                /** @description Substring search; forces the host ordering. */
-                q?: components["parameters"]["q"];
-                sort?: components["parameters"]["sort"];
-                /** @description Sparse fieldset (comma-separated top-level keys). */
-                fields?: components["parameters"]["fields"];
-                format?: components["parameters"]["format"];
-                /** @description Opaque keyset cursor from `page.next_cursor`. */
-                cursor?: components["parameters"]["cursor"];
-                /** @description Page size; default 50, cap 200 (CSV raises the cap to `export.csv_max_rows`). */
-                limit?: components["parameters"]["limit"];
-                /** @description Stateless deep link; rank-ordered views only. */
-                after_rank?: components["parameters"]["afterRank"];
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: components["responses"]["DomainList"];
-            422: components["responses"]["ScopeRequired"];
-        };
+  };
+  getDomainChangelogAtom: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description eTLD+1 or subdomain; canonicalized before lookup. */
+        host: components["parameters"]["host"];
+      };
+      cookie?: never;
     };
-    listShame: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Bounded editorial picks; exact `meta.count`, no cursor. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ShameList"];
-                };
-            };
-        };
+    requestBody?: never;
+    responses: {
+      200: components["responses"]["AtomFeed"];
+      404: components["responses"]["NotFound"];
     };
-    listCountries: {
-        parameters: {
-            query?: {
-                sort?: "percent" | "v6_sites" | "sites";
-                format?: components["parameters"]["format"];
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The bounded ISO set, served whole with exact `meta.count`. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CountryList"];
-                    "text/csv": string;
-                };
-            };
-            400: components["responses"]["InvalidParameter"];
-        };
+  };
+  getDomainChangelogJSONFeed: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description eTLD+1 or subdomain; canonicalized before lookup. */
+        host: components["parameters"]["host"];
+      };
+      cookie?: never;
     };
-    getCountry: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description ISO 3166-1 alpha-2, case-insensitive; `UN` is the sentinel. */
-                code: components["parameters"]["countryCode"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The §4.5 representation. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Country"];
-                };
-            };
-            404: components["responses"]["NotFound"];
-        };
+    requestBody?: never;
+    responses: {
+      200: components["responses"]["JSONFeed"];
+      404: components["responses"]["NotFound"];
     };
-    listCountryDomains: {
-        parameters: {
-            query?: {
-                class?: components["parameters"]["class"];
-                /** @description The only accepted value is true (saint ⊂ hero). */
-                saint?: components["parameters"]["saint"];
-                /** @description eTLD-suffix pivot; scope-required. */
-                tld?: components["parameters"]["tld"];
-                /** @description dns_provider id pivot; scope-required as a query filter. */
-                provider?: components["parameters"]["provider"];
-                /** @description Hosting/CDN text-tag pivot; scope-required. */
-                hosting?: components["parameters"]["hosting"];
-                /** @description class_flags residual; scope-required. */
-                flag?: components["parameters"]["flag"];
-                mx?: components["parameters"]["dimMX"];
-                rank_min?: components["parameters"]["rankMin"];
-                rank_max?: components["parameters"]["rankMax"];
-                /** @description Substring search; forces the host ordering. */
-                q?: components["parameters"]["q"];
-                sort?: components["parameters"]["sort"];
-                /** @description Sparse fieldset (comma-separated top-level keys). */
-                fields?: components["parameters"]["fields"];
-                format?: components["parameters"]["format"];
-                /** @description Opaque keyset cursor from `page.next_cursor`. */
-                cursor?: components["parameters"]["cursor"];
-                /** @description Page size; default 50, cap 200 (CSV raises the cap to `export.csv_max_rows`). */
-                limit?: components["parameters"]["limit"];
-                /** @description Stateless deep link; rank-ordered views only. */
-                after_rank?: components["parameters"]["afterRank"];
-            };
-            header?: never;
-            path: {
-                /** @description ISO 3166-1 alpha-2, case-insensitive; `UN` is the sentinel. */
-                code: components["parameters"]["countryCode"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: components["responses"]["DomainList"];
-            404: components["responses"]["NotFound"];
-            422: components["responses"]["ScopeRequired"];
-        };
+  };
+  getDomainHistory: {
+    parameters: {
+      query?: {
+        /** @description Window start (YYYY-MM-DD); default `to − 90d`. */
+        from?: components["parameters"]["statsFrom"];
+        /** @description Window end (YYYY-MM-DD); default today UTC. */
+        to?: components["parameters"]["statsTo"];
+        /** @description `weekly` keeps the latest snapshot per ISO week — a sample, never an average. */
+        interval?: components["parameters"]["interval"];
+      };
+      header?: never;
+      path: {
+        /** @description eTLD+1 or subdomain; canonicalized before lookup. */
+        host: components["parameters"]["host"];
+      };
+      cookie?: never;
     };
-    getCountryStats: {
-        parameters: {
-            query?: {
-                /** @description Window start (YYYY-MM-DD); default `to − 90d`. */
-                from?: components["parameters"]["statsFrom"];
-                /** @description Window end (YYYY-MM-DD); default today UTC. */
-                to?: components["parameters"]["statsTo"];
-                /** @description `weekly` keeps the latest snapshot per ISO week — a sample, never an average. */
-                interval?: components["parameters"]["interval"];
-            };
-            header?: never;
-            path: {
-                /** @description ISO 3166-1 alpha-2, case-insensitive; `UN` is the sentinel. */
-                code: components["parameters"]["countryCode"];
-            };
-            cookie?: never;
+    requestBody?: never;
+    responses: {
+      /** @description Reconstructed confirmed state per day; `error`/`inconsistent` never appear. Empty changelog → `points: []` (day-1 rule). */
+      200: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody?: never;
-        responses: {
-            /** @description Confirmed-state snapshots. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CountryStatsSeries"];
-                };
-            };
-            400: components["responses"]["InvalidParameter"];
-            404: components["responses"]["NotFound"];
+        content: {
+          "application/json": components["schemas"]["HistoryResponse"];
         };
+      };
+      400: components["responses"]["InvalidParameter"];
+      404: components["responses"]["NotFound"];
     };
-    listCountryChangelog: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description ISO 3166-1 alpha-2, case-insensitive; `UN` is the sentinel. */
-                code: components["parameters"]["countryCode"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: components["responses"]["ChangelogList"];
-            404: components["responses"]["NotFound"];
-        };
+  };
+  listHeroes: {
+    parameters: {
+      query?: {
+        /** @description ISO code scope; composes with class + rank order. */
+        country?: components["parameters"]["country"];
+        /** @description AS-number scope. */
+        asn?: components["parameters"]["asn"];
+        /** @description eTLD-suffix pivot; scope-required. */
+        tld?: components["parameters"]["tld"];
+        /** @description dns_provider id pivot; scope-required as a query filter. */
+        provider?: components["parameters"]["provider"];
+        /** @description Hosting/CDN text-tag pivot; scope-required. */
+        hosting?: components["parameters"]["hosting"];
+        /** @description class_flags residual; scope-required. */
+        flag?: components["parameters"]["flag"];
+        mx?: components["parameters"]["dimMX"];
+        rank_min?: components["parameters"]["rankMin"];
+        rank_max?: components["parameters"]["rankMax"];
+        /** @description Substring search; forces the host ordering. */
+        q?: components["parameters"]["q"];
+        sort?: components["parameters"]["sort"];
+        /** @description Sparse fieldset (comma-separated top-level keys). */
+        fields?: components["parameters"]["fields"];
+        format?: components["parameters"]["format"];
+        /** @description Opaque keyset cursor from `page.next_cursor`. */
+        cursor?: components["parameters"]["cursor"];
+        /** @description Page size; default 50, cap 200 (CSV raises the cap to `export.csv_max_rows`). */
+        limit?: components["parameters"]["limit"];
+        /** @description Stateless deep link; rank-ordered views only. */
+        after_rank?: components["parameters"]["afterRank"];
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    getCountryChangelogAtom: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description ISO 3166-1 alpha-2, case-insensitive; `UN` is the sentinel. */
-                code: components["parameters"]["countryCode"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: components["responses"]["AtomFeed"];
-            404: components["responses"]["NotFound"];
-        };
+    requestBody?: never;
+    responses: {
+      200: components["responses"]["DomainList"];
+      422: components["responses"]["ScopeRequired"];
     };
-    getCountryChangelogJSONFeed: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description ISO 3166-1 alpha-2, case-insensitive; `UN` is the sentinel. */
-                code: components["parameters"]["countryCode"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: components["responses"]["JSONFeed"];
-            404: components["responses"]["NotFound"];
-        };
+  };
+  listSinners: {
+    parameters: {
+      query?: {
+        /** @description ISO code scope; composes with class + rank order. */
+        country?: components["parameters"]["country"];
+        /** @description AS-number scope. */
+        asn?: components["parameters"]["asn"];
+        /** @description eTLD-suffix pivot; scope-required. */
+        tld?: components["parameters"]["tld"];
+        /** @description dns_provider id pivot; scope-required as a query filter. */
+        provider?: components["parameters"]["provider"];
+        /** @description Hosting/CDN text-tag pivot; scope-required. */
+        hosting?: components["parameters"]["hosting"];
+        /** @description class_flags residual; scope-required. */
+        flag?: components["parameters"]["flag"];
+        mx?: components["parameters"]["dimMX"];
+        rank_min?: components["parameters"]["rankMin"];
+        rank_max?: components["parameters"]["rankMax"];
+        /** @description Substring search; forces the host ordering. */
+        q?: components["parameters"]["q"];
+        sort?: components["parameters"]["sort"];
+        /** @description Sparse fieldset (comma-separated top-level keys). */
+        fields?: components["parameters"]["fields"];
+        format?: components["parameters"]["format"];
+        /** @description Opaque keyset cursor from `page.next_cursor`. */
+        cursor?: components["parameters"]["cursor"];
+        /** @description Page size; default 50, cap 200 (CSV raises the cap to `export.csv_max_rows`). */
+        limit?: components["parameters"]["limit"];
+        /** @description Stateless deep link; rank-ordered views only. */
+        after_rank?: components["parameters"]["afterRank"];
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    listASNs: {
-        parameters: {
-            query?: {
-                sort?: "count_v6" | "count_total";
-                /** @description Substring search; forces the host ordering. */
-                q?: components["parameters"]["q"];
-                format?: components["parameters"]["format"];
-                /** @description Opaque keyset cursor from `page.next_cursor`. */
-                cursor?: components["parameters"]["cursor"];
-                /** @description Page size; default 50, cap 200 (CSV raises the cap to `export.csv_max_rows`). */
-                limit?: components["parameters"]["limit"];
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Keyset-paginated on (count, number) descending. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ASNList"];
-                    "text/csv": string;
-                };
-            };
-            400: components["responses"]["InvalidParameter"];
-        };
+    requestBody?: never;
+    responses: {
+      200: components["responses"]["DomainList"];
+      422: components["responses"]["ScopeRequired"];
     };
-    getASN: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                number: components["parameters"]["asnNumber"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The §4.6 representation. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ASN"];
-                };
-            };
-            404: components["responses"]["NotFound"];
-        };
+  };
+  listSaints: {
+    parameters: {
+      query?: {
+        /** @description ISO code scope; composes with class + rank order. */
+        country?: components["parameters"]["country"];
+        /** @description AS-number scope. */
+        asn?: components["parameters"]["asn"];
+        /** @description eTLD-suffix pivot; scope-required. */
+        tld?: components["parameters"]["tld"];
+        /** @description dns_provider id pivot; scope-required as a query filter. */
+        provider?: components["parameters"]["provider"];
+        /** @description Hosting/CDN text-tag pivot; scope-required. */
+        hosting?: components["parameters"]["hosting"];
+        /** @description class_flags residual; scope-required. */
+        flag?: components["parameters"]["flag"];
+        mx?: components["parameters"]["dimMX"];
+        rank_min?: components["parameters"]["rankMin"];
+        rank_max?: components["parameters"]["rankMax"];
+        /** @description Substring search; forces the host ordering. */
+        q?: components["parameters"]["q"];
+        sort?: components["parameters"]["sort"];
+        /** @description Sparse fieldset (comma-separated top-level keys). */
+        fields?: components["parameters"]["fields"];
+        format?: components["parameters"]["format"];
+        /** @description Opaque keyset cursor from `page.next_cursor`. */
+        cursor?: components["parameters"]["cursor"];
+        /** @description Page size; default 50, cap 200 (CSV raises the cap to `export.csv_max_rows`). */
+        limit?: components["parameters"]["limit"];
+        /** @description Stateless deep link; rank-ordered views only. */
+        after_rank?: components["parameters"]["afterRank"];
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    listASNDomains: {
-        parameters: {
-            query?: {
-                class?: components["parameters"]["class"];
-                /** @description The only accepted value is true (saint ⊂ hero). */
-                saint?: components["parameters"]["saint"];
-                /** @description eTLD-suffix pivot; scope-required. */
-                tld?: components["parameters"]["tld"];
-                /** @description dns_provider id pivot; scope-required as a query filter. */
-                provider?: components["parameters"]["provider"];
-                /** @description Hosting/CDN text-tag pivot; scope-required. */
-                hosting?: components["parameters"]["hosting"];
-                /** @description class_flags residual; scope-required. */
-                flag?: components["parameters"]["flag"];
-                mx?: components["parameters"]["dimMX"];
-                rank_min?: components["parameters"]["rankMin"];
-                rank_max?: components["parameters"]["rankMax"];
-                /** @description Substring search; forces the host ordering. */
-                q?: components["parameters"]["q"];
-                sort?: components["parameters"]["sort"];
-                /** @description Sparse fieldset (comma-separated top-level keys). */
-                fields?: components["parameters"]["fields"];
-                format?: components["parameters"]["format"];
-                /** @description Opaque keyset cursor from `page.next_cursor`. */
-                cursor?: components["parameters"]["cursor"];
-                /** @description Page size; default 50, cap 200 (CSV raises the cap to `export.csv_max_rows`). */
-                limit?: components["parameters"]["limit"];
-                /** @description Stateless deep link; rank-ordered views only. */
-                after_rank?: components["parameters"]["afterRank"];
-            };
-            header?: never;
-            path: {
-                number: components["parameters"]["asnNumber"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: components["responses"]["DomainList"];
-            404: components["responses"]["NotFound"];
-            422: components["responses"]["ScopeRequired"];
-        };
+    requestBody?: never;
+    responses: {
+      200: components["responses"]["DomainList"];
+      422: components["responses"]["ScopeRequired"];
     };
-    getASNStats: {
-        parameters: {
-            query?: {
-                /** @description Window start (YYYY-MM-DD); default `to − 90d`. */
-                from?: components["parameters"]["statsFrom"];
-                /** @description Window end (YYYY-MM-DD); default today UTC. */
-                to?: components["parameters"]["statsTo"];
-                /** @description `weekly` keeps the latest snapshot per ISO week — a sample, never an average. */
-                interval?: components["parameters"]["interval"];
-            };
-            header?: never;
-            path: {
-                /** @description AS number; an optional leading `AS` prefix is accepted. */
-                number: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Confirmed-state snapshots. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ASNStatsSeries"];
-                };
-            };
-            400: components["responses"]["InvalidParameter"];
-            404: components["responses"]["NotFound"];
-        };
+  };
+  listAlmostHeroes: {
+    parameters: {
+      query?: {
+        /** @description ISO code scope; composes with class + rank order. */
+        country?: components["parameters"]["country"];
+        /** @description AS-number scope. */
+        asn?: components["parameters"]["asn"];
+        /** @description eTLD-suffix pivot; scope-required. */
+        tld?: components["parameters"]["tld"];
+        /** @description dns_provider id pivot; scope-required as a query filter. */
+        provider?: components["parameters"]["provider"];
+        /** @description Hosting/CDN text-tag pivot; scope-required. */
+        hosting?: components["parameters"]["hosting"];
+        /** @description class_flags residual; scope-required. */
+        flag?: components["parameters"]["flag"];
+        mx?: components["parameters"]["dimMX"];
+        rank_min?: components["parameters"]["rankMin"];
+        rank_max?: components["parameters"]["rankMax"];
+        /** @description Substring search; forces the host ordering. */
+        q?: components["parameters"]["q"];
+        sort?: components["parameters"]["sort"];
+        /** @description Sparse fieldset (comma-separated top-level keys). */
+        fields?: components["parameters"]["fields"];
+        format?: components["parameters"]["format"];
+        /** @description Opaque keyset cursor from `page.next_cursor`. */
+        cursor?: components["parameters"]["cursor"];
+        /** @description Page size; default 50, cap 200 (CSV raises the cap to `export.csv_max_rows`). */
+        limit?: components["parameters"]["limit"];
+        /** @description Stateless deep link; rank-ordered views only. */
+        after_rank?: components["parameters"]["afterRank"];
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    listProviders: {
-        parameters: {
-            query?: {
-                format?: components["parameters"]["format"];
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The bounded curated registry, exact `meta.count`. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProviderList"];
-                    "text/csv": string;
-                };
-            };
-            400: components["responses"]["InvalidParameter"];
-        };
+    requestBody?: never;
+    responses: {
+      200: components["responses"]["DomainList"];
+      422: components["responses"]["ScopeRequired"];
     };
-    getProvider: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["providerID"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The §4.6 provider representation. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Provider"];
-                };
-            };
-            404: components["responses"]["NotFound"];
-        };
+  };
+  listShame: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    listProviderDomains: {
-        parameters: {
-            query?: {
-                class?: components["parameters"]["class"];
-                /** @description The only accepted value is true (saint ⊂ hero). */
-                saint?: components["parameters"]["saint"];
-                /** @description eTLD-suffix pivot; scope-required. */
-                tld?: components["parameters"]["tld"];
-                /** @description dns_provider id pivot; scope-required as a query filter. */
-                provider?: components["parameters"]["provider"];
-                /** @description Hosting/CDN text-tag pivot; scope-required. */
-                hosting?: components["parameters"]["hosting"];
-                /** @description class_flags residual; scope-required. */
-                flag?: components["parameters"]["flag"];
-                mx?: components["parameters"]["dimMX"];
-                rank_min?: components["parameters"]["rankMin"];
-                rank_max?: components["parameters"]["rankMax"];
-                /** @description Substring search; forces the host ordering. */
-                q?: components["parameters"]["q"];
-                sort?: components["parameters"]["sort"];
-                /** @description Sparse fieldset (comma-separated top-level keys). */
-                fields?: components["parameters"]["fields"];
-                format?: components["parameters"]["format"];
-                /** @description Opaque keyset cursor from `page.next_cursor`. */
-                cursor?: components["parameters"]["cursor"];
-                /** @description Page size; default 50, cap 200 (CSV raises the cap to `export.csv_max_rows`). */
-                limit?: components["parameters"]["limit"];
-                /** @description Stateless deep link; rank-ordered views only. */
-                after_rank?: components["parameters"]["afterRank"];
-            };
-            header?: never;
-            path: {
-                id: components["parameters"]["providerID"];
-            };
-            cookie?: never;
+    requestBody?: never;
+    responses: {
+      /** @description Bounded editorial picks; exact `meta.count`, no cursor. */
+      200: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody?: never;
-        responses: {
-            200: components["responses"]["DomainList"];
-            404: components["responses"]["NotFound"];
-            422: components["responses"]["ScopeRequired"];
+        content: {
+          "application/json": components["schemas"]["ShameList"];
         };
+      };
     };
-    listCampaigns: {
-        parameters: {
-            query?: {
-                /** @description Filter to campaigns carrying this tag; unknown tags return an empty list. */
-                tag?: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Bounded curated set, exact `meta.count`. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CampaignList"];
-                };
-            };
-        };
+  };
+  listCountries: {
+    parameters: {
+      query?: {
+        sort?: "percent" | "v6_sites" | "sites";
+        format?: components["parameters"]["format"];
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    listMandates: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
+    requestBody?: never;
+    responses: {
+      /** @description The bounded ISO set, served whole with exact `meta.count`. */
+      200: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody?: never;
-        responses: {
-            /** @description The standard campaign list envelope. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CampaignList"];
-                };
-            };
+        content: {
+          "application/json": components["schemas"]["CountryList"];
+          "text/csv": string;
         };
+      };
+      400: components["responses"]["InvalidParameter"];
     };
-    getCampaign: {
-        parameters: {
-            query?: {
-                /** @description Opaque keyset cursor from `page.next_cursor`. */
-                cursor?: components["parameters"]["cursor"];
-                /** @description Page size; default 50, cap 200 (CSV raises the cap to `export.csv_max_rows`). */
-                limit?: components["parameters"]["limit"];
-            };
-            header?: never;
-            path: {
-                /** @description The raw campaign UUID. */
-                uuid: components["parameters"]["campaignUUID"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The §4.7 composite. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CampaignDetail"];
-                };
-            };
-            404: components["responses"]["NotFound"];
-        };
+  };
+  getCountry: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description ISO 3166-1 alpha-2, case-insensitive; `UN` is the sentinel. */
+        code: components["parameters"]["countryCode"];
+      };
+      cookie?: never;
     };
-    listCampaignDomains: {
-        parameters: {
-            query?: {
-                /** @description Opaque keyset cursor from `page.next_cursor`. */
-                cursor?: components["parameters"]["cursor"];
-                /** @description Page size; default 50, cap 200 (CSV raises the cap to `export.csv_max_rows`). */
-                limit?: components["parameters"]["limit"];
-            };
-            header?: never;
-            path: {
-                /** @description The raw campaign UUID. */
-                uuid: components["parameters"]["campaignUUID"];
-            };
-            cookie?: never;
+    requestBody?: never;
+    responses: {
+      /** @description The §4.5 representation. */
+      200: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody?: never;
-        responses: {
-            200: components["responses"]["DomainList"];
-            404: components["responses"]["NotFound"];
+        content: {
+          "application/json": components["schemas"]["Country"];
         };
+      };
+      404: components["responses"]["NotFound"];
     };
-    getCampaignStats: {
-        parameters: {
-            query?: {
-                /** @description Window start (YYYY-MM-DD); default `to − 90d`. */
-                from?: components["parameters"]["statsFrom"];
-                /** @description Window end (YYYY-MM-DD); default today UTC. */
-                to?: components["parameters"]["statsTo"];
-                /** @description `weekly` keeps the latest snapshot per ISO week — a sample, never an average. */
-                interval?: components["parameters"]["interval"];
-            };
-            header?: never;
-            path: {
-                /** @description The raw campaign UUID. */
-                uuid: components["parameters"]["campaignUUID"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Confirmed-state snapshots; disabled campaigns are 404. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CampaignStatsSeries"];
-                };
-            };
-            400: components["responses"]["InvalidParameter"];
-            404: components["responses"]["NotFound"];
-        };
+  };
+  listCountryDomains: {
+    parameters: {
+      query?: {
+        class?: components["parameters"]["class"];
+        /** @description The only accepted value is true (saint ⊂ hero). */
+        saint?: components["parameters"]["saint"];
+        /** @description eTLD-suffix pivot; scope-required. */
+        tld?: components["parameters"]["tld"];
+        /** @description dns_provider id pivot; scope-required as a query filter. */
+        provider?: components["parameters"]["provider"];
+        /** @description Hosting/CDN text-tag pivot; scope-required. */
+        hosting?: components["parameters"]["hosting"];
+        /** @description class_flags residual; scope-required. */
+        flag?: components["parameters"]["flag"];
+        mx?: components["parameters"]["dimMX"];
+        rank_min?: components["parameters"]["rankMin"];
+        rank_max?: components["parameters"]["rankMax"];
+        /** @description Substring search; forces the host ordering. */
+        q?: components["parameters"]["q"];
+        sort?: components["parameters"]["sort"];
+        /** @description Sparse fieldset (comma-separated top-level keys). */
+        fields?: components["parameters"]["fields"];
+        format?: components["parameters"]["format"];
+        /** @description Opaque keyset cursor from `page.next_cursor`. */
+        cursor?: components["parameters"]["cursor"];
+        /** @description Page size; default 50, cap 200 (CSV raises the cap to `export.csv_max_rows`). */
+        limit?: components["parameters"]["limit"];
+        /** @description Stateless deep link; rank-ordered views only. */
+        after_rank?: components["parameters"]["afterRank"];
+      };
+      header?: never;
+      path: {
+        /** @description ISO 3166-1 alpha-2, case-insensitive; `UN` is the sentinel. */
+        code: components["parameters"]["countryCode"];
+      };
+      cookie?: never;
     };
-    listCampaignChangelog: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The raw campaign UUID. */
-                uuid: components["parameters"]["campaignUUID"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: components["responses"]["ChangelogList"];
-            404: components["responses"]["NotFound"];
-        };
+    requestBody?: never;
+    responses: {
+      200: components["responses"]["DomainList"];
+      404: components["responses"]["NotFound"];
+      422: components["responses"]["ScopeRequired"];
     };
-    listCampaignDomainChangelog: {
-        parameters: {
-            query?: {
-                /** @description Opaque keyset cursor from `page.next_cursor`. */
-                cursor?: components["parameters"]["cursor"];
-                /** @description Page size; default 50, cap 200 (CSV raises the cap to `export.csv_max_rows`). */
-                limit?: components["parameters"]["limit"];
-            };
-            header?: never;
-            path: {
-                /** @description The raw campaign UUID. */
-                uuid: components["parameters"]["campaignUUID"];
-                /** @description eTLD+1 or subdomain; canonicalized before lookup. */
-                host: components["parameters"]["host"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: components["responses"]["ChangelogList"];
-            404: components["responses"]["NotFound"];
-        };
+  };
+  getCountryStats: {
+    parameters: {
+      query?: {
+        /** @description Window start (YYYY-MM-DD); default `to − 90d`. */
+        from?: components["parameters"]["statsFrom"];
+        /** @description Window end (YYYY-MM-DD); default today UTC. */
+        to?: components["parameters"]["statsTo"];
+        /** @description `weekly` keeps the latest snapshot per ISO week — a sample, never an average. */
+        interval?: components["parameters"]["interval"];
+      };
+      header?: never;
+      path: {
+        /** @description ISO 3166-1 alpha-2, case-insensitive; `UN` is the sentinel. */
+        code: components["parameters"]["countryCode"];
+      };
+      cookie?: never;
     };
-    getCampaignChangelogAtom: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The raw campaign UUID. */
-                uuid: components["parameters"]["campaignUUID"];
-            };
-            cookie?: never;
+    requestBody?: never;
+    responses: {
+      /** @description Confirmed-state snapshots. */
+      200: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody?: never;
-        responses: {
-            200: components["responses"]["AtomFeed"];
-            404: components["responses"]["NotFound"];
+        content: {
+          "application/json": components["schemas"]["CountryStatsSeries"];
         };
+      };
+      400: components["responses"]["InvalidParameter"];
+      404: components["responses"]["NotFound"];
     };
-    getCampaignChangelogJSONFeed: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The raw campaign UUID. */
-                uuid: components["parameters"]["campaignUUID"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: components["responses"]["JSONFeed"];
-            404: components["responses"]["NotFound"];
-        };
+  };
+  listCountryChangelog: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description ISO 3166-1 alpha-2, case-insensitive; `UN` is the sentinel. */
+        code: components["parameters"]["countryCode"];
+      };
+      cookie?: never;
     };
-    getResource: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description eTLD+1 or subdomain; canonicalized before lookup. */
-                host: components["parameters"]["host"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The §4.11 headline block. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ResourceHostDetail"];
-                };
-            };
-            404: components["responses"]["NotFound"];
-        };
+    requestBody?: never;
+    responses: {
+      200: components["responses"]["ChangelogList"];
+      404: components["responses"]["NotFound"];
     };
-    listResourceDependents: {
-        parameters: {
-            query?: {
-                /** @description Opaque keyset cursor from `page.next_cursor`. */
-                cursor?: components["parameters"]["cursor"];
-                /** @description Page size; default 50, cap 200 (CSV raises the cap to `export.csv_max_rows`). */
-                limit?: components["parameters"]["limit"];
-            };
-            header?: never;
-            path: {
-                /** @description eTLD+1 or subdomain; canonicalized before lookup. */
-                host: components["parameters"]["host"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Null-flag-first ordering (rank NULLS LAST); items are §4.2 rows plus the link attributes. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DependentsResponse"];
-                };
-            };
-            404: components["responses"]["NotFound"];
-        };
+  };
+  getCountryChangelogAtom: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description ISO 3166-1 alpha-2, case-insensitive; `UN` is the sentinel. */
+        code: components["parameters"]["countryCode"];
+      };
+      cookie?: never;
     };
-    listChangelog: {
-        parameters: {
-            query?: {
-                /** @description Restrict the feed to campaign-member domains (recent-window capped). */
-                scope?: components["parameters"]["changelogScope"];
-                field?: components["parameters"]["changelogField"];
-                /** @description Window start (YYYY-MM-DD or RFC 3339). */
-                from?: components["parameters"]["changelogFrom"];
-                /** @description Window end (YYYY-MM-DD or RFC 3339). */
-                to?: components["parameters"]["changelogTo"];
-                format?: components["parameters"]["format"];
-                /** @description Opaque keyset cursor from `page.next_cursor`. */
-                cursor?: components["parameters"]["cursor"];
-                /** @description Page size; default 50, cap 200 (CSV raises the cap to `export.csv_max_rows`). */
-                limit?: components["parameters"]["limit"];
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: components["responses"]["ChangelogList"];
-            400: components["responses"]["InvalidParameter"];
-            422: components["responses"]["ValidationError"];
-        };
+    requestBody?: never;
+    responses: {
+      200: components["responses"]["AtomFeed"];
+      404: components["responses"]["NotFound"];
     };
-    getChangelogAtom: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: components["responses"]["AtomFeed"];
-        };
+  };
+  getCountryChangelogJSONFeed: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description ISO 3166-1 alpha-2, case-insensitive; `UN` is the sentinel. */
+        code: components["parameters"]["countryCode"];
+      };
+      cookie?: never;
     };
-    getChangelogJSONFeed: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: components["responses"]["JSONFeed"];
-        };
+    requestBody?: never;
+    responses: {
+      200: components["responses"]["JSONFeed"];
+      404: components["responses"]["NotFound"];
     };
-    getStatsOverview: {
-        parameters: {
-            query?: {
-                /** @description Window start (YYYY-MM-DD); default `to − 90d`. */
-                from?: components["parameters"]["statsFrom"];
-                /** @description Window end (YYYY-MM-DD); default today UTC. */
-                to?: components["parameters"]["statsTo"];
-                /** @description `weekly` keeps the latest snapshot per ISO week — a sample, never an average. */
-                interval?: components["parameters"]["interval"];
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description `meta.source` is always `confirmed_state`. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["GlobalStatsSeries"];
-                };
-            };
-            400: components["responses"]["InvalidParameter"];
-        };
+  };
+  listASNs: {
+    parameters: {
+      query?: {
+        sort?: "count_v6" | "count_total";
+        /** @description Substring search; forces the host ordering. */
+        q?: components["parameters"]["q"];
+        format?: components["parameters"]["format"];
+        /** @description Opaque keyset cursor from `page.next_cursor`. */
+        cursor?: components["parameters"]["cursor"];
+        /** @description Page size; default 50, cap 200 (CSV raises the cap to `export.csv_max_rows`). */
+        limit?: components["parameters"]["limit"];
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    getDatasets: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
+    requestBody?: never;
+    responses: {
+      /** @description Keyset-paginated on (count, number) descending. */
+      200: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody?: never;
-        responses: {
-            /** @description Re-read from disk per request; files are nginx-served. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Manifest"];
-                };
-            };
-            503: components["responses"]["ManifestUnavailable"];
+        content: {
+          "application/json": components["schemas"]["ASNList"];
+          "text/csv": string;
         };
+      };
+      400: components["responses"]["InvalidParameter"];
     };
-    createCheck: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    /** @example example.com */
-                    host: string;
-                };
-            };
-        };
-        responses: {
-            /** @description Dedupe hit (domain- or job-side) — a cached done envelope. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CheckEnvelope"];
-                };
-            };
-            /** @description Job enqueued; poll the Location header. Recommended poll interval 2 s. */
-            202: {
-                headers: {
-                    Location?: string;
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CheckAccepted"];
-                };
-            };
-            400: components["responses"]["InvalidParameter"];
-            415: components["responses"]["UnsupportedMediaType"];
-            429: components["responses"]["RateLimited"];
-        };
+  };
+  getASN: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        number: components["parameters"]["asnNumber"];
+      };
+      cookie?: never;
     };
-    getLatestCheck: {
-        parameters: {
-            query: {
-                host: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
+    requestBody?: never;
+    responses: {
+      /** @description The §4.6 representation. */
+      200: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody?: never;
-        responses: {
-            /** @description A cached done envelope. `Cache-Control public, max-age=60`. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CheckEnvelope"];
-                };
-            };
-            400: components["responses"]["InvalidParameter"];
-            404: components["responses"]["NotFound"];
+        content: {
+          "application/json": components["schemas"]["ASN"];
         };
+      };
+      404: components["responses"]["NotFound"];
     };
-    getCheck: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Terminal (`done`/`failed`) responses cache `public, max-age=60`; in-flight polls are `no-store`. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CheckEnvelope"];
-                };
-            };
-            404: components["responses"]["NotFound"];
-        };
+  };
+  listASNDomains: {
+    parameters: {
+      query?: {
+        class?: components["parameters"]["class"];
+        /** @description The only accepted value is true (saint ⊂ hero). */
+        saint?: components["parameters"]["saint"];
+        /** @description eTLD-suffix pivot; scope-required. */
+        tld?: components["parameters"]["tld"];
+        /** @description dns_provider id pivot; scope-required as a query filter. */
+        provider?: components["parameters"]["provider"];
+        /** @description Hosting/CDN text-tag pivot; scope-required. */
+        hosting?: components["parameters"]["hosting"];
+        /** @description class_flags residual; scope-required. */
+        flag?: components["parameters"]["flag"];
+        mx?: components["parameters"]["dimMX"];
+        rank_min?: components["parameters"]["rankMin"];
+        rank_max?: components["parameters"]["rankMax"];
+        /** @description Substring search; forces the host ordering. */
+        q?: components["parameters"]["q"];
+        sort?: components["parameters"]["sort"];
+        /** @description Sparse fieldset (comma-separated top-level keys). */
+        fields?: components["parameters"]["fields"];
+        format?: components["parameters"]["format"];
+        /** @description Opaque keyset cursor from `page.next_cursor`. */
+        cursor?: components["parameters"]["cursor"];
+        /** @description Page size; default 50, cap 200 (CSV raises the cap to `export.csv_max_rows`). */
+        limit?: components["parameters"]["limit"];
+        /** @description Stateless deep link; rank-ordered views only. */
+        after_rank?: components["parameters"]["afterRank"];
+      };
+      header?: never;
+      path: {
+        number: components["parameters"]["asnNumber"];
+      };
+      cookie?: never;
     };
-    getBadgeSVG: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description eTLD+1 or subdomain; canonicalized before lookup. */
-                host: components["parameters"]["host"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Always 200 for a valid host (disabled/unknown render the gray `IPv6: unknown` variant). `Cache-Control: public, max-age=86400`. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "image/svg+xml": string;
-                };
-            };
-            400: components["responses"]["InvalidParameter"];
-        };
+    requestBody?: never;
+    responses: {
+      200: components["responses"]["DomainList"];
+      404: components["responses"]["NotFound"];
+      422: components["responses"]["ScopeRequired"];
     };
-    getBadgeJSON: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description eTLD+1 or subdomain; canonicalized before lookup. */
-                host: components["parameters"]["host"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The shields.io endpoint schema — the one sanctioned camelCase exception. Embed via `https://img.shields.io/endpoint?url=https://api.whynoipv6.com/badge/example.com.json`. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ShieldsBadge"];
-                };
-            };
-            400: components["responses"]["InvalidParameter"];
-        };
+  };
+  getASNStats: {
+    parameters: {
+      query?: {
+        /** @description Window start (YYYY-MM-DD); default `to − 90d`. */
+        from?: components["parameters"]["statsFrom"];
+        /** @description Window end (YYYY-MM-DD); default today UTC. */
+        to?: components["parameters"]["statsTo"];
+        /** @description `weekly` keeps the latest snapshot per ISO week — a sample, never an average. */
+        interval?: components["parameters"]["interval"];
+      };
+      header?: never;
+      path: {
+        /** @description AS number; an optional leading `AS` prefix is accepted. */
+        number: string;
+      };
+      cookie?: never;
     };
-    getIP: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
+    requestBody?: never;
+    responses: {
+      /** @description Confirmed-state snapshots. */
+      200: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody?: never;
-        responses: {
-            /** @description Bracketless address; family derived server-side. `no-store`. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        /** @example 2001:db8::7 */
-                        ip: string;
-                        /** @enum {string} */
-                        family: "ipv4" | "ipv6";
-                    };
-                };
-            };
+        content: {
+          "application/json": components["schemas"]["ASNStatsSeries"];
         };
+      };
+      400: components["responses"]["InvalidParameter"];
+      404: components["responses"]["NotFound"];
     };
+  };
+  listProviders: {
+    parameters: {
+      query?: {
+        format?: components["parameters"]["format"];
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The bounded curated registry, exact `meta.count`. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ProviderList"];
+          "text/csv": string;
+        };
+      };
+      400: components["responses"]["InvalidParameter"];
+    };
+  };
+  getProvider: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["providerID"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The §4.6 provider representation. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Provider"];
+        };
+      };
+      404: components["responses"]["NotFound"];
+    };
+  };
+  listProviderDomains: {
+    parameters: {
+      query?: {
+        class?: components["parameters"]["class"];
+        /** @description The only accepted value is true (saint ⊂ hero). */
+        saint?: components["parameters"]["saint"];
+        /** @description eTLD-suffix pivot; scope-required. */
+        tld?: components["parameters"]["tld"];
+        /** @description dns_provider id pivot; scope-required as a query filter. */
+        provider?: components["parameters"]["provider"];
+        /** @description Hosting/CDN text-tag pivot; scope-required. */
+        hosting?: components["parameters"]["hosting"];
+        /** @description class_flags residual; scope-required. */
+        flag?: components["parameters"]["flag"];
+        mx?: components["parameters"]["dimMX"];
+        rank_min?: components["parameters"]["rankMin"];
+        rank_max?: components["parameters"]["rankMax"];
+        /** @description Substring search; forces the host ordering. */
+        q?: components["parameters"]["q"];
+        sort?: components["parameters"]["sort"];
+        /** @description Sparse fieldset (comma-separated top-level keys). */
+        fields?: components["parameters"]["fields"];
+        format?: components["parameters"]["format"];
+        /** @description Opaque keyset cursor from `page.next_cursor`. */
+        cursor?: components["parameters"]["cursor"];
+        /** @description Page size; default 50, cap 200 (CSV raises the cap to `export.csv_max_rows`). */
+        limit?: components["parameters"]["limit"];
+        /** @description Stateless deep link; rank-ordered views only. */
+        after_rank?: components["parameters"]["afterRank"];
+      };
+      header?: never;
+      path: {
+        id: components["parameters"]["providerID"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: components["responses"]["DomainList"];
+      404: components["responses"]["NotFound"];
+      422: components["responses"]["ScopeRequired"];
+    };
+  };
+  listCampaigns: {
+    parameters: {
+      query?: {
+        /** @description Filter to campaigns carrying this tag; unknown tags return an empty list. */
+        tag?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Bounded curated set, exact `meta.count`. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CampaignList"];
+        };
+      };
+    };
+  };
+  listMandates: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The standard campaign list envelope. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CampaignList"];
+        };
+      };
+    };
+  };
+  getCampaign: {
+    parameters: {
+      query?: {
+        /** @description Opaque keyset cursor from `page.next_cursor`. */
+        cursor?: components["parameters"]["cursor"];
+        /** @description Page size; default 50, cap 200 (CSV raises the cap to `export.csv_max_rows`). */
+        limit?: components["parameters"]["limit"];
+      };
+      header?: never;
+      path: {
+        /** @description The raw campaign UUID. */
+        uuid: components["parameters"]["campaignUUID"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The §4.7 composite. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CampaignDetail"];
+        };
+      };
+      404: components["responses"]["NotFound"];
+    };
+  };
+  listCampaignDomains: {
+    parameters: {
+      query?: {
+        /** @description Opaque keyset cursor from `page.next_cursor`. */
+        cursor?: components["parameters"]["cursor"];
+        /** @description Page size; default 50, cap 200 (CSV raises the cap to `export.csv_max_rows`). */
+        limit?: components["parameters"]["limit"];
+      };
+      header?: never;
+      path: {
+        /** @description The raw campaign UUID. */
+        uuid: components["parameters"]["campaignUUID"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: components["responses"]["DomainList"];
+      404: components["responses"]["NotFound"];
+    };
+  };
+  getCampaignStats: {
+    parameters: {
+      query?: {
+        /** @description Window start (YYYY-MM-DD); default `to − 90d`. */
+        from?: components["parameters"]["statsFrom"];
+        /** @description Window end (YYYY-MM-DD); default today UTC. */
+        to?: components["parameters"]["statsTo"];
+        /** @description `weekly` keeps the latest snapshot per ISO week — a sample, never an average. */
+        interval?: components["parameters"]["interval"];
+      };
+      header?: never;
+      path: {
+        /** @description The raw campaign UUID. */
+        uuid: components["parameters"]["campaignUUID"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Confirmed-state snapshots; disabled campaigns are 404. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CampaignStatsSeries"];
+        };
+      };
+      400: components["responses"]["InvalidParameter"];
+      404: components["responses"]["NotFound"];
+    };
+  };
+  listCampaignChangelog: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The raw campaign UUID. */
+        uuid: components["parameters"]["campaignUUID"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: components["responses"]["ChangelogList"];
+      404: components["responses"]["NotFound"];
+    };
+  };
+  listCampaignDomainChangelog: {
+    parameters: {
+      query?: {
+        /** @description Opaque keyset cursor from `page.next_cursor`. */
+        cursor?: components["parameters"]["cursor"];
+        /** @description Page size; default 50, cap 200 (CSV raises the cap to `export.csv_max_rows`). */
+        limit?: components["parameters"]["limit"];
+      };
+      header?: never;
+      path: {
+        /** @description The raw campaign UUID. */
+        uuid: components["parameters"]["campaignUUID"];
+        /** @description eTLD+1 or subdomain; canonicalized before lookup. */
+        host: components["parameters"]["host"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: components["responses"]["ChangelogList"];
+      404: components["responses"]["NotFound"];
+    };
+  };
+  getCampaignChangelogAtom: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The raw campaign UUID. */
+        uuid: components["parameters"]["campaignUUID"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: components["responses"]["AtomFeed"];
+      404: components["responses"]["NotFound"];
+    };
+  };
+  getCampaignChangelogJSONFeed: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The raw campaign UUID. */
+        uuid: components["parameters"]["campaignUUID"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: components["responses"]["JSONFeed"];
+      404: components["responses"]["NotFound"];
+    };
+  };
+  getResource: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description eTLD+1 or subdomain; canonicalized before lookup. */
+        host: components["parameters"]["host"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The §4.11 headline block. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ResourceHostDetail"];
+        };
+      };
+      404: components["responses"]["NotFound"];
+    };
+  };
+  listResourceDependents: {
+    parameters: {
+      query?: {
+        /** @description Opaque keyset cursor from `page.next_cursor`. */
+        cursor?: components["parameters"]["cursor"];
+        /** @description Page size; default 50, cap 200 (CSV raises the cap to `export.csv_max_rows`). */
+        limit?: components["parameters"]["limit"];
+      };
+      header?: never;
+      path: {
+        /** @description eTLD+1 or subdomain; canonicalized before lookup. */
+        host: components["parameters"]["host"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Null-flag-first ordering (rank NULLS LAST); items are §4.2 rows plus the link attributes. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["DependentsResponse"];
+        };
+      };
+      404: components["responses"]["NotFound"];
+    };
+  };
+  listChangelog: {
+    parameters: {
+      query?: {
+        /** @description Restrict the feed to campaign-member domains (recent-window capped). */
+        scope?: components["parameters"]["changelogScope"];
+        field?: components["parameters"]["changelogField"];
+        /** @description Window start (YYYY-MM-DD or RFC 3339). */
+        from?: components["parameters"]["changelogFrom"];
+        /** @description Window end (YYYY-MM-DD or RFC 3339). */
+        to?: components["parameters"]["changelogTo"];
+        format?: components["parameters"]["format"];
+        /** @description Opaque keyset cursor from `page.next_cursor`. */
+        cursor?: components["parameters"]["cursor"];
+        /** @description Page size; default 50, cap 200 (CSV raises the cap to `export.csv_max_rows`). */
+        limit?: components["parameters"]["limit"];
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: components["responses"]["ChangelogList"];
+      400: components["responses"]["InvalidParameter"];
+      422: components["responses"]["ValidationError"];
+    };
+  };
+  getChangelogAtom: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: components["responses"]["AtomFeed"];
+    };
+  };
+  getChangelogJSONFeed: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: components["responses"]["JSONFeed"];
+    };
+  };
+  getStatsOverview: {
+    parameters: {
+      query?: {
+        /** @description Window start (YYYY-MM-DD); default `to − 90d`. */
+        from?: components["parameters"]["statsFrom"];
+        /** @description Window end (YYYY-MM-DD); default today UTC. */
+        to?: components["parameters"]["statsTo"];
+        /** @description `weekly` keeps the latest snapshot per ISO week — a sample, never an average. */
+        interval?: components["parameters"]["interval"];
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description `meta.source` is always `confirmed_state`. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["GlobalStatsSeries"];
+        };
+      };
+      400: components["responses"]["InvalidParameter"];
+    };
+  };
+  getDatasets: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Re-read from disk per request; files are nginx-served. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Manifest"];
+        };
+      };
+      503: components["responses"]["ManifestUnavailable"];
+    };
+  };
+  createCheck: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": {
+          /** @example example.com */
+          host: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Dedupe hit (domain- or job-side) — a cached done envelope. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CheckEnvelope"];
+        };
+      };
+      /** @description Job enqueued; poll the Location header. Recommended poll interval 2 s. */
+      202: {
+        headers: {
+          Location?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CheckAccepted"];
+        };
+      };
+      400: components["responses"]["InvalidParameter"];
+      415: components["responses"]["UnsupportedMediaType"];
+      429: components["responses"]["RateLimited"];
+    };
+  };
+  getLatestCheck: {
+    parameters: {
+      query: {
+        host: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description A cached done envelope. `Cache-Control public, max-age=60`. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CheckEnvelope"];
+        };
+      };
+      400: components["responses"]["InvalidParameter"];
+      404: components["responses"]["NotFound"];
+    };
+  };
+  getCheck: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Terminal (`done`/`failed`) responses cache `public, max-age=60`; in-flight polls are `no-store`. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CheckEnvelope"];
+        };
+      };
+      404: components["responses"]["NotFound"];
+    };
+  };
+  getBadgeSVG: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description eTLD+1 or subdomain; canonicalized before lookup. */
+        host: components["parameters"]["host"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Always 200 for a valid host (disabled/unknown render the gray `IPv6: unknown` variant). `Cache-Control: public, max-age=86400`. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "image/svg+xml": string;
+        };
+      };
+      400: components["responses"]["InvalidParameter"];
+    };
+  };
+  getBadgeJSON: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description eTLD+1 or subdomain; canonicalized before lookup. */
+        host: components["parameters"]["host"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The shields.io endpoint schema — the one sanctioned camelCase exception. Embed via `https://img.shields.io/endpoint?url=https://api.whynoipv6.com/badge/example.com.json`. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ShieldsBadge"];
+        };
+      };
+      400: components["responses"]["InvalidParameter"];
+    };
+  };
+  getIP: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Bracketless address; family derived server-side. `no-store`. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            /** @example 2001:db8::7 */
+            ip: string;
+            /** @enum {string} */
+            family: "ipv4" | "ipv6";
+          };
+        };
+      };
+    };
+  };
 }

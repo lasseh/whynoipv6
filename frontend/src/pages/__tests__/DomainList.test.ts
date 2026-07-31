@@ -9,6 +9,7 @@ vi.mock('@/api', () => ({
   listSinners: vi.fn(),
   listHeroes: vi.fn(),
   listSaints: vi.fn(),
+  listAlmostHeroes: vi.fn(),
 }))
 
 describe('DomainList (smoke)', () => {

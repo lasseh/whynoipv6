@@ -32,6 +32,9 @@ export const listHeroes = (query?: GetQuery<'/heroes'>, signal?: AbortSignal) =>
 export const listSaints = (query?: GetQuery<'/saints'>, signal?: AbortSignal) =>
   get('/saints', { query, signal })
 
+export const listAlmostHeroes = (query?: GetQuery<'/almost-heroes'>, signal?: AbortSignal) =>
+  get('/almost-heroes', { query, signal })
+
 export const listShame = (signal?: AbortSignal) => get('/shame', { signal })
 
 export const searchDomains = (query: GetQuery<'/domains'>, signal?: AbortSignal) =>

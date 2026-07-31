@@ -101,6 +101,7 @@ The classification tiers are promoted to their own **short, canonical plural col
 | `/heroes` | `class=hero` |
 | `/sinners` | `class=sinner` |
 | `/saints` | `saint=true` |
+| `/almost-heroes` | `almost_hero=true` |
 
 (**Decision, ADR 0003:** the former `/gold` tier is renamed `/saints`, and the `/almost` + `/mail` tier paths are removed — the partial and mail views are spelled `/domains?class=partial` and `/domains?class=hero&mx=supported`. This also retires the "almost there"/`partial` one-class-two-names alias.)
 
@@ -452,7 +453,20 @@ Heroes / sinners / saints are **first-class short collection resources** — eac
 GET /heroes             # preset: class=hero
 GET /sinners            # preset: class=sinner
 GET /saints             # preset: saint=true
+GET /almost-heroes      # preset: almost_hero=true
 ```
+
+**Almost-heroes** (decision 2026-07-31) is the advocacy cohort *one DNS
+record away from hero*: `www_status = 'supported' AND ns_status =
+'supported' AND mx_status IN ('supported','not_applicable') AND
+base_status IN ('unsupported','no_record')` — hero in every dimension
+except the apex AAAA (`conn` is excluded: it cannot pass without the apex
+record and follows once it lands). `almost_hero=true` is a `/domains`
+boolean param with the same grammar and guardrail role as `saint=true`.
+This is **not** the retired `/almost` alias (ADR 0003), which meant
+`class=partial`; the compound predicate here is not expressible in the
+one-status-dim §3.3 filter grammar, which is why it earns a preset path.
+URL-only for now: no frontend navigation links to it.
 
 `GET /domains` stays the **general filterable collection**; the same views are reachable via `?class=` (`GET /domains?class=hero&sort=rank`, `GET /domains?class=partial`, `GET /domains?class=hero&saint=true`). Tier paths accept the same additional filters, so "sinners in Norway" is `GET /sinners?country=no` (≡ `GET /domains?class=sinner&country=no`, ≡ the scoped `GET /countries/NO/domains?class=sinner`). The partial and mail views have no tier paths (ADR 0003): `GET /domains?class=partial` and `GET /domains?class=hero&mx=supported` are their canonical spellings.
 

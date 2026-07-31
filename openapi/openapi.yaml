@@ -59,6 +59,7 @@ paths:
       parameters:
         - $ref: "#/components/parameters/class"
         - $ref: "#/components/parameters/saint"
+        - $ref: "#/components/parameters/almostHero"
         - $ref: "#/components/parameters/country"
         - $ref: "#/components/parameters/asn"
         - $ref: "#/components/parameters/tld"
@@ -209,6 +210,15 @@ paths:
       operationId: listSaints
       tags: [tiers]
       summary: "Tier preset: saint=true"
+      parameters: *tierParams
+      responses:
+        "200": { $ref: "#/components/responses/DomainList" }
+        "422": { $ref: "#/components/responses/ScopeRequired" }
+  /almost-heroes:
+    get:
+      operationId: listAlmostHeroes
+      tags: [tiers]
+      summary: "Tier preset: almost_hero=true (one DNS record away from hero)"
       parameters: *tierParams
       responses:
         "200": { $ref: "#/components/responses/DomainList" }
@@ -866,6 +876,14 @@ components:
       name: saint
       in: query
       description: The only accepted value is true (saint ⊂ hero).
+      schema: { type: boolean }
+    almostHero:
+      name: almost_hero
+      in: query
+      description: >-
+        The only accepted value is true. Hero in every dimension except the
+        apex AAAA — www and ns supported, mx supported or not applicable,
+        base unsupported or no_record. One DNS record away.
       schema: { type: boolean }
     country:
       name: country

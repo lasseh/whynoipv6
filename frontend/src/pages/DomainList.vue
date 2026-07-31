@@ -26,7 +26,7 @@ const { items, page, loading, error, next, prev, setFilter } = useCursorList<Dom
 
 const queryFilter = computed(() => tierBySlug([route.query.filter].flat()[0] ?? undefined).slug)
 
-const tierTabs = TIERS.map((t) => ({ value: t.slug, label: t.label }))
+const tierTabs = TIERS.filter((t) => !t.hidden).map((t) => ({ value: t.slug, label: t.label }))
 </script>
 
 <template>

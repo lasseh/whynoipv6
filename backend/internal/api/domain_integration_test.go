@@ -243,7 +243,7 @@ func TestVisibility(t *testing.T) {
 // the saints preset and the partial/mail /domains filters return their
 // subsets.
 func TestTierEquivalence(t *testing.T) {
-	srv, _ := newAPI(t)
+	srv, pool := newAPI(t)
 	var tier, filtered envelope
 	getJSON(t, srv.URL+"/sinners", &tier)
 	getJSON(t, srv.URL+"/domains?class=sinner", &filtered)
@@ -277,6 +277,25 @@ func TestTierEquivalence(t *testing.T) {
 	getJSON(t, srv.URL+"/sinners?country=no", &no)
 	if len(no.Items) != 0 {
 		t.Errorf("/sinners?country=no = %v, want empty", hosts(t, no.Items))
+	}
+
+	// Almost-heroes (07 §4.4): hero in every dimension except the apex AAAA.
+	// Promote one sinner (base unsupported, ns supported) into the cohort;
+	// no other fixture row qualifies (the rest lack www/mx support).
+	if _, err := pool.Exec(context.Background(),
+		`UPDATE domain SET www_status = 'supported', mx_status = 'not_applicable'
+		 WHERE host = 'd6.example'`); err != nil {
+		t.Fatal(err)
+	}
+	var almost, almostEq envelope
+	getJSON(t, srv.URL+"/almost-heroes", &almost)
+	if g := hosts(t, almost.Items); len(g) != 1 || g[0] != "d6.example" {
+		t.Errorf("/almost-heroes = %v, want [d6.example]", g)
+	}
+	getJSON(t, srv.URL+"/domains?almost_hero=true", &almostEq)
+	if fmt.Sprint(hosts(t, almostEq.Items)) != fmt.Sprint(hosts(t, almost.Items)) {
+		t.Errorf("/domains?almost_hero=true = %v, want %v",
+			hosts(t, almostEq.Items), hosts(t, almost.Items))
 	}
 }
 
