@@ -3,6 +3,16 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="canonical" href="https://whynoipv6.com/" />
+    <!-- LCP is text: preload the latin Inter subset so first paint uses it.
+         Preconnect to the API origin (baked per-env) ahead of the app's first fetch. -->
+    <link
+      rel="preload"
+      href="/fonts/inter-var-latin.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <link rel="preconnect" href="%VITE_API_URL%" crossorigin />
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
@@ -80,8 +90,9 @@
 
     <script
       defer
-      src="https://whynoipv6.com/script.js"
+      src="https://whynoipv6.com/stats.js"
       data-website-id="17667fdb-fe13-4ce6-910f-7559aebb9edf"
+      data-host-url="https://whynoipv6.com"
     ></script>
   </head>
   <body class="font-inter antialiased bg-zinc-900 text-slate-200 tracking-tight">
