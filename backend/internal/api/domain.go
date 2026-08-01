@@ -351,7 +351,7 @@ func (s *Server) serveDomainList(w http.ResponseWriter, r *http.Request, preset 
 
 	wantCSV, err := parseFormat(q)
 	if err != nil {
-		InvalidParameter(w, r, err.Error())
+		invalidParam(w, r, err)
 		return
 	}
 	limitCap := MaxLimit
@@ -360,17 +360,17 @@ func (s *Server) serveDomainList(w http.ResponseWriter, r *http.Request, preset 
 	}
 	limit, err := ParseLimitCap(q, limitCap)
 	if err != nil {
-		InvalidParameter(w, r, err.Error())
+		invalidParam(w, r, err)
 		return
 	}
 	afterRank, err := ParseAfterRank(q, sortKey)
 	if err != nil {
-		InvalidParameter(w, r, err.Error())
+		invalidParam(w, r, err)
 		return
 	}
 	aroundRank, err := ParseAroundRank(q, sortKey)
 	if err != nil {
-		InvalidParameter(w, r, err.Error())
+		invalidParam(w, r, err)
 		return
 	}
 	// The positioning params are mutually exclusive: a cursor combined
@@ -535,7 +535,7 @@ func (s *Server) listSubdomains(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	limit, err := ParseLimit(q)
 	if err != nil {
-		InvalidParameter(w, r, err.Error())
+		invalidParam(w, r, err)
 		return
 	}
 	generation, asOf, err := s.generation(r.Context())

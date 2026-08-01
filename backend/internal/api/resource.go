@@ -121,7 +121,7 @@ func (s *Server) listResourceDependents(w http.ResponseWriter, r *http.Request) 
 	q := r.URL.Query()
 	limit, err := ParseLimit(q)
 	if err != nil {
-		InvalidParameter(w, r, err.Error())
+		invalidParam(w, r, err)
 		return
 	}
 	generation, asOf, err := s.generation(r.Context())

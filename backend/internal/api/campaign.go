@@ -133,7 +133,7 @@ func (s *Server) getCampaign(w http.ResponseWriter, r *http.Request) {
 	}
 	limit, err := ParseLimit(r.URL.Query())
 	if err != nil {
-		InvalidParameter(w, r, err.Error())
+		invalidParam(w, r, err)
 		return
 	}
 	generation, asOf, err := s.generation(r.Context())
@@ -185,7 +185,7 @@ func (s *Server) listCampaignDomains(w http.ResponseWriter, r *http.Request) {
 	}
 	limit, err := ParseLimit(r.URL.Query())
 	if err != nil {
-		InvalidParameter(w, r, err.Error())
+		invalidParam(w, r, err)
 		return
 	}
 	generation, asOf, err := s.generation(r.Context())

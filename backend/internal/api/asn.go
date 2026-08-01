@@ -43,7 +43,7 @@ func (s *Server) listASNs(w http.ResponseWriter, r *http.Request) {
 	}
 	wantCSV, err := parseFormat(q)
 	if err != nil {
-		InvalidParameter(w, r, err.Error())
+		invalidParam(w, r, err)
 		return
 	}
 	limitCap := MaxLimit
@@ -52,7 +52,7 @@ func (s *Server) listASNs(w http.ResponseWriter, r *http.Request) {
 	}
 	limit, err := ParseLimitCap(q, limitCap)
 	if err != nil {
-		InvalidParameter(w, r, err.Error())
+		invalidParam(w, r, err)
 		return
 	}
 

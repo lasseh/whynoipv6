@@ -126,7 +126,7 @@ func (s *Server) serveChangelogFeed(w http.ResponseWriter, r *http.Request, doma
 	}
 	wantCSV, err := parseFormat(q)
 	if err != nil {
-		InvalidParameter(w, r, err.Error())
+		invalidParam(w, r, err)
 		return
 	}
 	limitCap := MaxLimit
@@ -135,7 +135,7 @@ func (s *Server) serveChangelogFeed(w http.ResponseWriter, r *http.Request, doma
 	}
 	limit, err := ParseLimitCap(q, limitCap)
 	if err != nil {
-		InvalidParameter(w, r, err.Error())
+		invalidParam(w, r, err)
 		return
 	}
 

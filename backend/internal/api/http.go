@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
@@ -120,6 +121,12 @@ func NotFound(w http.ResponseWriter, r *http.Request, title, detail string) {
 // cursor, format, host or request field (07 §2.5).
 func InvalidParameter(w http.ResponseWriter, r *http.Request, detail string) {
 	WriteProblem(w, r, Problem{Type: problemBase + "invalid-parameter", Title: "Invalid parameter", Status: http.StatusBadRequest, Detail: detail})
+}
+
+// invalidParam renders a parameter error, dropping the ErrCursorInvalid
+// sentinel prefix the parse helpers wrap it in (07 §2.5).
+func invalidParam(w http.ResponseWriter, r *http.Request, err error) {
+	InvalidParameter(w, r, strings.TrimPrefix(err.Error(), "invalid cursor: "))
 }
 
 // ValidationError emits the 422 validation-error problem: a filter value

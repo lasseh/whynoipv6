@@ -26,7 +26,7 @@ type ProviderBody struct {
 func (s *Server) listProviders(w http.ResponseWriter, r *http.Request) {
 	wantCSV, err := parseFormat(r.URL.Query())
 	if err != nil {
-		InvalidParameter(w, r, err.Error())
+		invalidParam(w, r, err)
 		return
 	}
 	generation, asOf, err := s.generation(r.Context())
