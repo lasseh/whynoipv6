@@ -96,7 +96,9 @@ watch(
           <!-- Country not found -->
           <div v-if="notFound" class="flex justify-center py-16">
             <div class="text-center">
-              <div class="text-xl font-medium">Country not found</div>
+              <div class="text-xl font-medium">
+                Country not found. We go by ISO 3166 codes; check yours.
+              </div>
             </div>
           </div>
 
@@ -117,16 +119,16 @@ watch(
               </div>
               <div>
                 <div class="text-sm font-medium text-zinc-500 mb-2">
-                  {{ country?.sites ?? '—' }} Domains
+                  {{ country?.sites ?? '—' }} domains tracked
                 </div>
                 <div class="text-sm font-medium text-zinc-500 mb-2">
-                  {{ country?.v6_sites ?? '—' }} Domains V6 Ready
+                  {{ country?.v6_sites ?? '—' }} IPv6-ready domains
                 </div>
               </div>
             </div>
             <div class="mt-3 mb-4">
               <div class="flex justify-between mb-1">
-                <span class="text-sm font-medium text-white">v6 Ready</span>
+                <span class="text-sm font-medium text-white">IPv6 ready</span>
                 <span class="text-sm font-medium text-white">{{ country?.percent ?? 0 }}%</span>
               </div>
               <ProgressBar

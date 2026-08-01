@@ -51,7 +51,7 @@ onMounted(() => {
             <div class="sm:flex sm:justify-between sm:items-center mb-4">
               <!-- Left: Title -->
               <div class="mb-4 sm:mb-0">
-                <h1 class="text-2xl md:text-3xl text-zinc-100 font-bold">Country List</h1>
+                <h1 class="text-2xl md:text-3xl text-zinc-100 font-bold">IPv6 by Country</h1>
               </div>
 
               <!-- Right: Actions -->
@@ -64,11 +64,10 @@ onMounted(() => {
             <!-- content -->
             <div class="text-lg text-gray-400">
               <p class="mb-4 md:mr-32">
-                This resource tracks the progress of IPv6 adoption globally by listing countries and
-                their top domains that lack IPv6 support. Aimed at network administrators,
-                policymakers, and anyone interested in the transition from IPv4 to IPv6, the data
-                aims to highlight areas that need attention to build a more robust and future-proof
-                Internet infrastructure.
+                IPv6 adoption, country by country. Each domain in the Tranco list is mapped to a
+                country by GeoIP, then scored on who publishes an AAAA record and who doesn't. So
+                this measures a country's most-visited websites, not its networks. Some countries
+                are nearly done. Some haven't started. Pick yours and meet the local Sinners.
               </p>
             </div>
 
@@ -102,7 +101,7 @@ onMounted(() => {
                   </div>
                   <footer class="mt-3">
                     <div class="flex justify-between mb-1">
-                      <span class="text-sm font-medium text-gray-400">v6 Ready</span>
+                      <span class="text-sm font-medium text-gray-400">IPv6 ready</span>
                       <span class="text-sm font-medium text-gray-400">{{ country.percent }}%</span>
                     </div>
                     <ProgressBar :percent="country.percent" :total="country.sites" />

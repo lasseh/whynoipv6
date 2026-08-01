@@ -106,7 +106,7 @@ const formatLargeNumber = (number: number): string => {
     <div class="sm:flex sm:justify-between sm:items-center mb-4">
       <!-- Left: Title -->
       <div class="mb-4 sm:mb-0">
-        <h2 class="text-2xl md:text-2xl text-zinc-100 font-bold">Network Provider Readiness</h2>
+        <h2 class="text-2xl md:text-2xl text-zinc-100 font-bold">IPv6 by Network Provider</h2>
       </div>
 
       <!-- Search -->
@@ -115,7 +115,7 @@ const formatLargeNumber = (number: number): string => {
           v-model="searchQuery"
           input-id="asn-search"
           label="Search"
-          placeholder="Search…"
+          placeholder="Provider name…"
           input-class="h-10"
           button-class="text-xs font-medium"
           @submit="searchAsn(searchQuery)"
@@ -126,11 +126,10 @@ const formatLargeNumber = (number: number): string => {
     <!-- info content -->
     <div class="text-lg text-gray-400">
       <p class="mb-4">
-        Unveil the stark reality of network providers' shortcomings in promoting IPv6 adoption and
-        supporting their customers. Our analysis, based on the Tranco dataset, shines a spotlight on
-        the persisting gaps in IPv6 readiness among these providers. It's time to hold them
-        accountable for hindering progress and leaving customers behind. Explore our data and demand
-        better connectivity for all.
+        Every domain we crawl lives on someone's network. Here's the split per provider: hosted
+        domains answering over IPv6 versus the ones still IPv4-only. One default-on change at a big
+        hosting provider moves thousands of domains to dual stack overnight. The bars show who
+        flipped that switch, and who's still on the fence.
       </p>
     </div>
 
@@ -140,7 +139,7 @@ const formatLargeNumber = (number: number): string => {
         v-model="searchQuery"
         input-id="asn-search-mobile"
         label="Search"
-        placeholder="Search…"
+        placeholder="Provider name…"
         class="w-full"
         input-class="h-10 w-full"
         button-class="text-xs font-medium"
@@ -183,13 +182,13 @@ const formatLargeNumber = (number: number): string => {
           ></div>
         </div>
         <div class="mb-3 flex items-center justify-between text-xs">
-          <div class="text-gray-400">{{ formatLargeNumber(asn.count_v6) }} Dual Stack</div>
-          <div class="text-gray-400">{{ formatLargeNumber(asn.count_v4) }} IPv4 Only</div>
+          <div class="text-gray-400">{{ formatLargeNumber(asn.count_v6) }} dual-stack</div>
+          <div class="text-gray-400">{{ formatLargeNumber(asn.count_v4) }} IPv4-only</div>
         </div>
       </div>
 
       <p v-if="!isLoading && asnData.length === 0" class="text-gray-400">
-        No network providers matched.
+        No providers matched. Try a shorter name.
       </p>
     </template>
   </section>

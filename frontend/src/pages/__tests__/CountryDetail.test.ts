@@ -28,7 +28,7 @@ describe('CountryDetail', () => {
     })
     await flushPromises()
     expect(wrapper.text()).toContain('Norway')
-    expect(wrapper.text()).toContain('100 Domains')
+    expect(wrapper.text()).toContain('100 domains tracked')
     expect(wrapper.text()).toContain('25%')
     wrapper.unmount()
   })

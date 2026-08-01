@@ -58,23 +58,21 @@ const formatLargeNumber = (number: number | null | undefined): string => {
       <div class="text-left">
         <h3 class="h4 mb-1">Overview</h3>
         <p class="text-lg text-gray-400 mb-2">
-          In a detailed examination of IPv6 adoption, it's observed that among the top 1000 websites
-          ranked by Tranco, only
-          <span class="text-fuchsia-600">{{ latest.top_heroes ?? '—' }}</span>
-          have IPv6 enabled. Furthermore, while
-          <span class="text-fuchsia-600">{{ latest.top_nameserver ?? '—' }}</span>
-          of these sites' nameservers support IPv6, indicating a slightly better uptake in
-          infrastructure readiness, the overall picture across a wider dataset of
+          Of the
           <span class="text-fuchsia-600">{{ latest.domains ?? '—' }}</span>
-          sites is less optimistic, with just
+          most-visited websites on the internet, only
           <span class="text-fuchsia-600">{{ percentages }}</span>
-          adopting IPv6.
+          are fully IPv6-ready. IPv6 has been a standard since 1998. In the Tranco top 1000 the
+          picture is no prettier:
+          <span class="text-fuchsia-600">{{ latest.top_heroes ?? '—' }}</span>
+          have IPv6 enabled, and
+          <span class="text-fuchsia-600">{{ latest.top_nameserver ?? '—' }}</span>
+          sit behind nameservers reachable over IPv6.
         </p>
         <p class="text-lg text-gray-400">
-          This slow transition to the more advanced, secure, and efficient IPv6 is concerning,
-          especially considering its importance for the future scalability of the internet. The data
-          highlights a significant lag in the global shift towards modern internet protocols,
-          emphasizing the need for accelerated adoption efforts.
+          For context: IPv6 became a standard in 1998, and again in 2017, in case anyone missed it
+          the first time. The numbers above are what nearly three decades of "we'll get to it" looks
+          like. Every one of them moves the day someone publishes an AAAA record.
         </p>
       </div>
     </header>
@@ -94,21 +92,21 @@ const formatLargeNumber = (number: number | null | undefined): string => {
         <div class="text-4xl font-bold leading-tight tracking-tighter text-fuchsia-700 mb-2">
           {{ formatLargeNumber(latest.ns_supported) }}
         </div>
-        <div class="text-lg text-gray-400">IPv6 Enabled Nameservers</div>
+        <div class="text-lg text-gray-400">Domains with IPv6 nameservers</div>
       </div>
       <!-- 2nd item -->
       <div class="py-6 md:py-0 md:px-8">
         <div class="text-4xl font-bold leading-tight tracking-tighter text-fuchsia-700 mb-2">
           {{ formatLargeNumber(latest.base_supported) }}
         </div>
-        <div class="text-lg text-gray-400">IPv6 Enabled domains</div>
+        <div class="text-lg text-gray-400">IPv6-enabled domains</div>
       </div>
       <!-- 4rd item -->
       <div class="py-6 md:py-0 md:px-8">
         <div class="text-4xl font-bold leading-tight tracking-tighter text-fuchsia-700 mb-2">
           {{ formatLargeNumber(latest.heroes) }}
         </div>
-        <div class="text-lg text-gray-400">Fully IPv6 Ready Domains</div>
+        <div class="text-lg text-gray-400">Fully IPv6-ready domains</div>
       </div>
     </div>
 
@@ -117,7 +115,7 @@ const formatLargeNumber = (number: number | null | undefined): string => {
       <div class="text-left">
         <h3 class="h4 mb-1">Top 1000</h3>
         <p class="text-base text-gray-400">
-          Among the top 1000 domains, the following are equipped with IPv6 support:
+          The sites with the biggest engineering budgets and the fewest excuses:
         </p>
       </div>
     </header>
@@ -129,14 +127,14 @@ const formatLargeNumber = (number: number | null | undefined): string => {
         <div class="text-4xl font-bold leading-tight tracking-tighter text-fuchsia-700 mb-2">
           {{ formatLargeNumber(latest.top_heroes) }}
         </div>
-        <div class="text-lg text-gray-400">Top 1k domains</div>
+        <div class="text-lg text-gray-400">IPv6-enabled domains</div>
       </div>
       <!-- 2rd item -->
       <div class="py-6 md:py-0 md:px-8">
         <div class="text-4xl font-bold leading-tight tracking-tighter text-fuchsia-700 mb-2">
           {{ formatLargeNumber(latest.top_nameserver) }}
         </div>
-        <div class="text-lg text-gray-400">Top 1k IPv6 Enabled Nameservers</div>
+        <div class="text-lg text-gray-400">Domains with IPv6 nameservers</div>
       </div>
     </div>
   </section>

@@ -83,6 +83,8 @@ const groups = computed(() => {
         </ul>
       </section>
     </template>
-    <div v-else class="text-center py-8 text-gray-400">No changes yet</div>
+    <div v-else class="text-center py-8 text-gray-400">
+      No changes yet. Nothing fixed. To be fair, nothing broken either.
+    </div>
   </div>
 </template>

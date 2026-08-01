@@ -61,7 +61,7 @@ onMounted(() => {
                 <a
                   href="https://github.com/lasseh/whynoipv6-campaign"
                   target="_blank"
-                  title="Add Campaign on Github"
+                  title="Start a campaign on GitHub"
                   class="btn bg-fuchsia-700 hover:bg-fuchsia-800 text-white"
                 >
                   <svg class="w-4 h-4 fill-current opacity-50 shrink-0" viewBox="0 0 16 16">
@@ -69,7 +69,7 @@ onMounted(() => {
                       d="M15 7H9V1c0-.6-.4-1-1-1S7 .4 7 1v6H1c-.6 0-1 .4-1 1s.4 1 1 1h6v6c0 .6.4 1 1 1s1-.4 1-1V9h6c.6 0 1-.4 1-1s-.4-1-1-1z"
                     />
                   </svg>
-                  <span class="hidden ml-2">Create Campaign</span>
+                  <span class="hidden ml-2">Start a campaign</span>
                 </a>
               </div>
             </div>
@@ -77,23 +77,20 @@ onMounted(() => {
             <!-- Campaign info content -->
             <div class="text-lg text-gray-400">
               <p class="mb-4">
-                Our Campaigns page serves as a rallying point for users like you who recognize the
-                importance of IPv6. Here, we highlight user-submitted lists of domains that are
-                still operating in the IPv4 realm. This page is more than just a compilation of
-                domains; it's a call to action for businesses, website owners, and service providers
-                to step up their game and move towards an IPv6-supported future.
+                Campaigns are reader-submitted lists of domains with something in common: a
+                country's banks, its ISPs, its government. Each list is crawled and scored as a
+                group, with the same checks as everywhere else (AAAA, nameservers, mail). The
+                percentage on each card is how many have actually deployed it.
               </p>
               <p class="mb-8">
-                Have you discovered a domain that hasn't embraced the IPv6 technology yet? We invite
-                you to take an active role in our initiative. By submitting a issue to our
+                Have a list of domains that should know better? Open an issue in the
                 <a
                   href="https://github.com/lasseh/whynoipv6-campaign"
                   class="underline a-gradient"
                   target="_blank"
-                  >GitHub Repository</a
+                  >campaign repo</a
                 >
-                , we can collectively advocate for the adoption of IPv6. Act today and help us
-                promote the adoption of IPv6, one shame campaign at a time.
+                and we'll put them on the scoreboard. Shame scales.
               </p>
             </div>
 
@@ -129,7 +126,7 @@ onMounted(() => {
                   </div>
                   <footer class="mt-5">
                     <div class="flex justify-between mb-1">
-                      <span class="text-sm font-medium text-gray-400">v6 Ready</span>
+                      <span class="text-sm font-medium text-gray-400">IPv6 ready</span>
                       <span class="text-sm font-medium text-gray-400"
                         >{{ campaign.adoption?.v6_ready_percent ?? '—' }}%</span
                       >

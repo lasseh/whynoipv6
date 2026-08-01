@@ -17,7 +17,7 @@ describe('CountryList (smoke)', () => {
       global: { plugins: [router], stubs: layoutStubs },
     })
     await flushPromises()
-    expect(wrapper.text()).toContain('Country List')
+    expect(wrapper.text()).toContain('IPv6 by Country')
     expect(listCountries).toHaveBeenCalled()
   })
 

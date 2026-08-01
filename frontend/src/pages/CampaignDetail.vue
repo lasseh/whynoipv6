@@ -78,7 +78,7 @@ watch(uuid, (u) => {
 
 // Data-driven title once the campaign loads.
 watch(campaign, (c) => {
-  if (c) setPageTitle(c.name)
+  if (c) setPageTitle(`${c.name} IPv6 Campaign`)
 })
 
 // Pagination
@@ -95,7 +95,9 @@ watch(campaign, (c) => {
           <!-- Campaign not found -->
           <div v-if="notFound" class="flex justify-center py-16">
             <div class="text-center">
-              <div class="text-xl font-medium">Campaign not found</div>
+              <div class="text-xl font-medium">
+                Campaign not found. Wrong UUID or a stale link; nothing to shame here.
+              </div>
             </div>
           </div>
 
@@ -122,10 +124,10 @@ watch(campaign, (c) => {
               </div>
               <div>
                 <div class="text-sm font-medium text-zinc-500 mb-2">
-                  {{ meta?.count ?? '—' }} Domains
+                  {{ meta?.count ?? '—' }} domains
                 </div>
                 <div class="text-sm font-medium text-zinc-500 mb-2">
-                  {{ campaign?.adoption?.v6_ready_percent ?? 0 }}% V6 Ready
+                  {{ campaign?.adoption?.v6_ready_percent ?? 0 }}% IPv6 ready
                 </div>
               </div>
             </div>

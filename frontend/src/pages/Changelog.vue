@@ -61,7 +61,7 @@ onBeforeUnmount(() => {
             <div class="text-center sm:text-left">
               <h1 class="h3">Changelog</h1>
               <p class="text-base text-gray-400 mt-1">
-                Confirmed IPv6 changes as the crawler observes them
+                Who fixed their IPv6 and who broke it, confirmed by the crawler
               </p>
             </div>
           </header>
