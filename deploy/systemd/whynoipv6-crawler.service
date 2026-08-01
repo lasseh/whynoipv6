@@ -1,7 +1,7 @@
 [Unit]
 Description=WhyNoIPv6 crawler
 After=network-online.target postgresql.service unbound@1.service unbound@2.service
-Wants=network-online.target
+Wants=network-online.target unbound@1.service unbound@2.service
 
 [Service]
 User=whynoipv6

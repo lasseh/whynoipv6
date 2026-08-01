@@ -4,7 +4,7 @@
 set -euo pipefail
 log=/var/log/pgbackrest/verify.log
 info=$(pgbackrest --stanza=whynoipv6 info --output=json)
-versions=$(psql -Atc "SELECT version(), (SELECT extversion FROM pg_extension WHERE extname='timescaledb')")
+versions=$(psql -At -d whynoipv6 -c "SELECT version(), (SELECT extversion FROM pg_extension WHERE extname='timescaledb')")
 printf '%s %s\n%s %s\n' "$(date -Is)" "$info" "$(date -Is)" "$versions" >> "$log"
 
 alert() {
@@ -20,4 +20,8 @@ fi
 newest_wal=$(echo "$info" | jq -r '.[0].archive[-1].max // empty')
 if [ -z "$newest_wal" ]; then
   alert "no archived WAL recorded"
+fi
+wal_age=$(psql -At -c "SELECT coalesce(extract(epoch FROM now() - last_archived_time)::int, -1) FROM pg_stat_archiver")
+if [ "$wal_age" -lt 0 ] || [ "$wal_age" -gt 3600 ]; then
+  alert "newest archived WAL older than 1h"
 fi

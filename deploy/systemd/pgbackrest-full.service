@@ -4,6 +4,6 @@ OnFailure=whynoipv6-notify@%n.service
 
 [Service]
 Type=oneshot
-User=whynoipv6
+User=postgres
 EnvironmentFile=/etc/whynoipv6/env
 ExecStart=/usr/bin/pgbackrest --stanza=whynoipv6 --type=full backup

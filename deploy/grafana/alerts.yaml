@@ -1,7 +1,21 @@
 # Provisioned Grafana alert rules A1–A5 (09-ops.md §12), Postgres datasource
 # (uid: whynoipv6-pg), notification policy → the ops webhook. Thresholds are
-# tunable starting points.
+# tunable starting points. OPS_WEBHOOK_URL must be set in Grafana's
+# environment (compose/systemd) — provisioning interpolates it at load time.
 apiVersion: 1
+contactPoints:
+  - orgId: 1
+    name: ops-webhook
+    receivers:
+      - uid: wni6-ops-webhook
+        type: webhook
+        settings:
+          url: $OPS_WEBHOOK_URL
+          httpMethod: POST
+policies:
+  - orgId: 1
+    receiver: ops-webhook
+    group_by: ["grafana_folder", "alertname"]
 groups:
   - orgId: 1
     name: whynoipv6
