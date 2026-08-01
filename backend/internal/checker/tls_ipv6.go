@@ -3,6 +3,7 @@ package checker
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"net"
 	"time"
@@ -12,14 +13,17 @@ const expirySoonDays = 30
 
 // TLSIPv6 checks TLS certificate validity over an IPv6 connection
 // (01-engine.md §11 summary table, row 9 — tls_ipv6 has no dedicated §11.x
-// subsection).
+// subsection). port and rootCAs are internal seams: "443" and system roots
+// (nil) in production, test overrides in the dial tests.
 type TLSIPv6 struct {
-	dialer *SafeDialer
+	dialer  *SafeDialer
+	port    string
+	rootCAs *x509.CertPool
 }
 
 // NewTLSIPv6 creates a new tls_ipv6 checker.
 func NewTLSIPv6(dialer *SafeDialer) *TLSIPv6 {
-	return &TLSIPv6{dialer: dialer}
+	return &TLSIPv6{dialer: dialer, port: "443"}
 }
 
 func (c *TLSIPv6) Name() string { return NameTLS }
@@ -65,7 +69,7 @@ func (c *TLSIPv6) Check(ctx context.Context, domain string, kind Kind) (Result, 
 	d.Address = ip.String()
 
 	// Open TCP connection to the IPv6 address on port 443.
-	addr := net.JoinHostPort(ip.String(), "443")
+	addr := net.JoinHostPort(ip.String(), c.port)
 	conn, err := c.dialer.dialer.DialContext(ctx, "tcp6", addr)
 	if err != nil {
 		if isConnRefused(err) {
@@ -88,6 +92,7 @@ func (c *TLSIPv6) Check(ctx context.Context, domain string, kind Kind) (Result, 
 	tlsConn := tls.Client(conn, &tls.Config{
 		ServerName: domain,
 		MinVersion: tls.VersionTLS12,
+		RootCAs:    c.rootCAs,
 	})
 
 	if deadline, ok := ctx.Deadline(); ok {

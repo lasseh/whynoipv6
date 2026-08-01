@@ -13,14 +13,16 @@ import (
 const userAgent = "WhyNoIPv6Bot/1.0 (+https://whynoipv6.com/bot)"
 
 // HTTPIPv6 checks whether the domain responds to HTTP over IPv6
-// (01-engine.md §11.6).
+// (01-engine.md §11.6). port is an internal seam: "80" in production, a
+// test server's port in the dial tests.
 type HTTPIPv6 struct {
 	dialer *SafeDialer
+	port   string
 }
 
 // NewHTTPIPv6 creates a new http_ipv6 checker.
 func NewHTTPIPv6(dialer *SafeDialer) *HTTPIPv6 {
-	return &HTTPIPv6{dialer: dialer}
+	return &HTTPIPv6{dialer: dialer, port: "80"}
 }
 
 func (c *HTTPIPv6) Name() string { return NameHTTP }
@@ -29,93 +31,15 @@ func (c *HTTPIPv6) Check(ctx context.Context, domain string, kind Kind) (Result,
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
-	d := &HTTPDetail{}
-
-	// Resolve AAAA records. A resolver failure is transient (the consensus
-	// quorum already confirmed AAAA exists), so it must not produce a
-	// definitive unsupported observation.
-	ips, _, _, _, err := c.dialer.Resolver().LookupAAAA(ctx, domain)
-	if err != nil {
-		d.Error = err.Error()
-		return Result{
-			Status:  StatusError,
-			Detail:  d,
-			Latency: time.Since(start),
-		}, nil
-	}
-	if len(ips) == 0 {
-		d.Reason = errNoAAAARecord
-		return Result{
-			Status:  StatusUnsupported,
-			Detail:  d,
-			Latency: time.Since(start),
-		}, nil
-	}
-
-	// Try each IP (up to 3).
-	maxAttempts := min(len(ips), 3)
-
-	var lastErr error
-	for i := 0; i < maxAttempts; i++ {
-		ip := ips[i]
-		if err := c.dialer.ValidateIP(ip); err != nil {
-			d.Error = errAddrBlocked
-			return Result{
-				Status:  StatusError,
-				Detail:  d,
-				Latency: time.Since(start),
-			}, nil
-		}
-
-		result, tryErr := c.tryHTTP(ctx, domain, ip)
-		if tryErr == nil {
-			result.Latency = time.Since(start)
-			return result, nil
-		}
-		lastErr = tryErr
-
-		// Don't retry on context cancellation.
-		if ctx.Err() != nil {
-			break
-		}
-	}
-
-	// All attempts failed — classify the terminal error exactly as
-	// https_ipv6 does (01-engine.md §11.6, enumerated deviation 3), so the
-	// conn composition applies identically on the http-only fallback path.
-	// No certificate_error branch exists here (no TLS on port 80).
-	if isConnRefused(lastErr) {
-		d.Error = errConnRefused
-		d.ErrorType = ErrTypeConnRefused
-		return Result{
-			Status:  StatusUnsupported,
-			Detail:  d,
-			Latency: time.Since(start),
-		}, nil
-	}
-
-	if isTimeout(lastErr) {
-		d.Error = lastErr.Error()
-		d.ErrorType = ErrTypeTimeout
-		return Result{
-			Status:  StatusError,
-			Detail:  d,
-			Latency: time.Since(start),
-		}, nil
-	}
-
-	d.Error = lastErr.Error()
-	d.ErrorType = ErrTypeUnknown
-	return Result{
-		Status:  StatusError,
-		Detail:  d,
-		Latency: time.Since(start),
-	}, nil
+	return dialOverAAAA(ctx, c.dialer, domain, start, false,
+		func(ctx context.Context, ip net.IP) (Result, error) {
+			return c.tryHTTP(ctx, domain, ip)
+		})
 }
 
 func (c *HTTPIPv6) tryHTTP(ctx context.Context, domain string, ip net.IP) (Result, error) {
 	reqStart := time.Now()
-	addr := net.JoinHostPort(ip.String(), "80")
+	addr := net.JoinHostPort(ip.String(), c.port)
 
 	transport := &http.Transport{
 		DialContext: func(dialCtx context.Context, _, _ string) (net.Conn, error) {

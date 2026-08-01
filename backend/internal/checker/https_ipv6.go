@@ -3,6 +3,7 @@ package checker
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"fmt"
 	"net"
@@ -11,14 +12,17 @@ import (
 )
 
 // HTTPSIPv6 checks whether the domain responds to HTTPS over IPv6
-// (01-engine.md §11.7).
+// (01-engine.md §11.7). port and rootCAs are internal seams: "80"-style
+// production defaults ("443", system roots via nil) with test overrides.
 type HTTPSIPv6 struct {
-	dialer *SafeDialer
+	dialer  *SafeDialer
+	port    string
+	rootCAs *x509.CertPool
 }
 
 // NewHTTPSIPv6 creates a new https_ipv6 checker.
 func NewHTTPSIPv6(dialer *SafeDialer) *HTTPSIPv6 {
-	return &HTTPSIPv6{dialer: dialer}
+	return &HTTPSIPv6{dialer: dialer, port: "443"}
 }
 
 func (c *HTTPSIPv6) Name() string { return NameHTTPS }
@@ -27,92 +31,10 @@ func (c *HTTPSIPv6) Check(ctx context.Context, domain string, kind Kind) (Result
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
-	d := &HTTPDetail{}
-
-	// Resolve AAAA records. A resolver failure is transient (the consensus
-	// quorum already confirmed AAAA exists), so it must not produce a
-	// definitive unsupported observation.
-	ips, _, _, _, err := c.dialer.Resolver().LookupAAAA(ctx, domain)
-	if err != nil {
-		d.Error = err.Error()
-		return Result{
-			Status:  StatusError,
-			Detail:  d,
-			Latency: time.Since(start),
-		}, nil
-	}
-	if len(ips) == 0 {
-		d.Reason = errNoAAAARecord
-		return Result{
-			Status:  StatusUnsupported,
-			Detail:  d,
-			Latency: time.Since(start),
-		}, nil
-	}
-
-	maxAttempts := min(len(ips), 3)
-
-	var lastErr error
-	for i := 0; i < maxAttempts; i++ {
-		ip := ips[i]
-		if err := c.dialer.ValidateIP(ip); err != nil {
-			d.Error = errAddrBlocked
-			return Result{
-				Status:  StatusError,
-				Detail:  d,
-				Latency: time.Since(start),
-			}, nil
-		}
-
-		result, tryErr := c.tryHTTPS(ctx, domain, ip)
-		if tryErr == nil {
-			result.Latency = time.Since(start)
-			return result, nil
-		}
-		lastErr = tryErr
-
-		if ctx.Err() != nil {
-			break
-		}
-	}
-
-	if isConnRefused(lastErr) {
-		d.Error = errConnRefused
-		d.ErrorType = ErrTypeConnRefused
-		return Result{
-			Status:  StatusUnsupported,
-			Detail:  d,
-			Latency: time.Since(start),
-		}, nil
-	}
-
-	if isTimeout(lastErr) {
-		d.Error = lastErr.Error()
-		d.ErrorType = ErrTypeTimeout
-		return Result{
-			Status:  StatusError,
-			Detail:  d,
-			Latency: time.Since(start),
-		}, nil
-	}
-
-	if isTLSError(lastErr) {
-		d.Error = lastErr.Error()
-		d.ErrorType = ErrTypeCertificate
-		return Result{
-			Status:  StatusUnsupported,
-			Detail:  d,
-			Latency: time.Since(start),
-		}, nil
-	}
-
-	d.Error = lastErr.Error()
-	d.ErrorType = ErrTypeUnknown
-	return Result{
-		Status:  StatusError,
-		Detail:  d,
-		Latency: time.Since(start),
-	}, nil
+	return dialOverAAAA(ctx, c.dialer, domain, start, true,
+		func(ctx context.Context, ip net.IP) (Result, error) {
+			return c.tryHTTPS(ctx, domain, ip)
+		})
 }
 
 // isTimeout checks if an error is a timeout error.
@@ -149,7 +71,7 @@ func isTLSError(err error) bool {
 
 func (c *HTTPSIPv6) tryHTTPS(ctx context.Context, domain string, ip net.IP) (Result, error) {
 	reqStart := time.Now()
-	addr := net.JoinHostPort(ip.String(), "443")
+	addr := net.JoinHostPort(ip.String(), c.port)
 
 	transport := &http.Transport{
 		DialContext: func(dialCtx context.Context, _, _ string) (net.Conn, error) {
@@ -158,6 +80,7 @@ func (c *HTTPSIPv6) tryHTTPS(ctx context.Context, domain string, ip net.IP) (Res
 		TLSClientConfig: &tls.Config{
 			ServerName: domain,
 			MinVersion: tls.VersionTLS12,
+			RootCAs:    c.rootCAs,
 		},
 		DisableKeepAlives: true,
 	}

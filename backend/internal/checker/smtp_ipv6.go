@@ -19,14 +19,16 @@ const (
 )
 
 // SMTPIPv6 checks whether the domain's MX accepts SMTP over IPv6
-// (01-engine.md §11.10).
+// (01-engine.md §11.10). port is an internal seam: "25" in production, a
+// fake MX's port in the dial tests.
 type SMTPIPv6 struct {
 	dialer *SafeDialer
+	port   string
 }
 
 // NewSMTPIPv6 creates a new smtp_ipv6 checker.
 func NewSMTPIPv6(dialer *SafeDialer) *SMTPIPv6 {
-	return &SMTPIPv6{dialer: dialer}
+	return &SMTPIPv6{dialer: dialer, port: "25"}
 }
 
 func (c *SMTPIPv6) Name() string { return NameSMTP }
@@ -102,7 +104,7 @@ func (c *SMTPIPv6) tryMX(ctx context.Context, mxHost string, preference uint16) 
 	}
 
 	// Connect via TCP6 to port 25.
-	addr := net.JoinHostPort(ip.String(), "25")
+	addr := net.JoinHostPort(ip.String(), c.port)
 	conn, err := c.dialer.dialer.DialContext(ctx, "tcp6", addr)
 	if err != nil {
 		return Result{}, err
