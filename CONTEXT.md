@@ -63,3 +63,17 @@ crystallized *after* the spec was frozen.
   window conventions live in one place. The `around_rank` centered window shares
   only the minting half (`MintPage`). _Avoid:_ hand-rolling the decode→trim→mint
   sequence in a handler.
+
+- **List spec.** The per-endpoint description of a list endpoint's rim —
+  `api.ListSpec` (keyset lists: Sorts/Sort, Scope, Live, Fetch, Key, Item,
+  CSV, Count) and `api.WholeSpec` (bounded sets served whole), consumed by
+  `ServeList`/`ServeWhole`, which own everything around the keyset spec:
+  sort resolution, `?format=` negotiation, the CSV cap raise, freshness via
+  the `metaSource` seam (`pgMeta` in production, a fake in unit tests), the
+  ETag/304 gate before any window fetch, cursor error mapping, the row→item
+  map, and the envelope+count. Composite envelopes (dependents, the campaign
+  detail, `/domains`' cursor branch) reuse the response-free half
+  `api.ListPage`, which writes its own 400/500. Deliberate non-adopters:
+  `serveDomainList`'s rim (one pinned copy) and `writeRecentWindow`.
+  _Avoid:_ hand-writing the sort→format→limit→generation→304 sequence in a
+  handler.

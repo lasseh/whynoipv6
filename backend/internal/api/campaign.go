@@ -130,22 +130,13 @@ func (s *Server) getCampaign(w http.ResponseWriter, r *http.Request) {
 		invalidParam(w, r, err)
 		return
 	}
-	generation, asOf, err := s.generation(r.Context())
-	if err != nil {
-		InternalError(w, r, err)
-		return
-	}
-	if CacheList(w, r, generation) {
+	generation, asOf, ok := s.enterCache(w, r, false)
+	if !ok {
 		return
 	}
 
-	members, page, err := s.campaignMembersPage(r, row.ID, generation, limit)
-	if err != nil {
-		if errors.Is(err, ErrCursorInvalid) {
-			InvalidParameter(w, r, err.Error())
-			return
-		}
-		InternalError(w, r, err)
+	members, page, ok := s.campaignMembersPage(w, r, row.ID, generation, limit)
+	if !ok {
 		return
 	}
 
@@ -187,21 +178,12 @@ func (s *Server) listCampaignDomains(w http.ResponseWriter, r *http.Request) {
 		invalidParam(w, r, err)
 		return
 	}
-	generation, asOf, err := s.generation(r.Context())
-	if err != nil {
-		InternalError(w, r, err)
+	generation, asOf, ok := s.enterCache(w, r, false)
+	if !ok {
 		return
 	}
-	if CacheList(w, r, generation) {
-		return
-	}
-	members, page, err := s.campaignMembersPage(r, row.ID, generation, limit)
-	if err != nil {
-		if errors.Is(err, ErrCursorInvalid) {
-			InvalidParameter(w, r, err.Error())
-			return
-		}
-		InternalError(w, r, err)
+	members, page, ok := s.campaignMembersPage(w, r, row.ID, generation, limit)
+	if !ok {
 		return
 	}
 	meta := NewMeta(asOf, generation)
@@ -209,14 +191,32 @@ func (s *Server) listCampaignDomains(w http.ResponseWriter, r *http.Request) {
 	WriteJSON(w, http.StatusOK, ListEnvelope{Items: members, Page: page, Meta: meta})
 }
 
-// campaignMembersPage runs one host-ordered keyset page over the members
-// (§3.2 — host is unique, so the seek is total despite rank being NULL).
-func (s *Server) campaignMembersPage(r *http.Request, campaignID, generation int32, limit int) ([]DomainSummary, Page, error) {
+// campaignMembersPage runs one host-ordered members page through ListPage
+// (§3.2 — host is unique, so the seek is total despite rank being NULL) —
+// one spec shared by the standalone collection and the campaign-detail
+// embed, so their cursors stay interchangeable. Failures are already
+// written when ok is false.
+func (s *Server) campaignMembersPage(w http.ResponseWriter, r *http.Request, campaignID, generation int32, limit int) ([]DomainSummary, Page, bool) {
 	filter := postgres.DomainListFilter{CampaignID: &campaignID}
-	members, page, err := s.hostOrderedPage(r, &filter, fmt.Sprintf("campaign:%d", campaignID), generation, limit)
-	for i := range members {
-		ready := v6ReadyOf(&members[i].Status)
-		members[i].V6Ready = &ready
-	}
-	return members, page, err
+	return ListPage(w, r, generation, limit, KeysetSpec[postgres.DomainRow]{
+		Sort:        SortHost,
+		Fingerprint: ScopedFingerprint(fmt.Sprintf("campaign:%d", campaignID), r.URL.Query()),
+		Fetch: func(ctx context.Context, seek *Seek, lim int, backward bool) ([]postgres.DomainRow, error) {
+			var ds *postgres.DomainSeek
+			if seek != nil {
+				ds = &postgres.DomainSeek{Host: seek.Host}
+			}
+			return postgres.ListDomains(ctx, s.pool, &filter, postgres.ListSortHost, ds, nil, lim, backward)
+		},
+		Key: domainKey(SortHost),
+	}, memberItem)
+}
+
+// memberItem is the campaign-member wire row: the §4.2 summary plus the
+// campaign-side v6_ready verdict.
+func memberItem(row *postgres.DomainRow) DomainSummary {
+	d := summaryFromRow(row)
+	ready := v6ReadyOf(&d.Status)
+	d.V6Ready = &ready
+	return d
 }

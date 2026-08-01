@@ -107,16 +107,17 @@ func (s *Server) listResourceDependents(w http.ResponseWriter, r *http.Request) 
 		invalidParam(w, r, err)
 		return
 	}
-	generation, asOf, err := s.generation(r.Context())
-	if err != nil {
-		InternalError(w, r, err)
-		return
-	}
-	if CacheList(w, r, generation) {
+	generation, asOf, ok := s.enterCache(w, r, false)
+	if !ok {
 		return
 	}
 
-	rows, page, err := KeysetPage(r, generation, limit, KeysetSpec[postgres.DependentRow]{
+	type dependentItem struct {
+		DomainSummary
+		Source   string `json:"source"`
+		Required bool   `json:"required"`
+	}
+	items, page, ok := ListPage(w, r, generation, limit, KeysetSpec[postgres.DependentRow]{
 		Sort:        SortDependents,
 		Fingerprint: ScopedFingerprint(fmt.Sprintf("dependents:%d", row.ID), q),
 		Fetch: func(ctx context.Context, seek *Seek, lim int, backward bool) ([]postgres.DependentRow, error) {
@@ -134,24 +135,11 @@ func (s *Server) listResourceDependents(w http.ResponseWriter, r *http.Request) 
 			}
 			return []any{isNull, rank, d.ID}
 		},
+	}, func(d *postgres.DependentRow) dependentItem {
+		return dependentItem{summaryFromRow(&d.DomainRow), d.Source, d.Required}
 	})
-	if errors.Is(err, ErrCursorInvalid) {
-		InvalidParameter(w, r, err.Error())
+	if !ok {
 		return
-	}
-	if err != nil {
-		InternalError(w, r, err)
-		return
-	}
-
-	type dependentItem struct {
-		DomainSummary
-		Source   string `json:"source"`
-		Required bool   `json:"required"`
-	}
-	items := make([]dependentItem, len(rows))
-	for i := range rows {
-		items[i] = dependentItem{summaryFromRow(&rows[i].DomainRow), rows[i].Source, rows[i].Required}
 	}
 
 	est := int64(row.DependentCount)

@@ -410,19 +410,23 @@ func (s *Server) serveDomainList(w http.ResponseWriter, r *http.Request, preset 
 	// preset-MERGED query, so cursors minted on a preset route decode on
 	// that same route (and nowhere the preset does not hold).
 	fingerprint := FilterFingerprint(q)
-	var rows []postgres.DomainRow
+	var items []DomainSummary
 	var page Page
 	if aroundRank != nil {
-		var moreAbove, moreBelow bool
-		rows, moreAbove, moreBelow, err = postgres.ListDomainsAround(
+		rows, moreAbove, moreBelow, err := postgres.ListDomainsAround(
 			r.Context(), s.pool, &filter, *aroundRank, limit)
 		if err != nil {
 			InternalError(w, r, err)
 			return
 		}
 		page = MintPage(generation, sortKey, fingerprint, moreBelow, moreAbove, rows, domainKey(sortKey))
+		items = make([]DomainSummary, len(rows))
+		for i := range rows {
+			items[i] = summaryFromRow(&rows[i])
+		}
 	} else {
-		rows, page, err = KeysetPage(r, generation, limit, KeysetSpec[postgres.DomainRow]{
+		var ok bool
+		items, page, ok = ListPage(w, r, generation, limit, KeysetSpec[postgres.DomainRow]{
 			Sort:        sortKey,
 			Positioned:  afterRank != nil,
 			Fingerprint: fingerprint,
@@ -435,21 +439,12 @@ func (s *Server) serveDomainList(w http.ResponseWriter, r *http.Request, preset 
 					postgres.ListSort(sortKey), ds, afterRank, lim, backward)
 			},
 			Key: domainKey(sortKey),
-		})
-		if errors.Is(err, ErrCursorInvalid) {
-			InvalidParameter(w, r, err.Error())
-			return
-		}
-		if err != nil {
-			InternalError(w, r, err)
+		}, summaryFromRow)
+		if !ok {
 			return
 		}
 	}
 
-	items := make([]DomainSummary, len(rows))
-	for i := range rows {
-		items[i] = summaryFromRow(&rows[i])
-	}
 	if wantCSV {
 		writeDomainsCSV(w, items)
 		return
@@ -473,33 +468,6 @@ func (s *Server) serveDomainList(w http.ResponseWriter, r *http.Request, preset 
 		Page:  page,
 		Meta:  meta,
 	})
-}
-
-// hostOrderedPage runs one host-ordered keyset page over the given filter —
-// the shared engine for campaign members and subdomains (§3.2: host is a
-// unique key, total even when rank is NULL). scope binds the cursor to the
-// path-derived scope the filter carries (ScopedFingerprint).
-func (s *Server) hostOrderedPage(r *http.Request, filter *postgres.DomainListFilter, scope string, generation int32, limit int) ([]DomainSummary, Page, error) {
-	rows, page, err := KeysetPage(r, generation, limit, KeysetSpec[postgres.DomainRow]{
-		Sort:        SortHost,
-		Fingerprint: ScopedFingerprint(scope, r.URL.Query()),
-		Fetch: func(ctx context.Context, seek *Seek, lim int, backward bool) ([]postgres.DomainRow, error) {
-			var ds *postgres.DomainSeek
-			if seek != nil {
-				ds = &postgres.DomainSeek{Host: seek.Host}
-			}
-			return postgres.ListDomains(ctx, s.pool, filter, postgres.ListSortHost, ds, nil, lim, backward)
-		},
-		Key: domainKey(SortHost),
-	})
-	if err != nil {
-		return nil, Page{}, err
-	}
-	items := make([]DomainSummary, len(rows))
-	for i := range rows {
-		items[i] = summaryFromRow(&rows[i])
-	}
-	return items, page, nil
 }
 
 // domainKey is the per-row seek-tuple extractor for cursor minting; a
