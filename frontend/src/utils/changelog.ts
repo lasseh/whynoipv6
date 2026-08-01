@@ -13,11 +13,6 @@ export const FIELD_LABELS: Record<Dimension, string> = {
   resources: 'page resources',
 }
 
-export interface ChangelogMessage {
-  message: string
-  colorClass: string
-}
-
 export interface ChangelogParts {
   /** Verb phrase after the host — the feed renders the host separately as the link. */
   phrase: string
@@ -90,14 +85,5 @@ export function changelogParts(
       }
     case 'not_applicable':
       return { phrase: `no longer uses ${label}`, dotClass: dotOf(item) }
-  }
-}
-
-export function changelogMessage(
-  item: Pick<ChangelogItem, 'host' | 'field' | 'old_value' | 'new_value'>,
-): ChangelogMessage {
-  return {
-    message: `${item.host} ${changelogParts(item).phrase}`,
-    colorClass: statusClass('changelogText', item.new_value),
   }
 }

@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { changelogMessage, FIELD_LABELS } from '@/utils/changelog'
+import { changelogParts, FIELD_LABELS } from '@/utils/changelog'
+import { statusClass } from '@/utils/status'
 
 // Golden table for §7.4 — these wordings are the trust surface shared with the
 // server's feed serializer; change them only alongside the spec.
-describe('changelogMessage', () => {
+describe('changelogParts', () => {
   const goldens = [
     {
       field: 'base',
@@ -92,14 +93,13 @@ describe('changelogMessage', () => {
   ] as const
 
   it.each(goldens)('$field $old_value → $new_value', (g) => {
-    expect(
-      changelogMessage({
-        host: 'example.com',
-        field: g.field,
-        old_value: g.old_value,
-        new_value: g.new_value,
-      }),
-    ).toEqual({ message: g.message, colorClass: g.colorClass })
+    const parts = changelogParts({
+      field: g.field,
+      old_value: g.old_value,
+      new_value: g.new_value,
+    })
+    expect(`example.com ${parts.phrase}`).toBe(g.message)
+    expect(statusClass('changelogText', g.new_value)).toBe(g.colorClass)
   })
 
   it('labels all six dimensions', () => {
