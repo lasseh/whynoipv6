@@ -15,6 +15,7 @@ import (
 // identically: connection refused → unsupported, timeout → error, TLS
 // (withTLS only — no certificate branch exists on port 80) → unsupported,
 // anything else → error.
+//
 //nolint:unparam // error is always nil but kept so Check bodies stay a single return
 func dialOverAAAA(ctx context.Context, dialer *SafeDialer, domain string, start time.Time, withTLS bool,
 	try func(ctx context.Context, ip net.IP) (Result, error),
