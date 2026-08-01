@@ -610,14 +610,17 @@ WHERE (NOT disabled OR disabled_reason IN ('dead', 'delisted'))
   "conn":      { "...same keys..." },
   "resources": { "...same keys..." },
   "lease_lost": 0,
+  "commit_error": 0,
   "unresolvable": 0,
   "dead_triggered": 0,
   "recovered": 0,
+  "bootstrap_commits": 0,
+  "confirmed_transitions": 0,
   "singleton_skipped": {"daily_tick": 0, "tranco_import": 0, "campaign_sync": 0}
 }
 ```
 
-Per-dimension objects tally this interval's **observations** (post-mapping, pre-confirmation). `unresolvable` counts §6.1 scans; `dead_triggered` counts §6.2 firings; `recovered` counts §6.3 step-R executions; `singleton_skipped` counts `TryRun` `ErrHeld` skips by job name (this realizes the design's `crawler_singleton_skipped_total{job}` counter — **Decision:** as a `dim_counters` key, since there is no Prometheus).
+Per-dimension objects tally this interval's **observations** (post-mapping, pre-confirmation). `unresolvable` counts §6.1 scans; `dead_triggered` counts §6.2 firings; `recovered` counts §6.3 step-R executions; `bootstrap_commits` and `confirmed_transitions` count successful commits' bootstrapped dimensions and changelog rows written (03 "Metrics" — shadow transitions excluded); `singleton_skipped` counts `TryRun` `ErrHeld` skips by job name (this realizes the design's `crawler_singleton_skipped_total{job}` counter — **Decision:** as a `dim_counters` key, since there is no Prometheus).
 
 ### 15.3 Liveness heartbeats
 

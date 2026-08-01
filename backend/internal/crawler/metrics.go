@@ -51,6 +51,8 @@ type Metrics struct {
 	unresolvable   int
 	deadTriggered  int
 	recovered      int
+	bootstraps     int
+	confirmedTrans int
 	skips          map[string]int
 	hist           [histBuckets]int
 	lastCheckpoint time.Time
@@ -85,6 +87,12 @@ func (m *Metrics) RecordScan(ctx context.Context, obs *observe.Observations, unr
 		m.leaseLost++
 	default:
 		m.succeeded++
+		m.bootstraps += res.Bootstraps
+		for _, tr := range res.Transitions {
+			if !shadowTransition(tr.Dim, tr.New) { // shadows write no changelog row (03 §11)
+				m.confirmedTrans++
+			}
+		}
 	}
 	if obs != nil {
 		for d, o := range map[domain.Dimension]domain.Observation{
@@ -199,6 +207,7 @@ func (m *Metrics) Checkpoint(ctx context.Context, final bool) {
 	m.processed, m.succeeded, m.failed = 0, 0, 0
 	m.dims = map[domain.Dimension]map[domain.Observation]int{}
 	m.leaseLost, m.commitErrors, m.unresolvable, m.deadTriggered, m.recovered = 0, 0, 0, 0, 0
+	m.bootstraps, m.confirmedTrans = 0, 0
 	m.skips = map[string]int{}
 	m.hist = [histBuckets]int{}
 	m.lastCheckpoint = now
@@ -270,6 +279,12 @@ func (m *Metrics) dimCountersLocked() []byte {
 	}
 	if m.recovered > 0 {
 		out["recovered"] = m.recovered
+	}
+	if m.bootstraps > 0 {
+		out["bootstrap_commits"] = m.bootstraps
+	}
+	if m.confirmedTrans > 0 {
+		out["confirmed_transitions"] = m.confirmedTrans
 	}
 	if len(m.skips) > 0 {
 		out["singleton_skipped"] = m.skips

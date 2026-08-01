@@ -25,14 +25,26 @@ func TestMetrics(t *testing.T) {
 	obs := stableObs(domain.DimBase, domain.ObsSupported)
 
 	// 999 successes + 1 lease-lost = exactly one checkpointEvery boundary;
-	// ~2% slow scans so the 700 ms bucket carries p99.
+	// ~2% slow scans so the 700 ms bucket carries p99. The slow scans carry a
+	// bootstrap and two transitions (one a shadow, which writes no changelog
+	// row and must not count); the lease-lost scan carries both too — nothing
+	// was written, so neither may count.
+	committed := CommitResult{
+		Bootstraps: 1,
+		Transitions: []Transition{
+			{Dim: domain.DimBase, Old: domain.StatusUnsupported, New: domain.StatusSupported},
+			{Dim: domain.DimConn, Old: domain.StatusSupported, New: domain.StatusNotApplicable}, // shadow
+		},
+	}
 	for range checkpointEvery - 21 {
 		m.RecordScan(ctx, &obs, false, CommitResult{}, nil, 50*time.Millisecond)
 	}
 	for range 20 {
-		m.RecordScan(ctx, &obs, false, CommitResult{}, nil, 700*time.Millisecond)
+		m.RecordScan(ctx, &obs, false, committed, nil, 700*time.Millisecond)
 	}
-	m.RecordScan(ctx, &obs, false, CommitResult{LeaseLost: true}, nil, 700*time.Millisecond)
+	lost := committed
+	lost.LeaseLost = true
+	m.RecordScan(ctx, &obs, false, lost, nil, 700*time.Millisecond)
 
 	var processed, succeeded, failed int32
 	var counters []byte
@@ -55,6 +67,12 @@ func TestMetrics(t *testing.T) {
 	}
 	if base, _ := dim["base"].(map[string]any); base["supported"] != float64(checkpointEvery) {
 		t.Errorf("dim_counters.base = %v", dim["base"])
+	}
+	if got, _ := dim["bootstrap_commits"].(float64); got != 20 {
+		t.Errorf("dim_counters.bootstrap_commits = %v, want 20 (lease-lost scan excluded)", dim["bootstrap_commits"])
+	}
+	if got, _ := dim["confirmed_transitions"].(float64); got != 20 {
+		t.Errorf("dim_counters.confirmed_transitions = %v, want 20 (shadow + lease-lost excluded)", dim["confirmed_transitions"])
 	}
 	if p50 < 32 || p50 > 128 {
 		t.Errorf("p50 = %d ms, want ≈50 (log-bucket estimate)", p50)
