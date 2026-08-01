@@ -52,12 +52,12 @@ func TestResourceDiscovery(t *testing.T) {
 		if _, err := pool.Exec(ctx, "INSERT INTO resource_host (host) VALUES ($1) ON CONFLICT (host) DO NOTHING", host); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := pool.Exec(ctx, postgres.SQLUpsertDomainResource, host, domainID, tstz(now)); err != nil {
+		if _, err := pool.Exec(ctx, postgres.SQLUpsertDomainResource, host, domainID, postgres.TS(now)); err != nil {
 			t.Fatal(err)
 		}
 	}
 	prune := func(domainID int64) {
-		if _, err := pool.Exec(ctx, postgres.SQLPruneDomainResources, domainID, tstz(now)); err != nil {
+		if _, err := pool.Exec(ctx, postgres.SQLPruneDomainResources, domainID, postgres.TS(now)); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -89,7 +89,7 @@ func TestResourceDiscovery(t *testing.T) {
 		ids["d1.example"]); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pool.Exec(ctx, postgres.SQLPruneDomainResources, ids["d1.example"], tstz(time.Now().UTC())); err != nil {
+	if _, err := pool.Exec(ctx, postgres.SQLPruneDomainResources, ids["d1.example"], postgres.TS(time.Now().UTC())); err != nil {
 		t.Fatal(err)
 	}
 
@@ -274,7 +274,7 @@ func TestResourceCLI(t *testing.T) {
 		"UPDATE domain_resource SET last_seen = now() - interval '90 days' WHERE domain_id=$1", domainID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pool.Exec(ctx, postgres.SQLPruneDomainResources, domainID, tstz(time.Now().UTC())); err != nil {
+	if _, err := pool.Exec(ctx, postgres.SQLPruneDomainResources, domainID, postgres.TS(time.Now().UTC())); err != nil {
 		t.Fatal(err)
 	}
 	if stored, actual := countDeps(t, pool, "manual.example.net"); stored != 1 || actual != 1 {

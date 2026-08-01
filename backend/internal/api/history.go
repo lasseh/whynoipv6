@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/lasseh/whynoipv6/internal/domain"
+	"github.com/lasseh/whynoipv6/internal/postgres"
 	db "github.com/lasseh/whynoipv6/internal/postgres/db"
 )
 
@@ -192,7 +193,7 @@ func (s *Server) getDomainHistory(w http.ResponseWriter, r *http.Request) {
 	}
 
 	latency, err := s.q.ScanLatencyDaily(r.Context(), db.ScanLatencyDailyParams{
-		DomainID: row.ID, FromTs: pgTS(from), ToTs: pgTS(to.AddDate(0, 0, 1)),
+		DomainID: row.ID, FromTs: postgres.TS(from), ToTs: postgres.TS(to.AddDate(0, 0, 1)),
 	})
 	if err != nil {
 		InternalError(w, r, err)

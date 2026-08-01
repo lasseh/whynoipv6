@@ -13,7 +13,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/lasseh/whynoipv6/internal/postgres"
 )
 
@@ -215,11 +214,6 @@ func applyETag(w http.ResponseWriter, r *http.Request, etag string) bool {
 func queryFingerprint(r *http.Request) string {
 	q := r.URL.Query()
 	return fmt.Sprintf("%x", hashString(q.Encode()))
-}
-
-// pgTS wraps a time as a pgtype.Timestamptz, invalid when absent.
-func pgTS(t time.Time) pgtype.Timestamptz {
-	return pgtype.Timestamptz{Time: t, Valid: true}
 }
 
 // hashString is FNV-1a (deterministic across instances; not security).

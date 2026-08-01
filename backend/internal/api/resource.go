@@ -37,9 +37,9 @@ type ResourceHostBody struct {
 func resourceHostBody(row *db.ResourceHostByHostRow) ResourceHostBody {
 	return ResourceHostBody{
 		Host:           row.Host,
-		AAAAStatus:     statusPtr(row.AaaaStatus),
+		AAAAStatus:     postgres.StatusPtr(row.AaaaStatus),
 		DependentCount: row.DependentCount,
-		LastCheckedAt:  pgTimePtr(row.LastCheckedAt),
+		LastCheckedAt:  postgres.TimePtr(row.LastCheckedAt),
 	}
 }
 
@@ -67,12 +67,12 @@ func (s *Server) listDomainResources(w http.ResponseWriter, r *http.Request) {
 	for i := range rows {
 		items[i] = ResourceLink{
 			Host:          rows[i].Host,
-			AAAAStatus:    statusPtr(rows[i].AaaaStatus),
+			AAAAStatus:    postgres.StatusPtr(rows[i].AaaaStatus),
 			Source:        string(rows[i].Source),
 			Required:      rows[i].Required,
 			FirstSeen:     rows[i].FirstSeen.Time.UTC().Format("2006-01-02"),
 			LastSeen:      rows[i].LastSeen.Time.UTC().Format("2006-01-02"),
-			LastCheckedAt: pgTimePtr(rows[i].LastCheckedAt),
+			LastCheckedAt: postgres.TimePtr(rows[i].LastCheckedAt),
 		}
 	}
 	count := int64(len(items))

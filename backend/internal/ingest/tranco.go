@@ -14,10 +14,10 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/lasseh/whynoipv6/internal/domain"
+	"github.com/lasseh/whynoipv6/internal/postgres"
 	db "github.com/lasseh/whynoipv6/internal/postgres/db"
 )
 
@@ -241,7 +241,7 @@ func (ti *TrancoImporter) applyList(ctx context.Context, rep *TrancoReport, rows
 			slog.Warn("tranco import aborted", "list_id", rep.ListID, "note", note)
 			return db.New(ti.pool).TrancoInsertAborted(ctx, db.TrancoInsertAbortedParams{
 				ListID:         rep.ListID,
-				ListDate:       pgDate(rep.ListDate),
+				ListDate:       postgres.Date(rep.ListDate),
 				LineCount:      ptr(int32(rep.LineCount)),
 				RejectedCount:  ptr(int32(rep.RejectedCount)),
 				DuplicateCount: ptr(int32(rep.DuplicateCount)),
@@ -273,7 +273,7 @@ func (ti *TrancoImporter) applyList(ctx context.Context, rep *TrancoReport, rows
 
 	if _, err := q.TrancoInsertProvenance(ctx, db.TrancoInsertProvenanceParams{
 		ListID:         rep.ListID,
-		ListDate:       pgDate(rep.ListDate),
+		ListDate:       postgres.Date(rep.ListDate),
 		LineCount:      ptr(int32(rep.LineCount)),
 		ImportedCount:  ptr(int32(rep.ImportedCount)),
 		Delisted:       ptr(int32(rep.Delisted)),
@@ -346,5 +346,3 @@ func parseTrancoZip(zipBytes []byte) (rows [][]any, lineCount, rejected int, err
 }
 
 func ptr[T any](v T) *T { return &v }
-
-func pgDate(t time.Time) pgtype.Date { return pgtype.Date{Time: t, Valid: true} }

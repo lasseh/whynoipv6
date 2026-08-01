@@ -19,6 +19,7 @@ import (
 	"github.com/lasseh/whynoipv6/internal/checker"
 	"github.com/lasseh/whynoipv6/internal/domain"
 	"github.com/lasseh/whynoipv6/internal/observe"
+	"github.com/lasseh/whynoipv6/internal/postgres"
 	db "github.com/lasseh/whynoipv6/internal/postgres/db"
 )
 
@@ -253,7 +254,7 @@ func (s *Server) jobEnvelope(r *http.Request, j *jobFields) CheckEnvelope {
 	env := CheckEnvelope{
 		ID: &id, Host: j.Host, Status: j.Status,
 		CreatedAt:   j.CreatedAt.Time.UTC(),
-		CompletedAt: pgTimePtr(j.CompletedAt),
+		CompletedAt: postgres.TimePtr(j.CompletedAt),
 		Error:       j.Error,
 	}
 	if j.Result != nil {
@@ -330,7 +331,7 @@ func confirmedBlock(row *db.DomainConfirmedRow) *CheckConfirmed {
 		ClassFlags:     flags,
 		Saint:          row.Saint,
 		Status:         statusBlockTyped(&sextet),
-		AsOf:           pgTimePtr(row.LastCheckedAt),
+		AsOf:           postgres.TimePtr(row.LastCheckedAt),
 	}
 }
 

@@ -9,8 +9,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/lasseh/whynoipv6/internal/postgres"
 	db "github.com/lasseh/whynoipv6/internal/postgres/db"
 )
 
@@ -110,7 +110,7 @@ func (s *Server) getStatsOverview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rows, err := s.q.StatsGlobalRange(r.Context(), db.StatsGlobalRangeParams{
-		FromDay: pgDate(from), ToDay: pgDate(to),
+		FromDay: postgres.Date(from), ToDay: postgres.Date(to),
 	})
 	if err != nil {
 		InternalError(w, r, err)
@@ -175,7 +175,7 @@ func (s *Server) getCountryStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rows, err := s.q.StatsCountryRange(r.Context(), db.StatsCountryRangeParams{
-		CountryID: id, FromDay: pgDate(from), ToDay: pgDate(to),
+		CountryID: id, FromDay: postgres.Date(from), ToDay: postgres.Date(to),
 	})
 	if err != nil {
 		InternalError(w, r, err)
@@ -234,7 +234,7 @@ func (s *Server) getCampaignStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rows, err := s.q.StatsCampaignRange(r.Context(), db.StatsCampaignRangeParams{
-		CampaignID: row.ID, FromDay: pgDate(from), ToDay: pgDate(to),
+		CampaignID: row.ID, FromDay: postgres.Date(from), ToDay: postgres.Date(to),
 	})
 	if err != nil {
 		InternalError(w, r, err)
@@ -299,7 +299,7 @@ func (s *Server) getASNStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rows, err := s.q.StatsASNRange(r.Context(), db.StatsASNRangeParams{
-		AsnID: id, FromDay: pgTS(from), ToDay: pgTS(to),
+		AsnID: id, FromDay: postgres.TS(from), ToDay: postgres.TS(to),
 	})
 	if err != nil {
 		InternalError(w, r, err)
@@ -316,8 +316,4 @@ func (s *Server) getASNStats(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	WriteJSON(w, http.StatusOK, PointsEnvelope{Points: sampleWeekly(points, days, weekly), Meta: meta})
-}
-
-func pgDate(t time.Time) pgtype.Date {
-	return pgtype.Date{Time: t, Valid: true}
 }

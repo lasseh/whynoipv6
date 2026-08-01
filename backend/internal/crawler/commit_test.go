@@ -7,6 +7,7 @@ import (
 	"github.com/lasseh/whynoipv6/internal/checker"
 	"github.com/lasseh/whynoipv6/internal/domain"
 	"github.com/lasseh/whynoipv6/internal/observe"
+	"github.com/lasseh/whynoipv6/internal/postgres"
 	db "github.com/lasseh/whynoipv6/internal/postgres/db"
 )
 
@@ -110,19 +111,19 @@ func (m *machine) fold(u *commitUnit) {
 		r := domain.DisabledReason(*p.DisabledReason)
 		m.s.DisabledReason = &r
 	}
-	m.s.DisabledAt = tsPtr(p.DisabledAt)
+	m.s.DisabledAt = postgres.TimePtr(p.DisabledAt)
 	m.s.DeadStreak = p.DeadStreak
 	m.s.ErrorStreak = p.ErrorStreak
-	m.s.LastCountedAt = tsPtr(p.LastCountedAt)
+	m.s.LastCountedAt = postgres.TimePtr(p.LastCountedAt)
 	m.s.AsnID = p.AsnID
 	m.s.CountryID = p.CountryID
 	m.s.Dims = map[domain.Dimension]DimState{
-		domain.DimBase:      {Status: fromDB(p.BaseStatus), Pending: fromDB(p.BasePending), PendingCount: p.BasePendingCount, Since: tsPtr(p.BaseSince)},
-		domain.DimWWW:       {Status: fromDB(p.WwwStatus), Pending: fromDB(p.WwwPending), PendingCount: p.WwwPendingCount, Since: tsPtr(p.WwwSince)},
-		domain.DimNS:        {Status: fromDB(p.NsStatus), Pending: fromDB(p.NsPending), PendingCount: p.NsPendingCount, Since: tsPtr(p.NsSince)},
-		domain.DimMX:        {Status: fromDB(p.MxStatus), Pending: fromDB(p.MxPending), PendingCount: p.MxPendingCount, Since: tsPtr(p.MxSince)},
-		domain.DimConn:      {Status: fromDB(p.ConnStatus), Pending: fromDB(p.ConnPending), PendingCount: p.ConnPendingCount, Since: tsPtr(p.ConnSince)},
-		domain.DimResources: {Status: fromDB(p.ResourcesStatus), Pending: fromDB(p.ResourcesPending), PendingCount: p.ResourcesPendingCount, Since: tsPtr(p.ResourcesSince)},
+		domain.DimBase:      {Status: fromDB(p.BaseStatus), Pending: fromDB(p.BasePending), PendingCount: p.BasePendingCount, Since: postgres.TimePtr(p.BaseSince)},
+		domain.DimWWW:       {Status: fromDB(p.WwwStatus), Pending: fromDB(p.WwwPending), PendingCount: p.WwwPendingCount, Since: postgres.TimePtr(p.WwwSince)},
+		domain.DimNS:        {Status: fromDB(p.NsStatus), Pending: fromDB(p.NsPending), PendingCount: p.NsPendingCount, Since: postgres.TimePtr(p.NsSince)},
+		domain.DimMX:        {Status: fromDB(p.MxStatus), Pending: fromDB(p.MxPending), PendingCount: p.MxPendingCount, Since: postgres.TimePtr(p.MxSince)},
+		domain.DimConn:      {Status: fromDB(p.ConnStatus), Pending: fromDB(p.ConnPending), PendingCount: p.ConnPendingCount, Since: postgres.TimePtr(p.ConnSince)},
+		domain.DimResources: {Status: fromDB(p.ResourcesStatus), Pending: fromDB(p.ResourcesPending), PendingCount: p.ResourcesPendingCount, Since: postgres.TimePtr(p.ResourcesSince)},
 	}
 }
 

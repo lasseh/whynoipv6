@@ -187,7 +187,7 @@ func ComputeCommit(in *CommitInput, cfg *CommitConfig) (*commitUnit, error) {
 			if w.count >= domain.ConfirmN(d) {
 				if !shadowTransition(d, val) {
 					changelog = append(changelog, db.InsertChangelogParams{
-						DomainID: s.ID, Ts: tstz(t), Field: string(d),
+						DomainID: s.ID, Ts: postgres.TS(t), Field: string(d),
 						OldValue: db.Ipv6Status(*w.status), NewValue: db.Ipv6Status(val),
 					})
 				}
@@ -252,19 +252,19 @@ func ComputeCommit(in *CommitInput, cfg *CommitConfig) (*commitUnit, error) {
 		flags = []string{}
 	}
 	params := db.CommitDomainParams{
-		Lease:          tstz(s.ClaimedAt),
+		Lease:          postgres.TS(s.ClaimedAt),
 		Classification: db.Classification(class),
 		ClassFlags:     flags,
 		Saint:          saint,
 		AsnID:          asnID,
 		CountryID:      countryID,
 		Disabled:       disabled,
-		DisabledAt:     tstzPtr(disabledAt),
+		DisabledAt:     postgres.TSPtr(disabledAt),
 		DeadStreak:     deadStreak,
 		ErrorStreak:    errorStreak,
-		NextCheckAt:    tstz(nextCheck),
-		Ts:             tstz(t),
-		LastCountedAt:  tstzPtr(lastCounted),
+		NextCheckAt:    postgres.TS(nextCheck),
+		Ts:             postgres.TS(t),
+		LastCountedAt:  postgres.TSPtr(lastCounted),
 		DomainID:       s.ID,
 		// Step 8 — informational columns, overwritten verbatim every commit.
 		DnssecObserved: obsDB(info.DNSSEC),
@@ -290,7 +290,7 @@ func ComputeCommit(in *CommitInput, cfg *CommitConfig) (*commitUnit, error) {
 			Domain:    params,
 			Changelog: changelog,
 			Scan: db.InsertScanParams{
-				DomainID: s.ID, Ts: tstz(t),
+				DomainID: s.ID, Ts: postgres.TS(t),
 				Base: db.Observation(in.Obs.Base), Www: db.Observation(in.Obs.WWW),
 				Ns: db.Observation(in.Obs.NS), Mx: db.Observation(in.Obs.MX),
 				Conn: db.Observation(in.Obs.Conn), Resources: db.Observation(in.Obs.Resources),
@@ -301,7 +301,7 @@ func ComputeCommit(in *CommitInput, cfg *CommitConfig) (*commitUnit, error) {
 				CountryID:      &countryID, AsnID: &asnID,
 			},
 			Detail: db.InsertScanDetailParams{
-				DomainID: s.ID, Ts: tstz(t), Details: in.Details, DurationMs: &in.DurationMS,
+				DomainID: s.ID, Ts: postgres.TS(t), Details: in.Details, DurationMs: &in.DurationMS,
 			},
 		},
 		host:        s.Host,
@@ -332,7 +332,7 @@ func bindDim(status **db.Ipv6Status, observed **db.Observation, pending **db.Ipv
 		*pending = &v
 	}
 	*count = w.count
-	*since = tstzPtr(w.since)
+	*since = postgres.TSPtr(w.since)
 }
 
 func obsDB(o domain.Observation) *db.Observation {
@@ -341,15 +341,6 @@ func obsDB(o domain.Observation) *db.Observation {
 	}
 	v := db.Observation(o)
 	return &v
-}
-
-func tstz(t time.Time) pgtype.Timestamptz { return pgtype.Timestamptz{Time: t, Valid: true} }
-
-func tstzPtr(t *time.Time) pgtype.Timestamptz {
-	if t == nil {
-		return pgtype.Timestamptz{}
-	}
-	return pgtype.Timestamptz{Time: *t, Valid: true}
 }
 
 // Committer flushes commit units under the lease fence (03 §12–§13).

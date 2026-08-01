@@ -23,6 +23,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/parquet-go/parquet-go"
 
+	"github.com/lasseh/whynoipv6/internal/postgres"
 	db "github.com/lasseh/whynoipv6/internal/postgres/db"
 )
 
@@ -199,13 +200,7 @@ func (e *Exporter) fetch(ctx context.Context, rankedOnly bool, maxRank int32) ([
 	if err != nil {
 		return nil, fmt.Errorf("export rows: %w", err)
 	}
-	status := func(v *db.Ipv6Status) *string {
-		if v == nil {
-			return nil
-		}
-		s := string(*v)
-		return &s
-	}
+	status := postgres.StatusPtr
 	ts := func(t pgtype.Timestamptz) *string {
 		if !t.Valid {
 			return nil

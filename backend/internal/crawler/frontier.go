@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/lasseh/whynoipv6/internal/domain"
+	"github.com/lasseh/whynoipv6/internal/postgres"
 	db "github.com/lasseh/whynoipv6/internal/postgres/db"
 )
 
@@ -184,7 +185,7 @@ func claimedFromRow(r *claimRow) ClaimedDomain {
 		Rank:        r.Rank,
 		ClaimedAt:   r.ClaimedAt.Time,
 		Disabled:    r.Disabled,
-		DisabledAt:  tsPtr(r.DisabledAt),
+		DisabledAt:  postgres.TimePtr(r.DisabledAt),
 		DeadStreak:  r.DeadStreak,
 		ErrorStreak: r.ErrorStreak,
 		AsnID:       r.AsnID,
@@ -194,7 +195,7 @@ func claimedFromRow(r *claimRow) ClaimedDomain {
 		reason := domain.DisabledReason(*r.DisabledReason)
 		cd.DisabledReason = &reason
 	}
-	cd.LastCountedAt = tsPtr(r.LastCountedAt)
+	cd.LastCountedAt = postgres.TimePtr(r.LastCountedAt)
 	cd.Dims = map[domain.Dimension]DimState{
 		domain.DimBase:      dim(r.BaseStatus, r.BasePending, r.BasePendingCount, r.BaseSince),
 		domain.DimWWW:       dim(r.WwwStatus, r.WwwPending, r.WwwPendingCount, r.WwwSince),
@@ -208,25 +209,17 @@ func claimedFromRow(r *claimRow) ClaimedDomain {
 
 func dim(status, pending *db.Ipv6Status, count int16, since pgtype.Timestamptz) DimState {
 	return DimState{
-		Status:       statusPtr(status),
-		Pending:      statusPtr(pending),
+		Status:       ipv6StatusPtr(status),
+		Pending:      ipv6StatusPtr(pending),
 		PendingCount: count,
-		Since:        tsPtr(since),
+		Since:        postgres.TimePtr(since),
 	}
 }
 
-func statusPtr(s *db.Ipv6Status) *domain.IPv6Status {
+func ipv6StatusPtr(s *db.Ipv6Status) *domain.IPv6Status {
 	if s == nil {
 		return nil
 	}
 	v := domain.IPv6Status(*s)
 	return &v
-}
-
-func tsPtr(ts pgtype.Timestamptz) *time.Time {
-	if !ts.Valid {
-		return nil
-	}
-	t := ts.Time
-	return &t
 }

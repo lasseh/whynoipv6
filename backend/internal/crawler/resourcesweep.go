@@ -67,8 +67,8 @@ func (s *ResourceSweeper) claim(ctx context.Context) ([]sweptHost, error) {
 	for i, r := range rows {
 		out[i] = sweptHost{
 			ID: r.ID, Host: r.Host,
-			Status:       statusPtr(r.AaaaStatus),
-			Pending:      statusPtr(r.AaaaPending),
+			Status:       ipv6StatusPtr(r.AaaaStatus),
+			Pending:      ipv6StatusPtr(r.AaaaPending),
 			PendingCount: r.AaaaPendingCount,
 		}
 	}
@@ -123,8 +123,8 @@ func (s *ResourceSweeper) sweepHost(ctx context.Context, h *sweptHost) {
 
 	err := db.New(s.Pool).ResourceSweepCommit(ctx, db.ResourceSweepCommitParams{
 		ID:               h.ID,
-		AaaaStatus:       statusEnum(status),
-		AaaaPending:      statusEnum(pending),
+		AaaaStatus:       statusDB(status),
+		AaaaPending:      statusDB(pending),
 		AaaaPendingCount: pendingCount,
 	})
 	if err != nil && ctx.Err() == nil {
@@ -132,7 +132,7 @@ func (s *ResourceSweeper) sweepHost(ctx context.Context, h *sweptHost) {
 	}
 }
 
-func statusEnum(v *domain.IPv6Status) *db.Ipv6Status {
+func statusDB(v *domain.IPv6Status) *db.Ipv6Status {
 	if v == nil {
 		return nil
 	}

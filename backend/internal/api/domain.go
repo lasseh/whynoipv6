@@ -14,7 +14,6 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/lasseh/whynoipv6/internal/domain"
 	"github.com/lasseh/whynoipv6/internal/postgres"
@@ -127,8 +126,8 @@ func statusBlockTyped(c *db.ConfirmedSextet) StatusBlock {
 	var value [6]*string
 	var since [6]*time.Time
 	for i := range c.Status {
-		value[i] = statusPtr(c.Status[i])
-		since[i] = pgTimePtr(c.Since[i])
+		value[i] = postgres.StatusPtr(c.Status[i])
+		since[i] = postgres.TimePtr(c.Since[i])
 	}
 	return statusBlockOf(value, since)
 }
@@ -648,22 +647,6 @@ func maskObservation(o *db.Observation, allowPartial bool) *string {
 	return &v
 }
 
-func statusPtr(v *db.Ipv6Status) *string {
-	if v == nil {
-		return nil
-	}
-	s := string(*v)
-	return &s
-}
-
-func pgTimePtr(t pgtype.Timestamptz) *time.Time {
-	if !t.Valid {
-		return nil
-	}
-	u := t.Time.UTC()
-	return &u
-}
-
 // domainByPathHost resolves the {host} path param to its domain row
 // (path-parameter failure policy, 07 §2.8).
 func (s *Server) domainByPathHost(w http.ResponseWriter, r *http.Request) (db.DomainByHostRow, bool) {
@@ -741,7 +724,7 @@ func (s *Server) getDomain(w http.ResponseWriter, r *http.Request) {
 		HostingProvider: row.HostingProvider,
 		SubdomainCount:  row.SubdomainCount,
 		Disabled:        row.Disabled,
-		LastCheckedAt:   pgTimePtr(row.LastCheckedAt),
+		LastCheckedAt:   postgres.TimePtr(row.LastCheckedAt),
 		CreatedAt:       row.CreatedAt.Time.UTC(),
 		Meta:            DetailMeta{AsOf: asOf.UTC(), Generation: generation},
 	}
