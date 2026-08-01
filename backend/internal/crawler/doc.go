@@ -6,7 +6,7 @@
 //
 // The files: frontier.go — claim loop and slot pool; worker.go — per-domain
 // slot body; commit.go — the pure state machine (ComputeCommit) plus the
-// fenced flush (Committer); schedule.go — lane selection and cadence bands;
+// fenced flush (Committer); schedule.go — lane selection;
 // tick.go — the daily tick; coordinator.go — the singleton schedules;
 // sweep.go — the lifecycle sweep; resourcesweep.go — the resource-host
 // sweep; livecheck.go — the check-job consumers and reaper; metrics.go —

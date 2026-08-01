@@ -124,13 +124,6 @@ func (c *Config) Float(key string) float64 { c.mustKnow(key); return c.v.GetFloa
 // Duration returns the value of a registry key.
 func (c *Config) Duration(key string) time.Duration { c.mustKnow(key); return c.v.GetDuration(key) }
 
-// UnmarshalKey decodes a structured registry key (YAML-only shapes like
-// cadence.bands) into out via mapstructure.
-func (c *Config) UnmarshalKey(key string, out any) error {
-	c.mustKnow(key)
-	return c.v.UnmarshalKey(key, out)
-}
-
 // StringSlice returns the value of a list registry key; env overrides are
 // comma-separated (09-ops.md §1).
 func (c *Config) StringSlice(key string) []string {

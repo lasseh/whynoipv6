@@ -3,6 +3,7 @@ package crawler
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"time"
 
@@ -140,10 +141,13 @@ func scheduleAt(ctx context.Context, hhmm string) <-chan time.Time {
 }
 
 // nextOccurrence computes the next UTC occurrence of HH:MM after now.
+// tranco.import_at is validated at startup (cmd/crawler run) and TickAt is a
+// compile-time constant, so a malformed value here is a wiring defect — it
+// fails fast like the config accessors instead of silently rescheduling.
 func nextOccurrence(now time.Time, hhmm string) time.Time {
 	t, err := time.Parse("15:04", hhmm)
 	if err != nil {
-		t, _ = time.Parse("15:04", "03:30")
+		panic(fmt.Sprintf("crawler: malformed schedule time %q (want HH:MM)", hhmm))
 	}
 	next := time.Date(now.Year(), now.Month(), now.Day(), t.Hour(), t.Minute(), 0, 0, time.UTC)
 	if !next.After(now) {

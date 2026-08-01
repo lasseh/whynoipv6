@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -44,12 +45,16 @@ type LiveChecker struct {
 	Cfg       LiveCheckConfig
 }
 
-// Run blocks until ctx is done, operating Cfg.Workers claim loops and the
-// 60 s reaper tick.
-func (lc *LiveChecker) Run(ctx context.Context) {
-	for i := 0; i < lc.Cfg.Workers; i++ {
-		go lc.workerLoop(ctx)
+// Run blocks until ctx is done and every in-flight job has finished,
+// operating Cfg.Workers claim loops and the 60 s reaper tick. work is the
+// context jobs run under — cmd wiring passes the drain-budget root context
+// so a SIGTERM drains an in-flight job instead of cancelling it (04 §14).
+func (lc *LiveChecker) Run(ctx, work context.Context) {
+	var wg sync.WaitGroup
+	for range lc.Cfg.Workers {
+		wg.Go(func() { lc.workerLoop(ctx, work) })
 	}
+	defer wg.Wait()
 	t := time.NewTicker(reaperEvery)
 	defer t.Stop()
 	for {
@@ -67,7 +72,7 @@ func (lc *LiveChecker) Run(ctx context.Context) {
 	}
 }
 
-func (lc *LiveChecker) workerLoop(ctx context.Context) {
+func (lc *LiveChecker) workerLoop(ctx, work context.Context) {
 	for ctx.Err() == nil {
 		job, err := lc.Q.CheckJobClaim(ctx, pgInterval(lc.Cfg.ReclaimAfter))
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -84,7 +89,7 @@ func (lc *LiveChecker) workerLoop(ctx context.Context) {
 			}
 			continue
 		}
-		lc.process(ctx, job.ID, job.Host)
+		lc.process(work, job.ID, job.Host)
 	}
 }
 

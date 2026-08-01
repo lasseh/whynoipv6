@@ -78,9 +78,6 @@ func TestCommitTxn(t *testing.T) {
 	if !res.LeaseLost {
 		t.Fatal("re-commit with a consumed lease must be lease-lost")
 	}
-	if c.LeaseLost.Load() != 1 {
-		t.Errorf("lease_lost counter = %d, want 1", c.LeaseLost.Load())
-	}
 	if err := pool.QueryRow(ctx, "SELECT count(*) FROM scan").Scan(&scans); err != nil {
 		t.Fatal(err)
 	}

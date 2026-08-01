@@ -25,7 +25,6 @@ func registryDefaults(binary string) map[string]any {
 		"claim.order":                       "rank",
 		"worker_slots":                      64,
 		"cadence.default":                   "24h",
-		"cadence.bands":                     []map[string]any{},
 		"recheck_inconsistent":              "2h",
 		"recheck_error":                     "6h",
 		"recheck_backoff_max":               "720h",
@@ -97,6 +96,7 @@ func registryDefaults(binary string) map[string]any {
 		"datasets.retention_days":     90,
 		"feed.recent_window":          50,
 		"export.csv_max_rows":         10000,
+		"api.trusted_proxies":         []string{"127.0.0.0/8", "::1/128"},
 
 		// §2.11 DNS-provider mapping.
 		"dns_provider.seed_path":        "",

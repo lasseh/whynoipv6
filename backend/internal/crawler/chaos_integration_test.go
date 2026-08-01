@@ -66,7 +66,7 @@ func TestLeaseFenceChaos(t *testing.T) {
 	}
 
 	// Worker A wakes up and tries to commit its stale batch: every unit is
-	// fenced, writes nothing, and increments lease_lost.
+	// fenced and writes nothing.
 	for _, d := range batchA {
 		res, err := committer.Commit(ctx, &CommitInput{
 			Snapshot: d, Obs: obs,
@@ -79,9 +79,6 @@ func TestLeaseFenceChaos(t *testing.T) {
 		if !res.LeaseLost {
 			t.Fatal("worker A's stale commit landed — fence broken")
 		}
-	}
-	if got := committer.LeaseLost.Load(); got != int64(n) {
-		t.Errorf("lease_lost counter = %d, want %d", got, n)
 	}
 
 	// No double changelog: exactly one row per (domain_id, field).

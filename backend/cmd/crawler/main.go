@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -105,12 +106,7 @@ func run() error {
 		}()
 	}
 
-	commitCfg := crawler.CommitConfigFrom(cfg)
-	commitCfg.Schedule.Bands, err = crawler.BandsFrom(cfg)
-	if err != nil {
-		return err
-	}
-	committer := crawler.NewCommitter(pool, commitCfg)
+	committer := crawler.NewCommitter(pool, crawler.CommitConfigFrom(cfg))
 
 	runID := uuid.New()
 	hostname, _ := os.Hostname()
@@ -121,7 +117,6 @@ func run() error {
 	metrics := crawler.NewMetrics(pool, runID, worker)
 	metrics.GeoIPBuildEpoch = geoReader.BuildEpoch
 	metrics.Heartbeat = func() { notifier.HeartbeatOK(rootCtx) }
-	metrics.Disagreement = cons.DrainDisagreement
 
 	w := &crawler.Worker{
 		Pool: pool, Scanner: runner, Preflight: preflight, Committer: committer,
@@ -136,7 +131,6 @@ func run() error {
 	}
 
 	frontier := crawler.NewFrontier(pool, crawler.FrontierConfigFrom(cfg))
-	metrics.ActiveSlots = frontier.ActiveSlots
 	// Workers commit under rootCtx (drain); the claim loop stops first.
 	frontier.Process = func(_ context.Context, d crawler.ClaimedDomain) { w.Process(rootCtx, d) }
 	frontier.Preflight = func(ctx context.Context) bool {
@@ -156,10 +150,14 @@ func run() error {
 		Notify:   notifier.Webhook,
 		PingTick: notifier.PingTick,
 	}
+	importAt := cfg.String("tranco.import_at")
+	if _, err := time.Parse("15:04", importAt); err != nil {
+		return fmt.Errorf("tranco.import_at: %w", err)
+	}
 	coordinator := &crawler.Coordinator{
 		Pool: pool, Tick: tick, Metrics: metrics, Notify: notifier.Webhook,
 		Tranco:        ingest.NewTrancoImporter(pool, ingest.NewHTTPTrancoSource(), ingest.TrancoConfigFrom(cfg)),
-		ImportAt:      cfg.String("tranco.import_at"),
+		ImportAt:      importAt,
 		RetryInterval: cfg.Duration("tranco.retry_interval"),
 		StaleWarn:     cfg.Duration("tranco.stale_warn_after"),
 	}
@@ -176,26 +174,31 @@ func run() error {
 		time.AfterFunc(drainBudget, rootCancel)
 	}()
 
-	go coordinator.Run(claimCtx)
-	go metrics.RunIdleLoop(claimCtx)
-	go geoipReloadLoop(claimCtx, geoReader)
+	// The auxiliary loops stop with claimCtx and are joined before the final
+	// checkpoint so the process never exits mid-operation; in-flight
+	// live-check jobs drain under rootCtx like frontier scans (04 §14).
+	var aux sync.WaitGroup
+	aux.Go(func() { coordinator.Run(claimCtx) })
+	aux.Go(func() { metrics.RunIdleLoop(claimCtx) })
+	aux.Go(func() { geoipReloadLoop(claimCtx, geoReader) })
 
 	// The §5.1.5 check-job consumer pool + reaper (04 — placement).
 	liveChecker := &crawler.LiveChecker{
 		Pool: pool, Q: q, Runner: runner, Preflight: preflight,
 		Cfg: crawler.LiveCheckConfigFrom(cfg),
 	}
-	go liveChecker.Run(claimCtx)
+	aux.Go(func() { liveChecker.Run(claimCtx, rootCtx) })
 
 	// The resource-host sweep (06 §5.2): only when the dimension is on —
 	// the registry is empty otherwise; flag changes apply on restart.
 	if resourcesEnabled {
 		sweeper := &crawler.ResourceSweeper{Pool: pool, Bulk: bulk}
-		go sweeper.Run(claimCtx)
+		aux.Go(func() { sweeper.Run(claimCtx) })
 	}
 
 	slog.Info("crawler started", "worker_slots", cfg.Int("worker_slots"))
 	frontier.Run(claimCtx) // returns once claiming stopped and slots drained
+	aux.Wait()
 
 	// Final checkpoint (is_final) with a fresh short context: rootCtx may
 	// already be cancelled by the drain deadline.

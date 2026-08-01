@@ -33,17 +33,11 @@ type Metrics struct {
 	runID  uuid.UUID
 	worker string
 
-	// ActiveSlots reports busy worker slots at write time (nil = 0).
-	ActiveSlots func() int32
 	// GeoIPBuildEpoch reports the loaded mmdb build date (nil = NULL).
 	GeoIPBuildEpoch func() time.Time
 	// Heartbeat fires after every successful commit record (nil = disabled);
 	// the notify client throttles it.
 	Heartbeat func()
-	// Disagreement drains the per-provider consensus outvote tallies into
-	// consensus_disagree_<provider> keys (nil = none). Must return deltas —
-	// the checkpoint payload is per-interval (02 §2.10).
-	Disagreement func() map[string]int64
 
 	mu             sync.Mutex
 	processed      int32
@@ -53,7 +47,6 @@ type Metrics struct {
 	leaseLost      int
 	commitErrors   int
 	unresolvable   int
-	deadTriggered  int
 	recovered      int
 	bootstraps     int
 	confirmedTrans int
@@ -120,9 +113,6 @@ func (m *Metrics) RecordScan(ctx context.Context, obs *observe.Observations, unr
 		m.Checkpoint(ctx, false)
 	}
 }
-
-// RecordDeadTriggered / RecordRecovered tally lifecycle events (04 §15.2).
-func (m *Metrics) RecordDeadTriggered() { m.mu.Lock(); m.deadTriggered++; m.mu.Unlock() }
 
 // RecordRecovered counts step-R executions.
 func (m *Metrics) RecordRecovered() { m.mu.Lock(); m.recovered++; m.mu.Unlock() }
@@ -207,20 +197,13 @@ func (m *Metrics) Checkpoint(ctx context.Context, final bool) {
 	counters := m.dimCountersLocked()
 	m.processed, m.succeeded, m.failed = 0, 0, 0
 	m.dims = map[domain.Dimension]map[domain.Observation]int{}
-	m.leaseLost, m.commitErrors, m.unresolvable, m.deadTriggered, m.recovered = 0, 0, 0, 0, 0
+	m.leaseLost, m.commitErrors, m.unresolvable, m.recovered = 0, 0, 0, 0
 	m.bootstraps, m.confirmedTrans = 0, 0
 	m.skips = map[string]int{}
 	m.hist = [histBuckets]int{}
 	m.lastCheckpoint = now
 	m.mu.Unlock()
 
-	if m.Disagreement != nil {
-		for prov, n := range m.Disagreement() {
-			if n > 0 {
-				counters["consensus_disagree_"+prov] = n
-			}
-		}
-	}
 	raw, err := json.Marshal(counters)
 	if err != nil {
 		raw = []byte("{}")
@@ -234,9 +217,6 @@ func (m *Metrics) Checkpoint(ctx context.Context, final bool) {
 	depth := int32(depth64)
 
 	var slots int32
-	if m.ActiveSlots != nil {
-		slots = m.ActiveSlots()
-	}
 	params := db.InsertCrawlerMetricsParams{
 		RunID:       pgtype.UUID{Bytes: m.runID, Valid: true},
 		Worker:      m.worker,
@@ -262,7 +242,7 @@ func (m *Metrics) Checkpoint(ctx context.Context, final bool) {
 }
 
 // dimCountersLocked builds the §15.2 JSONB payload; zero-count keys
-// omitted. Checkpoint merges the drained consensus keys and marshals.
+// omitted. Checkpoint marshals it.
 func (m *Metrics) dimCountersLocked() map[string]any {
 	out := map[string]any{}
 	for d, counts := range m.dims {
@@ -287,9 +267,6 @@ func (m *Metrics) dimCountersLocked() map[string]any {
 	}
 	if m.unresolvable > 0 {
 		out["unresolvable"] = m.unresolvable
-	}
-	if m.deadTriggered > 0 {
-		out["dead_triggered"] = m.deadTriggered
 	}
 	if m.recovered > 0 {
 		out["recovered"] = m.recovered

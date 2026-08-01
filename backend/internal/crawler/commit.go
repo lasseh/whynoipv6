@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"sync/atomic"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
@@ -65,22 +64,20 @@ func shadowTransition(d domain.Dimension, newVal domain.IPv6Status) bool {
 
 // CommitResult reports one commit's outcome.
 type CommitResult struct {
-	LeaseLost     bool
-	Transitions   []Transition
-	Bootstraps    int
-	Recovered     bool // step R ran: a dead-disabled domain was re-enabled
-	DeadTriggered bool // step 4 fired: the dead streak disabled the domain
+	LeaseLost   bool
+	Transitions []Transition
+	Bootstraps  int
+	Recovered   bool // step R ran: a dead-disabled domain was re-enabled
 }
 
 // commitUnit is the computed write unit: the typed postgres.CommitUnit the
 // flush adapter executes, plus the telemetry the crawler keeps.
 type commitUnit struct {
 	postgres.CommitUnit
-	host          string
-	transitions   []Transition
-	bootstraps    int
-	recovered     bool
-	deadTriggered bool
+	host        string
+	transitions []Transition
+	bootstraps  int
+	recovered   bool
 }
 
 // dimWork is one dimension's working confirm/pending state during step 2.
@@ -242,7 +239,7 @@ func ComputeCommit(in *CommitInput, cfg *CommitConfig) (*commitUnit, error) {
 
 	// Step 6 — scheduling.
 	nextCheck := schedule(cfg.Schedule, disabled, obsOf[domain.DimBase], obsOf[domain.DimWWW],
-		errorStreak, s.Rank, in.BreakerOpen, t)
+		errorStreak, in.BreakerOpen, t)
 
 	// Step 7 — attribution (deferred on non-definitive base).
 	asnID, countryID := s.AsnID, s.CountryID
@@ -306,11 +303,10 @@ func ComputeCommit(in *CommitInput, cfg *CommitConfig) (*commitUnit, error) {
 				DomainID: s.ID, Ts: postgres.TS(t), Details: in.Details, DurationMs: &in.DurationMS,
 			},
 		},
-		host:          s.Host,
-		transitions:   transitions,
-		bootstraps:    bootstraps,
-		recovered:     recovered,
-		deadTriggered: deadTriggered,
+		host:        s.Host,
+		transitions: transitions,
+		bootstraps:  bootstraps,
+		recovered:   recovered,
 	}
 	if cfg.ResourcesEnabled && in.DiscoveryOK {
 		u.Resources = in.Discovered
@@ -350,10 +346,6 @@ func obsDB(o domain.Observation) *db.Observation {
 type Committer struct {
 	flush func(ctx context.Context, u *postgres.CommitUnit) (leaseLost bool, err error)
 	cfg   *CommitConfig
-
-	// Counters consumed by the metrics checkpointer (03 §15).
-	LeaseLost    atomic.Int64
-	CommitErrors atomic.Int64
 }
 
 // NewCommitter builds the committer over the postgres flush adapter.
@@ -371,23 +363,20 @@ func NewCommitter(pool *pgxpool.Pool, cfg *CommitConfig) *Committer {
 func (c *Committer) Commit(ctx context.Context, in *CommitInput) (CommitResult, error) {
 	u, err := ComputeCommit(in, c.cfg)
 	if err != nil {
-		c.CommitErrors.Add(1)
 		slog.Error("commit compute failed", "domain", in.Snapshot.Host, "err", err.Error())
 		return CommitResult{}, err
 	}
 	leaseLost, err := c.flush(ctx, &u.CommitUnit)
 	if err != nil {
-		c.CommitErrors.Add(1)
 		slog.Error("commit flush failed", "domain", in.Snapshot.Host, "err", err.Error())
 		return CommitResult{}, err
 	}
 	if leaseLost {
-		c.LeaseLost.Add(1)
 		slog.Warn("lease lost, commit discarded", "domain", u.host)
 		return CommitResult{LeaseLost: true}, nil
 	}
 	return CommitResult{Transitions: u.transitions, Bootstraps: u.bootstraps,
-		Recovered: u.recovered, DeadTriggered: u.deadTriggered}, nil
+		Recovered: u.recovered}, nil
 }
 
 // Unresolvable computes the dead signal U from raw engine/consensus

@@ -130,9 +130,6 @@ func (w *Worker) Process(ctx context.Context, d ClaimedDomain) { //nolint:gocrit
 		if res.Recovered {
 			w.Metrics.RecordRecovered()
 		}
-		if res.DeadTriggered {
-			w.Metrics.RecordDeadTriggered()
-		}
 	}
 	w.Metrics.RecordScan(ctx, &obs, unresolvable, res, err, time.Since(start))
 	slog.Debug("domain processed", "domain", d.Host,

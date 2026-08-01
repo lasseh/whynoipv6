@@ -12,7 +12,7 @@ import (
 
 // fakeCommitter builds a Committer over a fake flush adapter — the second
 // adapter at the flush seam, so Commit's orchestration (fence outcome,
-// counters, result mapping) is unit-testable without Postgres.
+// result mapping) is unit-testable without Postgres.
 func fakeCommitter(t *testing.T, flush func(context.Context, *postgres.CommitUnit) (bool, error)) *Committer {
 	t.Helper()
 	return &Committer{flush: flush, cfg: testCommitCfg(false)}
@@ -41,10 +41,6 @@ func TestCommitLeaseLost(t *testing.T) {
 	if !res.LeaseLost || len(res.Transitions) != 0 || res.Bootstraps != 0 {
 		t.Errorf("lease-lost result = %+v, want bare LeaseLost", res)
 	}
-	if c.LeaseLost.Load() != 1 || c.CommitErrors.Load() != 0 {
-		t.Errorf("counters lease_lost/errors = %d/%d, want 1/0",
-			c.LeaseLost.Load(), c.CommitErrors.Load())
-	}
 	// The fence input travels inside the typed unit.
 	if got.Domain.Lease.Time != seqT0 || !got.Domain.Lease.Valid {
 		t.Errorf("unit lease = %+v, want claim time %v", got.Domain.Lease, seqT0)
@@ -59,10 +55,6 @@ func TestCommitFlushError(t *testing.T) {
 	if _, err := c.Commit(context.Background(), commitInput(t)); !errors.Is(err, boom) {
 		t.Fatalf("err = %v, want boom", err)
 	}
-	if c.CommitErrors.Load() != 1 || c.LeaseLost.Load() != 0 {
-		t.Errorf("counters errors/lease_lost = %d/%d, want 1/0",
-			c.CommitErrors.Load(), c.LeaseLost.Load())
-	}
 }
 
 func TestCommitSuccessMapsUnit(t *testing.T) {
@@ -76,9 +68,5 @@ func TestCommitSuccessMapsUnit(t *testing.T) {
 	// A first definitive scan bootstraps every core dimension.
 	if res.Bootstraps == 0 {
 		t.Error("bootstraps = 0, want > 0")
-	}
-	if c.CommitErrors.Load() != 0 || c.LeaseLost.Load() != 0 {
-		t.Errorf("counters errors/lease_lost = %d/%d, want 0/0",
-			c.CommitErrors.Load(), c.LeaseLost.Load())
 	}
 }

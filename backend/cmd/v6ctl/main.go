@@ -5,6 +5,8 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/spf13/cobra"
@@ -64,7 +66,12 @@ func main() {
 	root.AddCommand(exportCmd())
 	root.AddCommand(resourceCmd())
 
-	err := root.Execute()
+	// SIGINT/SIGTERM cancel the command context so long-running commands
+	// (tranco import, campaign sync, export) unwind cleanly, mirroring
+	// cmd/api; the Taillight drain below still runs.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	err := root.ExecuteContext(ctx)
+	stop()
 	flushLogs() // drain the Taillight shipper regardless of command outcome
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "v6ctl: "+err.Error())
