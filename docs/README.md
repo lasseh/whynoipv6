@@ -44,6 +44,8 @@ record.
 - `design-refresh-prompt.md` — the frontend redesign brief (redesign shipped).
 - `spec-readiness-review.md` — the two-pass audit (35 findings) folded into Round 2.0.
 - `fable5-research-kickoff.md` — the kickoff prompt for the first research round.
+- `sqlc-timescale-research.md` — the sqlc × TimescaleDB data-access research behind the pgx/sqlc layer.
+- `prod-sizing-validation-2026-07.md` — empirical validation of the §5 capacity model on dev hardware; picked the prod crawl config.
 - `gates/` — recorded build-phase gate evidence (P0–P2 + P1 spikes).
 
 ## Agent scaffolding ([`agents/`](agents/))
