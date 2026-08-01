@@ -31,83 +31,28 @@ func asnBody(number int64, name string, total, v6 int32) ASNBody {
 // ?sort=count_v6 (default) | count_total, ?q= substring on the name,
 // keyset-paginated on (count, number) descending.
 func (s *Server) listASNs(w http.ResponseWriter, r *http.Request) {
-	q := r.URL.Query()
-	sortKey := q.Get("sort")
-	switch sortKey {
-	case "":
-		sortKey = SortCountV6
-	case SortCountV6, SortCountTotal:
-	default:
-		InvalidParameter(w, r, "sort must be count_v6 or count_total")
-		return
-	}
-	wantCSV, err := parseFormat(q)
-	if err != nil {
-		invalidParam(w, r, err)
-		return
-	}
-	limitCap := MaxLimit
-	if wantCSV {
-		limitCap = s.opts.CSVMaxRows
-	}
-	limit, err := ParseLimitCap(q, limitCap)
-	if err != nil {
-		invalidParam(w, r, err)
-		return
-	}
-
-	generation, asOf, err := s.generation(r.Context())
-	if err != nil {
-		InternalError(w, r, err)
-		return
-	}
-	if CacheList(w, r, generation) {
-		return
-	}
-
-	items, page, err := KeysetPage(r, generation, limit, KeysetSpec[ASNBody]{
-		Sort: sortKey,
-		Fetch: func(ctx context.Context, seek *Seek, lim int, backward bool) ([]ASNBody, error) {
+	search := r.URL.Query().Get("q")
+	ServeList(s, w, r, ListSpec[postgres.ASNRow, ASNBody]{
+		Sorts: []string{SortCountV6, SortCountTotal},
+		Fetch: func(ctx context.Context, sortKey string, seek *Seek, lim int, backward bool) ([]postgres.ASNRow, error) {
 			var as *postgres.ASNSeek
 			if seek != nil && seek.Rank != nil {
 				as = &postgres.ASNSeek{Count: *seek.Rank, Number: seek.ID}
 			}
-			rows, err := postgres.ListASNLeaderboard(ctx, s.pool, q.Get("q"),
+			return postgres.ListASNLeaderboard(ctx, s.pool, search,
 				sortKey == SortCountTotal, as, lim, backward)
-			if err != nil {
-				return nil, err
-			}
-			bodies := make([]ASNBody, len(rows))
-			for i := range rows {
-				bodies[i] = asnBody(rows[i].Number, rows[i].Name, rows[i].CountTotal, rows[i].CountV6)
-			}
-			return bodies, nil
 		},
-		Key: func(a *ASNBody) []any {
-			count := a.CountV6
+		Key: func(sortKey string, row *postgres.ASNRow) []any {
+			count := row.CountV6
 			if sortKey == SortCountTotal {
-				count = a.CountTotal
+				count = row.CountTotal
 			}
-			return []any{count, a.Number}
+			return []any{count, row.Number}
 		},
-	})
-	if errors.Is(err, ErrCursorInvalid) {
-		InvalidParameter(w, r, err.Error())
-		return
-	}
-	if err != nil {
-		InternalError(w, r, err)
-		return
-	}
-	if wantCSV {
-		writeASNsCSV(w, items)
-		return
-	}
-
-	WriteJSON(w, http.StatusOK, ListEnvelope{
-		Items: items,
-		Page:  page,
-		Meta:  NewMeta(asOf, generation),
+		Item: func(row *postgres.ASNRow) ASNBody {
+			return asnBody(row.Number, row.Name, row.CountTotal, row.CountV6)
+		},
+		CSV: writeASNsCSV,
 	})
 }
 

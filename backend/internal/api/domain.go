@@ -524,39 +524,21 @@ func (s *Server) listSubdomains(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	q := r.URL.Query()
-	limit, err := ParseLimit(q)
-	if err != nil {
-		invalidParam(w, r, err)
-		return
-	}
-	generation, asOf, err := s.generation(r.Context())
-	if err != nil {
-		InternalError(w, r, err)
-		return
-	}
-	if CacheList(w, r, generation) {
-		return
-	}
-
 	filter := postgres.DomainListFilter{ParentID: &d.ID}
-	items, page, err := s.hostOrderedPage(r, &filter, fmt.Sprintf("subdomains:%d", d.ID), generation, limit)
-	if err != nil {
-		if errors.Is(err, ErrCursorInvalid) {
-			InvalidParameter(w, r, err.Error())
-			return
-		}
-		InternalError(w, r, err)
-		return
-	}
-	count, err := s.q.SubdomainExactCount(r.Context(), &d.ID)
-	if err != nil {
-		InternalError(w, r, err)
-		return
-	}
-	meta := NewMeta(asOf, generation)
-	meta.Count = &count
-	WriteJSON(w, http.StatusOK, ListEnvelope{Items: items, Page: page, Meta: meta})
+	ServeList(s, w, r, ListSpec[postgres.DomainRow, DomainSummary]{
+		Sort:  SortHost,
+		Scope: fmt.Sprintf("subdomains:%d", d.ID),
+		Fetch: func(ctx context.Context, _ string, seek *Seek, lim int, backward bool) ([]postgres.DomainRow, error) {
+			var ds *postgres.DomainSeek
+			if seek != nil {
+				ds = &postgres.DomainSeek{Host: seek.Host}
+			}
+			return postgres.ListDomains(ctx, s.pool, &filter, postgres.ListSortHost, ds, nil, lim, backward)
+		},
+		Key:   func(_ string, row *postgres.DomainRow) []any { return domainKey(SortHost)(row) },
+		Item:  summaryFromRow,
+		Count: func(ctx context.Context) (int64, error) { return s.q.SubdomainExactCount(ctx, &d.ID) },
+	})
 }
 
 // trimFields applies the ?fields= sparse fieldset (07 §3.3) by re-projecting

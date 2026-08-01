@@ -114,42 +114,12 @@ func (s *Server) listDomainChangelog(w http.ResponseWriter, r *http.Request) {
 
 // serveChangelogFeed runs the global or per-domain paginating feed.
 func (s *Server) serveChangelogFeed(w http.ResponseWriter, r *http.Request, domainID *int64) {
-	q := r.URL.Query()
-	win, err := parseChangelogWindow(q)
+	win, err := parseChangelogWindow(r.URL.Query())
 	var ve validationError
 	if errors.As(err, &ve) {
 		ValidationError(w, r, []FieldError{{Field: ve.field, Reason: ve.msg}})
 		return
 	}
-	wantCSV, err := parseFormat(q)
-	if err != nil {
-		invalidParam(w, r, err)
-		return
-	}
-	limitCap := MaxLimit
-	if wantCSV {
-		limitCap = s.opts.CSVMaxRows
-	}
-	limit, err := ParseLimitCap(q, limitCap)
-	if err != nil {
-		invalidParam(w, r, err)
-		return
-	}
-
-	generation, asOf, err := s.generation(r.Context())
-	if err != nil {
-		InternalError(w, r, err)
-		return
-	}
-	maxTS, err := s.q.ChangelogMaxTS(r.Context())
-	if err != nil {
-		InternalError(w, r, err)
-		return
-	}
-	if CacheChangelog(w, r, maxTS.Time) {
-		return
-	}
-
 	filter := postgres.ChangelogFilter{DomainID: domainID, Field: win.Field}
 	if win.HasFrom {
 		filter.From = &win.From
@@ -159,45 +129,26 @@ func (s *Server) serveChangelogFeed(w http.ResponseWriter, r *http.Request, doma
 	}
 	// The per-domain feed scope arrives via the path — fold it into the
 	// cursor fingerprint so one domain's cursor cannot seek another's feed.
-	var fingerprint string
+	var scope string
 	if domainID != nil {
-		fingerprint = ScopedFingerprint(fmt.Sprintf("domain:%d", *domainID), q)
+		scope = fmt.Sprintf("domain:%d", *domainID)
 	}
-	rows, page, err := KeysetPage(r, generation, limit, KeysetSpec[postgres.ChangelogRow]{
-		Sort:        SortChangelog,
-		Fingerprint: fingerprint,
-		Fetch: func(ctx context.Context, seek *Seek, lim int, backward bool) ([]postgres.ChangelogRow, error) {
+	ServeList(s, w, r, ListSpec[postgres.ChangelogRow, ChangelogItem]{
+		Sort:  SortChangelog,
+		Scope: scope,
+		Live:  true,
+		Fetch: func(ctx context.Context, _ string, seek *Seek, lim int, backward bool) ([]postgres.ChangelogRow, error) {
 			var cs *postgres.ChangelogSeek
 			if seek != nil {
 				cs = &postgres.ChangelogSeek{TS: time.Unix(0, seek.TS).UTC(), DomainID: seek.ID, Field: seek.Field}
 			}
 			return postgres.ListChangelog(ctx, s.pool, &filter, cs, lim, backward)
 		},
-		Key: func(row *postgres.ChangelogRow) []any {
+		Key: func(_ string, row *postgres.ChangelogRow) []any {
 			return []any{row.TS.UnixNano(), row.DomainID, row.Field}
 		},
-	})
-	if errors.Is(err, ErrCursorInvalid) {
-		InvalidParameter(w, r, err.Error())
-		return
-	}
-	if err != nil {
-		InternalError(w, r, err)
-		return
-	}
-	items := make([]ChangelogItem, len(rows))
-	for i := range rows {
-		items[i] = changelogItem(&rows[i])
-	}
-	if wantCSV {
-		writeChangelogCSV(w, items)
-		return
-	}
-
-	WriteJSON(w, http.StatusOK, ListEnvelope{
-		Items: items,
-		Page:  page,
-		Meta:  NewMeta(asOf, generation),
+		Item: changelogItem,
+		CSV:  writeChangelogCSV,
 	})
 }
 
