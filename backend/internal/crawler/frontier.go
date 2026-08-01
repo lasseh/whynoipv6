@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"sync/atomic"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
@@ -61,6 +62,7 @@ type Frontier struct {
 	pool *pgxpool.Pool
 	q    *db.Queries
 	cfg  FrontierConfig
+	busy atomic.Int32 // slots currently inside Process (crawler_metrics.active_slots)
 
 	// Preflight runs before every claim cycle; false = claim nothing and
 	// retry after cfg.RetryInterval (04 §11/§12). Nil = always proceed.
@@ -104,6 +106,18 @@ func (f *Frontier) ClaimBatch(ctx context.Context) ([]ClaimedDomain, error) {
 	return out, nil
 }
 
+// processOne wraps Process with the busy-slot count; the defer keeps a
+// panicking Process from leaking it.
+func (f *Frontier) processOne(ctx context.Context, d ClaimedDomain) {
+	f.busy.Add(1)
+	defer f.busy.Add(-1)
+	f.Process(ctx, d)
+}
+
+// ActiveSlots reports the worker slots currently processing a domain
+// (Metrics.ActiveSlots hook, 04 §15.1).
+func (f *Frontier) ActiveSlots() int32 { return f.busy.Load() }
+
 // Run is the §12 claim loop: preflight → claim → dispatch to the slot pool,
 // claiming again as soon as the batch is dispatched. Returns when ctx is
 // cancelled and every in-flight slot has finished.
@@ -114,7 +128,7 @@ func (f *Frontier) Run(ctx context.Context) {
 		go func() {
 			defer func() { done <- struct{}{} }()
 			for d := range slots {
-				f.Process(ctx, d)
+				f.processOne(ctx, d)
 			}
 		}()
 	}

@@ -42,10 +42,9 @@ type DomainListFilter struct {
 // DomainSeek is the decoded cursor seek (mirrors api.Seek without the
 // import cycle).
 type DomainSeek struct {
-	Rank     *int32
-	ID       int64
-	Host     string
-	RankNull bool
+	Rank *int32
+	ID   int64
+	Host string
 }
 
 // DomainRow is the §4.2 summary row scanned via RowToStructByName.

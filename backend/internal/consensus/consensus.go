@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"maps"
 	"net"
 	"sync"
 	"time"
@@ -127,9 +126,14 @@ func New(cfg Config, bulk *checker.Resolver, alert func(ctx context.Context, msg
 		stop:         make(chan struct{}),
 	}
 	for _, def := range providerDefs {
+		res := checker.NewResolver(def.upstreams)
+		// Cap each attempt at perAttemptTimeout so perProviderBudget (2×)
+		// genuinely covers one attempt plus one retry (§2.3): without it a
+		// hanging first attempt eats the whole budget and the retry never runs.
+		res.SetAttemptTimeout(perAttemptTimeout)
 		r.providers = append(r.providers, &providerState{
 			name:    def.name,
-			res:     checker.NewResolver(def.upstreams),
+			res:     res,
 			limiter: rate.NewLimiter(rate.Limit(cfg.PerProviderQPS), cfg.PerProviderQPS),
 			window:  newWindow(cfg.Provider.Window),
 		})
@@ -159,13 +163,14 @@ func (r *Resolver) DroppedProvider() string {
 	return r.dropped
 }
 
-// DisagreementCounts snapshots the per-provider outvoted-answer tallies
-// (§2.10 — consumed into crawler_metrics.dim_counters).
-func (r *Resolver) DisagreementCounts() map[string]int64 {
+// DrainDisagreement returns and clears the per-provider outvoted-answer
+// tallies (§2.10 — consumed into crawler_metrics.dim_counters). Drained
+// once per metrics checkpoint so the payload stays a per-interval delta.
+func (r *Resolver) DrainDisagreement() map[string]int64 {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	out := make(map[string]int64, len(r.disagreement))
-	maps.Copy(out, r.disagreement)
+	out := r.disagreement
+	r.disagreement = map[string]int64{}
 	return out
 }
 

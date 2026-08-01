@@ -28,9 +28,10 @@ var defaultUpstreams = []string{
 // There is deliberately NO in-process cache: Unbound is the cache
 // (01-engine.md §6.2 — do not add one back).
 type Resolver struct {
-	upstreams []string
-	mu        sync.Mutex // guards upstream rotation
-	idx       int
+	upstreams      []string
+	attemptTimeout time.Duration // per-attempt cap; dnsTimeout when zero
+	mu             sync.Mutex    // guards upstream rotation
+	idx            int
 }
 
 // NewResolver creates a Resolver with the given upstream servers.
@@ -42,10 +43,11 @@ func NewResolver(upstreams []string) *Resolver {
 	return &Resolver{upstreams: upstreams}
 }
 
-// Upstreams returns the configured upstream servers.
-func (r *Resolver) Upstreams() []string {
-	return r.upstreams
-}
+// SetAttemptTimeout caps each individual query attempt at d (default
+// dnsTimeout). With a caller context spanning QueryWithRetry, this keeps a
+// hanging first attempt from consuming the whole budget so the retry still
+// has time to run. Call before first use — not safe concurrently.
+func (r *Resolver) SetAttemptTimeout(d time.Duration) { r.attemptTimeout = d }
 
 // nextUpstream returns the next upstream in round-robin order.
 func (r *Resolver) nextUpstream() string {
@@ -61,8 +63,11 @@ func (r *Resolver) nextUpstream() string {
 func (r *Resolver) Query(ctx context.Context, msg *dns.Msg) (*dns.Msg, error) {
 	upstream := r.nextUpstream()
 
-	deadline, ok := ctx.Deadline()
 	timeout := dnsTimeout
+	if r.attemptTimeout > 0 {
+		timeout = r.attemptTimeout
+	}
+	deadline, ok := ctx.Deadline()
 	if ok {
 		remaining := time.Until(deadline)
 		if remaining < timeout {

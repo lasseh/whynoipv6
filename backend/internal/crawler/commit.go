@@ -65,20 +65,22 @@ func shadowTransition(d domain.Dimension, newVal domain.IPv6Status) bool {
 
 // CommitResult reports one commit's outcome.
 type CommitResult struct {
-	LeaseLost   bool
-	Transitions []Transition
-	Bootstraps  int
-	Recovered   bool // step R ran: a dead-disabled domain was re-enabled
+	LeaseLost     bool
+	Transitions   []Transition
+	Bootstraps    int
+	Recovered     bool // step R ran: a dead-disabled domain was re-enabled
+	DeadTriggered bool // step 4 fired: the dead streak disabled the domain
 }
 
 // commitUnit is the computed write unit: the typed postgres.CommitUnit the
 // flush adapter executes, plus the telemetry the crawler keeps.
 type commitUnit struct {
 	postgres.CommitUnit
-	host        string
-	transitions []Transition
-	bootstraps  int
-	recovered   bool
+	host          string
+	transitions   []Transition
+	bootstraps    int
+	recovered     bool
+	deadTriggered bool
 }
 
 // dimWork is one dimension's working confirm/pending state during step 2.
@@ -304,10 +306,11 @@ func ComputeCommit(in *CommitInput, cfg *CommitConfig) (*commitUnit, error) {
 				DomainID: s.ID, Ts: postgres.TS(t), Details: in.Details, DurationMs: &in.DurationMS,
 			},
 		},
-		host:        s.Host,
-		transitions: transitions,
-		bootstraps:  bootstraps,
-		recovered:   recovered,
+		host:          s.Host,
+		transitions:   transitions,
+		bootstraps:    bootstraps,
+		recovered:     recovered,
+		deadTriggered: deadTriggered,
 	}
 	if cfg.ResourcesEnabled && in.DiscoveryOK {
 		u.Resources = in.Discovered
@@ -383,7 +386,8 @@ func (c *Committer) Commit(ctx context.Context, in *CommitInput) (CommitResult, 
 		slog.Warn("lease lost, commit discarded", "domain", u.host)
 		return CommitResult{LeaseLost: true}, nil
 	}
-	return CommitResult{Transitions: u.transitions, Bootstraps: u.bootstraps, Recovered: u.recovered}, nil
+	return CommitResult{Transitions: u.transitions, Bootstraps: u.bootstraps,
+		Recovered: u.recovered, DeadTriggered: u.deadTriggered}, nil
 }
 
 // Unresolvable computes the dead signal U from raw engine/consensus

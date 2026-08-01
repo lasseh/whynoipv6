@@ -21,6 +21,8 @@ func TestMetrics(t *testing.T) {
 	pool := pgtest.NewDB(t)
 	ctx := context.Background()
 	m := NewMetrics(pool, uuid.New(), "test:1")
+	m.Disagreement = func() map[string]int64 { return map[string]int64{"quad9": 3} }
+	m.RecordDeadTriggered()
 
 	obs := stableObs(domain.DimBase, domain.ObsSupported)
 
@@ -73,6 +75,12 @@ func TestMetrics(t *testing.T) {
 	}
 	if got, _ := dim["confirmed_transitions"].(float64); got != 20 {
 		t.Errorf("dim_counters.confirmed_transitions = %v, want 20 (shadow + lease-lost excluded)", dim["confirmed_transitions"])
+	}
+	if got, _ := dim["dead_triggered"].(float64); got != 1 {
+		t.Errorf("dim_counters.dead_triggered = %v, want 1", dim["dead_triggered"])
+	}
+	if got, _ := dim["consensus_disagree_quad9"].(float64); got != 3 {
+		t.Errorf("dim_counters.consensus_disagree_quad9 = %v, want 3", dim["consensus_disagree_quad9"])
 	}
 	if p50 < 32 || p50 > 128 {
 		t.Errorf("p50 = %d ms, want ≈50 (log-bucket estimate)", p50)

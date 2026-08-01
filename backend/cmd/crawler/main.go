@@ -103,6 +103,7 @@ func run() error {
 	metrics := crawler.NewMetrics(pool, runID, worker)
 	metrics.GeoIPBuildEpoch = geoReader.BuildEpoch
 	metrics.Heartbeat = func() { notifier.HeartbeatOK(rootCtx) }
+	metrics.Disagreement = cons.DrainDisagreement
 
 	w := &crawler.Worker{
 		Pool: pool, Scanner: runner, Preflight: preflight, Committer: committer,
@@ -117,6 +118,7 @@ func run() error {
 	}
 
 	frontier := crawler.NewFrontier(pool, crawler.FrontierConfigFrom(cfg))
+	metrics.ActiveSlots = frontier.ActiveSlots
 	// Workers commit under rootCtx (drain); the claim loop stops first.
 	frontier.Process = func(_ context.Context, d crawler.ClaimedDomain) { w.Process(rootCtx, d) }
 	frontier.Preflight = func(ctx context.Context) bool {

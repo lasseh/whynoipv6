@@ -40,6 +40,10 @@ type Metrics struct {
 	// Heartbeat fires after every successful commit record (nil = disabled);
 	// the notify client throttles it.
 	Heartbeat func()
+	// Disagreement drains the per-provider consensus outvote tallies into
+	// consensus_disagree_<provider> keys (nil = none). Must return deltas —
+	// the checkpoint payload is per-interval (02 §2.10).
+	Disagreement func() map[string]int64
 
 	mu             sync.Mutex
 	processed      int32
@@ -67,9 +71,6 @@ func NewMetrics(pool *pgxpool.Pool, runID uuid.UUID, worker string) *Metrics {
 		lastCheckpoint: time.Now(),
 	}
 }
-
-// RunID returns the process run id (stamped on the per-run child logger).
-func (m *Metrics) RunID() uuid.UUID { return m.runID }
 
 // RecordScan tallies one processed domain (04 §15.1/§15.2). commitErr is a
 // non-lease failure; res carries lease-lost and transitions.
@@ -213,6 +214,18 @@ func (m *Metrics) Checkpoint(ctx context.Context, final bool) {
 	m.lastCheckpoint = now
 	m.mu.Unlock()
 
+	if m.Disagreement != nil {
+		for prov, n := range m.Disagreement() {
+			if n > 0 {
+				counters["consensus_disagree_"+prov] = n
+			}
+		}
+	}
+	raw, err := json.Marshal(counters)
+	if err != nil {
+		raw = []byte("{}")
+	}
+
 	q := db.New(m.pool)
 	depth64, err := q.QueueDepth(ctx)
 	if err != nil {
@@ -235,7 +248,7 @@ func (m *Metrics) Checkpoint(ctx context.Context, final bool) {
 		P99Ms:       &p99,
 		ActiveSlots: &slots,
 		QueueDepth:  &depth,
-		DimCounters: counters,
+		DimCounters: raw,
 		IsFinal:     final,
 	}
 	if m.GeoIPBuildEpoch != nil {
@@ -248,8 +261,9 @@ func (m *Metrics) Checkpoint(ctx context.Context, final bool) {
 	}
 }
 
-// dimCountersLocked builds the §15.2 JSONB payload; zero-count keys omitted.
-func (m *Metrics) dimCountersLocked() []byte {
+// dimCountersLocked builds the §15.2 JSONB payload; zero-count keys
+// omitted. Checkpoint merges the drained consensus keys and marshals.
+func (m *Metrics) dimCountersLocked() map[string]any {
 	out := map[string]any{}
 	for d, counts := range m.dims {
 		if len(counts) == 0 {
@@ -289,9 +303,5 @@ func (m *Metrics) dimCountersLocked() []byte {
 	if len(m.skips) > 0 {
 		out["singleton_skipped"] = m.skips
 	}
-	raw, err := json.Marshal(out)
-	if err != nil {
-		return []byte("{}")
-	}
-	return raw
+	return out
 }
