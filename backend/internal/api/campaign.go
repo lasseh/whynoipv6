@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"math"
@@ -71,39 +72,31 @@ func (s *Server) listCampaigns(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) serveCampaignList(w http.ResponseWriter, r *http.Request, tag string) {
-	generation, asOf, err := s.generation(r.Context())
-	if err != nil {
-		InternalError(w, r, err)
-		return
-	}
-	if CacheList(w, r, generation) {
-		return
-	}
-	rows, err := s.q.CampaignPublicList(r.Context(), tag)
-	if err != nil {
-		InternalError(w, r, err)
-		return
-	}
-	items := make([]CampaignListItem, len(rows))
-	for i := range rows {
-		tags := rows[i].Tags
-		if tags == nil {
-			tags = []string{}
-		}
-		items[i] = CampaignListItem{
-			UUID:        uuid.UUID(rows[i].Uuid.Bytes).String(),
-			Name:        rows[i].Name,
-			Description: rows[i].Description,
-			SourceFile:  rows[i].SourceFile,
-			Tags:        tags,
-			DomainCount: rows[i].DomainCount,
-			Adoption:    campaignAdoption(rows[i].AdoptionDay, rows[i].AdoptionDomains, rows[i].AdoptionV6Ready),
-		}
-	}
-	count := int64(len(items))
-	meta := NewMeta(asOf, generation)
-	meta.Count = &count
-	WriteJSON(w, http.StatusOK, ListEnvelope{Items: items, Page: Page{}, Meta: meta})
+	ServeWhole(s, w, r, WholeSpec[CampaignListItem]{
+		Fetch: func(ctx context.Context, _ string) ([]CampaignListItem, error) {
+			rows, err := s.q.CampaignPublicList(ctx, tag)
+			if err != nil {
+				return nil, err
+			}
+			items := make([]CampaignListItem, len(rows))
+			for i := range rows {
+				tags := rows[i].Tags
+				if tags == nil {
+					tags = []string{}
+				}
+				items[i] = CampaignListItem{
+					UUID:        uuid.UUID(rows[i].Uuid.Bytes).String(),
+					Name:        rows[i].Name,
+					Description: rows[i].Description,
+					SourceFile:  rows[i].SourceFile,
+					Tags:        tags,
+					DomainCount: rows[i].DomainCount,
+					Adoption:    campaignAdoption(rows[i].AdoptionDay, rows[i].AdoptionDomains, rows[i].AdoptionV6Ready),
+				}
+			}
+			return items, nil
+		},
+	})
 }
 
 // campaignByPathUUID resolves the {uuid} path param (raw UUID, OPEN-1).

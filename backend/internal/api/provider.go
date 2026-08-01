@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"net/url"
@@ -24,38 +25,22 @@ type ProviderBody struct {
 // listProviders is GET /providers — the bounded curated registry, served
 // whole with an exact count (07 §4.6).
 func (s *Server) listProviders(w http.ResponseWriter, r *http.Request) {
-	wantCSV, err := parseFormat(r.URL.Query())
-	if err != nil {
-		invalidParam(w, r, err)
-		return
-	}
-	generation, asOf, err := s.generation(r.Context())
-	if err != nil {
-		InternalError(w, r, err)
-		return
-	}
-	if CacheList(w, r, generation) {
-		return
-	}
-	rows, err := s.q.ProviderLeaderboard(r.Context())
-	if err != nil {
-		InternalError(w, r, err)
-		return
-	}
-	items := make([]ProviderBody, len(rows))
-	for i := range rows {
-		items[i] = ProviderBody{ID: rows[i].ID, Name: rows[i].Name,
-			CountTotal: rows[i].CountTotal, CountV6: rows[i].CountV6,
-			CountV4: rows[i].CountTotal - rows[i].CountV6}
-	}
-	if wantCSV {
-		writeProvidersCSV(w, items)
-		return
-	}
-	count := int64(len(items))
-	meta := NewMeta(asOf, generation)
-	meta.Count = &count
-	WriteJSON(w, http.StatusOK, ListEnvelope{Items: items, Page: Page{}, Meta: meta})
+	ServeWhole(s, w, r, WholeSpec[ProviderBody]{
+		Fetch: func(ctx context.Context, _ string) ([]ProviderBody, error) {
+			rows, err := s.q.ProviderLeaderboard(ctx)
+			if err != nil {
+				return nil, err
+			}
+			items := make([]ProviderBody, len(rows))
+			for i := range rows {
+				items[i] = ProviderBody{ID: rows[i].ID, Name: rows[i].Name,
+					CountTotal: rows[i].CountTotal, CountV6: rows[i].CountV6,
+					CountV4: rows[i].CountTotal - rows[i].CountV6}
+			}
+			return items, nil
+		},
+		CSV: writeProvidersCSV,
+	})
 }
 
 // parseProviderID resolves the {id} path param; malformed → 404.

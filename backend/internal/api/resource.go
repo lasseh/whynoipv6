@@ -51,35 +51,27 @@ func (s *Server) listDomainResources(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	generation, asOf, err := s.generation(r.Context())
-	if err != nil {
-		InternalError(w, r, err)
-		return
-	}
-	if CacheList(w, r, generation) {
-		return
-	}
-	rows, err := s.q.DomainResourceList(r.Context(), d.ID)
-	if err != nil {
-		InternalError(w, r, err)
-		return
-	}
-	items := make([]ResourceLink, len(rows))
-	for i := range rows {
-		items[i] = ResourceLink{
-			Host:          rows[i].Host,
-			AAAAStatus:    postgres.StatusPtr(rows[i].AaaaStatus),
-			Source:        string(rows[i].Source),
-			Required:      rows[i].Required,
-			FirstSeen:     rows[i].FirstSeen.Time.UTC().Format("2006-01-02"),
-			LastSeen:      rows[i].LastSeen.Time.UTC().Format("2006-01-02"),
-			LastCheckedAt: postgres.TimePtr(rows[i].LastCheckedAt),
-		}
-	}
-	count := int64(len(items))
-	meta := NewMeta(asOf, generation)
-	meta.Count = &count
-	WriteJSON(w, http.StatusOK, ListEnvelope{Items: items, Page: Page{}, Meta: meta})
+	ServeWhole(s, w, r, WholeSpec[ResourceLink]{
+		Fetch: func(ctx context.Context, _ string) ([]ResourceLink, error) {
+			rows, err := s.q.DomainResourceList(ctx, d.ID)
+			if err != nil {
+				return nil, err
+			}
+			items := make([]ResourceLink, len(rows))
+			for i := range rows {
+				items[i] = ResourceLink{
+					Host:          rows[i].Host,
+					AAAAStatus:    postgres.StatusPtr(rows[i].AaaaStatus),
+					Source:        string(rows[i].Source),
+					Required:      rows[i].Required,
+					FirstSeen:     rows[i].FirstSeen.Time.UTC().Format("2006-01-02"),
+					LastSeen:      rows[i].LastSeen.Time.UTC().Format("2006-01-02"),
+					LastCheckedAt: postgres.TimePtr(rows[i].LastCheckedAt),
+				}
+			}
+			return items, nil
+		},
+	})
 }
 
 // getResource is GET /resources/{host} — the resource-host headline.

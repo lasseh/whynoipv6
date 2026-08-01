@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"net/url"
@@ -33,65 +34,40 @@ func countryBody(code, name string, tld *string, sites, v6sites int32, percent f
 // bounded set (~251 incl. the UN sentinel), served whole with an exact
 // count; ?sort=percent (default) | v6_sites | sites, descending.
 func (s *Server) listCountries(w http.ResponseWriter, r *http.Request) {
-	sortKey := r.URL.Query().Get("sort")
-	switch sortKey {
-	case "", "percent", "v6_sites", "sites":
-	default:
-		InvalidParameter(w, r, "sort must be percent, v6_sites, or sites")
-		return
-	}
-	wantCSV, err := parseFormat(r.URL.Query())
-	if err != nil {
-		invalidParam(w, r, err)
-		return
-	}
-
-	generation, asOf, err := s.generation(r.Context())
-	if err != nil {
-		InternalError(w, r, err)
-		return
-	}
-	if CacheList(w, r, generation) {
-		return
-	}
-
-	rows, err := s.q.CountryLeaderboard(r.Context())
-	if err != nil {
-		InternalError(w, r, err)
-		return
-	}
-	items := make([]CountryBody, len(rows))
-	for i := range rows {
-		pct, _ := rows[i].Percent.Float64Value()
-		items[i] = countryBody(strings.TrimSpace(rows[i].Code), rows[i].Name, rows[i].Tld,
-			rows[i].Sites, rows[i].V6sites, pct.Float64)
-	}
-	sort.SliceStable(items, func(i, j int) bool {
-		switch sortKey {
-		case "v6_sites":
-			if items[i].V6Sites != items[j].V6Sites {
-				return items[i].V6Sites > items[j].V6Sites
+	ServeWhole(s, w, r, WholeSpec[CountryBody]{
+		Sorts: []string{"percent", "v6_sites", "sites"},
+		Fetch: func(ctx context.Context, sortKey string) ([]CountryBody, error) {
+			rows, err := s.q.CountryLeaderboard(ctx)
+			if err != nil {
+				return nil, err
 			}
-		case "sites":
-			if items[i].Sites != items[j].Sites {
-				return items[i].Sites > items[j].Sites
+			items := make([]CountryBody, len(rows))
+			for i := range rows {
+				pct, _ := rows[i].Percent.Float64Value()
+				items[i] = countryBody(strings.TrimSpace(rows[i].Code), rows[i].Name, rows[i].Tld,
+					rows[i].Sites, rows[i].V6sites, pct.Float64)
 			}
-		default:
-			if items[i].Percent != items[j].Percent {
-				return items[i].Percent > items[j].Percent
-			}
-		}
-		return items[i].Code < items[j].Code
+			sort.SliceStable(items, func(i, j int) bool {
+				switch sortKey {
+				case "v6_sites":
+					if items[i].V6Sites != items[j].V6Sites {
+						return items[i].V6Sites > items[j].V6Sites
+					}
+				case "sites":
+					if items[i].Sites != items[j].Sites {
+						return items[i].Sites > items[j].Sites
+					}
+				default:
+					if items[i].Percent != items[j].Percent {
+						return items[i].Percent > items[j].Percent
+					}
+				}
+				return items[i].Code < items[j].Code
+			})
+			return items, nil
+		},
+		CSV: writeCountriesCSV,
 	})
-
-	if wantCSV {
-		writeCountriesCSV(w, items)
-		return
-	}
-	count := int64(len(items))
-	meta := NewMeta(asOf, generation)
-	meta.Count = &count
-	WriteJSON(w, http.StatusOK, ListEnvelope{Items: items, Page: Page{}, Meta: meta})
 }
 
 // countryByPathCode resolves the {code} path param to its country row
