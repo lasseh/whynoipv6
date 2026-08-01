@@ -99,7 +99,7 @@ func (s *Server) postCheck(w http.ResponseWriter, r *http.Request) {
 		InvalidParameter(w, r, "client address unavailable")
 		return
 	}
-	ipWin, err := s.q.CheckJobRatePrefix(r.Context(), prefix)
+	ipWin, err := s.checks.RatePrefix(r.Context(), prefix)
 	if err != nil {
 		InternalError(w, r, err)
 		return
@@ -109,7 +109,7 @@ func (s *Server) postCheck(w http.ResponseWriter, r *http.Request) {
 		RateLimited(w, r, retryAfter(ipWin.MinCreated))
 		return
 	}
-	globalWin, err := s.q.CheckJobRateGlobal(r.Context())
+	globalWin, err := s.checks.RateGlobal(r.Context())
 	if err != nil {
 		InternalError(w, r, err)
 		return
@@ -123,14 +123,14 @@ func (s *Server) postCheck(w http.ResponseWriter, r *http.Request) {
 
 	// 3. Lifecycle re-entry — every POST whose host already has a row,
 	// including dedupe hits (§5.1.6).
-	if err := s.q.DomainLiveCheckReentry(r.Context(), host); err != nil {
+	if err := s.checks.Reentry(r.Context(), host); err != nil {
 		InternalError(w, r, err)
 		return
 	}
 
 	// 4. Dedupe, domain-side: a fresh crawl within the window serves a
 	// synthetic done envelope from the latest scan_detail. No job row.
-	confirmedRow, confErr := s.q.DomainConfirmed(r.Context(), host)
+	confirmedRow, confErr := s.checks.Confirmed(r.Context(), host)
 	if confErr == nil && confirmedRow.LastCheckedAt.Valid &&
 		time.Since(confirmedRow.LastCheckedAt.Time) < s.opts.DedupeWindow {
 		if env, ok := s.dedupeEnvelope(r, &confirmedRow, host); ok {
@@ -144,9 +144,7 @@ func (s *Server) postCheck(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 5. Dedupe, job-side: a done job within the window replays, cached.
-	if job, err := s.q.CheckJobDedupe(r.Context(), db.CheckJobDedupeParams{
-		Host: host, DedupeWindow: pgInterval(s.opts.DedupeWindow),
-	}); err == nil {
+	if job, err := s.checks.JobDedupe(r.Context(), host, s.opts.DedupeWindow); err == nil {
 		env := s.jobEnvelope(r, &jobFields{
 			ID: job.ID, Host: job.Host, Status: string(job.Status), Result: job.Result,
 			Error: job.Error, CreatedAt: job.CreatedAt, CompletedAt: job.CompletedAt,
@@ -158,59 +156,35 @@ func (s *Server) postCheck(w http.ResponseWriter, r *http.Request) {
 
 	// 6. Enqueue. The step-2 reads are only the fast-path reject: both caps
 	// are re-checked and the row inserted in one transaction under a
-	// transaction-scoped advisory lock, so concurrent requests cannot race
-	// the check-then-insert past the limits.
+	// transaction-scoped advisory lock (EnqueueLocked), so concurrent
+	// requests cannot race the check-then-insert past the limits.
 	requester, err := netip.ParseAddr(clientIP(r))
 	if err != nil {
 		InvalidParameter(w, r, "client address unavailable")
 		return
 	}
-	tx, err := s.pool.Begin(r.Context())
+	out, err := s.checks.EnqueueLocked(r.Context(), host, requester, prefix,
+		s.opts.RateIPPerHour, s.opts.RateGlobalPerHour)
 	if err != nil {
 		InternalError(w, r, err)
 		return
 	}
-	defer func() { _ = tx.Rollback(r.Context()) }() // no-op after a successful Commit
-	if _, err := tx.Exec(r.Context(), "SELECT pg_advisory_xact_lock($1)", checkJobEnqueueLockID); err != nil {
-		InternalError(w, r, err)
-		return
-	}
-	qtx := s.q.WithTx(tx)
-	if ipWin, err = qtx.CheckJobRatePrefix(r.Context(), prefix); err != nil {
-		InternalError(w, r, err)
-		return
-	}
-	if int(ipWin.N) >= s.opts.RateIPPerHour {
+	if out.OverIP {
 		rateLimitHeaders(w, s.opts.RateIPPerHour, 0)
-		RateLimited(w, r, retryAfter(ipWin.MinCreated))
+		RateLimited(w, r, retryAfter(out.IPWindow.MinCreated))
 		return
 	}
-	if globalWin, err = qtx.CheckJobRateGlobal(r.Context()); err != nil {
-		InternalError(w, r, err)
-		return
-	}
-	if int(globalWin.N) >= s.opts.RateGlobalPerHour {
+	if out.OverGlobal {
 		rateLimitHeaders(w, s.opts.RateGlobalPerHour, 0)
-		RateLimited(w, r, retryAfter(globalWin.MinCreated))
-		return
-	}
-	ins, err := qtx.CheckJobInsert(r.Context(), db.CheckJobInsertParams{
-		Host: host, RequesterIp: requester,
-	})
-	if err != nil {
-		InternalError(w, r, err)
-		return
-	}
-	if err := tx.Commit(r.Context()); err != nil {
-		InternalError(w, r, err)
+		RateLimited(w, r, retryAfter(out.GlobalWindow.MinCreated))
 		return
 	}
 	// Refresh the headers with the locked count — the step-2 read may be stale.
-	rateLimitHeaders(w, s.opts.RateIPPerHour, s.opts.RateIPPerHour-int(ipWin.N)-1)
-	w.Header().Set("Location", "/check/"+strconv.FormatInt(ins.ID, 10))
+	rateLimitHeaders(w, s.opts.RateIPPerHour, s.opts.RateIPPerHour-int(out.IPWindow.N)-1)
+	w.Header().Set("Location", "/check/"+strconv.FormatInt(out.ID, 10))
 	WriteJSON(w, http.StatusAccepted, map[string]any{
-		"id": ins.ID, "host": host, "status": "pending",
-		"created_at": ins.CreatedAt.Time.UTC(),
+		"id": out.ID, "host": host, "status": "pending",
+		"created_at": out.CreatedAt.UTC(),
 	})
 }
 
@@ -222,7 +196,7 @@ func (s *Server) getCheck(w http.ResponseWriter, r *http.Request) {
 		NotFound(w, r, "Check not found", "Check jobs are keyed by their integer id.")
 		return
 	}
-	job, err := s.q.CheckJobByID(r.Context(), id)
+	job, err := s.checks.JobByID(r.Context(), id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		NotFound(w, r, "Check not found", "No such check job.")
 		return
@@ -258,7 +232,7 @@ func (s *Server) getLatestCheck(w http.ResponseWriter, r *http.Request) {
 
 	// Source 1 — tracked domain with a crawl inside the TTL (daily cadence
 	// means every active tracked domain hits this branch).
-	confirmedRow, confErr := s.q.DomainConfirmed(r.Context(), host)
+	confirmedRow, confErr := s.checks.Confirmed(r.Context(), host)
 	if confErr == nil && confirmedRow.LastCheckedAt.Valid &&
 		time.Since(confirmedRow.LastCheckedAt.Time) < s.opts.LinkTTL {
 		if env, ok := s.dedupeEnvelope(r, &confirmedRow, host); ok {
@@ -273,9 +247,7 @@ func (s *Server) getLatestCheck(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Source 2 — the newest done live-check job inside the TTL.
-	if job, err := s.q.CheckJobDedupe(r.Context(), db.CheckJobDedupeParams{
-		Host: host, DedupeWindow: pgInterval(s.opts.LinkTTL),
-	}); err == nil {
+	if job, err := s.checks.JobDedupe(r.Context(), host, s.opts.LinkTTL); err == nil {
 		env := s.jobEnvelope(r, &jobFields{
 			ID: job.ID, Host: job.Host, Status: string(job.Status), Result: job.Result,
 			Error: job.Error, CreatedAt: job.CreatedAt, CompletedAt: job.CompletedAt,
@@ -311,7 +283,7 @@ func (s *Server) jobEnvelope(r *http.Request, j *jobFields) CheckEnvelope {
 	if j.Result != nil {
 		env.Result = json.RawMessage(j.Result)
 	}
-	if row, err := s.q.DomainConfirmed(r.Context(), j.Host); err == nil {
+	if row, err := s.checks.Confirmed(r.Context(), j.Host); err == nil {
 		env.Confirmed = confirmedBlock(&row)
 	}
 	return env
@@ -326,7 +298,7 @@ func (s *Server) jobEnvelope(r *http.Request, j *jobFields) CheckEnvelope {
 func (s *Server) storedEvidence(r *http.Request, domainID int64, host string,
 	kind db.DomainKind, scanTS time.Time,
 ) (json.RawMessage, error) {
-	raw, err := s.q.LatestScanDetail(r.Context(), domainID)
+	raw, err := s.checks.LatestScanDetail(r.Context(), domainID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil
@@ -341,7 +313,7 @@ func (s *Server) storedEvidence(r *http.Request, domainID int64, host string,
 		slog.Warn("evidence detail unparseable, omitted", "domain", host, "err", err.Error())
 		return nil, nil
 	}
-	links := observe.LiveLinks(r.Context(), s.pool, sr, s.opts.ResourcesEnabled)
+	links := s.checks.LiveLinks(r.Context(), sr, s.opts.ResourcesEnabled)
 	result := observe.MapLiveResult(domain.Kind(kind), sr, scanTS, scanTS, links, s.opts.ResourcesEnabled)
 	resultRaw, err := json.Marshal(result)
 	if err != nil {

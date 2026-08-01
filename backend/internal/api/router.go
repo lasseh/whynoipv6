@@ -41,10 +41,11 @@ type Options struct {
 // queries, the sqlc queries for everything else (the one data seam,
 // 05-schema §10.3).
 type Server struct {
-	pool *pgxpool.Pool
-	q    *db.Queries
-	opts Options
-	meta metaSource // the list rim's freshness seam (list.go); pgMeta in production
+	pool   *pgxpool.Pool
+	q      *db.Queries
+	opts   Options
+	meta   metaSource // the list rim's freshness seam (list.go); pgMeta in production
+	checks checkStore // the live-check data seam (checkstore.go); pgCheckStore in production
 }
 
 // NewRouter builds the chi router with the 07 §1.7 middleware order
@@ -53,6 +54,7 @@ type Server struct {
 func NewRouter(pool *pgxpool.Pool, opts Options) http.Handler { //nolint:gocritic // one-shot config bag at startup; by-value keeps call sites simple
 	s := &Server{pool: pool, q: db.New(pool), opts: opts}
 	s.meta = pgMeta{q: s.q}
+	s.checks = pgCheckStore{pool: pool, q: s.q}
 	if s.opts.PublicBaseURL == "" {
 		s.opts.PublicBaseURL = "https://api.whynoipv6.com"
 	}
