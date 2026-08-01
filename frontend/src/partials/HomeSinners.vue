@@ -73,7 +73,7 @@ onMounted(() => {
                   width="540"
                   height="520"
                   loading="lazy"
-                  alt="Shame"
+                  alt="Why No IPv6 logo"
                 />
               </div>
             </div>
@@ -82,9 +82,8 @@ onMounted(() => {
               <div class="md:pr-4 lg:pr-12 xl:pr-16">
                 <h3 class="h3 mb-3">Top IPv6 Sinners</h3>
                 <p class="text-base text-gray-400 mb-0">
-                  The following domains are the top offenders of the IPv6 protocol. These domains
-                  are the most visited websites in the world, yet they have not embraced the future,
-                  IPv6.
+                  The most visited websites in the world, without a single AAAA record among them.
+                  IPv6 shipped in 1998; these domains are still thinking it over.
                 </p>
                 <p class="text-base text-gray-400 mb-4">Shame on them!</p>
 
@@ -109,7 +108,7 @@ onMounted(() => {
                 <div v-if="randomTestimonial" class="flex items-start mt-8">
                   <img
                     :src="randomTestimonial.imageUrl"
-                    alt="Testimonial Image"
+                    alt=""
                     class="rounded-full shrink-0 mr-4"
                     width="40"
                     height="40"

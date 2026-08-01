@@ -15,11 +15,10 @@
           <!-- Content -->
           <div class="text-lg text-gray-400">
             <p class="mb-2">
-              No, we're not talking about Software as a Service; we're talking about "Shame as a
-              Service". In the technology-driven world, where SaaS platforms solve complex business
-              problems, we've innovated a new kind of service aimed squarely at solving a critical
-              internet problem,
-              <span class="font-semibold a-gradient">the lack of IPv6 adoption.</span>
+              IPv6 has been a standard since 1998. IPv4 ran out of addresses more than a decade ago.
+              The most-visited websites on the internet still haven't connected those two facts, so
+              we keep score. Publicly,
+              <span class="font-semibold a-gradient">until an AAAA record says otherwise.</span>
             </p>
           </div>
         </article>
@@ -35,17 +34,15 @@
               >
                 <h3 class="h4 mb-3">How does it work?</h3>
                 <p class="text-base text-gray-400 mb-0">
-                  Just like how SaaS solutions give you the tools you need right when you need them,
-                  our version of SaaS delivers a potent dose of public "shame" to domains still
-                  lagging in IPv6 support. Through user-submitted campaigns and data-driven reports,
-                  we spotlight these slackers, providing that gentle nudge (or push!) to get them on
-                  the IPv6 train.
+                  A crawler checks every domain daily: AAAA records for the site and its www, IPv6
+                  on the nameservers and mail. Do it all and you're a Hero. Skip it and you're
+                  listed, Tranco rank and all. Anyone can start a campaign; the data does the rest.
                 </p>
-                <h3 class="h4 mb-3 mt-6">Why SaaS?</h3>
+                <h3 class="h4 mb-3 mt-6">Why shame?</h3>
                 <p class="text-base text-gray-400 mb-0">
-                  Because sometimes a bit of good-natured shaming is the most efficient way to spark
-                  change. Our SaaS is committed to making IPv6 adoption a reality, one red-faced
-                  domain at a time.
+                  The RFC is old enough to vote. The conference talks happened. World IPv6 Launch
+                  was in 2012. At some point the only tool left is a public list with your domain on
+                  it.
                 </p>
               </div>
               <!-- Buttons -->
@@ -71,11 +68,11 @@
                       </svg>
                       <div>
                         <div class="text-base font-semibold text-zinc-200 mb-1 a-gradient">
-                          Public Accountability
+                          Public receipts
                         </div>
                         <div class="text-zinc-400 text-base">
-                          With our public reports, it's harder for these domains to ignore their
-                          responsibilities.
+                          Every check is public and dated. A domain can ignore us, but it can't say
+                          it wasn't warned.
                         </div>
                       </div>
                     </div>
@@ -98,11 +95,11 @@
                       </svg>
                       <div>
                         <div class="text-base font-semibold text-zinc-200 mb-1 a-gradient">
-                          Community Engagement
+                          Strength in numbers
                         </div>
                         <div class="text-zinc-400 text-base">
-                          Engage in meaningful dialogue about the significance of IPv6, share your
-                          discoveries, and even initiate your own campaigns.
+                          Compare notes with people who care about address space. Share findings,
+                          argue methodology, watch the adoption graph inch upward.
                         </div>
                       </div>
                     </div>
@@ -126,11 +123,11 @@
                       </svg>
                       <div>
                         <div class="text-base font-semibold text-zinc-200 mb-1 a-gradient">
-                          User-Led Shaming
+                          Bring your own Sinner
                         </div>
                         <div class="text-zinc-400 text-base">
-                          Anyone can submit a domain for shaming, and our service will take it from
-                          there.
+                          Found a big name still IPv4-only? Submit it as a campaign and the crawler
+                          takes it from there.
                         </div>
                       </div>
                     </div>

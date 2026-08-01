@@ -35,13 +35,12 @@ onMounted(() => {
           <div class="text-left">
             <h2 class="h3 mb-4">Wall of Shame</h2>
             <p class="text-base text-gray-400">
-              As a part of this shaming-strategy, we supply all interested parties with an updated
-              list over the top 1 million websites and their corresponding (lack of) IPv6 support
-              clearly stated.
+              The Tranco top million, crawled daily: every domain's IPv6 support, or lack of it, on
+              public display.
             </p>
             <p class="text-base text-gray-400">
-              Each of the listed websites lack an AAAA-record. In addition the nameserver-support
-              for IPv6 is displayed.
+              Every domain listed here is missing an AAAA record. Nameserver IPv6 support is shown
+              alongside; some manage one without the other.
             </p>
           </div>
         </header>
@@ -54,12 +53,12 @@ onMounted(() => {
         <!-- Button to Domain List-->
         <div class="mt-8">
           <div class="flex justify-center">
-            <nav class="flex" role="navigation" aria-label="Navigation">
+            <nav class="flex" role="navigation" aria-label="Domain list">
               <div class="ml-2">
                 <router-link
                   to="/domains"
                   class="inline-flex items-center justify-center right-2.5 bottom-2.5 focus:ring-3 focus:outline-none font-medium rounded-sm text-sm px-4 py-2 bg-fuchsia-900 hover:bg-zinc-800 focus:ring-fuchsia-800"
-                  >View More Domains</router-link
+                  >View all domains</router-link
                 >
               </div>
             </nav>
