@@ -1,19 +1,32 @@
-# Curated service-domain list — hosts whose Tranco rank comes from machine or
-# embedded traffic (CDN, API/SDK, ad/tracking serving, nameserver/DNS infra,
-# device backends, app-hosting suffixes), not from humans browsing to them.
-# These should never appear in the public tier lists (04-lifecycle §"service").
+# Curated service-domain list — hosts hidden from the public tier lists
+# (04-lifecycle §"service"). Criterion (2026-08-01, revised): a domain is
+# hidden ONLY if an end-user client never names it directly. IPv6-only
+# viability is the mission, so everything a client connects to stays visible —
+# content CDNs (cloudfront.net, fbcdn.net), API/SDK/app backends (googleapis,
+# tiktokv.com), OS/update/auth/connectivity endpoints (windowsupdate.com,
+# msftconnecttest.com), app-hosting suffixes (github.io), device/IoT backends,
+# PKI and public-resolver endpoints.
 #
-# Curation: 2026-08-01 review of the Tranco top-1000 (research: apex/www content
-# probe + ownership research per ambiguous host). Inclusion test: humans do not
-# deliberately navigate to the apex; vanity aliases users actually type
-# (twitter.com, azure.com, office365.com) and link shorteners (t.co, bit.ly)
-# stay OUT. Tenant/app-hosting suffixes (github.io, sharepoint.com) are IN —
-# humans only ever visit customer subdomains, never the listed apex.
+# Hidden here:
+#  1. DNS/registry/nameserver zones and parking — resolvers contact these, not
+#     clients; each site's dependency on them is already measured by its `ns`
+#     dimension. Special-use names too (ipv4only.arpa is v4-only by RFC 7050).
+#  2. CNAME/load-balancer layers (msedge.net, edgekey.net) — clients resolve
+#     through them but never name them; the reachability they gate is measured
+#     on the domains that CNAME onto them.
+#  3. Web ad/tracking/analytics/consent serving — clients fetch them, but the
+#     impact is carried by each embedding site's resources dimension, and their
+#     failure is not user-felt. Includes rotating ad-blocker-evasion aliases
+#     (Statsig's prodregistryv2.org etc.), which have zero shame value.
+#
+# Curation source: full review of the Tranco top-1000 with per-host content
+# probes and ownership research for every ambiguous name. Unidentified hosts
+# stay visible (needs-info), they are not added here on suspicion.
 #
 # Apply:  v6ctl disable --service-list service_domains.txt   (idempotent)
 # Revert: v6ctl enable <host>                                (per host)
 
-# --- DNS / registry / nameserver / parking infrastructure ---
+# --- DNS / registry / nameserver zones, parking, special-use ---
 gtld-servers.net
 root-servers.net
 ripn.net
@@ -26,7 +39,6 @@ dnsowl.com
 dns-parking.com
 nominetdns.uk
 nstld.com
-alidns.com
 alibabadns.com
 azure-dns.com
 bdydns.com
@@ -51,76 +63,33 @@ share-dns.com
 footprintdns.com
 afilias-nst.info
 afilias-nst.org
-shifen.com
 nease.net
-resolver.arpa
-ipv4only.arpa
-3gppnetwork.org
-libp2p.direct
-mynetname.net
+shifen.com
 nic.direct
 nic.network
 nic.io
-dns.google
-cloudflare-dns.com
-one.one
-lencr.org
+resolver.arpa
+ipv4only.arpa
+3gppnetwork.org
 abovedomains.com
+hichina.com
+webempresa.eu
+rackspace.net
+telekom.net
+virginm.net
+ovh.net
 
-# --- CDN / edge / static-content serving ---
+# --- CNAME / load-balancer layers (never client-named) ---
 akamai.net
 akamaiedge.net
-akamaihd.net
-akamaized.net
 akamaitech.net
+akahost.net
 edgekey.net
 edgesuite.net
-akahost.net
-go-mpulse.net
-cloudfront.net
-fastly.net
 fastly-edge.com
-b-cdn.net
 bunnyinfra.net
-cdn77.org
-jsdelivr.net
-gcdn.co
-edgecdn.ru
-gstatic.com
-googleusercontent.com
-googlevideo.com
-ytimg.com
-ggpht.com
-gvt1.com
-gvt2.com
-googlezip.net
-fbcdn.net
-cdninstagram.com
-fbsbx.com
-facebook.net
-twimg.com
-licdn.com
-pinimg.com
-okcdn.ru
-cdn-vk.ru
-vkuserphoto.ru
-vkuser.net
-userapi.com
-imgsmail.ru
-mzstatic.com
-aaplimg.com
-cdn-apple.com
-icloud-content.com
-ssl-images-amazon.com
-media-amazon.com
-aiv-delivery.net
-static.microsoft
-sfx.ms
-svc.ms
-azureedge.net
-azurefd.net
-tm-azurefd.net
 trafficmanager.net
+tm-azurefd.net
 msedge.net
 a-msedge.net
 b-msedge.net
@@ -132,210 +101,24 @@ spo-msedge.net
 spov-msedge.net
 wac-msedge.net
 dual-s-msedge.net
-tiktokcdn.com
-tiktokcdn-us.com
-tiktokcdn-eu.com
-tiktokv.us
-tiktokv.eu
-tiktokw.us
-tiktokpangle.us
-bytefcdn-oversea.com
-byteoversea.net
 byteglb.com
-ibyteimg.com
-douyincdn.com
-ksyuncdn.com
-ks-cdn.com
-alicdn.com
-cdngslb.com
-aliyuncsslbintl.com
-nflxso.net
-nflxvideo.net
-nflximg.com
-netflix.net
-scdn.co
-spotifycdn.com
-steamstatic.com
-steamserver.net
-rbxcdn.com
-sc-cdn.net
-ttvnw.net
-live-video.net
-xhcdn.com
-githubusercontent.com
-typekit.net
-avcdn.net
 vedcdnlb.com
 vecdnlb.com
 vedsalb.com
 volcfcdndvs.com
-enacdn.net
-edgcdn.net
-cdnbuild.net
-qlivecdn.com
-cdnhwc1.com
-rocket-cdn.com
-yccdn.ru
-rtbcdn.ru
-cdn20.com
-pv-cdn.net
-wswebcdn.com
+cdngslb.com
+aliyuncsslbintl.com
 kunluncan.com
 tbcache.com
-geobasket.ru
-wbbasket.ru
-trbcdn.net
-unpkg.com
-
-# --- Cloud / hosting infrastructure & app-hosting (tenant) suffixes ---
-amazonaws.com
-windows.net
-azurewebsites.net
-elasticbeanstalk.com
-awswaf.com
+cloudflare.net
+netflix.net
 awsglobalaccelerator.com
-usgovcloudapi.net
-azure-devices.net
+aaplimg.com
 a2z.com
 amazon.dev
 aws.dev
-on.aws
-amazontrust.com
-myqcloud.com
-tencent-cloud.net
-aliyuncs.com
-myhuaweicloud.com
-dbankcloud.com
-dbankcloud.ru
-hicloud.com
-yandexcloud.net
-yandex.net
-herokuapp.com
-github.io
-myshopify.com
-shopifysvc.com
-vercel.app
-netlify.app
-workers.dev
-pages.dev
-run.app
-appspot.com
-wixsite.com
-wp.com
-blogspot.com
-digitaloceanspaces.com
-furycloud.io
-hichina.com
-grammarly.io
-quickconnect.to
-myfritz.net
-virginm.net
-ovh.net
-cloudflare.net
-sharepoint.com
-atlassian.net
-force.com
-service.gov.uk
-discordapp.com
-uk.com
-eu.com
-it.com
-rackspace.net
-telekom.net
-webempresa.eu
-spaceweb.pro
-dyndns.org
 
-# --- Microsoft service / telemetry backends ---
-microsoftonline.com
-office.net
-live.net
-msftncsi.com
-msftconnecttest.com
-msftauth.net
-msidentity.com
-exp-tas.com
-clarity.ms
-windowsupdate.com
-xboxlive.com
-
-# --- Google service / ads / measurement ---
-googleapis.com
-googletagmanager.com
-googlesyndication.com
-google-analytics.com
-googleadservices.com
-googletagservices.com
-doubleclick.net
-app-measurement.com
-app-analytics-services.com
-adtrafficquality.google
-2mdn.net
-nel.goog
-pki.goog
-telephony.goog
-recaptcha.net
-crashlytics.com
-
-# --- App / device / IoT / security backends ---
-whatsapp.net
-tiktokv.com
-discord.media
-wbx2.com
-kwai.net
-kwai-pro.com
-kwaipros.com
-easebar.com
-mtgglobals.com
-capcutapi.com
-pangle.io
-opera-api.com
-samsungapps.com
-hath.network
-pvp.net
-nintendo.net
-playstation.net
-xcal.tv
-vidaahub.com
-lgtvcommon.com
-nextlgsdp.com
-samsungcloudsolution.com
-samsungqbe.com
-samsungacr.com
-samsungosp.com
-samsungiotcloud.com
-immedia-semi.com
-e2ro.com
-eeroup.com
-heytapmobile.com
-heytapdl.com
-allawnos.com
-xiaomi.net
-tplinkcloud.com
-tplinknbu.com
-ezviz7.com
-hicloudcam.com
-ezvizlife.com
-eye4.cn
-shalltry.com
-leiniao.com
-vivoglobal.com
-hihonorcloud.com
-shopeemobile.com
-bamgrid.com
-amazonvideo.com
-amazonalexa.com
-adguard-vpn.online
-sentinelone.net
-goskope.com
-cloudsink.net
-skyhigh.cloud
-safebrowsing.apple
-pushy.io
-mangosip.ru
-lsrelayaccess.com
-
-# --- Ads / tracking / measurement / SDK serving ---
+# --- Web ads / tracking / analytics / consent serving ---
 amazon-adsystem.com
 adnxs.com
 adsrvr.org
@@ -355,7 +138,6 @@ demdex.net
 omtrdc.net
 adobedtm.com
 adobedc.net
-adobe.io
 adobe.net
 scorecardresearch.com
 imrworldwide.com
@@ -375,23 +157,36 @@ browser-intake-datadoghq.com
 fwmrm.net
 360yield.com
 inner-active.mobi
-appsflyersdk.com
 dv.tech
 creativecdn.com
 btloader.com
 tsyndicate.com
 lijit.com
 cookielaw.org
-youtube-nocookie.com
-avsxappcaptiveportal.com
-firetvcaptiveportal.com
 cloudflareinsights.com
+go-mpulse.net
+googletagmanager.com
+googlesyndication.com
+google-analytics.com
+googleadservices.com
+googletagservices.com
+doubleclick.net
+2mdn.net
+app-measurement.com
+app-analytics-services.com
+adtrafficquality.google
+nel.goog
+clarity.ms
+crashlytics.com
+mtgglobals.com
+pangle.io
+imcmdb.net
+rtbcdn.ru
+trbcdn.net
 segment.io
 teads.tv
 presage.io
 a-mo.net
-imcmdb.net
-mhverifier.ru
 prodregistryv2.org
 featureassets.org
 beyondwickedmapping.org
