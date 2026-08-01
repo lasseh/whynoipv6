@@ -358,7 +358,7 @@ Bottom-right toast; `GET /ip`; warn iff `family !== "ipv6"`; auto-hide 15 s / on
 
 ### 9.6 SEO / meta / analytics / machine-readable surface
 
-Static OG/Twitter/canonical block in `index.html` (WhyNoSticker.webp, @WhyNoIPv6, `notranslate`) as today; per-route `document.title` + meta-description via route `meta` + the global guard (web2's pattern — replaces the old imperative onMounted titles); umami `<script>` kept verbatim; `public/` robots.txt + sitemap.xml + security.txt carried over (sitemap regenerated for the §5 route set).
+Static OG/Twitter/canonical block in `index.html` (WhyNoSticker.webp, @WhyNoIPv6, `notranslate`) as today; per-route `document.title` + meta-description via route `meta` + the global guard (web2's pattern — replaces the old imperative onMounted titles); umami `<script>` kept, later amended for the first-party ad-blocker-proof proxy (src `/stats.js` + `data-host-url`, frontend-rebuild issue 04); `public/` robots.txt + sitemap.xml + security.txt carried over (sitemap regenerated for the §5 route set).
 
 **The static crawler surface (Decision 2026-07-11).** AI crawlers (GPTBot, ClaudeBot, PerplexityBot) do not execute JavaScript, and Bing renders it weakly — so anything that must be readable by them has to exist as static bytes. Instead of prerendering the SPA (§10 watch item), phase 1 ships the two cheap static artifacts:
 
