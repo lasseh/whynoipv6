@@ -42,7 +42,7 @@ Config keys introduced here by name (types, defaults, and the consolidated regis
 - `anti_flap.min_confirm_spacing` — duration, default `12h`. The counting gate (section 7).
 - `lifecycle.dead_streak` — int, default `7`. Consecutive unresolvable scans before `disabled_reason='dead'`.
 - `lifecycle.slow_lane_every` — duration, default `720h`. Post-commit cadence for disabled `dead`/`delisted` rows.
-- `cadence.default` / `cadence.bands` — normal-cadence resolution by rank (section 9).
+- `cadence.default` — the uniform normal cadence (section 9; rank bands removed, ADR 0004).
 - `recheck_inconsistent` (default `2h`), `recheck_error` (default `6h`), `recheck_backoff_max` (default `720h`) — fast-recheck lanes (section 9).
 - `crawler.resources.enabled` — bool, default `false`. While `false` the `resources` dimension is excluded from the loop entirely (section 5, step 2 preamble).
 
@@ -220,7 +220,7 @@ backoff(lane, streak):                                   # streak is the post-st
 ```
 
 - Error-lane progression: 6h, 12h, 24h, 48h, 96h, 192h, 384h, then capped at 720h. Inconsistent-lane progression: 2h, 4h, 8h, … capped identically.
-- `cadence(rank)`: `rank IS NULL` → `cadence.default` (24h); else the first entry of `cadence.bands` (config order) whose `min_rank`/`max_rank` bounds contain the rank → its `every`; no match → `cadence.default`. (Claim-side use of `next_check_at` and the frontier index: 04.)
+- Normal cadence: always `cadence.default` (24h) — rank-band overrides were removed at launch (ADR 0004). (Claim-side use of `next_check_at` and the frontier index: 04.)
 - **Decision:** `error_streak` still increments while the fast-lane breaker is open (its definition in section 8 is observation-based); only the *scheduling* effect is suspended. When the breaker closes, the accumulated streak resumes governing the backoff.
 - **Decision:** all scheduling arithmetic uses `T` as the base (not a fresh `now()`), making the commit unit fully deterministic and testable; T is at most seconds older than wall clock at write time.
 - Rechecks are full scans (`Runner.Run` on the whole domain); there is no partial-scan mode.

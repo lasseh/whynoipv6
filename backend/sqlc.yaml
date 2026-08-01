@@ -5,6 +5,7 @@ sql:
       - "db/migrations/000002_timescaledb.up.sql"
       - "db/migrations/000003_seed.up.sql"
       - "db/migrations/000004_launch_indexes.up.sql"
+      - "db/migrations/000005_drop_active_slots.up.sql"
     queries: "db/query"
     engine: "postgresql"
     gen:

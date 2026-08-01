@@ -76,9 +76,6 @@ v.AutomaticEnv()
   operator/dev convenience; when absent the loader proceeds silently.
 - **List/struct keys.** `resolver.bulk_upstreams` (`[]string`) is env-overridable as a
   comma-separated value (`RESOLVER_BULK_UPSTREAMS="127.0.0.1:53,127.0.0.1:5353"`).
-  `cadence.bands` (a list of `{min_rank,max_rank,every}` objects) is **YAML-only** — it
-  cannot be set through a single env var; the default `[]` (uniform daily cadence)
-  needs no override in production.
 
 **Decision — canonical key form.** Config keys use the **top-level section names
 exactly as the design doc's YAML blocks show them** (`claim.*`, `cadence.*`,
@@ -953,7 +950,7 @@ healthchecks.io pings.
 
 The **idle-checkpoint rule** (04-lifecycle-scheduling.md) keeps A1 valid when the
 frontier is drained: each process writes a `crawler_metrics` row (processed=0,
-is_final=false, current queue_depth/active_slots) whenever no checkpoint has been written
+is_final=false, current queue_depth) whenever no checkpoint has been written
 for 5 minutes.
 
 **`internal/notify`** implements both the ops-webhook POST and the healthchecks.io ping

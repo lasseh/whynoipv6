@@ -508,7 +508,7 @@ CREATE TABLE crawler_metrics (
   ts TIMESTAMPTZ NOT NULL DEFAULT now(),
   run_id UUID NOT NULL, worker TEXT NOT NULL,
   processed INT, succeeded INT, failed INT, qps REAL,
-  p50_ms INT, p99_ms INT, active_slots INT, queue_depth INT,
+  p50_ms INT, p99_ms INT, queue_depth INT,     -- active_slots dropped at launch (ADR 0004)
   dim_counters JSONB,                          -- per-dimension tallies; includes the
                                                --   lease_lost counter (03 fence aborts)
   geoip_build_epoch TIMESTAMPTZ,               -- build date of the loaded mmdb pair (06);

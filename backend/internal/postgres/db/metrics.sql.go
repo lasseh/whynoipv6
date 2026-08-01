@@ -14,11 +14,11 @@ import (
 const InsertCrawlerMetrics = `-- name: InsertCrawlerMetrics :exec
 
 INSERT INTO crawler_metrics (run_id, worker, processed, succeeded, failed, qps,
-                             p50_ms, p99_ms, active_slots, queue_depth,
+                             p50_ms, p99_ms, queue_depth,
                              dim_counters, geoip_build_epoch, is_final)
 VALUES ($1, $2, $3, $4, $5, $6,
-        $7, $8, $9, $10,
-        $11, $12, $13)
+        $7, $8, $9,
+        $10, $11, $12)
 `
 
 type InsertCrawlerMetricsParams struct {
@@ -30,7 +30,6 @@ type InsertCrawlerMetricsParams struct {
 	Qps             *float32           `json:"qps"`
 	P50Ms           *int32             `json:"p50_ms"`
 	P99Ms           *int32             `json:"p99_ms"`
-	ActiveSlots     *int32             `json:"active_slots"`
 	QueueDepth      *int32             `json:"queue_depth"`
 	DimCounters     []byte             `json:"dim_counters"`
 	GeoipBuildEpoch pgtype.Timestamptz `json:"geoip_build_epoch"`
@@ -48,7 +47,6 @@ func (q *Queries) InsertCrawlerMetrics(ctx context.Context, arg InsertCrawlerMet
 		arg.Qps,
 		arg.P50Ms,
 		arg.P99Ms,
-		arg.ActiveSlots,
 		arg.QueueDepth,
 		arg.DimCounters,
 		arg.GeoipBuildEpoch,

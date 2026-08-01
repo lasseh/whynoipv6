@@ -216,7 +216,6 @@ func (m *Metrics) Checkpoint(ctx context.Context, final bool) {
 	}
 	depth := int32(depth64)
 
-	var slots int32
 	params := db.InsertCrawlerMetricsParams{
 		RunID:       pgtype.UUID{Bytes: m.runID, Valid: true},
 		Worker:      m.worker,
@@ -226,7 +225,6 @@ func (m *Metrics) Checkpoint(ctx context.Context, final bool) {
 		Qps:         &qps,
 		P50Ms:       &p50,
 		P99Ms:       &p99,
-		ActiveSlots: &slots,
 		QueueDepth:  &depth,
 		DimCounters: raw,
 		IsFinal:     final,

@@ -107,48 +107,27 @@ RETURNING
 
 **Claim-loop cadence:** after a claim returning ≥1 row, the process feeds its worker pool and claims again as soon as the batch is dispatched (the pool's slot availability is the natural throttle). After a claim returning 0 rows, sleep `claim.empty_poll_interval` (default 10s) before the next preflight+claim cycle. With `idx_domain_due`, an empty-frontier claim is a sub-millisecond range probe; 10s is chosen to keep idle-log noise down, not for DB protection.
 
-## 4. cadence(rank)
+## 4. cadence
 
-Cadence is per-rank-band config, default daily everywhere:
+Cadence is uniform: every domain's base re-check interval is `cadence.default` (24h),
+rank or no rank.
 
 ```yaml
 # config (registry: 09-ops.md); keys are top-level, not nested under a `crawler:` map
 cadence:
   default: 24h
-  bands: []     # each: {min_rank: <int, optional>, max_rank: <int, optional>, every: <duration>}
 ```
 
-Normative definition:
+**Decision (ADR 0004):** rank-band cadence (`cadence.bands`, per-rank
+`{min_rank, max_rank, every}` overrides) was designed here but shipped unwired; the
+launch review chose deletion over wiring. Re-adding it is a config key plus a
+`ScheduleConfig`/`cadence()` change — no schema change, by construction. No jitter is
+added — spread comes from the Tranco import's 24h `next_check_at` spread on insert
+(06-ingest.md) and stays self-sustaining because each commit schedules relative to its
+own completion time.
 
-```go
-// internal/crawler/schedule.go
-
-type Band struct {
-    MinRank int32         // 0 = no lower bound
-    MaxRank int32         // 0 = no upper bound
-    Every   time.Duration // > 0
-}
-
-// cadence returns the base re-check interval for a domain.
-// rank == nil (unranked: campaign-only, live-check, parent_link rows) always
-// uses Default — bands never match a NULL rank.
-// Bands are evaluated in config order; the FIRST matching band wins.
-func cadence(rank *int32, def time.Duration, bands []Band) time.Duration {
-    if rank != nil {
-        for _, b := range bands {
-            if (b.MinRank == 0 || *rank >= b.MinRank) &&
-                (b.MaxRank == 0 || *rank <= b.MaxRank) {
-                return b.Every
-            }
-        }
-    }
-    return def
-}
-```
-
-**Decision:** the design gives band examples but no matching rule; pinned here: config order, first match wins, both bounds inclusive, absent bound = open, NULL rank never matches a band. Startup validation (fail fast): every band must set at least one bound, `Every > 0`, `MinRank <= MaxRank` when both set. No jitter is added — spread comes from the Tranco import's 24h `next_check_at` spread on insert (06-ingest.md) and stays self-sustaining because each commit schedules relative to its own completion time.
-
-The path to Tranco-full (~4.5M rows) is band config only, e.g. `[{max_rank: 1000000, every: 24h}, {min_rank: 1000001, every: 72h}]` — no schema or code change, by construction.
+The path to Tranco-full (~4.5M rows) is a slower `cadence.default`, or reviving rank
+bands per ADR 0004 — either way no schema change.
 
 ## 5. Post-commit scheduling
 
@@ -563,7 +542,7 @@ Grafana reads Postgres directly; there is **no Prometheus and no /metrics endpoi
 Each crawler process writes one `crawler_metrics` row:
 
 - after every **1000 processed domains** (constant `checkpointEvery = 1000`), and
-- whenever **no checkpoint has been written for 5 minutes** (constant `idleCheckpointAfter = 5 * time.Minute`) — an idle checkpoint with `processed = 0` and current `queue_depth`/`active_slots`. This keeps the Grafana staleness alert ("no crawler_metrics row in 15 min" → critical) valid when the frontier is drained.
+- whenever **no checkpoint has been written for 5 minutes** (constant `idleCheckpointAfter = 5 * time.Minute`) — an idle checkpoint with `processed = 0` and the current `queue_depth`. This keeps the Grafana staleness alert ("no crawler_metrics row in 15 min" → critical) valid when the frontier is drained.
 
 **Decision:** all counters in a row are **per-interval deltas** (since the previous checkpoint row of this process), not cumulative — Grafana alerting sums rows over windows (`sum(failed)/sum(processed)`), which requires deltas. `qps = processed / interval_seconds` for the row's interval.
 
@@ -579,7 +558,6 @@ Column semantics (names/types per 05-schema.md):
 | `failed` | engine panic/error preventing a commit attempt, DB error aborting the commit unit, or lease-fence rollback |
 | `qps` | `processed / interval_seconds` |
 | `p50_ms`, `p99_ms` | per-domain wall duration percentiles, this interval (histogram below) |
-| `active_slots` | busy worker slots at write time |
 | `queue_depth` | due-set size at write time (probe below) |
 | `dim_counters` | JSONB, schema below |
 | `is_final` | `true` only on the shutdown row (§14 step 3) |
@@ -643,7 +621,6 @@ All keys follow the viper uppercase-env convention; the consolidated registry wi
 | `claim.order` | string enum `rank\|age` | `rank` | claim ORDER BY policy; `age` = aging pressure valve (§3, Decision) |
 | `worker_slots` | int | `64` | concurrent domain slots per process (§12, Decision) |
 | `cadence.default` | duration | `24h` | base cadence (§4) |
-| `cadence.bands` | list of `{min_rank, max_rank, every}` | `[]` | per-rank-band cadence (§4) |
 | `recheck_inconsistent` | duration | `2h` | pull-in lane for `inconsistent` base/www (§5) |
 | `recheck_error` | duration | `6h` | pull-in lane for `error` base/www (§5) |
 | `recheck_backoff_max` | duration | `720h` | backoff cap (§5) |
@@ -664,7 +641,7 @@ Fixture tables and harness details live in 10-testing.md; an implementation of t
 
 1. **Claim-plan gate:** `EXPLAIN (FORMAT JSON)` of the claim query's inner SELECT on a seeded 1M-row table shows an Index Scan on `idx_domain_due` with `next_check_at <= now()` as the index condition and a top-N sort on `(rank NULLS LAST, next_check_at)`; the gate re-runs whenever an index is added to `domain`.
 2. **Claim atomicity:** two concurrent processes claiming from an overlapping due set never return the same row twice within a lease window; a row whose `claimed_at` is >30 min old is re-claimed.
-3. **Scheduling:** table-driven tests reproduce §5.2's two backoff progressions exactly, the inconsistent-beats-error lane choice, the breaker-open behavior (cadence lane, `error_streak` still increments), the slow-lane override for disabled rows, and cadence band matching incl. NULL rank.
+3. **Scheduling:** table-driven tests reproduce §5.2's two backoff progressions exactly, the inconsistent-beats-error lane choice, the breaker-open behavior (cadence lane, `error_streak` still increments), and the slow-lane override for disabled rows.
 4. **Dead lifecycle:** an NXDOMAIN-scripted domain dies on the 7th daily scan; an all-SERVFAIL domain **whose CD=1 re-query also fails (`cd_fail`)** dies on the 7th backoff-spaced scan; an all-SERVFAIL domain whose CD=1 returns AAAA (`cd_present`) is credited `base=supported` and never dies; three timeouts never increment `dead_streak`; a NOERROR-empty apex never increments it; recovery runs step R exactly once and produces no changelog rows.
 5. **Sweep:** each of S1–S5 verified in isolation and as a sequence: grace stamping is monotonic, live-check rows skip the grace, disabled campaigns don't pin members, S2 re-enables a delisted member when its campaign is re-enabled, and a second same-day run changes zero rows.
 6. **Re-entry matrix:** every cell of §7's matrix has a test at its owning ingress (06/07 tests reference this section).

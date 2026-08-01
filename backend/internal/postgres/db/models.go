@@ -430,7 +430,6 @@ type CrawlerMetric struct {
 	Qps             *float32           `json:"qps"`
 	P50Ms           *int32             `json:"p50_ms"`
 	P99Ms           *int32             `json:"p99_ms"`
-	ActiveSlots     *int32             `json:"active_slots"`
 	QueueDepth      *int32             `json:"queue_depth"`
 	DimCounters     []byte             `json:"dim_counters"`
 	GeoipBuildEpoch pgtype.Timestamptz `json:"geoip_build_epoch"`

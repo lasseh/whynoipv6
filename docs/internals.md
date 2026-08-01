@@ -114,7 +114,7 @@ subsection, using that subsection's column layout (dotted keys:
 derive mechanically from the dotted key (`anti_flap.min_confirm_spacing` →
 `ANTI_FLAP_MIN_CONFIRM_SPACING`) and are never spelled by hand. Globals:
 `DATABASE_URL` (required), `API_LISTEN`, `GEOIP_PATH`, `DATASETS_DIR`,
-`PUBLIC_BASE_URL`, `LOG_LEVEL`. Tuning keys cover claiming, cadence bands,
+`PUBLIC_BASE_URL`, `LOG_LEVEL`. Tuning keys cover claiming, cadence,
 anti-flap spacing, consensus QPS/breakers, lifecycle streaks, Tranco guards,
 live-check budgets, and ops URLs — every key is logged at startup with secrets
 redacted.
