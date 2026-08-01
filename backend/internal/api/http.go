@@ -12,8 +12,6 @@ import (
 	"net/http"
 	"strings"
 	"time"
-
-	"github.com/lasseh/whynoipv6/internal/postgres"
 )
 
 // problemBase is the stable, resolvable type-URI prefix (07 §2.5).
@@ -251,7 +249,9 @@ func hashString(s string) uint64 {
 	return h
 }
 
-// generation resolves the envelope meta sources for this request (07 §2.4).
+// generation resolves the envelope meta sources for this request (07 §2.4)
+// through the metaSource seam, so detail handlers share the list rim's
+// fakeable freshness source.
 func (s *Server) generation(ctx context.Context) (int32, time.Time, error) {
-	return postgres.Generation(ctx, s.q)
+	return s.meta.Generation(ctx)
 }
