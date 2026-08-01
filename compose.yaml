@@ -179,6 +179,10 @@ services:
       GF_SECURITY_ADMIN_USER: admin
       GF_SECURITY_ADMIN_PASSWORD: admin
       GF_USERS_ALLOW_SIGN_UP: "false"
+      # alerts.yaml's contact point requires a non-empty url — without a
+      # real ops webhook the placeholder keeps Grafana provisioning (and
+      # the container) booting; delivery just fails harmlessly on dev.
+      OPS_WEBHOOK_URL: ${OPS_WEBHOOK_URL:-http://127.0.0.1:1/ops-webhook-unset}
     volumes:
       - "./deploy/grafana/dev/datasources.yaml:/etc/grafana/provisioning/datasources/whynoipv6.yaml:ro"
       - "./deploy/grafana/dev/dashboards.yaml:/etc/grafana/provisioning/dashboards/whynoipv6.yaml:ro"
