@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { computed, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 
 import PageShell from '@/components/PageShell.vue'
 import ApiError from '@/components/ApiError.vue'
@@ -8,26 +8,16 @@ import CheckIcon from '@/components/icons/Check.vue'
 import CrossIcon from '@/components/icons/Cross.vue'
 import MinusIcon from '@/components/icons/Minus.vue'
 
-import { createCheck, getCheck, getLatestCheck, isCheckEnvelope } from '@/api'
-import type { CheckEnvelope } from '@/api'
-import { ApiProblem } from '@/api/problem'
+import { useLiveCheck } from '@/composables/useLiveCheck'
 import { setPageTitle } from '@/composables/usePageMeta'
 import { liveStatus } from '@/utils/status'
 import { formatDateTime } from '@/utils/date'
 
-// The §10.1 live-check flow: POST /check → 202 → poll GET /check/{id} every
-// 2 s to a terminal done|failed; a 200 on the POST is a dedupe envelope.
-const POLL_MS = 2_000
-const POLL_LIMIT = 60 // ~2 min; the engine's whole-scan budget is 90 s
-
 const route = useRoute()
-const router = useRouter()
 
-const host = ref('')
-const envelope = ref<CheckEnvelope | null>(null)
-const problem = ref<ApiProblem | null>(null)
-const running = ref(false)
-const retryLeft = ref(0)
+// The machine — poll loop, rate-limit countdown, and the shareable-URL
+// contract — lives in useLiveCheck; this page narrates and renders it.
+const { host, envelope, problem, running, retryLeft, submit, cancel } = useLiveCheck()
 
 const glyphs = { check: CheckIcon, cross: CrossIcon, minus: MinusIcon } as const
 
@@ -106,13 +96,6 @@ const waitMessage = computed(() => {
 // Asymptotic fill toward a 95 % cap: fast early motion, never falsely done.
 const progress = computed(() => Math.min(95, Math.round(100 * (1 - Math.exp(-elapsed.value / 18)))))
 
-// H3: a typo'd domain shouldn't lock the form for the whole scan.
-function cancel() {
-  stopPolling()
-  running.value = false
-  envelope.value = null
-}
-
 const copied = ref(false)
 async function copyLink() {
   if (!envelope.value) return
@@ -120,211 +103,6 @@ async function copyLink() {
   copied.value = true
   setTimeout(() => (copied.value = false), 2_000)
 }
-
-// One controller + token per submission: a new submit (or unmount) cancels
-// the in-flight fetch and orphans the old poll loop.
-let controller: AbortController | null = null
-let pollTimer: ReturnType<typeof setTimeout> | null = null
-let retryTimer: ReturnType<typeof setInterval> | null = null
-let pollToken = 0
-
-function stopPolling() {
-  pollToken++
-  if (pollTimer !== null) clearTimeout(pollTimer)
-  pollTimer = null
-  controller?.abort()
-  controller = null
-}
-
-onBeforeUnmount(() => {
-  stopPolling()
-  if (retryTimer !== null) clearInterval(retryTimer)
-})
-
-function startRetryCountdown(seconds: number) {
-  retryLeft.value = seconds
-  if (retryTimer !== null) clearInterval(retryTimer)
-  retryTimer = setInterval(() => {
-    retryLeft.value--
-    if (retryLeft.value <= 0 && retryTimer !== null) {
-      clearInterval(retryTimer)
-      retryTimer = null
-    }
-  }, 1_000)
-}
-
-function fail(e: unknown) {
-  const p = ApiProblem.from(e)
-  problem.value = p
-  running.value = false
-  if (p.code === 'rate-limited') startRetryCountdown(p.retryAfter ?? 60)
-}
-
-function poll(id: number, attempt: number) {
-  const token = pollToken
-  pollTimer = setTimeout(async () => {
-    if (token !== pollToken) return
-    try {
-      const env = await getCheck(id, controller?.signal)
-      if (token !== pollToken) return
-      envelope.value = env
-      if (env.status === 'done' || env.status === 'failed') {
-        running.value = false
-        return
-      }
-      if (attempt >= POLL_LIMIT) {
-        running.value = false
-        problem.value = new ApiProblem(
-          { title: 'Check timed out', detail: 'The scan is taking too long — try again later.' },
-          0,
-        )
-        return
-      }
-      poll(id, attempt + 1)
-    } catch (e) {
-      if (token === pollToken) fail(e)
-    }
-  }, POLL_MS)
-}
-
-// The shareable-link contract: the canonical URL is /check/{domain} — the
-// address bar always links to the host's result. Opening such a link serves
-// the freshest stored result inside live_check.link_ttl (7 d) via
-// GET /check/latest, and auto-runs a fresh check past that. Legacy numeric
-// /check/{id} links still load and upgrade to the domain URL. activeTarget
-// marks what this instance already handles, so the watcher ignores our own
-// router.replace and only reacts to real navigation (back/forward, links).
-let activeTarget: string | null = null
-
-function reflectHost(h: string) {
-  activeTarget = h
-  if (route.params.target !== h) {
-    void router.replace(`/check/${h}`)
-  }
-}
-
-function beginRequest() {
-  stopPolling()
-  controller = new AbortController()
-  envelope.value = null
-  problem.value = null
-  running.value = true
-}
-
-// Accept pasted URLs (http://vg.no/, https://www.vg.no/path?q=1): anything
-// URL-shaped reduces to its hostname; ports, paths, and queries drop. Plain
-// hosts pass through, and unparsable input goes to the API's validator.
-function extractHost(raw: string): string {
-  const trimmed = raw.trim()
-  if (!trimmed) return ''
-  try {
-    const url = /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed)
-      ? new URL(trimmed)
-      : new URL(`http://${trimmed}`)
-    return url.hostname
-  } catch {
-    return trimmed
-  }
-}
-
-async function submit(target = extractHost(host.value)) {
-  if (!target || running.value || retryLeft.value > 0) return
-  host.value = target // show the cleaned host in the input
-  beginRequest()
-  try {
-    const res = await createCheck(target, controller!.signal)
-    reflectHost(res.host)
-    if (isCheckEnvelope(res)) {
-      // Dedupe hit: a cached done envelope, no job to poll.
-      envelope.value = res
-      running.value = false
-      return
-    }
-    poll(res.id, 1)
-  } catch (e) {
-    fail(e)
-  }
-}
-
-// A /check/{domain} link: stored result inside the TTL, else recheck.
-async function loadByHost(h: string) {
-  activeTarget = h
-  host.value = h
-  beginRequest()
-  try {
-    const env = await getLatestCheck(h, controller!.signal)
-    envelope.value = env
-    host.value = env.host
-    reflectHost(env.host) // canonicalized form may differ from the URL
-    running.value = false
-  } catch (e) {
-    if (ApiProblem.from(e).code === 'not-found') {
-      running.value = false
-      void submit(h) // nothing stored within 7 days — recheck now
-      return
-    }
-    fail(e)
-  }
-}
-
-// A legacy /check/{id} link: load the job, then upgrade to the domain URL.
-async function loadByID(id: number) {
-  beginRequest()
-  try {
-    const env = await getCheck(id, controller!.signal)
-    envelope.value = env
-    host.value = env.host
-    reflectHost(env.host)
-    if (env.status === 'done' || env.status === 'failed') {
-      running.value = false
-      return
-    }
-    poll(id, 1)
-  } catch (e) {
-    const p = ApiProblem.from(e)
-    if (p.code === 'not-found') {
-      running.value = false
-      problem.value = new ApiProblem(
-        {
-          title: 'Check not found',
-          detail: 'This check link has expired or never existed — run a fresh check above.',
-        },
-        404,
-      )
-      return
-    }
-    fail(e)
-  }
-}
-
-function loadTarget(raw: string) {
-  activeTarget = raw
-  if (/^\d+$/.test(raw)) {
-    void loadByID(Number(raw))
-  } else {
-    void loadByHost(raw)
-  }
-}
-
-function routeTarget(): string | null {
-  const raw = route.params.target
-  return typeof raw === 'string' && raw !== '' ? raw : null
-}
-
-onMounted(() => {
-  const target = routeTarget()
-  if (target !== null) loadTarget(target)
-})
-
-// Back/forward between two result links re-loads the target; navigating to
-// the bare /check (nav link) keeps whatever is on screen.
-watch(
-  () => route.params.target,
-  () => {
-    const target = routeTarget()
-    if (target !== null && target !== activeTarget) loadTarget(target)
-  },
-)
 
 // Data-driven title once a result is on screen; also watches the target so
 // the canonicalizing router.replace (whose beforeEach resets the static
