@@ -118,6 +118,9 @@ type Querier interface {
 	DomainInsertLiveCheck(ctx context.Context, arg DomainInsertLiveCheckParams) (int64, error)
 	// Lifecycle re-entry (07 §5.1.6): every POST /check on an existing host.
 	DomainLiveCheckReentry(ctx context.Context, host string) error
+	// The mandate campaigns a domain belongs to (07 §4.3): drives the domain
+	// detail's mandate badge. Bounded by the handful of tagged campaigns.
+	DomainMandates(ctx context.Context, domainID int64) ([]DomainMandatesRow, error)
 	DomainMembershipReEntry(ctx context.Context, id int64) error
 	// The worker's pre-commit roll-up input (02 §6): required links only. The
 	// host rides along so the caller can fold this scan's discovery output D

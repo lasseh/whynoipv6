@@ -224,11 +224,11 @@ func TestCampaignSyncRealRepo(t *testing.T) {
 
 	pool := pgtest.NewDB(t)
 	ctx := context.Background()
-	// The live repo carries one file above the default 1000-domain cap
-	// (the 1729-entry Dutch central-government file); the cap is config
-	// (campaign.max_domains_per_file) and is raised for the full import.
+	// The live repo carries one large file (the 1729-entry Dutch
+	// central-government file); the cap is config
+	// (campaign.max_domains_per_file, default 5000) and is set explicitly here.
 	rep, err := Sync(context.Background(), Config{
-		RepoPath: dir, GitRemote: "origin", MaxDomainsPerFile: 2000,
+		RepoPath: dir, GitRemote: "origin", MaxDomainsPerFile: 5000,
 		AdoptUnknownUUIDs: true, Pull: false, Push: false,
 	}, pool)
 	if err != nil {
