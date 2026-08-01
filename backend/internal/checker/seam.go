@@ -25,6 +25,15 @@ const (
 	CDOutcomeFail    = "cd_fail"
 )
 
+// error_type wire tokens (01-engine.md §11.6/§11.7 — §477 calls these a wire
+// contract; observe's conn decision table keys off them).
+const (
+	ErrTypeConnRefused = "connection_refused"
+	ErrTypeTimeout     = "timeout"
+	ErrTypeCertificate = "certificate_error"
+	ErrTypeUnknown     = "unknown"
+)
+
 // AAAAAnswer is the result of a (possibly quorum'd) AAAA resolution.
 type AAAAAnswer struct {
 	IPs        []net.IP

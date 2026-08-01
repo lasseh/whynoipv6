@@ -22,12 +22,6 @@ import (
 // (03 §14.2); shared with the crawler's buildDetails serialization.
 const ConnKey = "conn"
 
-// error_type wire tokens (01-engine.md §11.7 — the conn table keys off them).
-const (
-	errTypeConnRefused = "connection_refused"
-	errTypeTimeout     = "timeout"
-)
-
 // preflightFreshness is the §5 constant: conn=unsupported is definitive only
 // with a preflight pass younger than this (mirrors checker.PreflightFreshness).
 const preflightFreshness = 5 * time.Minute
@@ -203,13 +197,13 @@ func composeConn(hSt checker.CheckStatus, errType string, pSt checker.CheckStatu
 	case hSt == checker.StatusSupported: // row 1
 		obs = domain.ObsSupported
 		detail["source"] = "https"
-	case hSt == checker.StatusUnsupported && errType == errTypeConnRefused && pSt == checker.StatusSupported: // row 2
+	case hSt == checker.StatusUnsupported && errType == checker.ErrTypeConnRefused && pSt == checker.StatusSupported: // row 2
 		obs = domain.ObsSupported
 		detail["source"] = "http"
 		detail["http_only"] = true
 	case hSt == checker.StatusUnsupported: // rows 3–4 (cert error, refused w/o http, no-AAAA)
 		obs = domain.ObsUnsupported
-	case hSt == checker.StatusError && errType == errTypeTimeout && preflightFresh: // row 5a
+	case hSt == checker.StatusError && errType == checker.ErrTypeTimeout && preflightFresh: // row 5a
 		obs = domain.ObsUnsupported
 	case hSt == checker.StatusError: // rows 5b–5c
 		obs = domain.ObsError

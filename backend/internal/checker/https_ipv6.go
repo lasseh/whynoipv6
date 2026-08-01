@@ -68,7 +68,7 @@ func (c *HTTPSIPv6) Check(ctx context.Context, domain string, kind Kind) (Result
 
 	if isConnRefused(lastErr) {
 		d.Error = errConnRefused
-		d.ErrorType = "connection_refused"
+		d.ErrorType = ErrTypeConnRefused
 		return Result{
 			Status:  StatusUnsupported,
 			Detail:  d,
@@ -78,7 +78,7 @@ func (c *HTTPSIPv6) Check(ctx context.Context, domain string, kind Kind) (Result
 
 	if isTimeout(lastErr) {
 		d.Error = lastErr.Error()
-		d.ErrorType = "timeout"
+		d.ErrorType = ErrTypeTimeout
 		return Result{
 			Status:  StatusError,
 			Detail:  d,
@@ -88,7 +88,7 @@ func (c *HTTPSIPv6) Check(ctx context.Context, domain string, kind Kind) (Result
 
 	if isTLSError(lastErr) {
 		d.Error = lastErr.Error()
-		d.ErrorType = "certificate_error"
+		d.ErrorType = ErrTypeCertificate
 		return Result{
 			Status:  StatusUnsupported,
 			Detail:  d,
@@ -97,7 +97,7 @@ func (c *HTTPSIPv6) Check(ctx context.Context, domain string, kind Kind) (Result
 	}
 
 	d.Error = lastErr.Error()
-	d.ErrorType = "unknown"
+	d.ErrorType = ErrTypeUnknown
 	return Result{
 		Status:  StatusError,
 		Detail:  d,
