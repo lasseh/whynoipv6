@@ -111,7 +111,8 @@ func (q *Queries) QueueDepth(ctx context.Context) (int64, error) {
 
 const TickSummaryCounts = `-- name: TickSummaryCounts :one
 SELECT
-  (SELECT count(*) FROM scan WHERE ts >= now() - interval '24 hours') AS scanned,
+  (SELECT COALESCE(sum(processed), 0)::bigint FROM crawler_metrics
+     WHERE ts >= now() - interval '24 hours') AS scanned,
   (SELECT count(*) FROM changelog WHERE ts >= now() - interval '24 hours') AS transitions,
   (SELECT count(*) FROM domain WHERE (NOT disabled OR disabled_reason IN ('dead', 'delisted'))
      AND next_check_at <= now()) AS queue_depth
@@ -123,7 +124,10 @@ type TickSummaryCountsRow struct {
 	QueueDepth  int64 `json:"queue_depth"`
 }
 
-// The tick step-7 ops digest (04 §9).
+// The tick step-7 ops digest (04 §9). scanned sums the checkpoint deltas
+// (crawler_metrics.processed resets every checkpoint) instead of counting
+// raw scan rows — the scan hypertable has no ts-leading index and a 24h
+// count(*) would seq-scan the newest chunk.
 func (q *Queries) TickSummaryCounts(ctx context.Context) (TickSummaryCountsRow, error) {
 	row := q.db.QueryRow(ctx, TickSummaryCounts)
 	var i TickSummaryCountsRow

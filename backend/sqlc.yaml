@@ -4,6 +4,7 @@ sql:
       - "db/migrations/000001_base_schema.up.sql"
       - "db/migrations/000002_timescaledb.up.sql"
       - "db/migrations/000003_seed.up.sql"
+      - "db/migrations/000004_launch_indexes.up.sql"
     queries: "db/query"
     engine: "postgresql"
     gen:

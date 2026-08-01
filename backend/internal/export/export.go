@@ -19,6 +19,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/parquet-go/parquet-go"
@@ -134,21 +135,18 @@ func (e *Exporter) Run(ctx context.Context, generation int32) error {
 	var resources []datapackageResource
 	var sums []string
 	for _, tier := range tiers {
-		rows, err := e.fetch(ctx, tier.RankedOnly, tier.MaxRank)
-		if err != nil {
+		csvName := fmt.Sprintf("whynoipv6-%s.%s", tier.Name, formatCSVGz)
+		parquetName := fmt.Sprintf("whynoipv6-%s.%s", tier.Name, formatParquet)
+		if err := e.writeTier(ctx, filepath.Join(tmp, csvName), filepath.Join(tmp, parquetName),
+			tier.RankedOnly, tier.MaxRank); err != nil {
 			return fmt.Errorf("tier %s: %w", tier.Name, err)
 		}
 		for _, format := range []string{formatCSVGz, formatParquet} {
-			name := fmt.Sprintf("whynoipv6-%s.%s", tier.Name, format)
+			name := csvName
+			if format == formatParquet {
+				name = parquetName
+			}
 			path := filepath.Join(tmp, name)
-			if format == formatCSVGz {
-				err = writeCSVGz(path, rows)
-			} else {
-				err = writeParquet(path, rows)
-			}
-			if err != nil {
-				return fmt.Errorf("%s: %w", name, err)
-			}
 			size, digest, err := fileDigest(path)
 			if err != nil {
 				return err
@@ -198,44 +196,37 @@ func (e *Exporter) Run(ctx context.Context, generation int32) error {
 	return e.writeManifest(ctx, now, generation)
 }
 
-func (e *Exporter) fetch(ctx context.Context, rankedOnly bool, maxRank int32) ([]Row, error) {
-	dbRows, err := db.New(e.Pool).ExportRows(ctx, db.ExportRowsParams{
-		RankedOnly: rankedOnly, MaxRank: maxRank,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("export rows: %w", err)
+// tsRFC3339 renders a nullable timestamp as RFC 3339 UTC.
+func tsRFC3339(t pgtype.Timestamptz) *string {
+	if !t.Valid {
+		return nil
 	}
+	s := t.Time.UTC().Format(time.RFC3339)
+	return &s
+}
+
+// exportRow maps one scanned ExportRows record to the exported shape.
+func exportRow(d *db.ExportRowsRow) Row {
 	status := postgres.StatusPtr
-	ts := func(t pgtype.Timestamptz) *string {
-		if !t.Valid {
-			return nil
-		}
-		s := t.Time.UTC().Format(time.RFC3339)
-		return &s
+	ts := tsRFC3339
+	var rank *int64
+	if d.Rank != nil {
+		r64 := int64(*d.Rank)
+		rank = &r64
 	}
-	out := make([]Row, len(dbRows))
-	for i := range dbRows {
-		d := &dbRows[i]
-		var rank *int64
-		if d.Rank != nil {
-			r64 := int64(*d.Rank)
-			rank = &r64
-		}
-		out[i] = Row{
-			Host: d.Host, Rank: rank, Kind: string(d.Kind), Parent: d.Parent,
-			Classification: string(d.Classification),
-			ClassFlags:     strings.Join(d.ClassFlags, ";"),
-			Saint:          d.Saint,
-			Base:           status(d.BaseStatus), WWW: status(d.WwwStatus), NS: status(d.NsStatus),
-			MX: status(d.MxStatus), Conn: status(d.ConnStatus), Resources: status(d.ResourcesStatus),
-			BaseSince: ts(d.BaseSince), WWWSince: ts(d.WwwSince), NSSince: ts(d.NsSince),
-			MXSince: ts(d.MxSince), ConnSince: ts(d.ConnSince), ResourcesSince: ts(d.ResourcesSince),
-			TLD: d.Tld, Country: strings.TrimSpace(d.Code), ASN: d.Asn,
-			DNSProvider: d.DnsProvider, HostingProvider: d.HostingProvider,
-			LastChecked: ts(d.LastCheckedAt),
-		}
+	return Row{
+		Host: d.Host, Rank: rank, Kind: string(d.Kind), Parent: d.Parent,
+		Classification: string(d.Classification),
+		ClassFlags:     strings.Join(d.ClassFlags, ";"),
+		Saint:          d.Saint,
+		Base:           status(d.BaseStatus), WWW: status(d.WwwStatus), NS: status(d.NsStatus),
+		MX: status(d.MxStatus), Conn: status(d.ConnStatus), Resources: status(d.ResourcesStatus),
+		BaseSince: ts(d.BaseSince), WWWSince: ts(d.WwwSince), NSSince: ts(d.NsSince),
+		MXSince: ts(d.MxSince), ConnSince: ts(d.ConnSince), ResourcesSince: ts(d.ResourcesSince),
+		TLD: d.Tld, Country: strings.TrimSpace(d.Code), ASN: d.Asn,
+		DNSProvider: d.DnsProvider, HostingProvider: d.HostingProvider,
+		LastChecked: ts(d.LastCheckedAt),
 	}
-	return out, nil
 }
 
 func (r *Row) csv() []string {
@@ -259,22 +250,66 @@ func (r *Row) csv() []string {
 	}
 }
 
-func writeCSVGz(path string, rows []Row) error {
-	f, err := os.Create(path)
+// parquetChunk batches the streaming parquet writes; small enough to keep
+// memory flat, large enough to keep the writer efficient.
+const parquetChunk = 1000
+
+// writeTier streams one ExportRows pass into the tier's CSV.gz and Parquet
+// files simultaneously — rows are scanned, mapped and written one at a time,
+// never materialized as a full-tier slice.
+func (e *Exporter) writeTier(ctx context.Context, csvPath, parquetPath string,
+	rankedOnly bool, maxRank int32,
+) error {
+	cf, err := os.Create(csvPath)
 	if err != nil {
 		return err
 	}
-	defer func() { _ = f.Close() }()
-	gz := gzip.NewWriter(f)
+	defer func() { _ = cf.Close() }()
+	gz := gzip.NewWriter(cf)
 	cw := csv.NewWriter(gz)
 	if err := cw.Write(columns); err != nil {
 		return err
 	}
-	for i := range rows {
-		if err := cw.Write(rows[i].csv()); err != nil {
+
+	pf, err := os.Create(parquetPath)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = pf.Close() }()
+	pw := parquet.NewGenericWriter[Row](pf, parquet.Compression(&parquet.Snappy))
+
+	rows, err := e.Pool.Query(ctx, db.ExportRows, rankedOnly, maxRank)
+	if err != nil {
+		return fmt.Errorf("export rows: %w", err)
+	}
+	defer rows.Close()
+	chunk := make([]Row, 0, parquetChunk)
+	for rows.Next() {
+		d, err := pgx.RowToStructByPos[db.ExportRowsRow](rows)
+		if err != nil {
+			return fmt.Errorf("export scan: %w", err)
+		}
+		row := exportRow(&d)
+		if err := cw.Write(row.csv()); err != nil {
+			return err
+		}
+		chunk = append(chunk, row)
+		if len(chunk) == parquetChunk {
+			if _, err := pw.Write(chunk); err != nil {
+				return err
+			}
+			chunk = chunk[:0]
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("export rows: %w", err)
+	}
+	if len(chunk) > 0 {
+		if _, err := pw.Write(chunk); err != nil {
 			return err
 		}
 	}
+
 	cw.Flush()
 	if err := cw.Error(); err != nil {
 		return err
@@ -282,25 +317,13 @@ func writeCSVGz(path string, rows []Row) error {
 	if err := gz.Close(); err != nil {
 		return err
 	}
-	return f.Close()
-}
-
-func writeParquet(path string, rows []Row) error {
-	f, err := os.Create(path)
-	if err != nil {
+	if err := cf.Close(); err != nil {
 		return err
 	}
-	defer func() { _ = f.Close() }()
-	w := parquet.NewGenericWriter[Row](f, parquet.Compression(&parquet.Snappy))
-	if len(rows) > 0 {
-		if _, err := w.Write(rows); err != nil {
-			return err
-		}
-	}
-	if err := w.Close(); err != nil {
+	if err := pw.Close(); err != nil {
 		return err
 	}
-	return f.Close()
+	return pf.Close()
 }
 
 func fileDigest(path string) (size int64, digest string, err error) {

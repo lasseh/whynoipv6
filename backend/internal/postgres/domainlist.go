@@ -9,6 +9,8 @@ import (
 
 	sq "github.com/Masterminds/squirrel"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	db "github.com/lasseh/whynoipv6/internal/postgres/db"
 )
 
 // DomainListFilter is the validated §3.3 filter set. Closed-set values
@@ -37,6 +39,40 @@ type DomainListFilter struct {
 	// (07 §2.2/§4.7); NOT disabled always applies.
 	CampaignID *int32 // campaign_domain membership (internal campaign.id)
 	ParentID   *int64 // subdomains of one apex
+}
+
+// The closed sets behind the literal interpolations in buildDomainList.
+// api.parseDomainFilter validates the same sets at the boundary, but the
+// builder re-checks them itself (validateLiterals) so no future caller can
+// reach the fmt.Sprintf literals with unvalidated input.
+var (
+	literalClasses = map[string]bool{
+		string(db.ClassificationUnknown): true, string(db.ClassificationInactive): true,
+		string(db.ClassificationSinner): true, string(db.ClassificationPartial): true,
+		string(db.ClassificationHero): true,
+	}
+	literalDims   = map[string]bool{"base": true, "www": true, "ns": true, "mx": true, "conn": true, "resources": true}
+	literalStatus = map[string]bool{
+		string(db.Ipv6StatusSupported): true, string(db.Ipv6StatusUnsupported): true,
+		string(db.Ipv6StatusNoRecord): true, string(db.Ipv6StatusNotApplicable): true,
+	}
+	literalFlags = map[string]bool{"broken_v6": true, "www_missing": true, "ns_missing": true, "mail_missing": true, "resources_v4only": true}
+)
+
+// validateLiterals rejects any literal-emitted field outside its closed set —
+// the in-package guard behind the cross-package validation convention.
+func (f *DomainListFilter) validateLiterals() error {
+	if f.Class != "" && !literalClasses[f.Class] {
+		return fmt.Errorf("domain list filter: class %q outside the closed set", f.Class)
+	}
+	if f.Flag != "" && !literalFlags[f.Flag] {
+		return fmt.Errorf("domain list filter: flag %q outside the closed set", f.Flag)
+	}
+	if (f.StatusDim != "" || f.StatusVal != "") &&
+		(!literalDims[f.StatusDim] || !literalStatus[f.StatusVal]) {
+		return fmt.Errorf("domain list filter: status %q=%q outside the closed set", f.StatusDim, f.StatusVal)
+	}
+	return nil
 }
 
 // DomainSeek is the decoded cursor seek (mirrors api.Seek without the
@@ -183,7 +219,9 @@ func buildDomainList(f *DomainListFilter, sortKey ListSort, seek *DomainSeek, af
 		q = q.Where(sq.Expr("d.hosting_provider = ?", f.Hosting))
 	}
 	if f.Flag != "" {
-		q = q.Where(sq.Expr(fmt.Sprintf("'%s' = ANY(d.class_flags)", f.Flag))) // validated closed set
+		// Bound, not literal: no partial index predicates class_flags, so
+		// the planner gains nothing from a literal here.
+		q = q.Where(sq.Expr("? = ANY(d.class_flags)", f.Flag))
 	}
 	if f.StatusDim != "" && f.StatusVal != "" {
 		q = q.Where(sq.Expr(fmt.Sprintf("d.%s_status = '%s'", f.StatusDim, f.StatusVal))) // both validated
@@ -245,6 +283,9 @@ func buildDomainList(f *DomainListFilter, sortKey ListSort, seek *DomainSeek, af
 func ListDomains(ctx context.Context, pool *pgxpool.Pool, f *DomainListFilter,
 	sortKey ListSort, seek *DomainSeek, afterRank *int32, limit int, backward bool,
 ) ([]DomainRow, error) {
+	if err := f.validateLiterals(); err != nil {
+		return nil, err
+	}
 	q := buildDomainList(f, sortKey, seek, afterRank, backward)
 	return collectKeysetRows[DomainRow](ctx, pool,
 		q.Limit(uint64(limit+1)), backward, "domain list") // N+1 fetch
@@ -294,6 +335,9 @@ func ListDomainsAround(ctx context.Context, pool *pgxpool.Pool, f *DomainListFil
 // EstimateDomainListCount returns the plan-row estimate for the filtered
 // list (07 §3.4 — never an exact count on the hot path).
 func EstimateDomainListCount(ctx context.Context, pool *pgxpool.Pool, f *DomainListFilter) (int64, error) {
+	if err := f.validateLiterals(); err != nil {
+		return 0, err
+	}
 	// No LIMIT: the estimate covers the whole scope.
 	sqlText, args, err := buildDomainList(f, ListSortRank, nil, nil, false).ToSql()
 	if err != nil {

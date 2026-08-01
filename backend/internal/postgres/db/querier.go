@@ -230,7 +230,10 @@ type Querier interface {
 	SweepDelistLiveCheck(ctx context.Context, arg SweepDelistLiveCheckParams) (int64, error)
 	SweepReenableDelisted(ctx context.Context, liveCheckLinkage pgtype.Interval) (int64, error)
 	SweepStampOrphans(ctx context.Context, liveCheckLinkage pgtype.Interval) (int64, error)
-	// The tick step-7 ops digest (04 §9).
+	// The tick step-7 ops digest (04 §9). scanned sums the checkpoint deltas
+	// (crawler_metrics.processed resets every checkpoint) instead of counting
+	// raw scan rows — the scan hypertable has no ts-leading index and a 24h
+	// count(*) would seq-scan the newest chunk.
 	TickSummaryCounts(ctx context.Context) (TickSummaryCountsRow, error)
 	TrancoInsertAborted(ctx context.Context, arg TrancoInsertAbortedParams) error
 	TrancoInsertProvenance(ctx context.Context, arg TrancoInsertProvenanceParams) (int64, error)

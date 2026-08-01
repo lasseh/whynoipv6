@@ -100,7 +100,7 @@ func TestMigrateDownUp(t *testing.T) {
 		t.Fatalf("migrate up after down: %v", err)
 	}
 	v, dirty, err := mig.Version()
-	if err != nil || dirty || v != 3 {
-		t.Errorf("version after down/up = %d dirty=%t err=%v, want 3 clean", v, dirty, err)
+	if err != nil || dirty || v != 4 {
+		t.Errorf("version after down/up = %d dirty=%t err=%v, want 4 clean", v, dirty, err)
 	}
 }

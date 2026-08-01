@@ -24,10 +24,14 @@ VALUES (@host, @num_queries, @cache_hits, @cache_miss,
         @rcode_servfail, @rcode_nxdomain,
         @recursion_time_avg_ms, @requestlist_avg, @raw);
 
--- The tick step-7 ops digest (04 §9).
+-- The tick step-7 ops digest (04 §9). scanned sums the checkpoint deltas
+-- (crawler_metrics.processed resets every checkpoint) instead of counting
+-- raw scan rows — the scan hypertable has no ts-leading index and a 24h
+-- count(*) would seq-scan the newest chunk.
 -- name: TickSummaryCounts :one
 SELECT
-  (SELECT count(*) FROM scan WHERE ts >= now() - interval '24 hours') AS scanned,
+  (SELECT COALESCE(sum(processed), 0)::bigint FROM crawler_metrics
+     WHERE ts >= now() - interval '24 hours') AS scanned,
   (SELECT count(*) FROM changelog WHERE ts >= now() - interval '24 hours') AS transitions,
   (SELECT count(*) FROM domain WHERE (NOT disabled OR disabled_reason IN ('dead', 'delisted'))
      AND next_check_at <= now()) AS queue_depth;
