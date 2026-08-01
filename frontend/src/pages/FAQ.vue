@@ -42,40 +42,34 @@ watch(
               </div>
               <ul class="-my-4">
                 <li class="py-4">
-                  <h4 class="text-xl font-medium mb-2">What is WhyNoIPv6.com?</h4>
+                  <h4 class="text-xl font-medium mb-2">What is Why No IPv6?</h4>
                   <p class="text-base text-gray-400">
-                    WhyNoIPv6.com is a specialized platform committed to monitoring and promoting
-                    the adoption of IPv6 among the 1 Million top-ranked websites and user-submitted
-                    campaigns. We offer insightful metrics to help you assess the current landscape
-                    of IPv6 implementation.
+                    Why No IPv6 crawls the Tranco top million every day, plus user-submitted
+                    campaigns, and checks each one for IPv6: the domain, www, nameservers, and mail.
+                    Then we sort the results into Sinners, Heroes, and Saints and publish the
+                    receipts.
                   </p>
                 </li>
                 <li class="py-4">
-                  <h4 class="text-xl font-medium mb-2">Why is IPv6 Important?</h4>
+                  <h4 class="text-xl font-medium mb-2">Why does IPv6 matter?</h4>
                   <p class="text-base text-gray-400 mb-2">
-                    IPv6 is not merely an upgrade; it's a fundamental pillar for the Internet's
-                    sustainable future. As we edge closer to exhausting the IPv4 address space, the
-                    immense address capacity of IPv6 becomes indispensable. Beyond the scalability,
-                    IPv6 brings along robust security protocols and superior performance, making it
-                    the linchpin for modern, efficient, and secure internet communications.
+                    IPv4 ran out. Not 'is running out': ran out. The registries held the funeral
+                    years ago. IPv6 is the address space the internet actually grew into. For a
+                    top-ranked site today, skipping it isn't an oversight. It's a choice.
                   </p>
                   <p class="text-base text-gray-400">
-                    Failing to adopt IPv6 is tantamount to inhibiting the Internet's evolution. For
-                    top websites, this isn't just negligence—it's an abdication of their role as
-                    industry leaders. That's why our mission at WhyNoIPv6.com is not just to
-                    monitor, but to actively push for the closing of these alarming gaps in IPv6
-                    adoption.
+                    Our part is simple: we watch the top million and publish who has IPv6 and who
+                    doesn't. Being on the second list is meant to be uncomfortable.
                   </p>
                 </li>
                 <li class="py-4">
-                  <h4 class="text-xl font-medium mb-2">How does WhyNoIPv6.com work?</h4>
+                  <h4 class="text-xl font-medium mb-2">How does the site work?</h4>
                   <p class="text-base text-gray-400">
-                    At WhyNoIPv6.com, we meticulously scan each domain from Tranco's top-ranked list
-                    every day to evaluate critical IPv6 adoption metrics. Specifically, we check for
-                    the existence of IPv6 DNS records and MX records. The data gleaned from these
-                    scans is then aggregated, analyzed, and made publicly available, providing a
-                    comprehensive and up-to-date snapshot of IPv6 implementation across influential
-                    websites.
+                    Once a day the crawler walks the entire Tranco list and runs the same checks on
+                    every domain: AAAA records on the domain and www, IPv6 on the nameservers and
+                    mail servers, and a real HTTP connection over IPv6 to confirm the records aren't
+                    decorative. The results feed everything here: the tiers, the country stats, and
+                    the changelog.
                   </p>
                 </li>
                 <li class="py-4">
@@ -85,30 +79,21 @@ watch(
                     <a href="https://tranco-list.eu/" target="_blank" class="a-gradient"
                       >Tranco List</a
                     >
-                    offers an alternative way to gauge a website's standing on the internet,
-                    diverging from traditional metrics such as those provided by Alexa rankings.
-                    Unlike Alexa, which ranks websites based on a combination of average daily
-                    visitors and pageviews over a three-month period, the Tranco List employs a
-                    robust methodology that aggregates data from various sources to compile its
-                    rankings.
+                    ranks the top million domains by aggregating several traffic lists, which
+                    smooths out the noise and manipulation that made single-source rankings like
+                    Alexa easy to game. It's the ranking researchers actually use.
                   </p>
                   <p class="text-base text-gray-400">
-                    This approach aims to provide a more comprehensive and reliable measure of a
-                    website's popularity and traffic, addressing some of the accuracy concerns
-                    associated with Alexa's data. As a result, the Tranco List is increasingly
-                    recognized as a valuable tool for understanding website prominence in a way that
-                    accounts for a broader spectrum of internet activity.
+                    We use it because the rank is half the shame: 'top 100 site, zero AAAA records'
+                    only lands if the ranking is credible.
                   </p>
                 </li>
                 <li class="py-4">
-                  <h4 class="text-xl font-medium mb-2">How accurate is our data?</h4>
+                  <h4 class="text-xl font-medium mb-2">How accurate is the data?</h4>
                   <p class="text-base text-gray-400">
-                    While we make every effort to ensure the precision of our metrics, it's
-                    important to interpret them as indicative rather than absolute. Several
-                    variables can introduce fluctuations in real-time accuracy. For instance, DNS
-                    propagation delays and the dynamic nature of Content Delivery Networks (CDNs)
-                    can alter the data based on the anycast DNS location. Therefore, our metrics
-                    offer a valuable yet approximate view of the current state of IPv6 adoption.
+                    Treat the data as indicative, not absolute. DNS propagation and CDNs that answer
+                    differently per anycast location can shift a result from one scan to the next.
+                    That's why a status only changes after three consecutive scans agree.
                   </p>
                 </li>
                 <li class="py-4">
@@ -116,12 +101,14 @@ watch(
                     Why does a domain show as not supporting IPv6 when it does?
                   </h4>
                   <p class="text-base text-gray-400 mb-2">
-                    This could be due to various reasons like DNS propagation delays or temporary
-                    server issues. If you notice inconsistencies, please contact us.
+                    Usually DNS propagation lag, a CDN answering differently from our vantage point,
+                    or a server that didn't respond during that scan. A real fix sticks after three
+                    consecutive daily scans, so give it a few days. If it still looks wrong, contact
+                    us.
                   </p>
                   <p class="text-base text-gray-400">
-                    For instance, DNS propagation delays and the dynamic nature of Content Delivery
-                    Networks (CDNs) can alter the data based on the anycast DNS location.
+                    Also note the crawler verifies reachability: an AAAA record that doesn't answer
+                    over IPv6 still counts as unsupported.
                   </p>
                 </li>
               </ul>
@@ -174,42 +161,42 @@ watch(
                 <li class="py-4">
                   <h4 class="text-xl font-medium mb-2">Crawler Errors</h4>
                   <p class="text-base text-gray-400">
-                    Did you find any errors from the crawler? PR's are welcome
+                    Found a bug in the crawler? PRs are welcome.
                   </p>
                 </li>
                 <li class="py-4">
                   <h4 class="text-xl font-medium mb-2">Heroes</h4>
                   <p class="text-base text-gray-400">
-                    To become one of the IPv6 heroes here, you need IPv6 on domain.com,
-                    www.domain.com and the nameservers. MX records need IPv6 or be empty, and the
-                    site has to actually respond over IPv6.
+                    Hero status takes IPv6 on domain.com, www.domain.com, and the nameservers. MX
+                    hosts need IPv6 too (or no MX at all), and the site has to actually answer over
+                    IPv6.
                   </p>
                 </li>
                 <li class="py-4">
                   <h4 class="text-xl font-medium mb-2">Saints</h4>
                   <p class="text-base text-gray-400">
-                    Saints are heroes that also load all their page resources — scripts, fonts,
-                    images — over IPv6. The full package: the site works on an IPv6-only connection.
+                    Saints are Heroes that also load all their page resources (scripts, fonts,
+                    images) over IPv6. The full package: the site works on an IPv6-only connection.
                   </p>
                 </li>
                 <li class="pt-4">
                   <h3 class="text-xl font-medium underline">Campaign Crawler</h3>
                 </li>
                 <li class="py-4">
-                  <h4 class="text-xl font-medium mb-2">How do i create my own campaign?</h4>
+                  <h4 class="text-xl font-medium mb-2">How do I create my own campaign?</h4>
                   <p class="text-base text-gray-400">
-                    Create a new issue on the
+                    Open an issue on the
                     <a
                       href="https://github.com/lasseh/whynoipv6-campaign"
                       target="_blank"
                       class="a-gradient"
-                      >Github repo</a
-                    >
+                      >GitHub repo</a
+                    >.
                   </p>
                 </li>
                 <li class="py-4">
                   <h4 class="text-xl font-medium mb-2">
-                    How can i get my domain removed from the list?
+                    How can I get my domain removed from the list?
                   </h4>
                   <p class="text-base text-gray-400">Yes, you can start using IPv6!</p>
                 </li>
@@ -217,7 +204,7 @@ watch(
                   <h3 class="text-xl font-medium underline">API</h3>
                 </li>
                 <li class="py-4">
-                  <h4 class="text-xl font-medium mb-2">Can i get access to the API?</h4>
+                  <h4 class="text-xl font-medium mb-2">Can I get access to the API?</h4>
                   <p class="text-base text-gray-400 mb-2">
                     Yes, the API is open — no key, no signup. Everything on this site is served from
                     it, at
@@ -240,7 +227,7 @@ watch(
                   </p>
                 </li>
                 <li class="py-4">
-                  <h4 class="text-xl font-medium mb-2">Can i download the whole dataset?</h4>
+                  <h4 class="text-xl font-medium mb-2">Can I download the whole dataset?</h4>
                   <p class="text-base text-gray-400 mb-2">
                     Yes — daily snapshots (CSV and Parquet) are published at
                     <a href="https://api.whynoipv6.com/datasets" target="_blank" class="a-gradient"
@@ -262,7 +249,7 @@ watch(
                   </p>
                 </li>
                 <li class="py-4">
-                  <h4 class="text-xl font-medium mb-2">Can i follow changes as a feed?</h4>
+                  <h4 class="text-xl font-medium mb-2">Can I follow changes as a feed?</h4>
                   <p class="text-base text-gray-400">
                     The changelog is available as
                     <a
@@ -325,7 +312,7 @@ watch(
                 <li class="py-4">
                   <h4 class="text-xl font-medium mb-2">Community and Forums</h4>
                   <p class="text-base text-gray-400">
-                    <a href="https://www.reddit.com/r/ipv6/" class="a-gradient">Reddit's r/ipv6</a>
+                    <a href="https://www.reddit.com/r/ipv6/" class="a-gradient">r/ipv6</a>
                   </p>
                   <p class="text-base text-gray-400">
                     <a href="https://www.ipv6forum.com/" class="a-gradient">IPv6 Forum</a>
@@ -337,7 +324,7 @@ watch(
                   </p>
                 </li>
                 <li class="py-4">
-                  <h4 class="text-xl font-medium mb-2">Online Courses and Webinars</h4>
+                  <h4 class="text-xl font-medium mb-2">Courses and Certifications</h4>
                   <p class="text-base text-gray-400">
                     <a href="https://ipv6.he.net/certification/" target="_blank" class="a-gradient"
                       >Hurricane Electric IPv6 Certification Project</a
@@ -372,7 +359,7 @@ watch(
                       href="https://www.google.com/intl/en/ipv6/statistics.html"
                       target="_blank"
                       class="a-gradient"
-                      >Google v6 Statistics</a
+                      >Google IPv6 Statistics</a
                     >
                   </p>
                   <p class="text-base text-gray-400">
@@ -389,14 +376,15 @@ watch(
                 <li class="py-4">
                   <h4 class="text-xl font-medium mb-2">Stickers</h4>
                   <p class="text-base text-gray-400">
-                    Become part of a community of like-minded individuals and show your support for
-                    IPv6.
+                    Fly the colors. Nothing says 'ask me about AAAA records' like a protocol
+                    sticker.
                   </p>
                   <p class="text-base text-gray-400 mb-2">
-                    Add stickers to your laptop, or vandalize a building of a IPv6 sinner!
+                    Put one on your laptop, your rack, or a Sinner's front door. Get permission for
+                    that last one.
                   </p>
                   <p class="text-base text-gray-400">
-                    Order your's today:
+                    Order yours:
                     <br />
                     <a
                       href="https://www.stickermule.com/u/89ea0892a27fc29/item/14732767"
@@ -418,7 +406,7 @@ watch(
                         src="/images/WhyNoSticker.webp"
                         :width="380"
                         :height="472"
-                        alt="Sticker"
+                        alt="Why No IPv6 sticker"
                       />
                     </div>
                   </div>
@@ -435,18 +423,18 @@ watch(
                 <li class="py-4">
                   <h4 class="text-xl font-medium mb-2"># whoami</h4>
                   <p class="text-base text-gray-400 mb-2">
-                    Hello! I'm Lasse, Norway's own network maestro, on a personal crusade to spread
-                    the magic of IPv6 across every corner of the internet.
+                    I'm Lasse, a network engineer from Norway. By day I build and run networks; by
+                    night I run a crawler that shames billion-dollar companies who still won't
+                    publish an AAAA record.
                   </p>
                   <p class="text-base text-gray-400 mb-2">
-                    By day, I'm a wizard of wires and a sorcerer of switches, tirelessly weaving the
-                    intricate web of networks that keep our digital world in motion. By night, I
-                    prowl the internet, seeking out IPv6 slackers, nudging them to embrace the
-                    future of the internet.
+                    None of it is personal. Any domain can walk off the Sinners list with one DNS
+                    change and a server that answers over IPv6; the crawler forgives after three
+                    clean scans.
                   </p>
                   <p class="text-base text-gray-400">
-                    Join me on this journey towards an IPv6-enabled future, where 'IP exhaustion'
-                    becomes just a spooky story of the past!
+                    The endgame is an empty Sinners list. IPv6 turns 30 in 2028. I'd like to be done
+                    before it turns 40.
                   </p>
                 </li>
                 <li class="py-4">
@@ -458,14 +446,14 @@ watch(
                     >
                   </p>
                   <p class="text-base text-gray-400">
-                    E-Mail:
+                    Email:
                     <span class="a-gradient">whynoipv6@protonmail.com</span>
                   </p>
                 </li>
                 <li class="py-4">
                   <h4 class="text-xl font-medium mb-2">Status page</h4>
                   <p class="text-base text-gray-400 mb-2">
-                    We maintain a status page to show our operations and availability:
+                    Uptime and incident history:
                     <a href="https://status.whynoipv6.com/" target="_blank" class="a-gradient"
                       >status.whynoipv6.com</a
                     >
@@ -474,8 +462,8 @@ watch(
                 <li class="py-4">
                   <h4 class="text-xl font-medium mb-2">Our Supporters</h4>
                   <p class="text-base text-gray-400 mb-4">
-                    We have been fortunate to have support of some great organizations early on in
-                    our existence.
+                    These organizations supported the site early on, back when it was one crawler
+                    and a grudge.
                   </p>
                   <!-- Sponsors -->
                   <div
