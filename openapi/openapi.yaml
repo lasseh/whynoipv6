@@ -34,6 +34,7 @@ x-tier-parameters: &tierParams
   - $ref: "#/components/parameters/cursor"
   - $ref: "#/components/parameters/limit"
   - $ref: "#/components/parameters/afterRank"
+  - $ref: "#/components/parameters/aroundRank"
 
 tags:
   - name: domains
@@ -81,6 +82,7 @@ paths:
         - $ref: "#/components/parameters/cursor"
         - $ref: "#/components/parameters/limit"
         - $ref: "#/components/parameters/afterRank"
+        - $ref: "#/components/parameters/aroundRank"
       responses:
         "200": { $ref: "#/components/responses/DomainList" }
         "400": { $ref: "#/components/responses/InvalidParameter" }
@@ -290,6 +292,7 @@ paths:
         - $ref: "#/components/parameters/cursor"
         - $ref: "#/components/parameters/limit"
         - $ref: "#/components/parameters/afterRank"
+        - $ref: "#/components/parameters/aroundRank"
       responses:
         "200": { $ref: "#/components/responses/DomainList" }
         "404": { $ref: "#/components/responses/NotFound" }
@@ -398,6 +401,7 @@ paths:
         - $ref: "#/components/parameters/cursor"
         - $ref: "#/components/parameters/limit"
         - $ref: "#/components/parameters/afterRank"
+        - $ref: "#/components/parameters/aroundRank"
       responses:
         "200": { $ref: "#/components/responses/DomainList" }
         "404": { $ref: "#/components/responses/NotFound" }
@@ -477,6 +481,7 @@ paths:
         - $ref: "#/components/parameters/cursor"
         - $ref: "#/components/parameters/limit"
         - $ref: "#/components/parameters/afterRank"
+        - $ref: "#/components/parameters/aroundRank"
       responses:
         "200": { $ref: "#/components/responses/DomainList" }
         "404": { $ref: "#/components/responses/NotFound" }
@@ -864,6 +869,15 @@ components:
       in: query
       description: Stateless deep link; rank-ordered views only.
       schema: { type: integer, minimum: 0 }
+    aroundRank:
+      name: around_rank
+      in: query
+      description: >-
+        Centered-window deep link (§3.2): the ⌈limit/2⌉ rows ranked ≤ N plus
+        the ⌊limit/2⌋ rows ranked > N. Default rank ordering only; mutually
+        exclusive with `cursor` and `after_rank`. The returned `page` cursors
+        continue the window in either direction.
+      schema: { type: integer, minimum: 0 }
     sort:
       name: sort
       in: query
@@ -981,7 +995,9 @@ components:
     changelogTo:
       name: to
       in: query
-      description: Window end (YYYY-MM-DD or RFC 3339).
+      description: >-
+        Window end (YYYY-MM-DD or RFC 3339). A bare date is inclusive of
+        that whole day (UTC).
       schema: { type: string }
     statsFrom:
       name: from

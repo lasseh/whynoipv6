@@ -150,7 +150,6 @@ needs them.
 | `claim.order` | `CLAIM_ORDER` | enum `rank\|age` | `rank` | 04 | Claim `ORDER BY` policy; `age` is the aging pressure valve. |
 | `worker_slots` | `WORKER_SLOTS` | int | `64` | 04 | Concurrent domain slots **per process** (2 procs → 128 provisioned; sizing constant `WORKER_SLOTS`, 00-overview.md). |
 | `cadence.default` | `CADENCE_DEFAULT` | duration | `24h` | 03,04 | Base per-domain cadence. |
-| `cadence.bands` | (YAML only) | list `{min_rank,max_rank,every}` | `[]` | 03,04 | Per-rank-band cadence overrides. |
 | `recheck_inconsistent` | `RECHECK_INCONSISTENT` | duration | `2h` | 03,04 | Pull-in lane for `inconsistent` base/www. |
 | `recheck_error` | `RECHECK_ERROR` | duration | `6h` | 03,04 | Pull-in lane for `error` base/www. |
 | `recheck_backoff_max` | `RECHECK_BACKOFF_MAX` | duration | `720h` | 03,04 | Backoff cap (== 30d slow lane). |
@@ -254,6 +253,7 @@ cadence and the report's §6/§7 defaults; behavior is normative in 07-api.md.
 | `datasets.retention_days` | `DATASETS_RETENTION_DAYS` | int | `90` | v6ctl(export) | 07 §7.4 | Daily-snapshot retention applied by `v6ctl export`; first-of-month snapshots kept forever (report §6.3). |
 | `feed.recent_window` | `FEED_RECENT_WINDOW` | int | `50` | api | 07 | Latest-N transitions per Atom/JSON-Feed scope — the fixed recent window, no pagination (report §6.4; OPEN-15 = keep the latest-50 cap). |
 | `export.csv_max_rows` | `EXPORT_CSV_MAX_ROWS` | int | `10000` | api | 07 | Row cap for `?format=csv` list responses; larger "give me everything" pulls are steered to the static datasets (report §6.5). |
+| `api.trusted_proxies` | `API_TRUSTED_PROXIES` | []string CIDR | `["127.0.0.0/8","::1/128"]` | api | 07 §1.2 | CIDRs whose `X-Real-IP`/`X-Forwarded-For` are honored for client-IP derivation; any other peer keeps its socket address (spoofing guard when the API is reachable without nginx in front). |
 
 `DATASETS_DIR` (§2.1) is the snapshot root; `PUBLIC_BASE_URL` (§2.1) supplies the absolute
 origin for the manifest/feed URLs. The `POST /check` rate-limit keys already live in §2.7

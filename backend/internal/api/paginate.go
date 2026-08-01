@@ -188,6 +188,14 @@ func (c *Cursor) SeekTuple() (Seek, error) {
 // FilterFingerprint hashes the normalized filter set — every query param
 // except the paging machinery itself (07 §3.2 `f`).
 func FilterFingerprint(q url.Values) string {
+	return ScopedFingerprint("", q)
+}
+
+// ScopedFingerprint is FilterFingerprint with a path-derived scope folded
+// into the hash input, so a cursor minted under one scope (a campaign, a
+// parent domain, a resource host) cannot be replayed under another —
+// path scopes are filters too (07 §3.2 `f`).
+func ScopedFingerprint(scope string, q url.Values) string {
 	keys := make([]string, 0, len(q))
 	for k := range q {
 		switch k {
@@ -198,6 +206,9 @@ func FilterFingerprint(q url.Values) string {
 	}
 	sort.Strings(keys)
 	var b strings.Builder
+	if scope != "" {
+		b.WriteString("@" + scope + ";")
+	}
 	for _, k := range keys {
 		vals := append([]string(nil), q[k]...)
 		sort.Strings(vals)

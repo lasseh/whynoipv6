@@ -98,6 +98,11 @@ func WriteProblem(w http.ResponseWriter, r *http.Request, p Problem) { //nolint:
 	if p.Instance == "" && r != nil {
 		p.Instance = r.URL.Path
 	}
+	// Errors are never cacheable: override any public cache headers and ETag
+	// a handler set on the success path before the failure (RFC 9111 would
+	// otherwise let a CDN pin the problem body for the full s-maxage).
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Del("ETag")
 	w.Header().Set("Content-Type", "application/problem+json")
 	if p.RetryAfter != nil {
 		w.Header().Set("Retry-After", fmt.Sprintf("%d", *p.RetryAfter))
@@ -186,14 +191,14 @@ func InternalError(w http.ResponseWriter, r *http.Request, err error) {
 func CacheList(w http.ResponseWriter, r *http.Request, generation int32) bool {
 	w.Header().Set("Cache-Control",
 		"public, max-age=300, s-maxage=3600, stale-while-revalidate=600, stale-if-error=86400")
-	return applyETag(w, r, fmt.Sprintf(`"g%d-%s"`, generation, queryFingerprint(r)))
+	return applyETag(w, r, fmt.Sprintf(`W/"g%d-%s"`, generation, queryFingerprint(r)))
 }
 
 // CacheChangelog: the live-surface class — ETag from the scope window's
 // max(changelog.ts), never the daily generation (07 §6.1).
 func CacheChangelog(w http.ResponseWriter, r *http.Request, maxTS time.Time) bool {
 	w.Header().Set("Cache-Control", "public, max-age=300")
-	return applyETag(w, r, fmt.Sprintf(`"cl%d-%s"`, maxTS.UnixNano(), queryFingerprint(r)))
+	return applyETag(w, r, fmt.Sprintf(`W/"cl%d-%s"`, maxTS.UnixNano(), queryFingerprint(r)))
 }
 
 // NoStore marks the no-store class (POST /check, in-flight poll, /ip, health).
@@ -201,11 +206,30 @@ func NoStore(w http.ResponseWriter) {
 	w.Header().Set("Cache-Control", "no-store")
 }
 
+// applyETag sets the (weak — nginx's gzip filter strips strong ETags but
+// preserves W/ ones) ETag and answers a matching conditional GET with 304.
 func applyETag(w http.ResponseWriter, r *http.Request, etag string) bool {
 	w.Header().Set("ETag", etag)
-	if match := r.Header.Get("If-None-Match"); match != "" && match == etag {
+	if ifNoneMatch(r.Header.Get("If-None-Match"), etag) {
 		w.WriteHeader(http.StatusNotModified)
 		return true
+	}
+	return false
+}
+
+// ifNoneMatch implements the RFC 9110 §13.1.2 rule: the header is a
+// comma-separated candidate list compared weakly (W/ prefixes ignored on
+// both sides), and "*" matches any current representation.
+func ifNoneMatch(header, etag string) bool {
+	if header == "" {
+		return false
+	}
+	opaque := strings.TrimPrefix(etag, "W/")
+	for cand := range strings.SplitSeq(header, ",") {
+		cand = strings.TrimSpace(cand)
+		if cand == "*" || strings.TrimPrefix(cand, "W/") == opaque {
+			return true
+		}
 	}
 	return false
 }

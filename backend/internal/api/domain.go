@@ -406,7 +406,10 @@ func (s *Server) serveDomainList(w http.ResponseWriter, r *http.Request, preset 
 
 	// The N+1 window walk (§3.2 bidirectional) via the keyset pipeline;
 	// around_rank arrives from the two-sided fetch instead of the cursor
-	// walk and shares only the minting.
+	// walk and shares only the minting. Both branches fingerprint the
+	// preset-MERGED query, so cursors minted on a preset route decode on
+	// that same route (and nowhere the preset does not hold).
+	fingerprint := FilterFingerprint(q)
 	var rows []postgres.DomainRow
 	var page Page
 	if aroundRank != nil {
@@ -417,11 +420,12 @@ func (s *Server) serveDomainList(w http.ResponseWriter, r *http.Request, preset 
 			InternalError(w, r, err)
 			return
 		}
-		page = MintPage(generation, sortKey, FilterFingerprint(q), moreBelow, moreAbove, rows, domainKey(sortKey))
+		page = MintPage(generation, sortKey, fingerprint, moreBelow, moreAbove, rows, domainKey(sortKey))
 	} else {
 		rows, page, err = KeysetPage(r, generation, limit, KeysetSpec[postgres.DomainRow]{
-			Sort:       sortKey,
-			Positioned: afterRank != nil,
+			Sort:        sortKey,
+			Positioned:  afterRank != nil,
+			Fingerprint: fingerprint,
 			Fetch: func(ctx context.Context, seek *Seek, lim int, backward bool) ([]postgres.DomainRow, error) {
 				var ds *postgres.DomainSeek
 				if seek != nil {
@@ -473,10 +477,12 @@ func (s *Server) serveDomainList(w http.ResponseWriter, r *http.Request, preset 
 
 // hostOrderedPage runs one host-ordered keyset page over the given filter —
 // the shared engine for campaign members and subdomains (§3.2: host is a
-// unique key, total even when rank is NULL).
-func (s *Server) hostOrderedPage(r *http.Request, filter *postgres.DomainListFilter, generation int32, limit int) ([]DomainSummary, Page, error) {
+// unique key, total even when rank is NULL). scope binds the cursor to the
+// path-derived scope the filter carries (ScopedFingerprint).
+func (s *Server) hostOrderedPage(r *http.Request, filter *postgres.DomainListFilter, scope string, generation int32, limit int) ([]DomainSummary, Page, error) {
 	rows, page, err := KeysetPage(r, generation, limit, KeysetSpec[postgres.DomainRow]{
-		Sort: SortHost,
+		Sort:        SortHost,
+		Fingerprint: ScopedFingerprint(scope, r.URL.Query()),
 		Fetch: func(ctx context.Context, seek *Seek, lim int, backward bool) ([]postgres.DomainRow, error) {
 			var ds *postgres.DomainSeek
 			if seek != nil {
@@ -534,7 +540,7 @@ func (s *Server) listSubdomains(w http.ResponseWriter, r *http.Request) {
 	}
 
 	filter := postgres.DomainListFilter{ParentID: &d.ID}
-	items, page, err := s.hostOrderedPage(r, &filter, generation, limit)
+	items, page, err := s.hostOrderedPage(r, &filter, fmt.Sprintf("subdomains:%d", d.ID), generation, limit)
 	if err != nil {
 		if errors.Is(err, ErrCursorInvalid) {
 			InvalidParameter(w, r, err.Error())

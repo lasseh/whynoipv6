@@ -17,6 +17,12 @@ type KeysetSpec[Row any] struct {
 	// so a prev_cursor is mintable even without a backward probe.
 	Positioned bool
 
+	// Fingerprint, when non-empty, overrides the fingerprint KeysetPage
+	// derives from the raw query — set where the filter set includes
+	// path-derived scope (presets, campaign/parent/resource ids) the
+	// query string alone cannot see.
+	Fingerprint string
+
 	// Fetch runs the window query: up to limit+1 rows in DISPLAY order.
 	// A backward fetch flips its comparisons and ORDER internally,
 	// re-reverses into display order, and carries its N+1 overflow row at
@@ -35,7 +41,10 @@ type KeysetSpec[Row any] struct {
 // stay with the caller.
 func KeysetPage[Row any](r *http.Request, generation int32, limit int, spec KeysetSpec[Row]) ([]Row, Page, error) {
 	q := r.URL.Query()
-	fingerprint := FilterFingerprint(q)
+	fingerprint := spec.Fingerprint
+	if fingerprint == "" {
+		fingerprint = FilterFingerprint(q)
+	}
 
 	var seek *Seek
 	backward := false

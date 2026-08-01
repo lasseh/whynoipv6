@@ -1500,6 +1500,8 @@ export interface components {
         limit: number;
         /** @description Stateless deep link; rank-ordered views only. */
         afterRank: number;
+        /** @description Centered-window deep link (§3.2): the ⌈limit/2⌉ rows ranked ≤ N plus the ⌊limit/2⌋ rows ranked > N. Default rank ordering only; mutually exclusive with `cursor` and `after_rank`. The returned `page` cursors continue the window in either direction. */
+        aroundRank: number;
         sort: "rank" | "-rank" | "host";
         class: components["schemas"]["Classification"];
         /** @description The only accepted value is true (saint ⊂ hero). */
@@ -1537,7 +1539,7 @@ export interface components {
         changelogField: components["schemas"]["Dimension"];
         /** @description Window start (YYYY-MM-DD or RFC 3339). */
         changelogFrom: string;
-        /** @description Window end (YYYY-MM-DD or RFC 3339). */
+        /** @description Window end (YYYY-MM-DD or RFC 3339). A bare date is inclusive of that whole day (UTC). */
         changelogTo: string;
         /** @description Window start (YYYY-MM-DD); default `to − 90d`. */
         statsFrom: string;
@@ -1593,6 +1595,8 @@ export interface operations {
                 limit?: components["parameters"]["limit"];
                 /** @description Stateless deep link; rank-ordered views only. */
                 after_rank?: components["parameters"]["afterRank"];
+                /** @description Centered-window deep link (§3.2): the ⌈limit/2⌉ rows ranked ≤ N plus the ⌊limit/2⌋ rows ranked > N. Default rank ordering only; mutually exclusive with `cursor` and `after_rank`. The returned `page` cursors continue the window in either direction. */
+                around_rank?: components["parameters"]["aroundRank"];
             };
             header?: never;
             path?: never;
@@ -1683,7 +1687,7 @@ export interface operations {
                 field?: components["parameters"]["changelogField"];
                 /** @description Window start (YYYY-MM-DD or RFC 3339). */
                 from?: components["parameters"]["changelogFrom"];
-                /** @description Window end (YYYY-MM-DD or RFC 3339). */
+                /** @description Window end (YYYY-MM-DD or RFC 3339). A bare date is inclusive of that whole day (UTC). */
                 to?: components["parameters"]["changelogTo"];
                 format?: components["parameters"]["format"];
                 /** @description Opaque keyset cursor from `page.next_cursor`. */
@@ -1799,6 +1803,8 @@ export interface operations {
                 limit?: components["parameters"]["limit"];
                 /** @description Stateless deep link; rank-ordered views only. */
                 after_rank?: components["parameters"]["afterRank"];
+                /** @description Centered-window deep link (§3.2): the ⌈limit/2⌉ rows ranked ≤ N plus the ⌊limit/2⌋ rows ranked > N. Default rank ordering only; mutually exclusive with `cursor` and `after_rank`. The returned `page` cursors continue the window in either direction. */
+                around_rank?: components["parameters"]["aroundRank"];
             };
             header?: never;
             path?: never;
@@ -1840,6 +1846,8 @@ export interface operations {
                 limit?: components["parameters"]["limit"];
                 /** @description Stateless deep link; rank-ordered views only. */
                 after_rank?: components["parameters"]["afterRank"];
+                /** @description Centered-window deep link (§3.2): the ⌈limit/2⌉ rows ranked ≤ N plus the ⌊limit/2⌋ rows ranked > N. Default rank ordering only; mutually exclusive with `cursor` and `after_rank`. The returned `page` cursors continue the window in either direction. */
+                around_rank?: components["parameters"]["aroundRank"];
             };
             header?: never;
             path?: never;
@@ -1881,6 +1889,8 @@ export interface operations {
                 limit?: components["parameters"]["limit"];
                 /** @description Stateless deep link; rank-ordered views only. */
                 after_rank?: components["parameters"]["afterRank"];
+                /** @description Centered-window deep link (§3.2): the ⌈limit/2⌉ rows ranked ≤ N plus the ⌊limit/2⌋ rows ranked > N. Default rank ordering only; mutually exclusive with `cursor` and `after_rank`. The returned `page` cursors continue the window in either direction. */
+                around_rank?: components["parameters"]["aroundRank"];
             };
             header?: never;
             path?: never;
@@ -1922,6 +1932,8 @@ export interface operations {
                 limit?: components["parameters"]["limit"];
                 /** @description Stateless deep link; rank-ordered views only. */
                 after_rank?: components["parameters"]["afterRank"];
+                /** @description Centered-window deep link (§3.2): the ⌈limit/2⌉ rows ranked ≤ N plus the ⌊limit/2⌋ rows ranked > N. Default rank ordering only; mutually exclusive with `cursor` and `after_rank`. The returned `page` cursors continue the window in either direction. */
+                around_rank?: components["parameters"]["aroundRank"];
             };
             header?: never;
             path?: never;
@@ -2031,6 +2043,8 @@ export interface operations {
                 limit?: components["parameters"]["limit"];
                 /** @description Stateless deep link; rank-ordered views only. */
                 after_rank?: components["parameters"]["afterRank"];
+                /** @description Centered-window deep link (§3.2): the ⌈limit/2⌉ rows ranked ≤ N plus the ⌊limit/2⌋ rows ranked > N. Default rank ordering only; mutually exclusive with `cursor` and `after_rank`. The returned `page` cursors continue the window in either direction. */
+                around_rank?: components["parameters"]["aroundRank"];
             };
             header?: never;
             path: {
@@ -2209,6 +2223,8 @@ export interface operations {
                 limit?: components["parameters"]["limit"];
                 /** @description Stateless deep link; rank-ordered views only. */
                 after_rank?: components["parameters"]["afterRank"];
+                /** @description Centered-window deep link (§3.2): the ⌈limit/2⌉ rows ranked ≤ N plus the ⌊limit/2⌋ rows ranked > N. Default rank ordering only; mutually exclusive with `cursor` and `after_rank`. The returned `page` cursors continue the window in either direction. */
+                around_rank?: components["parameters"]["aroundRank"];
             };
             header?: never;
             path: {
@@ -2331,6 +2347,8 @@ export interface operations {
                 limit?: components["parameters"]["limit"];
                 /** @description Stateless deep link; rank-ordered views only. */
                 after_rank?: components["parameters"]["afterRank"];
+                /** @description Centered-window deep link (§3.2): the ⌈limit/2⌉ rows ranked ≤ N plus the ⌊limit/2⌋ rows ranked > N. Default rank ordering only; mutually exclusive with `cursor` and `after_rank`. The returned `page` cursors continue the window in either direction. */
+                around_rank?: components["parameters"]["aroundRank"];
             };
             header?: never;
             path: {
@@ -2602,7 +2620,7 @@ export interface operations {
                 field?: components["parameters"]["changelogField"];
                 /** @description Window start (YYYY-MM-DD or RFC 3339). */
                 from?: components["parameters"]["changelogFrom"];
-                /** @description Window end (YYYY-MM-DD or RFC 3339). */
+                /** @description Window end (YYYY-MM-DD or RFC 3339). A bare date is inclusive of that whole day (UTC). */
                 to?: components["parameters"]["changelogTo"];
                 format?: components["parameters"]["format"];
                 /** @description Opaque keyset cursor from `page.next_cursor`. */

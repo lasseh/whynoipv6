@@ -45,13 +45,19 @@ type HistoryEnvelope struct {
 }
 
 // parseHistoryWindow applies the §4.10 window contract: default to=today
-// UTC, from=to−90d, interval daily|weekly, 400 on malformed input.
+// UTC, from=to−90d, interval daily|weekly, 400 on malformed input. `to` is
+// clamped to today — the future holds no confirmed state, and an unbounded
+// ?to=9999-12-31 would otherwise drive history's per-day synthesis loop.
 func parseHistoryWindow(q url.Values) (from, to time.Time, weekly bool, err error) {
 	now := time.Now().UTC()
-	to = time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+	to = today
 	if v := q.Get("to"); v != "" {
 		if to, err = time.Parse("2006-01-02", v); err != nil {
 			return from, to, false, errors.New("to must be YYYY-MM-DD")
+		}
+		if to.After(today) {
+			to = today // the future holds no confirmed state
 		}
 	}
 	from = to.AddDate(0, 0, -90)
@@ -71,6 +77,17 @@ func parseHistoryWindow(q url.Values) (from, to time.Time, weekly bool, err erro
 		return from, to, false, errors.New("interval must be daily or weekly")
 	}
 	return from, to, weekly, nil
+}
+
+// capHistoryWindow bounds the synthesized window at the documented
+// changelog retention (history-only — the stats endpoints share the parser
+// but read real rollup rows): a wide `from` cannot make the day loop
+// allocate more than changelogRetentionDays points.
+func capHistoryWindow(from, to time.Time) time.Time {
+	if oldest := to.AddDate(0, 0, -changelogRetentionDays); from.Before(oldest) {
+		return oldest
+	}
+	return from
 }
 
 // dimTrack is one dimension's reconstruction input: its ascending
@@ -171,11 +188,13 @@ func (s *Server) getDomainHistory(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Clamp the window start to the entity's existence — the pre-first-
-	// transition backfill (old_value) must not reach before creation.
+	// transition backfill (old_value) must not reach before creation —
+	// and to the changelog retention.
 	created := row.CreatedAt.Time.UTC().Truncate(24 * time.Hour)
 	if from.Before(created) {
 		from = created
 	}
+	from = capHistoryWindow(from, to)
 
 	tracks := map[string]*dimTrack{}
 	for _, dim := range statusDims {
@@ -205,6 +224,9 @@ func (s *Server) getDomainHistory(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for d := from; !d.After(to); d = d.AddDate(0, 0, 1) {
+		if r.Context().Err() != nil {
+			return // client gone / timeout: stop synthesizing points
+		}
 		if weekly && d.Weekday() != time.Monday {
 			continue // weekly samples the state at each ISO week boundary
 		}

@@ -2,6 +2,7 @@ package api
 
 import (
 	"errors"
+	"fmt"
 	"math"
 	"net/http"
 
@@ -166,8 +167,13 @@ func (s *Server) getCampaign(w http.ResponseWriter, r *http.Request) {
 	if d.Tags == nil {
 		d.Tags = []string{}
 	}
-	if adoption, err := s.q.CampaignAdoption(r.Context(), row.ID); err == nil {
+	adoption, err := s.q.CampaignAdoption(r.Context(), row.ID)
+	switch {
+	case err == nil:
 		d.Adoption = campaignAdoption(adoption.Day, adoption.Domains, adoption.V6Ready)
+	case !errors.Is(err, pgx.ErrNoRows): // no rows = pre-first-rollup: adoption stays null
+		InternalError(w, r, err)
+		return
 	}
 	d.Domains.Items = members
 	d.Domains.Page = page
@@ -214,7 +220,7 @@ func (s *Server) listCampaignDomains(w http.ResponseWriter, r *http.Request) {
 // (§3.2 — host is unique, so the seek is total despite rank being NULL).
 func (s *Server) campaignMembersPage(r *http.Request, campaignID, generation int32, limit int) ([]DomainSummary, Page, error) {
 	filter := postgres.DomainListFilter{CampaignID: &campaignID}
-	members, page, err := s.hostOrderedPage(r, &filter, generation, limit)
+	members, page, err := s.hostOrderedPage(r, &filter, fmt.Sprintf("campaign:%d", campaignID), generation, limit)
 	for i := range members {
 		ready := v6ReadyOf(&members[i].Status)
 		members[i].V6Ready = &ready

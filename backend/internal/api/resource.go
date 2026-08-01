@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -124,7 +125,8 @@ func (s *Server) listResourceDependents(w http.ResponseWriter, r *http.Request) 
 	}
 
 	rows, page, err := KeysetPage(r, generation, limit, KeysetSpec[postgres.DependentRow]{
-		Sort: SortDependents,
+		Sort:        SortDependents,
+		Fingerprint: ScopedFingerprint(fmt.Sprintf("dependents:%d", row.ID), q),
 		Fetch: func(ctx context.Context, seek *Seek, lim int, backward bool) ([]postgres.DependentRow, error) {
 			var ds *postgres.DependentSeek
 			if seek != nil {

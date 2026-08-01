@@ -45,16 +45,29 @@ type CheckConfirmed struct {
 	AsOf           *time.Time  `json:"as_of"`
 }
 
+// checkJobEnqueueLockID keys the pg_advisory_xact_lock serializing the §6.3
+// rate-limit re-check + insert. One global key is enough: the write path is
+// capped at rate_global_per_hour, so contention is negligible.
+const checkJobEnqueueLockID = int64(0x636865636b6a6f62) // "checkjob"
+
 // postCheck is POST /check — the API's only write path (§5.1.1): async
 // enqueue + poll, never synchronous. Processing order is normative.
 func (s *Server) postCheck(w http.ResponseWriter, r *http.Request) {
 	NoStore(w)
 
 	// 1. Parse + validate: non-JSON → 415; missing/non-string host → 400.
+	// A host name needs well under 1 KB — cap the body in the app instead of
+	// relying on nginx's client_max_body_size.
+	r.Body = http.MaxBytesReader(w, r.Body, 4096)
 	var body struct {
 		Host *string `json:"host"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) {
+			InvalidParameter(w, r, "request body too large")
+			return
+		}
 		var typeErr *json.UnmarshalTypeError
 		if errors.As(err, &typeErr) {
 			InvalidParameter(w, r, "host must be a string")
@@ -143,19 +156,57 @@ func (s *Server) postCheck(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 6. Enqueue.
+	// 6. Enqueue. The step-2 reads are only the fast-path reject: both caps
+	// are re-checked and the row inserted in one transaction under a
+	// transaction-scoped advisory lock, so concurrent requests cannot race
+	// the check-then-insert past the limits.
 	requester, err := netip.ParseAddr(clientIP(r))
 	if err != nil {
 		InvalidParameter(w, r, "client address unavailable")
 		return
 	}
-	ins, err := s.q.CheckJobInsert(r.Context(), db.CheckJobInsertParams{
+	tx, err := s.pool.Begin(r.Context())
+	if err != nil {
+		InternalError(w, r, err)
+		return
+	}
+	defer func() { _ = tx.Rollback(r.Context()) }() // no-op after a successful Commit
+	if _, err := tx.Exec(r.Context(), "SELECT pg_advisory_xact_lock($1)", checkJobEnqueueLockID); err != nil {
+		InternalError(w, r, err)
+		return
+	}
+	qtx := s.q.WithTx(tx)
+	if ipWin, err = qtx.CheckJobRatePrefix(r.Context(), prefix); err != nil {
+		InternalError(w, r, err)
+		return
+	}
+	if int(ipWin.N) >= s.opts.RateIPPerHour {
+		rateLimitHeaders(w, s.opts.RateIPPerHour, 0)
+		RateLimited(w, r, retryAfter(ipWin.MinCreated))
+		return
+	}
+	if globalWin, err = qtx.CheckJobRateGlobal(r.Context()); err != nil {
+		InternalError(w, r, err)
+		return
+	}
+	if int(globalWin.N) >= s.opts.RateGlobalPerHour {
+		rateLimitHeaders(w, s.opts.RateGlobalPerHour, 0)
+		RateLimited(w, r, retryAfter(globalWin.MinCreated))
+		return
+	}
+	ins, err := qtx.CheckJobInsert(r.Context(), db.CheckJobInsertParams{
 		Host: host, RequesterIp: requester,
 	})
 	if err != nil {
 		InternalError(w, r, err)
 		return
 	}
+	if err := tx.Commit(r.Context()); err != nil {
+		InternalError(w, r, err)
+		return
+	}
+	// Refresh the headers with the locked count — the step-2 read may be stale.
+	rateLimitHeaders(w, s.opts.RateIPPerHour, s.opts.RateIPPerHour-int(ipWin.N)-1)
 	w.Header().Set("Location", "/check/"+strconv.FormatInt(ins.ID, 10))
 	WriteJSON(w, http.StatusAccepted, map[string]any{
 		"id": ins.ID, "host": host, "status": "pending",

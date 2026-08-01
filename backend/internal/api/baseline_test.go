@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -43,7 +44,9 @@ func TestBaseline(t *testing.T) {
 
 	t.Run("ip_echo_real_ip", func(t *testing.T) {
 		// §1.8.1: X-Real-IP wins; bracketless; family derived server-side.
+		// Proxy headers are honored only from a trusted (loopback) peer.
 		req := httptest.NewRequest(http.MethodGet, "/ip", nil)
+		req.RemoteAddr = "127.0.0.1:9999"
 		req.Header.Set("X-Real-IP", "2001:db8::7")
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, req)
@@ -59,12 +62,29 @@ func TestBaseline(t *testing.T) {
 		}
 
 		req = httptest.NewRequest(http.MethodGet, "/ip", nil)
+		req.RemoteAddr = "127.0.0.1:9999"
 		req.Header.Set("X-Forwarded-For", "192.0.2.7, 10.0.0.1")
 		rec = httptest.NewRecorder()
 		router.ServeHTTP(rec, req)
 		_ = json.Unmarshal(rec.Body.Bytes(), &body)
 		if body["ip"] != "192.0.2.7" || body["family"] != "ipv4" {
 			t.Errorf("xff echo = %v", body)
+		}
+	})
+
+	t.Run("ip_echo_untrusted_peer_ignores_headers", func(t *testing.T) {
+		// A peer outside api.trusted_proxies cannot spoof its client IP
+		// (httptest's default RemoteAddr 192.0.2.1 is untrusted).
+		req := httptest.NewRequest(http.MethodGet, "/ip", nil)
+		req.Header.Set("X-Real-IP", "2001:db8::7")
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+		var body map[string]string
+		if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+			t.Fatal(err)
+		}
+		if body["ip"] != "192.0.2.1" || body["family"] != "ipv4" {
+			t.Errorf("untrusted peer echo = %v", body)
 		}
 	})
 
@@ -97,7 +117,8 @@ func TestBaseline(t *testing.T) {
 }
 
 // TestCacheHelpers: the generation-seeded ETag honors If-None-Match with a
-// query fingerprint (07 §6.1).
+// query fingerprint (07 §6.1). ETags are weak so nginx's gzip filter
+// preserves them.
 func TestCacheHelpers(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/domains?class=hero", nil)
 	rec := httptest.NewRecorder()
@@ -107,6 +128,9 @@ func TestCacheHelpers(t *testing.T) {
 	etag := rec.Header().Get("ETag")
 	if etag == "" || !strings.Contains(rec.Header().Get("Cache-Control"), "s-maxage") {
 		t.Fatalf("headers = %v", rec.Header())
+	}
+	if !strings.HasPrefix(etag, `W/"`) {
+		t.Errorf("ETag %q must be weak (nginx gzip strips strong ETags)", etag)
 	}
 
 	req2 := httptest.NewRequest(http.MethodGet, "/domains?class=hero", nil)
@@ -122,5 +146,49 @@ func TestCacheHelpers(t *testing.T) {
 	rec3 := httptest.NewRecorder()
 	if CacheList(rec3, req3, 20260707) {
 		t.Error("different query must have a different ETag")
+	}
+}
+
+// TestIfNoneMatch pins the RFC 9110 §13.1.2 comparison: comma-separated
+// candidate lists, weak comparison, and the "*" wildcard.
+func TestIfNoneMatch(t *testing.T) {
+	const etag = `W/"g1-abc"`
+	tests := []struct {
+		name   string
+		header string
+		want   bool
+	}{
+		{"empty", "", false},
+		{"exact_weak", `W/"g1-abc"`, true},
+		{"strong_candidate_weak_compares", `"g1-abc"`, true},
+		{"list_match", `"other", W/"g1-abc", "another"`, true},
+		{"star", "*", true},
+		{"miss", `W/"g2-def"`, false},
+		{"list_miss", `"a", "b"`, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := ifNoneMatch(tt.header, etag); got != tt.want {
+				t.Errorf("ifNoneMatch(%q, %q) = %v, want %v", tt.header, etag, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestProblemNotCacheable: an error emitted after a handler already set the
+// public list cache headers must go out no-store with no ETag, so a CDN can
+// never pin a problem+json body (RFC 9111 explicit-directive caching).
+func TestProblemNotCacheable(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/domains", nil)
+	rec := httptest.NewRecorder()
+	if CacheList(rec, req, 20260707) {
+		t.Fatal("unexpected 304")
+	}
+	InternalError(rec, req, errors.New("db blip"))
+	if cc := rec.Header().Get("Cache-Control"); cc != "no-store" {
+		t.Errorf("error Cache-Control = %q, want no-store", cc)
+	}
+	if etag := rec.Header().Get("ETag"); etag != "" {
+		t.Errorf("error response must not carry an ETag, got %q", etag)
 	}
 }

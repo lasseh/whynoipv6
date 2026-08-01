@@ -40,7 +40,9 @@ const redocPage = `<!DOCTYPE html>
 </head>
 <body>
   <redoc spec-url="/openapi.json"></redoc>
-  <script src="https://cdn.redoc.ly/redoc/latest/bundles/redoc.standalone.js"></script>
+  <script src="https://cdn.redoc.ly/redoc/v2.5.3/bundles/redoc.standalone.js"
+          integrity="sha384-xiEssMQFSpSfLbzRZCGfxxIM5QDb2DTrU6vyoZdp2sV1L6pmOMy6MpTtUoLbpC96"
+          crossorigin="anonymous"></script>
 </body>
 </html>
 `

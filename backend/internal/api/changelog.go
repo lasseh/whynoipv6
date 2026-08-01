@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
@@ -66,6 +67,12 @@ func parseChangelogWindow(q url.Values) (changelogWindow, error) {
 		t, err := parse(v)
 		if err != nil {
 			return w, validationError{"to", "must be YYYY-MM-DD or RFC 3339"}
+		}
+		// A bare date means the whole day: extend to its last representable
+		// microsecond (timestamptz precision) so ts <= to includes that
+		// day's events.
+		if len(v) == len("2006-01-02") {
+			t = t.AddDate(0, 0, 1).Add(-time.Microsecond)
 		}
 		w.To, w.HasTo = t, true
 	}
@@ -150,8 +157,15 @@ func (s *Server) serveChangelogFeed(w http.ResponseWriter, r *http.Request, doma
 	if win.HasTo {
 		filter.To = &win.To
 	}
+	// The per-domain feed scope arrives via the path — fold it into the
+	// cursor fingerprint so one domain's cursor cannot seek another's feed.
+	var fingerprint string
+	if domainID != nil {
+		fingerprint = ScopedFingerprint(fmt.Sprintf("domain:%d", *domainID), q)
+	}
 	rows, page, err := KeysetPage(r, generation, limit, KeysetSpec[postgres.ChangelogRow]{
-		Sort: SortChangelog,
+		Sort:        SortChangelog,
+		Fingerprint: fingerprint,
 		Fetch: func(ctx context.Context, seek *Seek, lim int, backward bool) ([]postgres.ChangelogRow, error) {
 			var cs *postgres.ChangelogSeek
 			if seek != nil {

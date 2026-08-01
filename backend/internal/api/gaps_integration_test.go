@@ -59,6 +59,57 @@ func TestAroundRank(t *testing.T) {
 	}
 }
 
+// TestAroundRankPresetCursors (07 §3.2): cursors minted by a centered
+// window on a preset route fingerprint the preset-MERGED query, so they
+// can be followed on that same route — and nowhere the preset does not hold.
+func TestAroundRankPresetCursors(t *testing.T) {
+	srv, _ := newAPI(t) // heroes at visible ranks 1,3,5,7; NO = d1..d3
+
+	// /heroes: follow the around_rank window forward.
+	var window envelope
+	getJSON(t, srv.URL+"/heroes?around_rank=3&limit=2", &window)
+	if h := hosts(t, window.Items); fmt.Sprint(h) != "[d3.example d5.example]" {
+		t.Fatalf("heroes centered window = %v", h)
+	}
+	if window.Page.NextCursor == nil || window.Page.PrevCursor == nil {
+		t.Fatalf("heroes window must mint both cursors: %+v", window.Page)
+	}
+	var next envelope
+	if resp := getJSON(t, srv.URL+"/heroes?limit=2&cursor="+*window.Page.NextCursor, &next); resp.StatusCode != 200 {
+		t.Fatalf("following the heroes next_cursor: %d", resp.StatusCode)
+	}
+	if h := hosts(t, next.Items); fmt.Sprint(h) != "[d7.example]" {
+		t.Errorf("heroes forward continuation = %v, want [d7.example]", h)
+	}
+
+	// /countries/{code}/domains: the same follow on a path-scoped preset.
+	var no envelope
+	getJSON(t, srv.URL+"/countries/NO/domains?around_rank=1&limit=2", &no)
+	if h := hosts(t, no.Items); fmt.Sprint(h) != "[d1.example d2.example]" {
+		t.Fatalf("NO centered window = %v", h)
+	}
+	if no.Page.NextCursor == nil {
+		t.Fatal("NO window must mint next_cursor")
+	}
+	var noNext envelope
+	if resp := getJSON(t, srv.URL+"/countries/NO/domains?limit=2&cursor="+*no.Page.NextCursor, &noNext); resp.StatusCode != 200 {
+		t.Fatalf("following the NO next_cursor: %d", resp.StatusCode)
+	}
+	if h := hosts(t, noNext.Items); fmt.Sprint(h) != "[d3.example]" {
+		t.Errorf("NO forward continuation = %v, want [d3.example]", h)
+	}
+
+	// Cursors are scope-bound: a /heroes cursor replays neither on the
+	// bare leaderboard nor on a sibling preset.
+	var problem struct{ Type string }
+	if resp := getJSON(t, srv.URL+"/domains?limit=2&cursor="+*window.Page.NextCursor, &problem); resp.StatusCode != 400 {
+		t.Errorf("heroes cursor on /domains: %d, want 400", resp.StatusCode)
+	}
+	if resp := getJSON(t, srv.URL+"/sinners?limit=2&cursor="+*window.Page.NextCursor, &problem); resp.StatusCode != 400 {
+		t.Errorf("heroes cursor on /sinners: %d, want 400", resp.StatusCode)
+	}
+}
+
 // TestPrevCursor (07 §3.2): bidirectional paging — walking forward then
 // back reproduces the earlier page exactly.
 func TestPrevCursor(t *testing.T) {

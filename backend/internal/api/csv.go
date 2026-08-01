@@ -24,14 +24,34 @@ func parseFormat(q url.Values) (csvWanted bool, err error) {
 	}
 }
 
-// writeCSV emits text/csv with the attachment disposition.
+// writeCSV emits text/csv with the attachment disposition, cells neutralized
+// against spreadsheet formula injection.
 func writeCSV(w http.ResponseWriter, filename string, header []string, rows [][]string) {
 	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
 	w.Header().Set("Content-Disposition", `attachment; filename="`+filename+`"`)
 	w.WriteHeader(http.StatusOK)
 	cw := csv.NewWriter(w)
 	_ = cw.Write(header)
+	for _, row := range rows {
+		for i := range row {
+			row[i] = csvSanitize(row[i])
+		}
+	}
 	_ = cw.WriteAll(rows)
+}
+
+// csvSanitize neutralizes spreadsheet formula injection (OWASP): a cell
+// starting with =, +, -, @, tab or CR is prefixed with a single quote so
+// Excel/LibreOffice treat it as text, never a formula.
+func csvSanitize(cell string) string {
+	if cell == "" {
+		return cell
+	}
+	switch cell[0] {
+	case '=', '+', '-', '@', '\t', '\r':
+		return "'" + cell
+	}
+	return cell
 }
 
 func csvStr(p *string) string {
