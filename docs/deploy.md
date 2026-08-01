@@ -12,9 +12,12 @@ Everything dev-related runs from the repo root `compose.yaml`.
 ### Prerequisites
 
 - Docker with the compose plugin.
-- A free [IPinfo](https://ipinfo.io/signup) token for the GeoIP database. Copy the
-  tracked `.env.example` to a gitignored `.env` at the repo root and fill in
-  `IPINFO_TOKEN` — the `geoip-init` service uses it to fetch `ipinfo_lite.mmdb`.
+- A gitignored `.env` at the repo root — **required**, not optional: `api`,
+  `crawler`, and `geoip-init` declare it as an `env_file`, so `docker compose`
+  refuses to start without it. Copy the tracked `.env.example` and fill it in.
+- A free [IPinfo](https://ipinfo.io/signup) token for the GeoIP database, set as
+  `IPINFO_TOKEN` in that `.env` — the `geoip-init` service uses it to fetch
+  `ipinfo_lite.mmdb`.
 - **Working IPv6 on the host.** The crawler preflights IPv6 egress before claiming
   any work; without v6 connectivity it will start but sit idle, retrying the
   preflight every 60s.
@@ -28,6 +31,13 @@ falls back to the defaults below):
 | `CRAWLER_REPLICAS` | `1` | crawler processes; the prod shape is `2` |
 | `CRAWLER_WORKER_SLOTS` | `4` | per-process fan-out; `4` on laptops (OrbStack's 16k UDP conntrack limit), `64` on native-netfilter hosts |
 | `FRONTEND_API_URL` | `http://localhost:8080` | host-visible API origin baked into the frontend bundle at build time |
+
+Those four are read by compose itself (replica count, volume paths, build args),
+so they resolve by `${...}` interpolation and keep working via the defaults above
+even when absent. Every *other* key in `.env` is passed straight through into the
+`api`, `crawler`, and `geoip-init` containers — that is how the optional
+`TAILLIGHT_URL` / `TAILLIGHT_API_KEY` log shipping (09-ops §13) reaches them. An
+explicit `environment:` entry in `compose.yaml` wins over `.env` on conflicts.
 
 ### Start the stack
 
@@ -102,6 +112,7 @@ docker compose run --rm --entrypoint /v6ctl migrate <verb> [args...]
 | `campaign sync [--adopt-unknown-uuids]` | sync the campaign-YAML checkout into the DB (see below) |
 | `campaign validate --repo <path> [--base <ref>]` | CI-style validation of campaign YAML, no DB needed |
 | `geoip update [--token …] [--dir …]` | download a fresh IPinfo Lite mmdb (atomic replace; crawler hot-reloads hourly) |
+| `provider seed [--path …]` | load the curated DNS-provider mapping (embedded list by default; idempotent) |
 | `provider add <name> <ns-suffix>…` / `remove` / `list` | curate the DNS-provider mapping |
 | `shame add <host> [--reason …]` / `remove` / `list` | curate the editorial top-shame list |
 | `disable <host>` / `disable --service-list <file>` | manually disable hosts (e.g. service/CDN domains) |
@@ -125,6 +136,36 @@ docker compose run --rm --entrypoint /v6ctl api export
 # mounted on the crawler service, which also sets CAMPAIGN_PULL/PUSH=false
 # (the distroless image has no git):
 docker compose run --rm --entrypoint /v6ctl crawler campaign sync
+```
+
+### The DNS-provider mapping
+
+`domain.dns_provider_id` — which managed-DNS operator runs a domain's zone, and
+so the `/providers` league table — is stamped at scan-commit from the mapping in
+the `dns_provider` table. **An empty table means every domain attributes to
+NULL and the league table is empty**, so seeding is a required provisioning
+step, like the GeoIP mmdb.
+
+`v6ctl provider seed` loads the curated list embedded in the binary
+([`backend/db/seed/dns_provider.yaml`](../backend/db/seed/dns_provider.yaml)) —
+no files or config needed, and it is idempotent, so re-running after editing the
+list only adds. Compose runs it as `provider-init` before the crawler starts;
+production runs it once after `migrate up`. Point `--path` (or
+`dns_provider.seed_path`) at your own file to override the embedded list.
+
+Stamping happens on each domain's next scan commit, so edits take effect within
+one frontier pass — there is no backfill step. To find operators still worth
+adding, rank the unattributed domains by their observed nameserver suffix:
+
+```sql
+SELECT substring(ns FROM '[^.]+\.[^.]+\.?$') AS suffix, count(*) AS domains
+FROM domain d
+JOIN LATERAL (
+  SELECT jsonb_object_keys(sd.details->'results'->'dns_ns_ipv6'->'details'->'nameservers') AS ns
+  FROM scan_detail sd WHERE sd.domain_id = d.id ORDER BY sd.ts DESC LIMIT 1
+) ns ON TRUE
+WHERE d.dns_provider_id IS NULL AND d.rank IS NOT NULL
+GROUP BY 1 ORDER BY domains DESC LIMIT 50;
 ```
 
 ## 3. Production deployment
