@@ -21,7 +21,7 @@ describe('DomainList (smoke)', () => {
       global: { plugins: [router], stubs: layoutStubs },
     })
     await flushPromises()
-    expect(wrapper.text()).toContain('Unmasking the Top 1M Websites of the World')
+    expect(wrapper.text()).toContain('The top million websites, judged by their AAAA records')
     expect(listSinners).toHaveBeenCalled()
     expect(listHeroes).not.toHaveBeenCalled()
     expect(wrapper.text()).toContain('No domains found')

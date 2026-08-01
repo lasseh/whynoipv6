@@ -29,7 +29,7 @@ const DIMENSIONS: { key: 'dnssec' | 'ptr' | 'smtp' | 'parity'; label: string; de
   {
     key: 'smtp',
     label: 'SMTP over IPv6',
-    desc: 'A mail server answers an SMTP greeting on an IPv6 connection.',
+    desc: 'A mail server presents its SMTP banner over an IPv6 connection.',
   },
   {
     key: 'parity',

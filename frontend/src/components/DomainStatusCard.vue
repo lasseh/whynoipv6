@@ -68,7 +68,7 @@ const rows = computed<Row[]>(() => {
       dims: [
         {
           dim: 'base',
-          desc: 'The domain publishes an IPv6 (AAAA) address, confirmed by three independent resolvers.',
+          desc: 'The apex domain publishes an AAAA record, cross-checked against three independent resolvers.',
         },
       ],
     },
@@ -76,11 +76,11 @@ const rows = computed<Row[]>(() => {
       key: 'www',
       label: `www.${props.domain.host}`,
       value: status.www.value,
-      dims: [{ dim: 'www', desc: 'The www hostname publishes an IPv6 (AAAA) address.' }],
+      dims: [{ dim: 'www', desc: 'The www hostname publishes an AAAA record.' }],
     },
     {
       key: 'ns',
-      label: 'Nameserver',
+      label: 'Nameservers',
       value: status.ns.value,
       dims: [
         { dim: 'ns', desc: 'The domain’s DNS is served by at least one IPv6-capable nameserver.' },
@@ -99,13 +99,13 @@ const rows = computed<Row[]>(() => {
     },
     {
       key: 'ipv6_only',
-      label: 'IPv6 Only',
+      label: 'IPv6-only',
       value: props.domain.ipv6_only,
       dims: [
         {
           dim: 'conn',
           label: 'Reachability',
-          desc: 'The site answers a real HTTP request made over an IPv6-only connection.',
+          desc: 'The site answers a real HTTP request over an IPv6-only connection.',
         },
         {
           dim: 'resources',
@@ -118,7 +118,7 @@ const rows = computed<Row[]>(() => {
 })
 
 const formattedTsCheck = computed(() =>
-  props.domain.last_checked_at ? formatDateTime(props.domain.last_checked_at) : 'Not Checked Yet',
+  props.domain.last_checked_at ? formatDateTime(props.domain.last_checked_at) : 'never',
 )
 </script>
 
@@ -126,7 +126,7 @@ const formattedTsCheck = computed(() =>
   <!-- Domain Status Card -->
   <div class="flex justify-between items-center">
     <div :class="headerAlignClass">
-      <div class="font-bold text-xl text-pink-600">Domain Status</div>
+      <div class="font-bold text-xl text-pink-600">IPv6 status</div>
     </div>
     <!-- Rating Stars -->
     <div class="text-center">

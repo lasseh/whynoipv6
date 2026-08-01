@@ -27,7 +27,7 @@ describe('StatusIcon', () => {
     {
       value: 'no_record',
       colorClass: 'text-amber-500',
-      tooltip: 'No Records',
+      tooltip: 'No record',
       path: 'M19.5 12h-15',
     },
     {

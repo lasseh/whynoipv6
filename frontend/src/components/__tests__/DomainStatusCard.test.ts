@@ -34,7 +34,7 @@ function mountCard(conn: StatusValue, resources: StatusValue) {
 }
 
 async function expandIPv6Only(wrapper: ReturnType<typeof mountCard>) {
-  const row = wrapper.findAll('button').find((b) => b.text().includes('IPv6 Only'))
+  const row = wrapper.findAll('button').find((b) => b.text().includes('IPv6-only'))
   await row!.trigger('click')
 }
 

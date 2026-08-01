@@ -19,7 +19,7 @@ describe('status maps', () => {
       text: 'text-emerald-500',
       cardText: 'text-emerald-600',
       border: 'border-emerald-600',
-      label: 'Success',
+      label: 'Supported',
       tooltip: 'Supported',
     },
     {
@@ -37,8 +37,8 @@ describe('status maps', () => {
       text: 'text-amber-500',
       cardText: 'text-amber-500',
       border: 'border-amber-500',
-      label: 'No Record',
-      tooltip: 'No Records',
+      label: 'No record',
+      tooltip: 'No record',
     },
     {
       value: 'not_applicable',

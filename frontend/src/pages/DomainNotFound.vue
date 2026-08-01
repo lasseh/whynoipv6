@@ -6,7 +6,7 @@ import PageShell from '@/components/PageShell.vue'
 
 const route = useRoute()
 
-const domainName = computed(() => (route.params.domain as string) || 'unknown.domain')
+const domainName = computed(() => (route.params.domain as string) || 'unknown.invalid')
 </script>
 
 <template>
@@ -18,18 +18,15 @@ const domainName = computed(() => (route.params.domain as string) || 'unknown.do
           <!-- 404 Content -->
           <div class="text-center">
             <!-- Main heading -->
-            <h1 class="h1 mb-4 text-white">Domain Not Found</h1>
+            <h1 class="h1 mb-4 text-white">Domain not found</h1>
 
             <!-- Funny message -->
             <div class="max-w-3xl mx-auto mb-8">
               <p class="text-xl text-gray-300 mb-4">
-                Oops! The domain
-                <span class="font-mono text-pink-600">{{ domainName }}</span> seems to have vanished
-                into the void.
+                <span class="font-mono text-pink-600">{{ domainName }}</span> isn't in our database.
               </p>
               <p class="text-lg text-gray-400 mb-6">
-                It's either playing hide and seek in the DNS records, or it never existed in our
-                database to begin with.
+                Either our crawler hasn't met it yet, or that's a typo. NXDOMAIN, basically.
               </p>
             </div>
 
@@ -54,14 +51,14 @@ const domainName = computed(() => (route.params.domain as string) || 'unknown.do
                       />
                     </svg>
                   </div>
-                  <h3 class="text-lg font-semibold text-white mb-2">DNS Resolution Failed</h3>
+                  <h3 class="text-lg font-semibold text-white mb-2">Not in the crawl</h3>
                   <p class="text-gray-400 text-sm">
-                    Our crawlers couldn't find this domain in the wild. It might be:
+                    No record of it in our data. The likely reasons:
                   </p>
                   <ul class="text-gray-400 text-sm mt-2 text-left">
-                    <li>• Not yet crawled by our bots</li>
+                    <li>• Not yet picked up by the crawler</li>
                     <li>• A typo in the domain name</li>
-                    <li>• Living in a parallel universe</li>
+                    <li>• Outside the Tranco top million</li>
                   </ul>
                 </div>
 
@@ -83,12 +80,16 @@ const domainName = computed(() => (route.params.domain as string) || 'unknown.do
                       />
                     </svg>
                   </div>
-                  <h3 class="text-lg font-semibold text-white mb-2">
-                    Want Us to Track This Domain?
-                  </h3>
+                  <h3 class="text-lg font-semibold text-white mb-2">Put it on the list</h3>
                   <p class="text-gray-400 text-sm mb-3">
-                    Help us expand IPv6 monitoring! Submit this domain to our community campaign and
-                    we'll start tracking its IPv6 adoption progress.
+                    Run a
+                    <router-link
+                      :to="`/check/${domainName}`"
+                      class="text-purple-400 hover:text-purple-300 transition-colors"
+                      >live check</router-link
+                    >
+                    on it right now, or submit it through the community campaign and we'll start
+                    keeping score. Once merged, the crawler picks it up on its next run.
                   </p>
                   <a
                     href="https://github.com/lasseh/whynoipv6-campaign"
@@ -108,7 +109,7 @@ const domainName = computed(() => (route.params.domain as string) || 'unknown.do
                         clip-rule="evenodd"
                       ></path>
                     </svg>
-                    Submit to Campaign →
+                    Submit to campaign →
                   </a>
                 </div>
               </div>
@@ -120,19 +121,19 @@ const domainName = computed(() => (route.params.domain as string) || 'unknown.do
                 to="/domains"
                 class="btn text-white bg-purple-600 hover:bg-purple-700 w-full sm:w-auto"
               >
-                Browse All Domains
+                Browse domains
               </router-link>
               <router-link
                 to="/search"
                 class="btn text-purple-600 bg-gray-800 hover:bg-gray-700 border border-gray-600 w-full sm:w-auto"
               >
-                Search Domains
+                Search domains
               </router-link>
               <router-link
                 to="/"
                 class="btn text-gray-400 bg-transparent hover:bg-gray-800 border border-gray-600 w-full sm:w-auto"
               >
-                Go Home
+                Go home
               </router-link>
             </div>
           </div>

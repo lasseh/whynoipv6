@@ -4,8 +4,8 @@ import type { DomainSummary } from '@/api'
 import StatusIcon from '@/components/StatusIcon.vue'
 import Tooltip from '@/components/Tooltip.vue'
 
-// The one domain-table module (§4.2 list row): columns Apex/WWW/E-Mail/
-// Nameserver/IPv6 Only map to status.base/www/mx/ns.value and ipv6_only
+// The one domain-table module (§4.2 list row): columns Apex/WWW/Mail (MX)/
+// Nameservers/IPv6 Only map to status.base/www/mx/ns.value and ipv6_only
 // (§7.1). Two surfaces share it — leaderboards (rank badge, hidden on null
 // and never 0 (§7.3), DomainDetail links) and campaign members
 // (`campaignUuid` set: member links, the server's v6_ready row highlight
@@ -42,20 +42,25 @@ const hoverIndex = ref<number | null>(null)
             <div class="font-semibold text-left">Domain</div>
           </th>
           <th class="px-2 py-3 whitespace-nowrap">
-            <Tooltip text="Top-level domain query: dig AAAA domain.com">Apex</Tooltip>
+            <Tooltip text="AAAA lookup at the zone apex: dig AAAA domain.com">Apex</Tooltip>
           </th>
           <th class="px-2 py-3 whitespace-nowrap">
-            <Tooltip text="Query AAAA record for www.domain.com">WWW</Tooltip>
+            <Tooltip text="AAAA lookup for the www host: dig AAAA www.domain.com">WWW</Tooltip>
           </th>
           <th class="px-2 py-3 whitespace-nowrap">
             <div class="font-semibold text-center md:block hidden">
-              <Tooltip text="Query MX record for domain.com">Mail (MX)</Tooltip>
+              <Tooltip text="MX hosts for domain.com, each checked for an AAAA record"
+                >Mail (MX)</Tooltip
+              >
             </div>
             <div class="font-semibold text-center md:hidden">MX</div>
           </th>
           <th class="px-2 py-3 whitespace-nowrap">
             <div class="font-semibold text-center md:block hidden">
-              <Tooltip text="Query NS record for domain.com">Nameserver</Tooltip>
+              <Tooltip
+                text="Authoritative nameservers for domain.com, each checked for an AAAA record"
+                >Nameservers</Tooltip
+              >
             </div>
             <div class="font-semibold text-center md:hidden">NS</div>
           </th>

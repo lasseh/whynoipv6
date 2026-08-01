@@ -32,7 +32,7 @@ const emit = defineEmits<{ 'update:modelValue': [value: string]; submit: [] }>()
     <button
       :class="['absolute inset-0 right-auto group', buttonClass]"
       type="submit"
-      aria-label="Search"
+      aria-label="Apply filter"
     >
       <svg
         class="w-4 h-4 shrink-0 fill-current text-zinc-500 group-hover:text-zinc-400 ml-3 mr-2"

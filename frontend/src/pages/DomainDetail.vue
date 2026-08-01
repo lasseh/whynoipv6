@@ -24,9 +24,10 @@ const { domain, changelogs, history, error } = useDomainDetail(
   },
 )
 
-// Data-driven title once the domain loads — the "example.com IPv6" long tail.
+// Data-driven title once the domain loads — the "does example.com support
+// IPv6" long-tail query, mirrored by CampaignDomain.
 watch(domain, (d) => {
-  if (d) setPageTitle(`${d.host} IPv6 Status`)
+  if (d) setPageTitle(`Does ${d.host} support IPv6?`)
 })
 </script>
 

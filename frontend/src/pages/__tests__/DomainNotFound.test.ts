@@ -16,6 +16,7 @@ describe('DomainNotFound page', () => {
         { path: '/', component: { template: '<div />' } },
         { path: '/domains', component: { template: '<div />' } },
         { path: '/search', component: { template: '<div />' } },
+        { path: '/check/:target?', component: { template: '<div />' } },
         {
           path: '/domains/:domain([^/]+)/not-found',
           name: 'DomainNotFound',
@@ -31,7 +32,7 @@ describe('DomainNotFound page', () => {
     })
     await flushPromises()
 
-    expect(wrapper.text()).toContain('Domain Not Found')
+    expect(wrapper.text()).toContain('Domain not found')
     expect(wrapper.text()).toContain('gone.example')
     expect(warn).not.toHaveBeenCalled()
     expect(error).not.toHaveBeenCalled()

@@ -119,11 +119,11 @@ export const STAR_CLASS: Record<StarKind, string> = {
 export function statusLabel(value: StatusValue): string {
   switch (value) {
     case 'supported':
-      return 'Success'
+      return 'Supported'
     case 'unsupported':
       return 'Missing'
     case 'no_record':
-      return 'No Record'
+      return 'No record'
     case 'not_applicable':
       return 'Not applicable'
     default:
@@ -165,7 +165,7 @@ export function infoStatus(value: string | null): LiveStatusView {
   return liveStatus(value)
 }
 
-/** Hover tooltip on status icons — the old wording for the legacy three states. */
+/** Hover tooltip on status icons — same vocabulary as the status labels. */
 export function statusTooltip(value: StatusValue): string {
   switch (value) {
     case 'supported':
@@ -173,7 +173,7 @@ export function statusTooltip(value: StatusValue): string {
     case 'unsupported':
       return 'Missing'
     case 'no_record':
-      return 'No Records'
+      return 'No record'
     case 'not_applicable':
       return 'Not applicable'
     default:
