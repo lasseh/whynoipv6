@@ -1,12 +1,13 @@
 services:
   db:
     image: timescale/timescaledb:latest-pg18
+    restart: unless-stopped
     shm_size: 256m   # docker's 64m default breaks parallel queries over the 1M-row domain table
     environment:
       POSTGRES_USER: whynoipv6
       POSTGRES_PASSWORD: whynoipv6
       POSTGRES_DB: whynoipv6
-    ports: ["15432:5432"]   # 15432: the dev host runs a native postgres on 5432
+    ports: ["127.0.0.1:15432:5432"]   # 15432: the dev host runs a native postgres on 5432; loopback-only (dev creds)
     volumes: ["pgdata:/var/lib/postgresql"]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U whynoipv6"]
@@ -19,15 +20,20 @@ services:
   # sets it in .env).
   unbound1:
     image: mvance/unbound:latest
+    restart: unless-stopped
     volumes:
       ["./deploy/unbound/${UNBOUND_DEV_PROFILE:-dev}/unbound1.conf:/opt/unbound/etc/unbound/unbound.conf:ro"]
-    ports: ["5301:53/udp", "5301:53/tcp"]
+    # Loopback-only: the crawler reaches unbound over the compose network by
+    # service name; the host publish exists for the latencyspike probe
+    # (backend/internal/consensus/latencyspike), which dials 127.0.0.1.
+    ports: ["127.0.0.1:5301:53/udp", "127.0.0.1:5301:53/tcp"]
 
   unbound2:
     image: mvance/unbound:latest
+    restart: unless-stopped
     volumes:
       ["./deploy/unbound/${UNBOUND_DEV_PROFILE:-dev}/unbound2.conf:/opt/unbound/etc/unbound/unbound.conf:ro"]
-    ports: ["5302:53/udp", "5302:53/tcp"]
+    ports: ["127.0.0.1:5302:53/udp", "127.0.0.1:5302:53/tcp"]
 
   migrate:
     build: {context: ./backend, dockerfile: Dockerfile}
@@ -39,6 +45,7 @@ services:
 
   api:
     build: {context: ./backend, dockerfile: Dockerfile}
+    restart: unless-stopped
     entrypoint: ["/api"]
     ports: ["8080:8080"]
     env_file: [.env]
@@ -68,6 +75,7 @@ services:
       # the bundle targets the nginx-fronted public API. Build args come from
       # interpolation, not env_file — this one must stay a ${...} reference.
       args: {VITE_API_URL: "${FRONTEND_API_URL:-http://localhost:8080}"}
+    restart: unless-stopped
     ports: ["8081:80"]
     depends_on: [api]
 
@@ -113,6 +121,7 @@ services:
 
   crawler:
     build: {context: ./backend, dockerfile: Dockerfile}
+    restart: unless-stopped
     entrypoint: ["/crawler"]
     # Prod shape is 2 processes (00-overview CRAWLER_PROCS); the dev host
     # sets CRAWLER_REPLICAS=2 in .env, laptops default to 1.
@@ -150,6 +159,7 @@ services:
     build:
       context: .
       dockerfile: deploy/unbound/dev/stats-scraper.Dockerfile
+    restart: unless-stopped
     hostname: unbound-stats
     environment:
       DATABASE_URL: postgres://whynoipv6:whynoipv6@db:5432/whynoipv6?sslmode=disable
@@ -163,6 +173,7 @@ services:
   # Loopback-only publish: reach it via ssh -L 3000:localhost:3000 on the server.
   grafana:
     image: grafana/grafana:latest
+    restart: unless-stopped
     ports: ["127.0.0.1:3000:3000"]
     environment:
       GF_SECURITY_ADMIN_USER: admin
