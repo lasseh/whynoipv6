@@ -13,9 +13,9 @@ import (
 	"github.com/lasseh/whynoipv6/internal/postgres"
 )
 
-// feedWindow is the fixed feed contract: the latest 50 transitions, no
-// pagination (07 §5.4 — bulk consumers go to the datasets).
-const feedWindow = 50
+// The feed contract: the latest feed.recent_window transitions, no
+// pagination (07 §5.4 — bulk consumers go to the datasets). NewRouter
+// clamps a ≤0 override back to the spec default 50.
 
 // feedScope names one changelog scope for rendering.
 type feedScope struct {
@@ -203,11 +203,11 @@ func (s *Server) writeJSONFeed(w http.ResponseWriter, r *http.Request, scope *fe
 // Scope loaders — each returns the latest-50 window for its scope.
 
 func (s *Server) globalFeedScope(r *http.Request) (*feedScope, error) {
-	rows, err := postgres.ListChangelog(r.Context(), s.pool, &postgres.ChangelogFilter{}, nil, feedWindow, false)
+	rows, err := postgres.ListChangelog(r.Context(), s.pool, &postgres.ChangelogFilter{}, nil, s.opts.FeedRecentWindow, false)
 	if err != nil {
 		return nil, err
 	}
-	rows = rows[:min(len(rows), feedWindow)] // drop the builder's N+1 probe row
+	rows = rows[:min(len(rows), s.opts.FeedRecentWindow)] // drop the builder's N+1 probe row
 	items := make([]ChangelogItem, len(rows))
 	for i := range rows {
 		items[i] = changelogItem(&rows[i])
@@ -225,12 +225,12 @@ func (s *Server) domainFeedScope(w http.ResponseWriter, r *http.Request) (*feedS
 		return nil, false
 	}
 	rows, err := postgres.ListChangelog(r.Context(), s.pool,
-		&postgres.ChangelogFilter{DomainID: &d.ID}, nil, feedWindow, false)
+		&postgres.ChangelogFilter{DomainID: &d.ID}, nil, s.opts.FeedRecentWindow, false)
 	if err != nil {
 		InternalError(w, r, err)
 		return nil, false
 	}
-	rows = rows[:min(len(rows), feedWindow)] // drop the builder's N+1 probe row
+	rows = rows[:min(len(rows), s.opts.FeedRecentWindow)] // drop the builder's N+1 probe row
 	items := make([]ChangelogItem, len(rows))
 	for i := range rows {
 		items[i] = changelogItem(&rows[i])

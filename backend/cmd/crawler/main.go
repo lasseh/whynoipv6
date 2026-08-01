@@ -86,6 +86,24 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	// Re-snapshot the ns_host → provider mapping so curation (v6ctl provider
+	// add/remove) lands without a crawler restart (06-ingest §6.10).
+	if interval := cfg.Duration("dns_provider.refresh_interval"); interval > 0 {
+		go func() {
+			t := time.NewTicker(interval)
+			defer t.Stop()
+			for {
+				select {
+				case <-rootCtx.Done():
+					return
+				case <-t.C:
+					if err := providers.Refresh(rootCtx, q); err != nil {
+						log.Warn("provider mapping refresh failed", "err", err.Error())
+					}
+				}
+			}
+		}()
+	}
 
 	commitCfg := crawler.CommitConfigFrom(cfg)
 	commitCfg.Schedule.Bands, err = crawler.BandsFrom(cfg)

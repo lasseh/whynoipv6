@@ -103,6 +103,11 @@ type Exporter struct {
 	Pool *pgxpool.Pool
 	Dir  string // $DATASETS_DIR
 
+	// RetentionDays prunes dailies older than this (datasets.retention_days;
+	// ≤0 falls back to the spec default 90). First-of-month snapshots are
+	// kept forever regardless.
+	RetentionDays int
+
 	// Now is injectable for tests; defaults to time.Now.
 	Now func() time.Time
 }
@@ -326,7 +331,11 @@ func (e *Exporter) prune(now time.Time) error {
 	if err != nil {
 		return fmt.Errorf("prune readdir: %w", err)
 	}
-	cutoff := now.AddDate(0, 0, -90)
+	days := e.RetentionDays
+	if days <= 0 {
+		days = 90
+	}
+	cutoff := now.AddDate(0, 0, -days)
 	for _, ent := range entries {
 		if !ent.IsDir() {
 			continue

@@ -33,7 +33,8 @@ func exportCmd() *cobra.Command {
 				if err != nil {
 					return fmt.Errorf("generation: %w", err)
 				}
-				e := &export.Exporter{Pool: pool, Dir: cfg.DatasetsDir}
+				e := &export.Exporter{Pool: pool, Dir: cfg.DatasetsDir,
+					RetentionDays: cfg.Int("datasets.retention_days")}
 				if err := e.Run(ctx, generation); err != nil {
 					return err
 				}

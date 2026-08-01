@@ -8,6 +8,7 @@ type ConfigSource interface {
 	Int(key string) int
 	Bool(key string) bool
 	Duration(key string) time.Duration
+	StringSlice(key string) []string
 }
 
 // OptionsFrom binds the API's registry keys (09-ops §2.7, §2.10). The
@@ -21,5 +22,9 @@ func OptionsFrom(src ConfigSource) Options {
 		DedupeWindow:      src.Duration("live_check.dedupe_window"),
 		LinkTTL:           src.Duration("live_check.link_ttl"),
 		ResourcesEnabled:  src.Bool("crawler.resources.enabled"),
+		BadgeCacheTTL:     src.Duration("badge.cache_ttl"),
+		ManifestCacheTTL:  src.Duration("datasets.manifest_cache_ttl"),
+		FeedRecentWindow:  src.Int("feed.recent_window"),
+		TrustedProxies:    src.StringSlice("api.trusted_proxies"),
 	}
 }

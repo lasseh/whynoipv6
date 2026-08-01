@@ -156,8 +156,8 @@ func (s *Server) badgeCache(w http.ResponseWriter, r *http.Request) bool {
 	if err != nil {
 		return false // serve uncached rather than fail the embed
 	}
-	w.Header().Set("Cache-Control", "public, max-age=86400")
-	return applyETag(w, r, fmt.Sprintf(`"b%d-%s"`, generation, queryFingerprint(r)))
+	w.Header().Set("Cache-Control", fmt.Sprintf("public, max-age=%d", int(s.opts.BadgeCacheTTL.Seconds())))
+	return applyETag(w, r, fmt.Sprintf(`W/"b%d-%s"`, generation, queryFingerprint(r)))
 }
 
 // getBadgeSVG is GET /badge/{host}.svg.
@@ -207,6 +207,6 @@ func (s *Server) getBadgeJSON(w http.ResponseWriter, r *http.Request, raw string
 	v := badgeVariants[variant]
 	WriteJSON(w, http.StatusOK, shieldsEndpoint{
 		SchemaVersion: 1, Label: "IPv6", Message: v.Message, Color: v.Color,
-		CacheSeconds: 86400, IsError: v.IsError,
+		CacheSeconds: int(s.opts.BadgeCacheTTL.Seconds()), IsError: v.IsError,
 	})
 }

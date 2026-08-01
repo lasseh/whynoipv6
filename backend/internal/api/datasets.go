@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -27,7 +28,7 @@ func (s *Server) getDatasets(w http.ResponseWriter, r *http.Request) {
 		ManifestUnavailable(w, r)
 		return
 	}
-	w.Header().Set("Cache-Control", "public, max-age=300")
+	w.Header().Set("Cache-Control", fmt.Sprintf("public, max-age=%d", int(s.opts.ManifestCacheTTL.Seconds())))
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(raw)

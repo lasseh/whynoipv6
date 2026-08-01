@@ -2,7 +2,9 @@ package api
 
 import (
 	"log/slog"
+	"net"
 	"net/http"
+	"net/netip"
 	"strings"
 	"time"
 
@@ -27,6 +29,12 @@ type Options struct {
 	DedupeWindow      time.Duration // live_check.dedupe_window; default 1h
 	LinkTTL           time.Duration // live_check.link_ttl; default 168h (§5.1.7)
 	ResourcesEnabled  bool          // crawler.resources.enabled
+
+	BadgeCacheTTL    time.Duration // badge.cache_ttl; default 24h
+	ManifestCacheTTL time.Duration // datasets.manifest_cache_ttl; default 5m
+	FeedRecentWindow int           // feed.recent_window; default 50 (≤0 falls back)
+
+	TrustedProxies []string // api.trusted_proxies; CIDRs whose client-IP headers are honored (default loopback)
 }
 
 // Server carries the handler dependencies: the pool for the builder-built
@@ -64,9 +72,30 @@ func NewRouter(pool *pgxpool.Pool, opts Options) http.Handler { //nolint:gocriti
 	if s.opts.LinkTTL == 0 {
 		s.opts.LinkTTL = 168 * time.Hour
 	}
+	if s.opts.BadgeCacheTTL == 0 {
+		s.opts.BadgeCacheTTL = 24 * time.Hour
+	}
+	if s.opts.ManifestCacheTTL == 0 {
+		s.opts.ManifestCacheTTL = 5 * time.Minute
+	}
+	if s.opts.FeedRecentWindow <= 0 {
+		s.opts.FeedRecentWindow = 50
+	}
+	if len(s.opts.TrustedProxies) == 0 {
+		s.opts.TrustedProxies = []string{"127.0.0.0/8", "::1/128"}
+	}
+	trusted := make([]netip.Prefix, 0, len(s.opts.TrustedProxies))
+	for _, c := range s.opts.TrustedProxies {
+		p, err := netip.ParsePrefix(c)
+		if err != nil {
+			slog.Warn("ignoring invalid api.trusted_proxies CIDR", "cidr", c, "err", err.Error())
+			continue
+		}
+		trusted = append(trusted, p)
+	}
 	r := chi.NewRouter()
 
-	r.Use(realIP)
+	r.Use(realIP(trusted))
 	r.Use(middleware.RequestID)
 	r.Use(accessLog)
 	r.Use(recoverer)
@@ -162,8 +191,8 @@ func NewRouter(pool *pgxpool.Pool, opts Options) http.Handler { //nolint:gocriti
 	r.Get("/campaigns/{uuid}/changelog", s.listCampaignChangelog)
 	r.Get("/campaigns/{uuid}/domains/{host}/changelog", s.listCampaignDomainChangelog)
 
-	// Route inventory grows with the endpoint tasks (P4.3 onward), each
-	// implementing the generated strict-server interface.
+	// Handlers are hand-written against openapi.yaml; TestOpenAPIRouteCoverage
+	// is the drift gate holding this route inventory to the contract.
 	r.NotFound(func(w http.ResponseWriter, r *http.Request) {
 		NotFound(w, r, "Not found", "No such resource.")
 	})
@@ -174,21 +203,48 @@ func NewRouter(pool *pgxpool.Pool, opts Options) http.Handler { //nolint:gocriti
 	return r
 }
 
-// realIP derives the client address from the trusted proxy headers
-// (07 §1.2): X-Real-IP first, else the first X-Forwarded-For entry, else the
-// peer address. Trusting these is safe only because API_LISTEN defaults to
-// loopback behind nginx. (chi's middleware.RealIP is deprecated upstream;
-// this is the spec's exact rule, implemented locally.)
-func realIP(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if rip := r.Header.Get("X-Real-IP"); rip != "" {
-			r.RemoteAddr = rip
-		} else if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-			first, _, _ := strings.Cut(xff, ",")
-			r.RemoteAddr = strings.TrimSpace(first)
+// realIP derives the client address from the proxy headers (07 §1.2):
+// X-Real-IP first, else the first X-Forwarded-For entry, else the peer
+// address — but only when the transport peer is inside a trusted-proxy
+// CIDR (api.trusted_proxies; loopback by default, matching the
+// nginx-in-front deployment). Any other peer keeps its socket address, so
+// a directly-reachable API cannot be fed spoofed client IPs. (chi's
+// middleware.RealIP is deprecated upstream; this is the spec's exact
+// rule, implemented locally.)
+func realIP(trusted []netip.Prefix) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if trustedPeer(r.RemoteAddr, trusted) {
+				if rip := r.Header.Get("X-Real-IP"); rip != "" {
+					r.RemoteAddr = rip
+				} else if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+					first, _, _ := strings.Cut(xff, ",")
+					r.RemoteAddr = strings.TrimSpace(first)
+				}
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// trustedPeer reports whether the pre-rewrite socket address falls inside
+// one of the trusted-proxy prefixes.
+func trustedPeer(remoteAddr string, trusted []netip.Prefix) bool {
+	host := remoteAddr
+	if h, _, err := net.SplitHostPort(remoteAddr); err == nil {
+		host = h
+	}
+	addr, err := netip.ParseAddr(host)
+	if err != nil {
+		return false
+	}
+	addr = addr.Unmap()
+	for _, p := range trusted {
+		if p.Contains(addr) {
+			return true
 		}
-		next.ServeHTTP(w, r)
-	})
+	}
+	return false
 }
 
 // securityHeaders sets the §1.4 defaults on every response.

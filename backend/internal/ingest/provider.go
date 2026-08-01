@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 
 	"gopkg.in/yaml.v3"
 
@@ -15,22 +16,37 @@ import (
 // ProviderMapping is the in-memory ns_host → provider snapshot, loaded once
 // per run and refreshed on dns_provider.refresh_interval (06-ingest.md §6.10).
 type ProviderMapping struct {
+	mu       sync.RWMutex
 	suffixes map[string]int64 // suffix (lowercase, no leading dot) -> provider id
 }
 
 // LoadProviderMapping builds the snapshot from the dns_provider table.
 func LoadProviderMapping(ctx context.Context, q *db.Queries) (*ProviderMapping, error) {
-	rows, err := q.ProviderList(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("provider mapping: %w", err)
-	}
-	m := &ProviderMapping{suffixes: map[string]int64{}}
-	for _, r := range rows {
-		for _, s := range r.NsSuffixes {
-			m.suffixes[s] = r.ID
-		}
+	m := &ProviderMapping{}
+	if err := m.Refresh(ctx, q); err != nil {
+		return nil, err
 	}
 	return m, nil
+}
+
+// Refresh rebuilds the snapshot in place from the dns_provider table
+// (dns_provider.refresh_interval — provider curation lands without a
+// crawler restart).
+func (m *ProviderMapping) Refresh(ctx context.Context, q *db.Queries) error {
+	rows, err := q.ProviderList(ctx)
+	if err != nil {
+		return fmt.Errorf("provider mapping: %w", err)
+	}
+	next := map[string]int64{}
+	for _, r := range rows {
+		for _, s := range r.NsSuffixes {
+			next[s] = r.ID
+		}
+	}
+	m.mu.Lock()
+	m.suffixes = next
+	m.mu.Unlock()
+	return nil
 }
 
 // ProviderForNSHost resolves one nameserver host by the longest matching
@@ -39,6 +55,8 @@ func LoadProviderMapping(ctx context.Context, q *db.Queries) (*ProviderMapping, 
 // they are folded to the stored suffix form first — same step as
 // NormalizeHosting's CNAME chain.
 func (m *ProviderMapping) ProviderForNSHost(ns string) (id int64, matchLen int, ok bool) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	ns = strings.ToLower(strings.TrimSuffix(ns, "."))
 	for suffix, pid := range m.suffixes {
 		if ns == suffix || strings.HasSuffix(ns, "."+suffix) {
