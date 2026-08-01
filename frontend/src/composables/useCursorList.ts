@@ -15,13 +15,25 @@ export interface ItemCollection<T> {
   meta?: Meta
 }
 
-export interface CursorListOptions<T> {
+export interface FilterSpec {
+  /** The closed vocabulary; omit for free-text keys (?q=). */
+  values?: readonly string[]
+  /** Coercion target for absent or out-of-set values; '' when omitted. */
+  default?: string
+}
+
+export interface CursorListOptions<T, K extends string = never> {
   fetch: (
     params: { cursor?: string; [k: string]: string | undefined },
     signal: AbortSignal,
   ) => Promise<ItemCollection<T>>
-  /** Query keys (e.g. ['filter']) synced alongside cursor; changing one clears the cursor. */
-  filterKeys?: string[]
+  /**
+   * Query keys synced alongside cursor, each coerced to its closed set —
+   * the returned `filters` map is the ONE place the URL→value rule lives,
+   * feeding both the fetch params and the page's tab state. Changing one
+   * clears the cursor.
+   */
+  filters?: Record<K, FilterSpec>
   /** Scrolled into view on next()/prev() so pagination lands at the list top. */
   anchor?: Ref<HTMLElement | null>
 }
@@ -31,10 +43,10 @@ function first(v: LocationQueryValue | LocationQueryValue[] | undefined): string
   return s == null || s === '' ? undefined : s
 }
 
-export function useCursorList<T>(opts: CursorListOptions<T>) {
+export function useCursorList<T, K extends string = never>(opts: CursorListOptions<T, K>) {
   const route = useRoute()
   const router = useRouter()
-  const filterKeys = opts.filterKeys ?? []
+  const filterSpecs: Record<string, FilterSpec> = opts.filters ?? {}
 
   const items = shallowRef<T[]>([])
   const page = ref<Page | null>(null)
@@ -43,8 +55,15 @@ export function useCursorList<T>(opts: CursorListOptions<T>) {
   const error = ref<ApiProblem | null>(null)
 
   const cursor = computed(() => first(route.query.cursor))
-  const filters = computed(() =>
-    Object.fromEntries(filterKeys.map((k) => [k, first(route.query[k])])),
+  const filters = computed(
+    () =>
+      Object.fromEntries(
+        Object.entries(filterSpecs).map(([k, spec]) => {
+          const raw = first(route.query[k])
+          const valid = raw !== undefined && (!spec.values || spec.values.includes(raw))
+          return [k, valid ? raw : (spec.default ?? '')]
+        }),
+      ) as Record<K, string>,
   )
 
   let controller: AbortController | null = null
@@ -113,5 +132,5 @@ export function useCursorList<T>(opts: CursorListOptions<T>) {
     void load()
   }
 
-  return { items, page, meta, loading, error, next, prev, setFilter, reload }
+  return { items, page, meta, loading, error, filters, next, prev, setFilter, reload }
 }

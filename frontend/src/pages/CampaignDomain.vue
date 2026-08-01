@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
 import PageShell from '@/components/PageShell.vue'
@@ -12,12 +12,11 @@ import MandateBadge from '@/components/MandateBadge.vue'
 
 import { getCampaign, getCampaignDomainChangelog } from '@/api'
 import { useDomainDetail } from '@/composables/useDomainDetail'
+import { useEntity } from '@/composables/useEntity'
 import { setPageTitle } from '@/composables/usePageMeta'
 
 const route = useRoute()
 const uuid = computed(() => route.params.uuid as string)
-
-const campaignName = ref('')
 
 const domainRoute = (h: string) => ({
   name: 'CampaignDomain',
@@ -35,18 +34,13 @@ const { domain, changelogs, history, error } = useDomainDetail(
   },
 )
 
-// Breadcrumb name — non-fatal if the campaign lookup fails; refetched when
-// param-only navigation lands on another campaign.
-watch(
-  uuid,
-  (u) => {
-    if (!u) return
-    getCampaign(u)
-      .then((c) => (campaignName.value = c.name))
-      .catch(() => (campaignName.value = ''))
-  },
-  { immediate: true },
+// Breadcrumb name — non-fatal if the campaign lookup fails; useEntity
+// refetches on param-only navigation and aborts a superseded fetch.
+const { data: campaignHeader } = useEntity(
+  () => uuid.value,
+  (u, signal) => getCampaign(u, undefined, signal),
 )
+const campaignName = computed(() => campaignHeader.value?.name ?? '')
 
 // Data-driven title once the domain loads — the "does example.com support
 // IPv6" long-tail query, mirrored by DomainDetail.

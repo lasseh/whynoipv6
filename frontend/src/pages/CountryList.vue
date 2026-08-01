@@ -1,44 +1,26 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-
 import PageShell from '@/components/PageShell.vue'
 import ApiError from '@/components/ApiError.vue'
 import FilterInput from '@/components/FilterInput.vue'
+import LoadingSpinner from '@/components/LoadingSpinner.vue'
 
 import CountryFlag from '@/components/CountryFlag.vue'
 import RatingBadge from '@/components/RatingBadge.vue'
 import ProgressBar from '@/components/ProgressBar.vue'
 
 import { listCountries } from '@/api'
-import type { Country } from '@/api'
-import { ApiProblem } from '@/api/problem'
-
-const countryList = ref<Country[]>([])
-const searchQuery = ref('')
-const error = ref<ApiProblem | null>(null)
-
-async function fetchCountryList() {
-  try {
-    const response = await listCountries()
-    countryList.value = response.items
-  } catch (e) {
-    error.value = ApiProblem.from(e)
-  }
-}
+import { useFilteredCollection } from '@/composables/useFilteredCollection'
 
 // Client-side name filter over the country list (§8.7).
-const filteredCountryList = computed(() => {
-  if (!searchQuery.value) {
-    return countryList.value
-  }
-  return countryList.value.filter((country) =>
-    country.name.toLowerCase().includes(searchQuery.value.toLowerCase()),
-  )
-})
-
-onMounted(() => {
-  void fetchCountryList()
-})
+const {
+  filtered: filteredCountryList,
+  query: searchQuery,
+  loading,
+  error,
+} = useFilteredCollection(
+  (signal) => listCountries(signal),
+  (c) => c.name,
+)
 </script>
 
 <template>
@@ -73,6 +55,7 @@ onMounted(() => {
 
             <!-- Error state (§6.3) -->
             <ApiError v-if="error" :problem="error" />
+            <LoadingSpinner v-else-if="loading" />
 
             <div v-else class="grid grid-cols-2 xl:grid-cols-8 gap-4">
               <router-link

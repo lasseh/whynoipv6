@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onScopeDispose, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
 import PageShell from '@/components/PageShell.vue'
@@ -14,40 +14,22 @@ import RatingBadge from '@/components/RatingBadge.vue'
 import ProgressBar from '@/components/ProgressBar.vue'
 
 import { getCountry, listCountryDomains } from '@/api'
-import type { Country } from '@/api'
-import { ApiProblem } from '@/api/problem'
 import { useCursorList } from '@/composables/useCursorList'
+import { useEntity } from '@/composables/useEntity'
 import { setPageTitle } from '@/composables/usePageMeta'
 
 const route = useRoute()
 const code = computed(() => String(route.params.id ?? ''))
 
-const country = ref<Country | null>(null)
-const notFound = ref(false)
-
-// Header fetch — aborted when superseded or on unmount.
-let countryController: AbortController | null = null
-onScopeDispose(() => countryController?.abort())
-
-function loadCountry(c: string) {
-  countryController?.abort()
-  const ctl = new AbortController()
-  countryController = ctl
-  country.value = null
-  notFound.value = false
-  getCountry(c, ctl.signal)
-    .then((res) => {
-      country.value = res
-    })
-    .catch((e: unknown) => {
-      if (e instanceof ApiProblem && e.code === 'not-found') notFound.value = true
-    })
-}
-loadCountry(code.value)
+// Header fetch — abort/supersede/param-renavigation via useEntity.
+const { data: country, notFound } = useEntity(
+  () => code.value,
+  (c, signal) => getCountry(c, signal),
+)
 
 const anchorTop = ref<HTMLElement | null>(null)
 
-const { items, page, loading, error, next, prev, setFilter, reload } = useCursorList({
+const { items, page, loading, error, next, prev, setFilter, filters, reload } = useCursorList({
   anchor: anchorTop,
   fetch: (params, signal) =>
     listCountryDomains(
@@ -58,29 +40,18 @@ const { items, page, loading, error, next, prev, setFilter, reload } = useCursor
       },
       signal,
     ),
-  filterKeys: ['filter'],
+  filters: { filter: { values: ['sinners', 'heroes'], default: 'sinners' } },
 })
 
 // vue-router reuses the instance on param-only navigation
-// (/countries/NO → /countries/SE): refetch both surfaces.
-watch(code, (c) => {
-  if (!c) return
-  loadCountry(c)
-  reload()
-})
+// (/countries/NO → /countries/SE): the entity refetches itself; the list
+// fetch closes over code, so it needs the explicit nudge.
+watch(code, () => reload())
 
 // Data-driven title once the country loads.
 watch(country, (c) => {
   if (c) setPageTitle(`IPv6 Adoption in ${c.name}`)
 })
-
-const queryFilter = ref(route.query.filter === 'heroes' ? 'heroes' : 'sinners')
-watch(
-  () => route.query.filter,
-  (value) => {
-    queryFilter.value = value === 'heroes' ? 'heroes' : 'sinners'
-  },
-)
 
 // Pagination
 </script>
@@ -144,7 +115,7 @@ watch(
                   { value: 'sinners', label: 'Sinners' },
                   { value: 'heroes', label: 'Heroes' },
                 ]"
-                :model-value="queryFilter"
+                :model-value="filters.filter"
                 @update:model-value="(v) => setFilter('filter', v)"
               />
             </div>

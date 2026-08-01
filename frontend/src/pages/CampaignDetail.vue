@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onScopeDispose, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
 import PageShell from '@/components/PageShell.vue'
@@ -14,9 +14,10 @@ import MandateBadge from '@/components/MandateBadge.vue'
 import ProgressBar from '@/components/ProgressBar.vue'
 
 import { getCampaign, getCampaignChangelog } from '@/api'
-import type { CampaignDetail, ChangelogItem } from '@/api'
+import type { CampaignDetail } from '@/api'
 import { ApiProblem } from '@/api/problem'
 import { useCursorList } from '@/composables/useCursorList'
+import { useEntity } from '@/composables/useEntity'
 import { setPageTitle } from '@/composables/usePageMeta'
 
 const route = useRoute()
@@ -47,32 +48,21 @@ const { items, page, meta, loading, error, next, prev, reload } = useCursorList(
   },
 })
 
-// Changelog fetch — aborted when superseded or on unmount.
-const campaignChangelog = ref<ChangelogItem[]>([])
-let changelogController: AbortController | null = null
-onScopeDispose(() => changelogController?.abort())
-
-function loadChangelog(u: string) {
-  changelogController?.abort()
-  const c = new AbortController()
-  changelogController = c
-  getCampaignChangelog(u, undefined, c.signal)
-    .then((res) => {
-      campaignChangelog.value = res.items
-    })
-    .catch(() => {
-      if (!c.signal.aborted) campaignChangelog.value = []
-    })
-}
-loadChangelog(uuid.value)
+// Changelog side surface — abort/supersede/param-renavigation via
+// useEntity; a failure just leaves the list empty (non-fatal).
+const { data: changelogRes } = useEntity(
+  () => uuid.value,
+  (u, signal) => getCampaignChangelog(u, undefined, signal),
+)
+const campaignChangelog = computed(() => changelogRes.value?.items ?? [])
 
 // vue-router reuses the instance on param-only navigation
-// (/campaigns/a → /campaigns/b): refetch both surfaces.
+// (/campaigns/a → /campaigns/b): the entity refetches itself; the
+// composite list fetch closes over uuid, so it needs the explicit nudge.
 watch(uuid, (u) => {
   if (!u) return
   campaign.value = null
   notFound.value = false
-  loadChangelog(u)
   reload()
 })
 

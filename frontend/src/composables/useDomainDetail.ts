@@ -1,15 +1,13 @@
 // The one domain-detail fetch body shared by DomainDetail and its
-// CampaignDomain variant: fatal getDomain (not-found redirects), then the
-// two non-fatal side surfaces (changelog + history). The host is a getter:
-// vue-router reuses the component instance on param-only navigation
-// (/domains/a → /domains/b), so the watcher — not onMounted — drives the
-// fetch, and superseded/unmounted loads are aborted.
-import { onScopeDispose, ref, watch } from 'vue'
+// CampaignDomain variant: fatal getDomain (not-found redirects) through
+// the useEntity lifecycle, then the two non-fatal side surfaces
+// (changelog + history) riding the same abort signal.
+import { shallowRef } from 'vue'
 import { useRouter } from 'vue-router'
 import type { RouteLocationRaw } from 'vue-router'
 import { getDomain, getDomainHistory } from '@/api'
-import type { ChangelogItem, DomainDetail, HistoryPoint } from '@/api'
-import { ApiProblem } from '@/api/problem'
+import type { ChangelogItem, HistoryPoint } from '@/api'
+import { useEntity } from '@/composables/useEntity'
 
 export interface DomainDetailOptions {
   /** Where to land when the host does not exist. */
@@ -21,53 +19,30 @@ export interface DomainDetailOptions {
 export function useDomainDetail(host: () => string, opts: DomainDetailOptions) {
   const router = useRouter()
 
-  const domain = ref<DomainDetail | null>(null)
-  const changelogs = ref<ChangelogItem[]>([])
-  const history = ref<HistoryPoint[]>([])
-  const error = ref<ApiProblem | null>(null)
+  const changelogs = shallowRef<ChangelogItem[]>([])
+  const history = shallowRef<HistoryPoint[]>([])
 
-  let controller: AbortController | null = null
-  onScopeDispose(() => controller?.abort())
-
-  async function load(h: string): Promise<void> {
-    controller?.abort()
-    const c = new AbortController()
-    controller = c
-    domain.value = null
-    changelogs.value = []
-    history.value = []
-    error.value = null
-    try {
-      domain.value = await getDomain(h, c.signal)
-    } catch (e) {
-      if (c.signal.aborted) return
-      if (e instanceof ApiProblem && e.code === 'not-found') {
-        void router.replace(opts.notFoundRoute(h))
-        return
-      }
-      error.value = ApiProblem.from(e)
-      return
-    }
-    // Non-fatal side surfaces — an error just leaves them empty.
-    opts
-      .fetchChangelog(h, c.signal)
-      .then((res) => {
-        if (!c.signal.aborted) changelogs.value = res.items
-      })
-      .catch(() => {})
-    getDomainHistory(h, undefined, c.signal)
-      .then((res) => {
-        if (!c.signal.aborted) history.value = res.points
-      })
-      .catch(() => {})
-  }
-
-  watch(
+  const { data: domain, error } = useEntity(
     host,
-    (h) => {
-      if (h) void load(h)
+    async (h, signal) => {
+      changelogs.value = []
+      history.value = []
+      const d = await getDomain(h, signal)
+      // Non-fatal side surfaces — an error just leaves them empty.
+      opts
+        .fetchChangelog(h, signal)
+        .then((res) => {
+          if (!signal.aborted) changelogs.value = res.items
+        })
+        .catch(() => {})
+      getDomainHistory(h, undefined, signal)
+        .then((res) => {
+          if (!signal.aborted) history.value = res.points
+        })
+        .catch(() => {})
+      return d
     },
-    { immediate: true },
+    { onNotFound: (h) => void router.replace(opts.notFoundRoute(h)) },
   )
 
   return { domain, changelogs, history, error }

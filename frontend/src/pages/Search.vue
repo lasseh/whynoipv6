@@ -25,7 +25,7 @@ const { items, page, loading, error, next, prev, setFilter } = useCursorList<Dom
     params.q
       ? searchDomains({ q: params.q, cursor: params.cursor }, signal)
       : Promise.resolve({ items: [], page: emptyPage }),
-  filterKeys: ['q'],
+  filters: { q: { default: '' } },
 })
 
 const searchString = ref(typeof route.query.q === 'string' ? route.query.q : '')

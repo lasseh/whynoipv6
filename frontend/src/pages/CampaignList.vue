@@ -1,41 +1,23 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-
 import PageShell from '@/components/PageShell.vue'
 import ApiError from '@/components/ApiError.vue'
 import FilterInput from '@/components/FilterInput.vue'
+import LoadingSpinner from '@/components/LoadingSpinner.vue'
 import MandateBadge from '@/components/MandateBadge.vue'
 
 import { listCampaigns } from '@/api'
-import type { CampaignListItem } from '@/api'
-import { ApiProblem } from '@/api/problem'
+import { useFilteredCollection } from '@/composables/useFilteredCollection'
 
-const campaignList = ref<CampaignListItem[]>([])
-const searchQuery = ref('')
-const error = ref<ApiProblem | null>(null)
-
-async function fetchCampaignList() {
-  try {
-    const response = await listCampaigns()
-    campaignList.value = response.items
-  } catch (e) {
-    error.value = ApiProblem.from(e)
-  }
-}
-
-// A computed property to get the filtered campaign list based on the search query
-const filteredCampaignList = computed(() => {
-  if (!searchQuery.value) {
-    return campaignList.value
-  }
-  return campaignList.value.filter((campaign) =>
-    campaign.name.toLowerCase().includes(searchQuery.value.toLowerCase()),
-  )
-})
-
-onMounted(() => {
-  void fetchCampaignList()
-})
+// Client-side name filter over the campaign list.
+const {
+  filtered: filteredCampaignList,
+  query: searchQuery,
+  loading,
+  error,
+} = useFilteredCollection(
+  (signal) => listCampaigns(undefined, signal),
+  (c) => c.name,
+)
 </script>
 
 <template>
@@ -106,6 +88,7 @@ onMounted(() => {
 
             <!-- Error state (§6.3) -->
             <ApiError v-if="error" :problem="error" />
+            <LoadingSpinner v-else-if="loading" />
 
             <!-- Cards -->
             <div v-else class="grid grid-cols-2 xl:grid-cols-8 gap-4">

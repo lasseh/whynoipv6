@@ -19,7 +19,7 @@ const route = useRoute()
 // (07 §4.8 — a fixed recent window whose null cursors self-disable Pagination).
 const anchorTop = ref<HTMLElement | null>(null)
 
-const { items, page, loading, error, setFilter, next, prev, reload } = useCursorList({
+const { items, page, loading, error, filters, setFilter, next, prev, reload } = useCursorList({
   anchor: anchorTop,
   fetch: (params, signal) =>
     listChangelog(
@@ -29,10 +29,8 @@ const { items, page, loading, error, setFilter, next, prev, reload } = useCursor
       },
       signal,
     ),
-  filterKeys: ['filter'],
+  filters: { filter: { values: ['tranco', 'campaign'], default: 'tranco' } },
 })
-
-const queryFilter = computed(() => (route.query.filter === 'campaign' ? 'campaign' : 'tranco'))
 
 // 30 s auto-refresh (§7.4) — refreshes hit the CDN's 300 s public cache;
 // freshness comes from the API's changelog-seeded ETags. Only the live head
@@ -72,7 +70,7 @@ onBeforeUnmount(() => {
                 { value: 'tranco', label: 'Tranco Top 1M' },
                 { value: 'campaign', label: 'Campaigns' },
               ]"
-              :model-value="queryFilter"
+              :model-value="filters.filter"
               @update:model-value="(v) => setFilter('filter', v)"
             />
           </div>

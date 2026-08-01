@@ -5,7 +5,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import type { Router } from 'vue-router'
 import { useCursorList } from '@/composables/useCursorList'
-import type { CursorListOptions, ItemCollection } from '@/composables/useCursorList'
+import type { CursorListOptions, FilterSpec, ItemCollection } from '@/composables/useCursorList'
 import { ApiProblem } from '@/api/problem'
 import type { Meta, Page } from '@/api'
 
@@ -21,9 +21,13 @@ function collection(items: string[], page: Partial<Page> = {}): ItemCollection<s
   return { items, page: makePage(page), meta }
 }
 
+const tierFilters: Record<string, FilterSpec> = {
+  filter: { values: ['sinners', 'heroes'], default: 'sinners' },
+}
+
 async function setup(
   fetch: CursorListOptions<string>['fetch'],
-  filterKeys?: string[],
+  filters?: Record<string, FilterSpec>,
 ): Promise<{ router: Router; list: List }> {
   const router = createRouter({
     history: createMemoryHistory(),
@@ -34,7 +38,7 @@ async function setup(
   let list: List | undefined
   const Host = defineComponent({
     setup() {
-      list = useCursorList<string>({ fetch, ...(filterKeys && { filterKeys }) })
+      list = useCursorList<string>({ fetch, ...(filters && { filters }) })
       return () => h('div')
     },
   })
@@ -78,15 +82,37 @@ describe('useCursorList', () => {
 
   it('changing a filter clears the cursor', async () => {
     const fetch = vi.fn().mockResolvedValue(collection([]))
-    const { router, list } = await setup(fetch, ['filter'])
+    const { router, list } = await setup(fetch, tierFilters)
 
-    await router.push({ query: { filter: 'sinners', cursor: 'c9' } })
+    await router.push({ query: { filter: 'heroes', cursor: 'c9' } })
     await flushPromises()
-    expect(fetch.mock.calls.at(-1)?.[0]).toEqual({ filter: 'sinners', cursor: 'c9' })
+    expect(fetch.mock.calls.at(-1)?.[0]).toEqual({ filter: 'heroes', cursor: 'c9' })
 
-    list.setFilter('filter', 'heroes')
+    list.setFilter('filter', 'sinners')
     await flushPromises()
-    expect(router.currentRoute.value.query).toEqual({ filter: 'heroes' })
+    expect(router.currentRoute.value.query).toEqual({ filter: 'sinners' })
+    expect(fetch.mock.calls.at(-1)?.[0]).toEqual({ filter: 'sinners' })
+  })
+
+  it('coerces the filter to its closed set — one rule for fetch AND tabs', async () => {
+    const fetch = vi.fn().mockResolvedValue(collection([]))
+    const { router, list } = await setup(fetch, tierFilters)
+
+    // Absent → default, on both surfaces.
+    expect(fetch.mock.calls.at(-1)?.[0]).toEqual({ filter: 'sinners' })
+    expect(list.filters.value).toEqual({ filter: 'sinners' })
+
+    // Garbage → default; a coerced-equal value change does not refetch.
+    const calls = fetch.mock.calls.length
+    await router.push({ query: { filter: 'zzz' } })
+    await flushPromises()
+    expect(list.filters.value).toEqual({ filter: 'sinners' })
+    expect(fetch).toHaveBeenCalledTimes(calls)
+
+    // A real member of the set flows through.
+    await router.push({ query: { filter: 'heroes' } })
+    await flushPromises()
+    expect(list.filters.value).toEqual({ filter: 'heroes' })
     expect(fetch.mock.calls.at(-1)?.[0]).toEqual({ filter: 'heroes' })
   })
 

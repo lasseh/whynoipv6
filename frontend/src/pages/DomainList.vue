@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import { useRoute } from 'vue-router'
+import { ref } from 'vue'
 
 import PageShell from '@/components/PageShell.vue'
 import ApiError from '@/components/ApiError.vue'
@@ -10,21 +9,16 @@ import DomainTable from '@/components/DomainTable.vue'
 import Pagination from '@/components/Pagination.vue'
 import LoadingSpinner from '@/components/LoadingSpinner.vue'
 
-import type { DomainSummary } from '@/api'
 import { useCursorList } from '@/composables/useCursorList'
 import { TIERS, tierBySlug } from '@/tiers'
 
-const route = useRoute()
-
 const anchorTop = ref<HTMLElement | null>(null)
 
-const { items, page, loading, error, next, prev, setFilter } = useCursorList<DomainSummary>({
+const { items, page, loading, error, filters, next, prev, setFilter } = useCursorList({
   anchor: anchorTop,
   fetch: (params, signal) => tierBySlug(params.filter).list({ cursor: params.cursor }, signal),
-  filterKeys: ['filter'],
+  filters: { filter: { values: TIERS.map((t) => t.slug), default: TIERS[0]!.slug } },
 })
-
-const queryFilter = computed(() => tierBySlug([route.query.filter].flat()[0] ?? undefined).slug)
 
 const tierTabs = TIERS.filter((t) => !t.hidden).map((t) => ({ value: t.slug, label: t.label }))
 </script>
@@ -51,7 +45,7 @@ const tierTabs = TIERS.filter((t) => !t.hidden).map((t) => ({ value: t.slug, lab
           <div class="mb-4">
             <SegmentedTabs
               :options="tierTabs"
-              :model-value="queryFilter"
+              :model-value="filters.filter"
               @update:model-value="(v) => setFilter('filter', v)"
             />
           </div>
