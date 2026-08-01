@@ -34,6 +34,22 @@ func TestProviderMapping(t *testing.T) {
 		}
 	})
 
+	t.Run("wire_form_fqdn", func(t *testing.T) {
+		// The NS check stores nameservers as served: FQDN with the root dot,
+		// case unfolded. Both must still resolve, or the whole mapping is
+		// inert against real scan data.
+		id, _, ok := m.ProviderForNSHost("gina.ns.cloudflare.com.")
+		if !ok || id != 3 {
+			t.Errorf("trailing-dot FQDN = %d/%t, want 3", id, ok)
+		}
+		if id, _, ok := m.ProviderForNSHost("GINA.NS.CloudFlare.COM."); !ok || id != 3 {
+			t.Errorf("mixed-case FQDN = %d/%t, want 3", id, ok)
+		}
+		if got := m.ProviderForNSSet([]string{"ns1.awsdns.com.", "ns2.awsdns.com."}); got == nil || *got != 2 {
+			t.Errorf("FQDN NS set = %v, want 2", got)
+		}
+	})
+
 	t.Run("unknown_ns", func(t *testing.T) {
 		if got := m.ProviderForNSSet([]string{"ns1.example.org", "ns2.example.org"}); got != nil {
 			t.Errorf("unknown NS set = %v, want nil", got)

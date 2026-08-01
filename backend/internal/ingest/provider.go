@@ -3,7 +3,6 @@ package ingest
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -36,7 +35,11 @@ func LoadProviderMapping(ctx context.Context, q *db.Queries) (*ProviderMapping, 
 
 // ProviderForNSHost resolves one nameserver host by the longest matching
 // suffix on a label boundary (ns == suffix or ns ends with "."+suffix).
+// NS hosts arrive as wire-form FQDNs (trailing root dot, case as served), so
+// they are folded to the stored suffix form first — same step as
+// NormalizeHosting's CNAME chain.
 func (m *ProviderMapping) ProviderForNSHost(ns string) (id int64, matchLen int, ok bool) {
+	ns = strings.ToLower(strings.TrimSuffix(ns, "."))
 	for suffix, pid := range m.suffixes {
 		if ns == suffix || strings.HasSuffix(ns, "."+suffix) {
 			if len(suffix) > matchLen {
@@ -78,13 +81,9 @@ type providerSeedEntry struct {
 	Suffixes []string `yaml:"suffixes"`
 }
 
-// SeedProvidersFromYAML loads a curated seed file and upserts each provider
-// (the same operation as `v6ctl provider add`).
-func SeedProvidersFromYAML(ctx context.Context, pool *pgxpool.Pool, path string) (int, error) {
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		return 0, fmt.Errorf("provider seed: %w", err)
-	}
+// SeedProviders upserts every provider in a curated seed document — the same
+// operation as `v6ctl provider add`, once per entry, so it is idempotent.
+func SeedProviders(ctx context.Context, pool *pgxpool.Pool, raw []byte) (int, error) {
 	var entries []providerSeedEntry
 	if err := yaml.Unmarshal(raw, &entries); err != nil {
 		return 0, fmt.Errorf("provider seed: %w", err)
