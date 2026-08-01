@@ -43,7 +43,7 @@ onMounted(() => {
     <section class="relative">
       <div class="max-w-6xl mx-auto px-4 sm:px-6">
         <div class="pt-20 pb-4 md:pt-24 md:pb-4">
-          <div class="py-4 max-w-9xl mx-auto">
+          <div class="py-4 mx-auto">
             <!-- Page header -->
             <div class="sm:flex sm:justify-between sm:items-center mb-4">
               <!-- Left: Title -->
@@ -69,7 +69,7 @@ onMounted(() => {
                       d="M15 7H9V1c0-.6-.4-1-1-1S7 .4 7 1v6H1c-.6 0-1 .4-1 1s.4 1 1 1h6v6c0 .6.4 1 1 1s1-.4 1-1V9h6c.6 0 1-.4 1-1s-.4-1-1-1z"
                     />
                   </svg>
-                  <span class="hidden xs:block ml-2">Create Campaign</span>
+                  <span class="hidden ml-2">Create Campaign</span>
                 </a>
               </div>
             </div>

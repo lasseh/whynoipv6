@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { defineComponent, h } from 'vue'
+import { defineComponent, h, ref } from 'vue'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import type { Router } from 'vue-router'
@@ -20,7 +20,10 @@ const historyPoint = { date: '2026-07-11' } as unknown as HistoryPoint
 
 type Detail = ReturnType<typeof useDomainDetail>
 
-async function setup(opts?: Partial<DomainDetailOptions>): Promise<{
+async function setup(
+  opts?: Partial<DomainDetailOptions>,
+  host: () => string = () => 'bad.example',
+): Promise<{
   router: Router
   detail: Detail
 }> {
@@ -36,8 +39,8 @@ async function setup(opts?: Partial<DomainDetailOptions>): Promise<{
   let detail: Detail | undefined
   const Host = defineComponent({
     setup() {
-      detail = useDomainDetail('bad.example', {
-        notFoundRoute: { name: 'NotFound' },
+      detail = useDomainDetail(host, {
+        notFoundRoute: () => ({ name: 'NotFound' }),
         fetchChangelog: () => Promise.resolve({ items: [] }),
         ...opts,
       })
@@ -103,5 +106,21 @@ describe('useDomainDetail', () => {
     expect(detail.changelogs.value).toEqual([])
     expect(detail.history.value).toEqual([])
     expect(detail.error.value).toBeNull()
+  })
+
+  it('refetches when the host changes (param-only navigation)', async () => {
+    vi.mocked(getDomain).mockResolvedValue(domainFixture)
+    vi.mocked(getDomainHistory).mockResolvedValue({
+      host: 'bad.example',
+      points: [],
+      meta: { as_of: '2026-07-11T00:00:00Z', retention_days: 90 },
+    })
+    const host = ref('a.example')
+    await setup(undefined, () => host.value)
+    expect(vi.mocked(getDomain).mock.calls.at(-1)?.[0]).toBe('a.example')
+
+    host.value = 'b.example'
+    await flushPromises()
+    expect(vi.mocked(getDomain).mock.calls.at(-1)?.[0]).toBe('b.example')
   })
 })

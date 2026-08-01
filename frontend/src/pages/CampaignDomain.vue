@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
 import PageShell from '@/components/PageShell.vue'
@@ -12,25 +12,45 @@ import MandateBadge from '@/components/MandateBadge.vue'
 
 import { getCampaign, getCampaignDomainChangelog } from '@/api'
 import { useDomainDetail } from '@/composables/useDomainDetail'
+import { setPageTitle } from '@/composables/usePageMeta'
 
 const route = useRoute()
-const uuid = route.params.uuid as string
-const host = route.params.domain as string
+const uuid = computed(() => route.params.uuid as string)
 
 const campaignName = ref('')
 
-const domainRoute = (h: string) => ({ name: 'CampaignDomain', params: { uuid, domain: h } })
-
-const { domain, changelogs, history, error } = useDomainDetail(host, {
-  notFoundRoute: { name: 'CampaignDomainNotFound', params: { uuid, domain: host } },
-  fetchChangelog: () => getCampaignDomainChangelog(uuid, host),
+const domainRoute = (h: string) => ({
+  name: 'CampaignDomain',
+  params: { uuid: uuid.value, domain: h },
 })
 
-onMounted(() => {
-  // Breadcrumb name — non-fatal if the campaign lookup fails.
-  getCampaign(uuid)
-    .then((c) => (campaignName.value = c.name))
-    .catch(() => (campaignName.value = ''))
+const { domain, changelogs, history, error } = useDomainDetail(
+  () => route.params.domain as string,
+  {
+    notFoundRoute: (h) => ({
+      name: 'CampaignDomainNotFound',
+      params: { uuid: uuid.value, domain: h },
+    }),
+    fetchChangelog: (h, signal) => getCampaignDomainChangelog(uuid.value, h, undefined, signal),
+  },
+)
+
+// Breadcrumb name — non-fatal if the campaign lookup fails; refetched when
+// param-only navigation lands on another campaign.
+watch(
+  uuid,
+  (u) => {
+    if (!u) return
+    getCampaign(u)
+      .then((c) => (campaignName.value = c.name))
+      .catch(() => (campaignName.value = ''))
+  },
+  { immediate: true },
+)
+
+// Data-driven title once the domain loads — the "example.com IPv6" long tail.
+watch(domain, (d) => {
+  if (d) setPageTitle(`${d.host} IPv6 Status`)
 })
 </script>
 

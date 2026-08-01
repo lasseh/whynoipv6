@@ -38,12 +38,12 @@ watch(
           <main class="md:flex-auto md:pl-10 order-1">
             <div v-show="page === '1'">
               <div class="mb-8">
-                <h2 class="h2 mb-4">Frequently Asked Questions</h2>
+                <h1 class="h2 mb-4">Frequently Asked Questions</h1>
               </div>
               <ul class="-my-4">
                 <li class="py-4">
                   <h4 class="text-xl font-medium mb-2">What is WhyNoIPv6.com?</h4>
-                  <p class="text-md text-gray-400">
+                  <p class="text-base text-gray-400">
                     WhyNoIPv6.com is a specialized platform committed to monitoring and promoting
                     the adoption of IPv6 among the 1 Million top-ranked websites and user-submitted
                     campaigns. We offer insightful metrics to help you assess the current landscape
@@ -52,14 +52,14 @@ watch(
                 </li>
                 <li class="py-4">
                   <h4 class="text-xl font-medium mb-2">Why is IPv6 Important?</h4>
-                  <p class="text-md text-gray-400 mb-2">
+                  <p class="text-base text-gray-400 mb-2">
                     IPv6 is not merely an upgrade; it's a fundamental pillar for the Internet's
                     sustainable future. As we edge closer to exhausting the IPv4 address space, the
                     immense address capacity of IPv6 becomes indispensable. Beyond the scalability,
                     IPv6 brings along robust security protocols and superior performance, making it
                     the linchpin for modern, efficient, and secure internet communications.
                   </p>
-                  <p class="text-md text-gray-400">
+                  <p class="text-base text-gray-400">
                     Failing to adopt IPv6 is tantamount to inhibiting the Internet's evolution. For
                     top websites, this isn't just negligence—it's an abdication of their role as
                     industry leaders. That's why our mission at WhyNoIPv6.com is not just to
@@ -69,7 +69,7 @@ watch(
                 </li>
                 <li class="py-4">
                   <h4 class="text-xl font-medium mb-2">How does WhyNoIPv6.com work?</h4>
-                  <p class="text-md text-gray-400">
+                  <p class="text-base text-gray-400">
                     At WhyNoIPv6.com, we meticulously scan each domain from Tranco's top-ranked list
                     every day to evaluate critical IPv6 adoption metrics. Specifically, we check for
                     the existence of IPv6 DNS records and MX records. The data gleaned from these
@@ -80,7 +80,7 @@ watch(
                 </li>
                 <li class="py-4">
                   <h4 class="text-xl font-medium mb-2">Tranco?</h4>
-                  <p class="text-md text-gray-400 mb-2">
+                  <p class="text-base text-gray-400 mb-2">
                     The
                     <a href="https://tranco-list.eu/" target="_blank" class="a-gradient"
                       >Tranco List</a
@@ -92,7 +92,7 @@ watch(
                     robust methodology that aggregates data from various sources to compile its
                     rankings.
                   </p>
-                  <p class="text-md text-gray-400">
+                  <p class="text-base text-gray-400">
                     This approach aims to provide a more comprehensive and reliable measure of a
                     website's popularity and traffic, addressing some of the accuracy concerns
                     associated with Alexa's data. As a result, the Tranco List is increasingly
@@ -102,7 +102,7 @@ watch(
                 </li>
                 <li class="py-4">
                   <h4 class="text-xl font-medium mb-2">How accurate is our data?</h4>
-                  <p class="text-md text-gray-400">
+                  <p class="text-base text-gray-400">
                     While we make every effort to ensure the precision of our metrics, it's
                     important to interpret them as indicative rather than absolute. Several
                     variables can introduce fluctuations in real-time accuracy. For instance, DNS
@@ -115,11 +115,11 @@ watch(
                   <h4 class="text-xl font-medium mb-2">
                     Why does a domain show as not supporting IPv6 when it does?
                   </h4>
-                  <p class="text-md text-gray-400 mb-2">
+                  <p class="text-base text-gray-400 mb-2">
                     This could be due to various reasons like DNS propagation delays or temporary
                     server issues. If you notice inconsistencies, please contact us.
                   </p>
-                  <p class="text-md text-gray-400">
+                  <p class="text-base text-gray-400">
                     For instance, DNS propagation delays and the dynamic nature of Content Delivery
                     Networks (CDNs) can alter the data based on the anycast DNS location.
                   </p>
@@ -130,7 +130,7 @@ watch(
             <!-- Rules and API -->
             <div v-show="page === '2'">
               <div class="mb-8">
-                <h2 class="h2 mb-4">Rules, Frequency, and API Access</h2>
+                <h1 class="h2 mb-4">Rules, Frequency, and API Access</h1>
               </div>
               <ul class="-my-4">
                 <li class="pt-4">
@@ -138,33 +138,33 @@ watch(
                 </li>
                 <li class="py-4">
                   <h4 class="text-xl font-medium mb-2">Crawler Rules</h4>
-                  <p class="text-md text-gray-400 mb-2">
+                  <p class="text-base text-gray-400 mb-2">
                     The crawler checks AAAA records on domain.com, www.domain.com, and the domain's
                     NS and MX records. It also opens a real HTTP connection over IPv6 — publishing
                     an AAAA record that doesn't answer won't fool anyone.
                   </p>
-                  <p class="text-md text-gray-400">
+                  <p class="text-base text-gray-400">
                     The domain and www lookups go through three independent public resolvers, and
                     two out of three must agree.
                   </p>
                 </li>
                 <li class="py-4">
                   <h4 class="text-xl font-medium mb-2">Crawler Frequency</h4>
-                  <p class="text-md text-gray-400">
+                  <p class="text-base text-gray-400">
                     Every domain is scanned once per day. A status only changes after 3 consecutive
                     scans agree, so one flaky DNS answer won't flip your verdict.
                   </p>
                 </li>
                 <li class="py-4">
                   <h4 class="text-xl font-medium mb-2">What does “Not applicable” mean?</h4>
-                  <p class="text-md text-gray-400 mb-2">
+                  <p class="text-base text-gray-400 mb-2">
                     There was nothing to grade — it never counts against a domain.
                   </p>
-                  <p class="text-md text-gray-400 mb-2">
+                  <p class="text-base text-gray-400 mb-2">
                     For E-Mail it means the domain publishes no MX records: no mail service, nothing
                     to check. A domain without mail can still become a hero.
                   </p>
-                  <p class="text-md text-gray-400">
+                  <p class="text-base text-gray-400">
                     For Page resources it means one of two things: the page loads over IPv6 and
                     pulls no resources from external hosts, or the site isn't reachable over IPv6 at
                     all — then its resources can't be evaluated. The domain status card and the live
@@ -173,13 +173,13 @@ watch(
                 </li>
                 <li class="py-4">
                   <h4 class="text-xl font-medium mb-2">Crawler Errors</h4>
-                  <p class="text-md text-gray-400">
+                  <p class="text-base text-gray-400">
                     Did you find any errors from the crawler? PR's are welcome
                   </p>
                 </li>
                 <li class="py-4">
                   <h4 class="text-xl font-medium mb-2">Heroes</h4>
-                  <p class="text-md text-gray-400">
+                  <p class="text-base text-gray-400">
                     To become one of the IPv6 heroes here, you need IPv6 on domain.com,
                     www.domain.com and the nameservers. MX records need IPv6 or be empty, and the
                     site has to actually respond over IPv6.
@@ -187,7 +187,7 @@ watch(
                 </li>
                 <li class="py-4">
                   <h4 class="text-xl font-medium mb-2">Saints</h4>
-                  <p class="text-md text-gray-400">
+                  <p class="text-base text-gray-400">
                     Saints are heroes that also load all their page resources — scripts, fonts,
                     images — over IPv6. The full package: the site works on an IPv6-only connection.
                   </p>
@@ -197,7 +197,7 @@ watch(
                 </li>
                 <li class="py-4">
                   <h4 class="text-xl font-medium mb-2">How do i create my own campaign?</h4>
-                  <p class="text-md text-gray-400">
+                  <p class="text-base text-gray-400">
                     Create a new issue on the
                     <a
                       href="https://github.com/lasseh/whynoipv6-campaign"
@@ -211,19 +211,19 @@ watch(
                   <h4 class="text-xl font-medium mb-2">
                     How can i get my domain removed from the list?
                   </h4>
-                  <p class="text-md text-gray-400">Yes, you can start using IPv6!</p>
+                  <p class="text-base text-gray-400">Yes, you can start using IPv6!</p>
                 </li>
                 <li class="pt-3">
                   <h3 class="text-xl font-medium underline">API</h3>
                 </li>
                 <li class="py-4">
                   <h4 class="text-xl font-medium mb-2">Can i get access to the API?</h4>
-                  <p class="text-md text-gray-400 mb-2">
+                  <p class="text-base text-gray-400 mb-2">
                     Yes, the API is open — no key, no signup. Everything on this site is served from
                     it, at
                     <span class="a-gradient">https://api.whynoipv6.com</span> (no version prefix).
                   </p>
-                  <p class="text-md text-gray-400 mb-2">
+                  <p class="text-base text-gray-400 mb-2">
                     Start with the
                     <a href="https://api.whynoipv6.com/docs" target="_blank" class="a-gradient"
                       >interactive docs</a
@@ -241,29 +241,29 @@ watch(
                 </li>
                 <li class="py-4">
                   <h4 class="text-xl font-medium mb-2">Can i download the whole dataset?</h4>
-                  <p class="text-md text-gray-400 mb-2">
+                  <p class="text-base text-gray-400 mb-2">
                     Yes — daily snapshots (CSV and Parquet) are published at
                     <a href="https://api.whynoipv6.com/datasets" target="_blank" class="a-gradient"
                       >api.whynoipv6.com/datasets</a
                     >. Please don't paginate the whole API when a bulk file exists.
                   </p>
-                  <p class="text-md text-gray-400">
+                  <p class="text-base text-gray-400">
                     The data is licensed CC-BY-NC-4.0. Attribution: Data: whynoipv6.com
                     (CC-BY-NC-4.0). Ranks: Tranco.
                   </p>
                 </li>
                 <li class="py-4">
                   <h4 class="text-xl font-medium mb-2">Is there a badge for my README?</h4>
-                  <p class="text-md text-gray-400 mb-2">
+                  <p class="text-base text-gray-400 mb-2">
                     Every domain has an SVG status badge. Embed it in markdown:
                   </p>
-                  <p class="text-md text-gray-400 font-mono">
+                  <p class="text-base text-gray-400 font-mono">
                     ![IPv6](https://api.whynoipv6.com/badge/yourdomain.com.svg)
                   </p>
                 </li>
                 <li class="py-4">
                   <h4 class="text-xl font-medium mb-2">Can i follow changes as a feed?</h4>
-                  <p class="text-md text-gray-400">
+                  <p class="text-base text-gray-400">
                     The changelog is available as
                     <a
                       href="https://api.whynoipv6.com/changelog.atom"
@@ -286,12 +286,12 @@ watch(
             <!-- Resources -->
             <div v-show="page === '3'">
               <div class="mb-8">
-                <h2 class="h2 mb-4">Resources</h2>
+                <h1 class="h2 mb-4">Resources</h1>
               </div>
               <ul class="-my-4">
                 <li class="py-4">
                   <h4 class="text-xl font-medium mb-2">IPv6</h4>
-                  <p class="text-md text-gray-400">
+                  <p class="text-base text-gray-400">
                     <a
                       href="https://www.internetsociety.org/deploy360/ipv6/"
                       target="_blank"
@@ -299,7 +299,7 @@ watch(
                       >Internet Society IPv6</a
                     >
                   </p>
-                  <p class="text-md text-gray-400">
+                  <p class="text-base text-gray-400">
                     <a href="https://ready.chair6.net/" target="_blank" class="a-gradient"
                       >IPv6 Ready test</a
                     >
@@ -307,14 +307,14 @@ watch(
                 </li>
                 <li class="py-4">
                   <h4 class="text-xl font-medium mb-2">IPv6 Networking Best Practices</h4>
-                  <p class="text-md text-gray-400">
+                  <p class="text-base text-gray-400">
                     <a
                       href="https://blog.apnic.net/2023/04/04/ipv6-architecture-and-subnetting-guide-for-network-engineers-and-operators/"
                       class="a-gradient"
                       >IPv6 Subnetting - Best Practices</a
                     >
                   </p>
-                  <p class="text-md text-gray-400">
+                  <p class="text-base text-gray-400">
                     <a
                       href="https://www.internetsociety.org/deploy360/ipv6/security/"
                       class="a-gradient"
@@ -324,13 +324,13 @@ watch(
                 </li>
                 <li class="py-4">
                   <h4 class="text-xl font-medium mb-2">Community and Forums</h4>
-                  <p class="text-md text-gray-400">
+                  <p class="text-base text-gray-400">
                     <a href="https://www.reddit.com/r/ipv6/" class="a-gradient">Reddit's r/ipv6</a>
                   </p>
-                  <p class="text-md text-gray-400">
+                  <p class="text-base text-gray-400">
                     <a href="https://www.ipv6forum.com/" class="a-gradient">IPv6 Forum</a>
                   </p>
-                  <p class="text-md text-gray-400">
+                  <p class="text-base text-gray-400">
                     <a href="https://packetpushers.net/podcasts/ipv6-buzz/" class="a-gradient"
                       >IPv6 Buzz Podcast</a
                     >
@@ -338,12 +338,12 @@ watch(
                 </li>
                 <li class="py-4">
                   <h4 class="text-xl font-medium mb-2">Online Courses and Webinars</h4>
-                  <p class="text-md text-gray-400">
+                  <p class="text-base text-gray-400">
                     <a href="https://ipv6.he.net/certification/" target="_blank" class="a-gradient"
                       >Hurricane Electric IPv6 Certification Project</a
                     >
                   </p>
-                  <p class="text-md text-gray-400">
+                  <p class="text-base text-gray-400">
                     <a
                       href="https://www.coursera.org/projects/ip-address-v6"
                       target="_blank"
@@ -354,7 +354,7 @@ watch(
                 </li>
                 <li class="py-4">
                   <h4 class="text-xl font-medium mb-2">Reports and IPv6 Status</h4>
-                  <p class="text-md text-gray-400">
+                  <p class="text-base text-gray-400">
                     <a
                       href="https://bgp.he.net/ipv6-progress-report.cgi"
                       target="_blank"
@@ -362,12 +362,12 @@ watch(
                       >Global IPv6 Deployment Progress Report</a
                     >
                   </p>
-                  <p class="text-md text-gray-400">
+                  <p class="text-base text-gray-400">
                     <a href="https://www.worldipv6launch.org/" target="_blank" class="a-gradient"
                       >World IPv6 Launch</a
                     >
                   </p>
-                  <p class="text-md text-gray-400">
+                  <p class="text-base text-gray-400">
                     <a
                       href="https://www.google.com/intl/en/ipv6/statistics.html"
                       target="_blank"
@@ -375,12 +375,12 @@ watch(
                       >Google v6 Statistics</a
                     >
                   </p>
-                  <p class="text-md text-gray-400">
+                  <p class="text-base text-gray-400">
                     <a href="https://www.vyncke.org/ipv6status/" target="_blank" class="a-gradient"
                       >IPv6 Deployment Aggregated Status</a
                     >
                   </p>
-                  <p class="text-md text-gray-400">
+                  <p class="text-base text-gray-400">
                     <a href="https://awsipv6.neveragain.de/" target="_blank" class="a-gradient"
                       >AWS service endpoints by region and IPv6 support</a
                     >
@@ -388,14 +388,14 @@ watch(
                 </li>
                 <li class="py-4">
                   <h4 class="text-xl font-medium mb-2">Stickers</h4>
-                  <p class="text-md text-gray-400">
+                  <p class="text-base text-gray-400">
                     Become part of a community of like-minded individuals and show your support for
                     IPv6.
                   </p>
-                  <p class="text-md text-gray-400 mb-2">
+                  <p class="text-base text-gray-400 mb-2">
                     Add stickers to your laptop, or vandalize a building of a IPv6 sinner!
                   </p>
-                  <p class="text-md text-gray-400">
+                  <p class="text-base text-gray-400">
                     Order your's today:
                     <br />
                     <a
@@ -429,42 +429,42 @@ watch(
             <!-- About -->
             <div v-show="page === '4'">
               <div class="mb-8">
-                <h2 class="h2 mb-4">About</h2>
+                <h1 class="h2 mb-4">About</h1>
               </div>
               <ul class="-my-4">
                 <li class="py-4">
                   <h4 class="text-xl font-medium mb-2"># whoami</h4>
-                  <p class="text-md text-gray-400 mb-2">
+                  <p class="text-base text-gray-400 mb-2">
                     Hello! I'm Lasse, Norway's own network maestro, on a personal crusade to spread
                     the magic of IPv6 across every corner of the internet.
                   </p>
-                  <p class="text-md text-gray-400 mb-2">
+                  <p class="text-base text-gray-400 mb-2">
                     By day, I'm a wizard of wires and a sorcerer of switches, tirelessly weaving the
                     intricate web of networks that keep our digital world in motion. By night, I
                     prowl the internet, seeking out IPv6 slackers, nudging them to embrace the
                     future of the internet.
                   </p>
-                  <p class="text-md text-gray-400">
+                  <p class="text-base text-gray-400">
                     Join me on this journey towards an IPv6-enabled future, where 'IP exhaustion'
                     becomes just a spooky story of the past!
                   </p>
                 </li>
                 <li class="py-4">
                   <h4 class="text-xl font-medium mb-2">Contact</h4>
-                  <p class="text-md text-gray-400">
+                  <p class="text-base text-gray-400">
                     Twitter / X:
                     <a href="https://twitter.com/WhyNoIPv6" target="_blank" class="a-gradient"
                       >@whynoipv6</a
                     >
                   </p>
-                  <p class="text-md text-gray-400">
+                  <p class="text-base text-gray-400">
                     E-Mail:
                     <span class="a-gradient">whynoipv6@protonmail.com</span>
                   </p>
                 </li>
                 <li class="py-4">
                   <h4 class="text-xl font-medium mb-2">Status page</h4>
-                  <p class="text-md text-gray-400 mb-2">
+                  <p class="text-base text-gray-400 mb-2">
                     We maintain a status page to show our operations and availability:
                     <a href="https://status.whynoipv6.com/" target="_blank" class="a-gradient"
                       >status.whynoipv6.com</a
@@ -473,7 +473,7 @@ watch(
                 </li>
                 <li class="py-4">
                   <h4 class="text-xl font-medium mb-2">Our Supporters</h4>
-                  <p class="text-md text-gray-400 mb-4">
+                  <p class="text-base text-gray-400 mb-4">
                     We have been fortunate to have support of some great organizations early on in
                     our existence.
                   </p>

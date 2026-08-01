@@ -2,7 +2,7 @@
 // of truth: next()/prev()/setFilter() only navigate; the route watcher is the
 // sole fetch trigger, so back/forward and reload just work and there is no
 // state↔URL feedback loop to guard.
-import { computed, shallowRef, ref, watch } from 'vue'
+import { computed, onScopeDispose, shallowRef, ref, watch } from 'vue'
 import type { Ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import type { LocationQuery, LocationQueryValue } from 'vue-router'
@@ -48,6 +48,7 @@ export function useCursorList<T>(opts: CursorListOptions<T>) {
   )
 
   let controller: AbortController | null = null
+  onScopeDispose(() => controller?.abort())
 
   async function load(): Promise<void> {
     controller?.abort()

@@ -53,11 +53,11 @@ onBeforeUnmount(() => {
         <div class="shrink-0 mr-4">
           <!-- Logo -->
           <router-link to="/" class="block" aria-label="WhyNoIPv6">
-            <h2
+            <div
               class="bg-gradient-to-r bg-clip-text text-2xl font-bold text-transparent from-fuchsia-500 to-fuchsia-700"
             >
               Why No IPv6?
-            </h2>
+            </div>
           </router-link>
         </div>
 

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onScopeDispose, reactive, ref, toRefs, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import type { LocationQuery } from 'vue-router'
 
 import ApiError from '@/components/ApiError.vue'
 import FilterInput from '@/components/FilterInput.vue'
@@ -72,7 +73,7 @@ void load()
 
 function setSort(order: string) {
   // Dropping ?q= returns the list to the chosen sort order.
-  const query = { ...route.query, sort: order }
+  const query: LocationQuery = { ...route.query, sort: order }
   delete query.q
   void router.replace({ query })
 }
@@ -97,7 +98,6 @@ const formatLargeNumber = (number: number): string => {
   if (!number) return '0'
   return number >= 1000 ? `${(number / 1000).toFixed(0)}k` : number.toString()
 }
-
 </script>
 
 <template>
@@ -106,7 +106,7 @@ const formatLargeNumber = (number: number): string => {
     <div class="sm:flex sm:justify-between sm:items-center mb-4">
       <!-- Left: Title -->
       <div class="mb-4 sm:mb-0">
-        <h1 class="text-2xl md:2text-xl text-zinc-100 font-bold">Network Provider Readiness</h1>
+        <h2 class="text-2xl md:text-2xl text-zinc-100 font-bold">Network Provider Readiness</h2>
       </div>
 
       <!-- Search -->

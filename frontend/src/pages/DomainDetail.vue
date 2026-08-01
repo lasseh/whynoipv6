@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { watch } from 'vue'
 import { useRoute } from 'vue-router'
 
 import PageShell from '@/components/PageShell.vue'
@@ -11,13 +12,21 @@ import MandateBadge from '@/components/MandateBadge.vue'
 
 import { getDomainChangelog } from '@/api'
 import { useDomainDetail } from '@/composables/useDomainDetail'
+import { setPageTitle } from '@/composables/usePageMeta'
 
 const route = useRoute()
-const host = route.params.domain as string
 
-const { domain, changelogs, history, error } = useDomainDetail(host, {
-  notFoundRoute: { name: 'DomainNotFound', params: { domain: host } },
-  fetchChangelog: () => getDomainChangelog(host),
+const { domain, changelogs, history, error } = useDomainDetail(
+  () => route.params.domain as string,
+  {
+    notFoundRoute: (h) => ({ name: 'DomainNotFound', params: { domain: h } }),
+    fetchChangelog: (h, signal) => getDomainChangelog(h, undefined, signal),
+  },
+)
+
+// Data-driven title once the domain loads — the "example.com IPv6" long tail.
+watch(domain, (d) => {
+  if (d) setPageTitle(`${d.host} IPv6 Status`)
 })
 </script>
 

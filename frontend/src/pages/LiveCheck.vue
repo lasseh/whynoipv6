@@ -11,6 +11,7 @@ import MinusIcon from '@/components/icons/Minus.vue'
 import { createCheck, getCheck, getLatestCheck, isCheckEnvelope } from '@/api'
 import type { CheckEnvelope } from '@/api'
 import { ApiProblem } from '@/api/problem'
+import { setPageTitle } from '@/composables/usePageMeta'
 import { liveStatus } from '@/utils/status'
 import { formatDateTime } from '@/utils/date'
 
@@ -324,6 +325,13 @@ watch(
     if (target !== null && target !== activeTarget) loadTarget(target)
   },
 )
+
+// Data-driven title once a result is on screen; also watches the target so
+// the canonicalizing router.replace (whose beforeEach resets the static
+// title) does not clobber it.
+watch([envelope, () => route.params.target], ([env]) => {
+  if (env) setPageTitle(`${env.host} Live IPv6 Check`)
+})
 </script>
 
 <template>

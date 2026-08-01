@@ -81,12 +81,12 @@ onMounted(() => {
             <div class="max-w-xl md:max-w-none md:w-full mx-auto md:col-span-7 lg:col-span-6">
               <div class="md:pr-4 lg:pr-12 xl:pr-16">
                 <h3 class="h3 mb-3">Top IPv6 Sinners</h3>
-                <p class="text-l text-gray-400 mb-0">
+                <p class="text-base text-gray-400 mb-0">
                   The following domains are the top offenders of the IPv6 protocol. These domains
                   are the most visited websites in the world, yet they have not embraced the future,
                   IPv6.
                 </p>
-                <p class="text-l text-gray-400 mb-4">Shame on them!</p>
+                <p class="text-base text-gray-400 mb-4">Shame on them!</p>
 
                 <div class="grid grid-cols-2 gap-4">
                   <ul

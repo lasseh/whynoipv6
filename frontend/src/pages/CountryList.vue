@@ -46,7 +46,7 @@ onMounted(() => {
     <section class="relative">
       <div class="max-w-6xl mx-auto px-4 sm:px-6">
         <div class="pt-20 pb-4 md:pt-24 md:pb-4">
-          <div class="py-4 max-w-9xl mx-auto">
+          <div class="py-4 mx-auto">
             <!-- Page header -->
             <div class="sm:flex sm:justify-between sm:items-center mb-4">
               <!-- Left: Title -->

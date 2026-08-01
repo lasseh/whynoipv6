@@ -34,7 +34,7 @@
                 class="max-w-xl md:max-w-none md:w-full mx-auto md:col-span-5 lg:col-span-6 mb-8 md:mb-0 md:order-1"
               >
                 <h3 class="h4 mb-3">How does it work?</h3>
-                <p class="text-l text-gray-400 mb-0">
+                <p class="text-base text-gray-400 mb-0">
                   Just like how SaaS solutions give you the tools you need right when you need them,
                   our version of SaaS delivers a potent dose of public "shame" to domains still
                   lagging in IPv6 support. Through user-submitted campaigns and data-driven reports,
@@ -42,7 +42,7 @@
                   the IPv6 train.
                 </p>
                 <h3 class="h4 mb-3 mt-6">Why SaaS?</h3>
-                <p class="text-l text-gray-400 mb-0">
+                <p class="text-base text-gray-400 mb-0">
                   Because sometimes a bit of good-natured shaming is the most efficient way to spark
                   change. Our SaaS is committed to making IPv6 adoption a reality, one red-faced
                   domain at a time.
@@ -70,9 +70,7 @@
                         />
                       </svg>
                       <div>
-                        <div
-                          class="font-inter-tight text-md font-semibold text-zinc-200 mb-1 a-gradient"
-                        >
+                        <div class="text-base font-semibold text-zinc-200 mb-1 a-gradient">
                           Public Accountability
                         </div>
                         <div class="text-zinc-400 text-base">
@@ -99,9 +97,7 @@
                         />
                       </svg>
                       <div>
-                        <div
-                          class="font-inter-tight text-md font-semibold text-zinc-200 mb-1 a-gradient"
-                        >
+                        <div class="text-base font-semibold text-zinc-200 mb-1 a-gradient">
                           Community Engagement
                         </div>
                         <div class="text-zinc-400 text-base">
@@ -129,9 +125,7 @@
                         />
                       </svg>
                       <div>
-                        <div
-                          class="font-inter-tight text-md font-semibold text-zinc-200 mb-1 a-gradient"
-                        >
+                        <div class="text-base font-semibold text-zinc-200 mb-1 a-gradient">
                           User-Led Shaming
                         </div>
                         <div class="text-zinc-400 text-base">

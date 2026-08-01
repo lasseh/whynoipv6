@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, onScopeDispose, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
 import PageShell from '@/components/PageShell.vue'
@@ -17,9 +17,10 @@ import { getCampaign, getCampaignChangelog } from '@/api'
 import type { CampaignDetail, ChangelogItem } from '@/api'
 import { ApiProblem } from '@/api/problem'
 import { useCursorList } from '@/composables/useCursorList'
+import { setPageTitle } from '@/composables/usePageMeta'
 
 const route = useRoute()
-const uuid = String(route.params.uuid)
+const uuid = computed(() => String(route.params.uuid ?? ''))
 
 // One composite request per page (07 §4.7): the campaign header and the
 // members page ride the same response — no per-campaign fan-out.
@@ -28,12 +29,12 @@ const notFound = ref(false)
 
 const anchorTop = ref<HTMLElement | null>(null)
 
-const { items, page, meta, loading, error, next, prev } = useCursorList({
+const { items, page, meta, loading, error, next, prev, reload } = useCursorList({
   anchor: anchorTop,
   fetch: async (params, signal) => {
     try {
       const res = await getCampaign(
-        uuid,
+        uuid.value,
         params.cursor !== undefined ? { cursor: params.cursor } : undefined,
         signal,
       )
@@ -46,14 +47,39 @@ const { items, page, meta, loading, error, next, prev } = useCursorList({
   },
 })
 
+// Changelog fetch — aborted when superseded or on unmount.
 const campaignChangelog = ref<ChangelogItem[]>([])
-getCampaignChangelog(uuid)
-  .then((res) => {
-    campaignChangelog.value = res.items
-  })
-  .catch(() => {
-    campaignChangelog.value = []
-  })
+let changelogController: AbortController | null = null
+onScopeDispose(() => changelogController?.abort())
+
+function loadChangelog(u: string) {
+  changelogController?.abort()
+  const c = new AbortController()
+  changelogController = c
+  getCampaignChangelog(u, undefined, c.signal)
+    .then((res) => {
+      campaignChangelog.value = res.items
+    })
+    .catch(() => {
+      if (!c.signal.aborted) campaignChangelog.value = []
+    })
+}
+loadChangelog(uuid.value)
+
+// vue-router reuses the instance on param-only navigation
+// (/campaigns/a → /campaigns/b): refetch both surfaces.
+watch(uuid, (u) => {
+  if (!u) return
+  campaign.value = null
+  notFound.value = false
+  loadChangelog(u)
+  reload()
+})
+
+// Data-driven title once the campaign loads.
+watch(campaign, (c) => {
+  if (c) setPageTitle(c.name)
+})
 
 // Pagination
 </script>

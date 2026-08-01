@@ -60,7 +60,7 @@ onBeforeUnmount(() => {
           <header ref="anchorTop" class="mb-6">
             <div class="text-center sm:text-left">
               <h1 class="h3">Changelog</h1>
-              <p class="text-md text-gray-400 mt-1">
+              <p class="text-base text-gray-400 mt-1">
                 Confirmed IPv6 changes as the crawler observes them
               </p>
             </div>

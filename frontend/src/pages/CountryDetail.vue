@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, onScopeDispose, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
 import PageShell from '@/components/PageShell.vue'
@@ -17,28 +17,41 @@ import { getCountry, listCountryDomains } from '@/api'
 import type { Country } from '@/api'
 import { ApiProblem } from '@/api/problem'
 import { useCursorList } from '@/composables/useCursorList'
+import { setPageTitle } from '@/composables/usePageMeta'
 
 const route = useRoute()
-const code = String(route.params.id)
+const code = computed(() => String(route.params.id ?? ''))
 
 const country = ref<Country | null>(null)
 const notFound = ref(false)
 
-getCountry(code)
-  .then((res) => {
-    country.value = res
-  })
-  .catch((e: unknown) => {
-    if (e instanceof ApiProblem && e.code === 'not-found') notFound.value = true
-  })
+// Header fetch — aborted when superseded or on unmount.
+let countryController: AbortController | null = null
+onScopeDispose(() => countryController?.abort())
+
+function loadCountry(c: string) {
+  countryController?.abort()
+  const ctl = new AbortController()
+  countryController = ctl
+  country.value = null
+  notFound.value = false
+  getCountry(c, ctl.signal)
+    .then((res) => {
+      country.value = res
+    })
+    .catch((e: unknown) => {
+      if (e instanceof ApiProblem && e.code === 'not-found') notFound.value = true
+    })
+}
+loadCountry(code.value)
 
 const anchorTop = ref<HTMLElement | null>(null)
 
-const { items, page, loading, error, next, prev, setFilter } = useCursorList({
+const { items, page, loading, error, next, prev, setFilter, reload } = useCursorList({
   anchor: anchorTop,
   fetch: (params, signal) =>
     listCountryDomains(
-      code,
+      code.value,
       {
         class: params.filter === 'heroes' ? 'hero' : 'sinner',
         ...(params.cursor !== undefined && { cursor: params.cursor }),
@@ -46,6 +59,19 @@ const { items, page, loading, error, next, prev, setFilter } = useCursorList({
       signal,
     ),
   filterKeys: ['filter'],
+})
+
+// vue-router reuses the instance on param-only navigation
+// (/countries/NO → /countries/SE): refetch both surfaces.
+watch(code, (c) => {
+  if (!c) return
+  loadCountry(c)
+  reload()
+})
+
+// Data-driven title once the country loads.
+watch(country, (c) => {
+  if (c) setPageTitle(`IPv6 Adoption in ${c.name}`)
 })
 
 const queryFilter = ref(route.query.filter === 'heroes' ? 'heroes' : 'sinners')

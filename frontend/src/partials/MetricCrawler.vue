@@ -1,21 +1,27 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 
+import ApiError from '@/components/ApiError.vue'
+
 import { getOverviewStats } from '@/api'
 import type { GlobalStatsPoint } from '@/api'
+import { ApiProblem } from '@/api/problem'
 
 // Latest point of GET /stats/overview; old field mapping per §7.3:
 // base_domain→base_supported, nameserver→ns_supported, mx_record→mx_supported.
 const latest = ref<GlobalStatsPoint | null>(null)
 const isLoading = ref(true)
+const error = ref<ApiProblem | null>(null)
 
 async function getTotals() {
+  error.value = null
   try {
     const response = await getOverviewStats()
     const points = [...response.points].sort((a, b) => (a.day < b.day ? -1 : 1))
     latest.value = points.at(-1) ?? null
-  } catch {
+  } catch (e) {
     latest.value = null
+    error.value = ApiProblem.from(e)
   } finally {
     isLoading.value = false
   }
@@ -44,7 +50,10 @@ const formatLargeNumber = (number: number | null | undefined): string => {
 </script>
 
 <template>
-  <section v-if="!isLoading && latest">
+  <!-- Error state (§6.3) -->
+  <ApiError v-if="error" :problem="error" />
+
+  <section v-else-if="!isLoading && latest">
     <header class="mb-8">
       <div class="text-left">
         <h3 class="h4 mb-1">Overview</h3>
@@ -107,7 +116,7 @@ const formatLargeNumber = (number: number | null | undefined): string => {
     <header class="mb-8">
       <div class="text-left">
         <h3 class="h4 mb-1">Top 1000</h3>
-        <p class="text-l text-gray-400">
+        <p class="text-base text-gray-400">
           Among the top 1000 domains, the following are equipped with IPv6 support:
         </p>
       </div>

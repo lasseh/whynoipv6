@@ -42,7 +42,7 @@ const groups = computed(() => {
   <div class="max-w-6xl mx-auto px-4 sm:px-6">
     <header v-if="header" class="mb-4">
       <div class="text-left">
-        <h1 class="h3">{{ header }}</h1>
+        <h2 class="h3">{{ header }}</h2>
       </div>
     </header>
 
