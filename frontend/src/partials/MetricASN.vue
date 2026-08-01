@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, toRefs } from 'vue'
+import { computed, onScopeDispose, reactive, ref, toRefs, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import ApiError from '@/components/ApiError.vue'
+import FilterInput from '@/components/FilterInput.vue'
 import SegmentedTabs from '@/components/SegmentedTabs.vue'
 
 import { listASNs } from '@/api'
@@ -16,7 +17,6 @@ const props = withDefaults(defineProps<{ query?: string }>(), { query: '' })
 
 const router = useRouter()
 const route = useRoute()
-const searchQuery = ref(props.query)
 const error = ref<ApiProblem | null>(null)
 const state = reactive({
   asnData: [] as ASN[],
@@ -26,49 +26,62 @@ const orderBy = computed(() => {
   const sort = route.query.sort
   return sort === 'ipv6' ? 'ipv6' : 'ipv4'
 })
+// ?q= is the search scope; sort tabs apply when no search is active.
+const routeQ = computed(() => {
+  const q = route.query.q
+  return typeof q === 'string' && q.length >= 2 ? q : undefined
+})
+const searchQuery = ref(routeQ.value ?? props.query)
 
 const { asnData, isLoading } = toRefs(state)
 
-async function getAsnData(order: string = 'ipv4') {
+// The URL is the source of truth (§9.1, like useCursorList): tab clicks and
+// search submits only navigate; the route watcher is the sole fetch trigger,
+// and superseded or unmounted fetches abort.
+let controller: AbortController | null = null
+onScopeDispose(() => controller?.abort())
+
+async function load() {
+  controller?.abort()
+  const c = new AbortController()
+  controller = c
   error.value = null
   state.isLoading = true
   try {
-    const response = await listASNs({ sort: order === 'ipv6' ? 'count_v6' : 'count_total' })
+    const response = await listASNs(
+      routeQ.value !== undefined
+        ? { q: routeQ.value }
+        : { sort: orderBy.value === 'ipv6' ? 'count_v6' : 'count_total' },
+      c.signal,
+    )
+    if (c.signal.aborted) return
     state.asnData = response.items
   } catch (e) {
+    if (c.signal.aborted) return
     error.value = ApiProblem.from(e)
   } finally {
-    state.isLoading = false
+    if (controller === c) state.isLoading = false
   }
 }
 
-async function getOrderedAsnData(order: string) {
-  void getAsnData(order)
-  // Update the route without adding history and without refreshing the page
-  void router.replace({ query: { ...route.query, sort: order } })
+watch([routeQ, orderBy], ([q]) => {
+  if (q !== undefined) searchQuery.value = q
+  void load()
+})
+void load()
+
+function setSort(order: string) {
+  // Dropping ?q= returns the list to the chosen sort order.
+  const query = { ...route.query, sort: order }
+  delete query.q
+  void router.replace({ query })
 }
 
-// Search for ASN data
-async function searchAsn(query: string) {
+function searchAsn(query: string) {
   if (query.length < 2) {
     return
   }
-
-  error.value = null
-  state.asnData = []
-  state.isLoading = true
-  listASNs({ q: query })
-    .then((response) => {
-      state.asnData = response.items
-      // Update the URL with the search query
-      void router.replace({ query: { ...route.query, q: query } })
-    })
-    .catch((e) => {
-      error.value = ApiProblem.from(e)
-    })
-    .finally(() => {
-      state.isLoading = false
-    })
+  void router.replace({ query: { ...route.query, q: query } })
 }
 
 const barWidths = computed(() => (asn: ASN): [string, string] => {
@@ -85,16 +98,6 @@ const formatLargeNumber = (number: number): string => {
   return number >= 1000 ? `${(number / 1000).toFixed(0)}k` : number.toString()
 }
 
-onMounted(() => {
-  const urlSearchQuery = route.query.q
-
-  if (typeof urlSearchQuery === 'string' && urlSearchQuery.length >= 2) {
-    searchQuery.value = urlSearchQuery
-    void searchAsn(searchQuery.value)
-  } else {
-    void getAsnData(orderBy.value)
-  }
-})
 </script>
 
 <template>
@@ -108,34 +111,15 @@ onMounted(() => {
 
       <!-- Search -->
       <div class="hidden md:grid grid-flow-col sm:auto-cols-max justify-start sm:justify-end gap-2">
-        <form class="relative" @submit.prevent="searchAsn(searchQuery)">
-          <label for="action-search" class="sr-only">Search</label>
-          <input
-            id="action-search"
-            v-model="searchQuery"
-            class="form-input pl-9 bg-zinc-800 h-10"
-            type="search"
-            placeholder="Search…"
-          />
-          <button
-            class="absolute inset-0 right-auto group text-xs font-medium"
-            type="submit"
-            aria-label="Search"
-          >
-            <svg
-              class="w-4 h-4 shrink-0 fill-current text-zinc-500 group-hover:text-zinc-400 ml-3 mr-2"
-              viewBox="0 0 16 16"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <path
-                d="M7 14c-3.86 0-7-3.14-7-7s3.14-7 7-7 7 3.14 7 7-3.14 7-7 7zM7 2C4.243 2 2 4.243 2 7s2.243 5 5 5 5-2.243 5-5-2.243-5-5-5z"
-              />
-              <path
-                d="M15.707 14.293L13.314 11.9a8.019 8.019 0 01-1.414 1.414l2.393 2.393a.997.997 0 001.414 0 .999.999 0 000-1.414z"
-              />
-            </svg>
-          </button>
-        </form>
+        <FilterInput
+          v-model="searchQuery"
+          input-id="asn-search"
+          label="Search"
+          placeholder="Search…"
+          input-class="h-10"
+          button-class="text-xs font-medium"
+          @submit="searchAsn(searchQuery)"
+        />
       </div>
     </div>
 
@@ -152,34 +136,16 @@ onMounted(() => {
 
     <!-- Search Mobile -->
     <div class="md:hidden grid grid-flow-col sm:auto-cols-max gap-2 mb-2">
-      <form class="relative w-full" @submit.prevent="searchAsn(searchQuery)">
-        <label for="action-search-mobile" class="sr-only">Search</label>
-        <input
-          id="action-search-mobile"
-          v-model="searchQuery"
-          class="form-input pl-9 bg-zinc-800 h-10 w-full"
-          type="search"
-          placeholder="Search…"
-        />
-        <button
-          class="absolute inset-0 right-auto group text-xs font-medium"
-          type="submit"
-          aria-label="Search"
-        >
-          <svg
-            class="w-4 h-4 shrink-0 fill-current text-zinc-500 group-hover:text-zinc-400 ml-3 mr-2"
-            viewBox="0 0 16 16"
-            xmlns="http://www.w3.org/2000/svg"
-          >
-            <path
-              d="M7 14c-3.86 0-7-3.14-7-7s3.14-7 7-7 7 3.14 7 7-3.14 7-7 7zM7 2C4.243 2 2 4.243 2 7s2.243 5 5 5 5-2.243 5-5-2.243-5-5-5z"
-            />
-            <path
-              d="M15.707 14.293L13.314 11.9a8.019 8.019 0 01-1.414 1.414l2.393 2.393a.997.997 0 001.414 0 .999.999 0 000-1.414z"
-            />
-          </svg>
-        </button>
-      </form>
+      <FilterInput
+        v-model="searchQuery"
+        input-id="asn-search-mobile"
+        label="Search"
+        placeholder="Search…"
+        class="w-full"
+        input-class="h-10 w-full"
+        button-class="text-xs font-medium"
+        @submit="searchAsn(searchQuery)"
+      />
     </div>
 
     <!-- Filter Buttons -->
@@ -190,7 +156,7 @@ onMounted(() => {
           { value: 'ipv6', label: 'IPv6' },
         ]"
         :model-value="orderBy"
-        @update:model-value="getOrderedAsnData"
+        @update:model-value="setSort"
       />
     </div>
 
