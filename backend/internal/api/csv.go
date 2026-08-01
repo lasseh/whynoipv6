@@ -75,44 +75,68 @@ func csvTime(p *time.Time) string {
 	return p.UTC().Format(time.RFC3339)
 }
 
-// domainCSVHeader is the defined /domains* column set — the §4.2
-// summary-row fields flattened.
-var domainCSVHeader = []string{
-	"host", "rank", "kind", "parent", "classification", "class_flags", "saint",
-	"base_status", "base_since", "www_status", "www_since",
-	"ns_status", "ns_since", "mx_status", "mx_since",
-	"conn_status", "conn_since", "resources_status", "resources_since",
-	"tld", "country_code", "country_name", "asn_number", "asn_name",
-	"dns_provider_id", "dns_provider_name", "hosting_provider", "last_checked_at",
+// domainCSV is the one declaration of the /domains* CSV projection — the
+// §4.2 summary-row fields flattened, each column name adjacent to its cell
+// extractor so header and rows cannot misalign (the ConfirmedSextet
+// declare-once rule at CSV scale).
+var domainCSV = []struct {
+	name string
+	cell func(*DomainSummary) string
+}{
+	{"host", func(d *DomainSummary) string { return d.Host }},
+	{"rank", func(d *DomainSummary) string { return csvInt32(d.Rank) }},
+	{"kind", func(d *DomainSummary) string { return d.Kind }},
+	{"parent", func(d *DomainSummary) string { return csvStr(d.Parent) }},
+	{"classification", func(d *DomainSummary) string { return d.Classification }},
+	{"class_flags", func(d *DomainSummary) string { return strings.Join(d.ClassFlags, ";") }},
+	{"saint", func(d *DomainSummary) string { return strconv.FormatBool(d.Saint) }},
+	{"base_status", func(d *DomainSummary) string { return csvStr(d.Status.Base.Value) }},
+	{"base_since", func(d *DomainSummary) string { return csvTime(d.Status.Base.Since) }},
+	{"www_status", func(d *DomainSummary) string { return csvStr(d.Status.WWW.Value) }},
+	{"www_since", func(d *DomainSummary) string { return csvTime(d.Status.WWW.Since) }},
+	{"ns_status", func(d *DomainSummary) string { return csvStr(d.Status.NS.Value) }},
+	{"ns_since", func(d *DomainSummary) string { return csvTime(d.Status.NS.Since) }},
+	{"mx_status", func(d *DomainSummary) string { return csvStr(d.Status.MX.Value) }},
+	{"mx_since", func(d *DomainSummary) string { return csvTime(d.Status.MX.Since) }},
+	{"conn_status", func(d *DomainSummary) string { return csvStr(d.Status.Conn.Value) }},
+	{"conn_since", func(d *DomainSummary) string { return csvTime(d.Status.Conn.Since) }},
+	{"resources_status", func(d *DomainSummary) string { return csvStr(d.Status.Resources.Value) }},
+	{"resources_since", func(d *DomainSummary) string { return csvTime(d.Status.Resources.Since) }},
+	{"tld", func(d *DomainSummary) string { return csvStr(d.TLD) }},
+	{"country_code", func(d *DomainSummary) string { return d.Country.Code }},
+	{"country_name", func(d *DomainSummary) string { return d.Country.Name }},
+	{"asn_number", func(d *DomainSummary) string { return strconv.FormatInt(d.ASN.Number, 10) }},
+	{"asn_name", func(d *DomainSummary) string { return d.ASN.Name }},
+	{"dns_provider_id", func(d *DomainSummary) string {
+		if d.DNSProvider == nil {
+			return ""
+		}
+		return strconv.FormatInt(d.DNSProvider.ID, 10)
+	}},
+	{"dns_provider_name", func(d *DomainSummary) string {
+		if d.DNSProvider == nil {
+			return ""
+		}
+		return d.DNSProvider.Name
+	}},
+	{"hosting_provider", func(d *DomainSummary) string { return csvStr(d.HostingProvider) }},
+	{"last_checked_at", func(d *DomainSummary) string { return csvTime(d.LastCheckedAt) }},
 }
 
 func writeDomainsCSV(w http.ResponseWriter, items []DomainSummary) {
+	header := make([]string, len(domainCSV))
+	for i, c := range domainCSV {
+		header[i] = c.name
+	}
 	rows := make([][]string, len(items))
 	for i := range items {
-		d := &items[i]
-		providerID, providerName := "", ""
-		if d.DNSProvider != nil {
-			providerID = strconv.FormatInt(d.DNSProvider.ID, 10)
-			providerName = d.DNSProvider.Name
+		row := make([]string, len(domainCSV))
+		for j, c := range domainCSV {
+			row[j] = c.cell(&items[i])
 		}
-		st := func(o StatusObject) (string, string) { return csvStr(o.Value), csvTime(o.Since) }
-		base, baseSince := st(d.Status.Base)
-		www, wwwSince := st(d.Status.WWW)
-		ns, nsSince := st(d.Status.NS)
-		mx, mxSince := st(d.Status.MX)
-		conn, connSince := st(d.Status.Conn)
-		res, resSince := st(d.Status.Resources)
-		rows[i] = []string{
-			d.Host, csvInt32(d.Rank), d.Kind, csvStr(d.Parent), d.Classification,
-			strings.Join(d.ClassFlags, ";"), strconv.FormatBool(d.Saint),
-			base, baseSince, www, wwwSince, ns, nsSince, mx, mxSince,
-			conn, connSince, res, resSince,
-			csvStr(d.TLD), d.Country.Code, d.Country.Name,
-			strconv.FormatInt(d.ASN.Number, 10), d.ASN.Name,
-			providerID, providerName, csvStr(d.HostingProvider), csvTime(d.LastCheckedAt),
-		}
+		rows[i] = row
 	}
-	writeCSV(w, "domains.csv", domainCSVHeader, rows)
+	writeCSV(w, "domains.csv", header, rows)
 }
 
 func writeCountriesCSV(w http.ResponseWriter, items []CountryBody) {

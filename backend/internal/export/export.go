@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -63,12 +64,18 @@ type Row struct {
 	LastChecked     *string `parquet:"last_checked,optional" json:"last_checked"`
 }
 
-// columns is the CSV header and the Table Schema field order.
-var columns = []string{
-	"host", "rank", "kind", "parent", "classification", "class_flags", "saint",
-	"base", "www", "ns", "mx", "conn", "resources",
-	"base_since", "www_since", "ns_since", "mx_since", "conn_since", "resources_since",
-	"tld", "country", "asn", "dns_provider", "hosting_provider", "last_checked",
+// columns is the CSV header and the Table Schema field order — derived from
+// Row's parquet tags, so the struct is the single declaration of the
+// exported column set and the header cannot drift from the fields.
+var columns = rowColumns()
+
+func rowColumns() []string {
+	t := reflect.TypeOf(Row{})
+	cols := make([]string, t.NumField())
+	for i := range cols {
+		cols[i] = strings.SplitN(t.Field(i).Tag.Get("parquet"), ",", 2)[0]
+	}
+	return cols
 }
 
 // Frictionless Table Schema types + the two published formats.
@@ -79,6 +86,8 @@ const (
 )
 
 // columnTypes maps column → Frictionless Table Schema type.
+//
+//nolint:goconst // a literal data table; repeated column names are values
 var columnTypes = map[string]string{
 	"rank": "integer", "saint": "boolean", "asn": "integer",
 	"base_since": typeDatetime, "www_since": typeDatetime, "ns_since": typeDatetime,
@@ -229,25 +238,33 @@ func exportRow(d *db.ExportRowsRow) Row {
 	}
 }
 
+// csv renders the row in field order — the same order columns derives — so
+// header and cells cannot misalign. An unrenderable field kind is a
+// programmer error (a new field needs a case here) and panics; the export
+// unit test renders a fully-populated Row to catch it before any nightly run.
 func (r *Row) csv() []string {
-	str := func(p *string) string {
-		if p == nil {
-			return ""
+	v := reflect.ValueOf(*r)
+	out := make([]string, v.NumField())
+	for i := range out {
+		f := v.Field(i)
+		if f.Kind() == reflect.Pointer {
+			if f.IsNil() {
+				continue // empty cell
+			}
+			f = f.Elem()
 		}
-		return *p
+		switch f.Kind() {
+		case reflect.String:
+			out[i] = f.String()
+		case reflect.Bool:
+			out[i] = strconv.FormatBool(f.Bool())
+		case reflect.Int64:
+			out[i] = strconv.FormatInt(f.Int(), 10)
+		default:
+			panic(fmt.Sprintf("export: no CSV rendering for Row field kind %s", f.Kind()))
+		}
 	}
-	rank := ""
-	if r.Rank != nil {
-		rank = strconv.FormatInt(*r.Rank, 10)
-	}
-	return []string{
-		r.Host, rank, r.Kind, str(r.Parent), r.Classification, r.ClassFlags,
-		strconv.FormatBool(r.Saint),
-		str(r.Base), str(r.WWW), str(r.NS), str(r.MX), str(r.Conn), str(r.Resources),
-		str(r.BaseSince), str(r.WWWSince), str(r.NSSince), str(r.MXSince), str(r.ConnSince), str(r.ResourcesSince),
-		str(r.TLD), r.Country, strconv.FormatInt(r.ASN, 10),
-		str(r.DNSProvider), str(r.HostingProvider), str(r.LastChecked),
-	}
+	return out
 }
 
 // parquetChunk batches the streaming parquet writes; small enough to keep
