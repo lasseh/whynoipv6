@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, reactive } from 'vue'
 import type { Dimension, DomainDetail, HistoryPoint } from '@/api'
+import InformationalCard from '@/components/InformationalCard.vue'
 import RatingStars from '@/components/RatingStars.vue'
 import Tracker from '@/components/Tracker.vue'
 import { statusCardBorderClass, statusCardTextClass, statusLabel } from '@/utils/status'
@@ -212,7 +213,9 @@ const formattedTsCheck = computed(() =>
     </li>
   </ul>
 
-  <div class="flex items-center justify-between text-xs font-normal text-gray-400">
+  <InformationalCard :informational="domain.informational" />
+
+  <div class="mt-4 flex items-center justify-between text-xs font-normal text-gray-400">
     <span>Last checked: {{ formattedTsCheck }}</span>
     <RouterLink
       to="/faq?page=2"

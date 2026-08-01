@@ -69,13 +69,15 @@ export const domainDetail: DomainDetail = {
     conn: status(null),
     resources: status(null),
   },
+  // One of each shape the §4.3 masking can produce: a masked null, a stored
+  // partial (legal only on ptr/parity), and both plain verdicts.
   informational: {
     dnssec: null,
-    ptr: null,
-    smtp: null,
-    parity: null,
-    latency_v4_ms: null,
-    latency_v6_ms: null,
+    ptr: 'partial',
+    smtp: 'supported',
+    parity: 'unsupported',
+    latency_v4_ms: 162,
+    latency_v6_ms: 46,
   },
   tld: 'com',
   country: { code: 'NO', name: 'Norway' },

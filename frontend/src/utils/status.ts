@@ -156,6 +156,15 @@ export function liveStatus(value: string | undefined): LiveStatusView {
   )
 }
 
+// The §4.3 informational values on a tracked domain: the same vocabulary as
+// the live check, except `null` — which masking produces when the stored
+// observation was `error` or `inconsistent` (07 §4.4). The domain HAS been
+// scanned, so "Not checked" would be a lie; the value is simply withheld.
+export function infoStatus(value: string | null): LiveStatusView {
+  if (value === null) return { icon: 'minus', class: 'text-zinc-600', label: 'No result' }
+  return liveStatus(value)
+}
+
 /** Hover tooltip on status icons — the old wording for the legacy three states. */
 export function statusTooltip(value: StatusValue): string {
   switch (value) {
