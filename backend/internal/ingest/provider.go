@@ -118,5 +118,5 @@ func ProviderAdd(ctx context.Context, q *db.Queries, name string, suffixes []str
 		}
 		return nil
 	}
-	return q.ProviderAppendSuffixes(ctx, db.ProviderAppendSuffixesParams{ID: row.ID, Column2: norm})
+	return q.ProviderAppendSuffixes(ctx, db.ProviderAppendSuffixesParams{ID: row.ID, Suffixes: norm})
 }

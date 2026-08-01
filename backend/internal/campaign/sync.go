@@ -241,7 +241,7 @@ func syncMembers(ctx context.Context, q *db.Queries, ens *entityEnsurer, campaig
 		}
 	}
 	removed, err := q.CampaignRemoveMembersNotIn(ctx, db.CampaignRemoveMembersNotInParams{
-		CampaignID: campaignID, Column2: desired,
+		CampaignID: campaignID, DomainIds: desired,
 	})
 	if err != nil {
 		return fmt.Errorf("campaign sync: remove members: %w", err)

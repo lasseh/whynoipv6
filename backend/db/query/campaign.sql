@@ -27,7 +27,7 @@ VALUES ($1, $2) ON CONFLICT DO NOTHING;
 
 -- name: CampaignRemoveMembersNotIn :execrows
 DELETE FROM campaign_domain
-WHERE campaign_id = $1 AND domain_id <> ALL($2::bigint[]);
+WHERE campaign_id = @campaign_id AND domain_id <> ALL(@domain_ids::bigint[]);
 
 -- name: CampaignDisableAbsent :many
 UPDATE campaign SET disabled = true, updated_at = now()

@@ -42,17 +42,17 @@ func (q *Queries) DomainStampHostingProvider(ctx context.Context, arg DomainStam
 const ProviderAppendSuffixes = `-- name: ProviderAppendSuffixes :exec
 UPDATE dns_provider
 SET ns_suffixes = (SELECT array_agg(DISTINCT s ORDER BY s)
-                   FROM unnest(ns_suffixes || $2::text[]) AS s)
-WHERE id = $1
+                   FROM unnest(ns_suffixes || $1::text[]) AS s)
+WHERE id = $2
 `
 
 type ProviderAppendSuffixesParams struct {
-	ID      int64    `json:"id"`
-	Column2 []string `json:"column_2"`
+	Suffixes []string `json:"suffixes"`
+	ID       int64    `json:"id"`
 }
 
 func (q *Queries) ProviderAppendSuffixes(ctx context.Context, arg ProviderAppendSuffixesParams) error {
-	_, err := q.db.Exec(ctx, ProviderAppendSuffixes, arg.ID, arg.Column2)
+	_, err := q.db.Exec(ctx, ProviderAppendSuffixes, arg.Suffixes, arg.ID)
 	return err
 }
 

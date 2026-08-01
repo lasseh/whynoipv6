@@ -255,11 +255,11 @@ WHERE campaign_id = $1 AND domain_id <> ALL($2::bigint[])
 
 type CampaignRemoveMembersNotInParams struct {
 	CampaignID int32   `json:"campaign_id"`
-	Column2    []int64 `json:"column_2"`
+	DomainIds  []int64 `json:"domain_ids"`
 }
 
 func (q *Queries) CampaignRemoveMembersNotIn(ctx context.Context, arg CampaignRemoveMembersNotInParams) (int64, error) {
-	result, err := q.db.Exec(ctx, CampaignRemoveMembersNotIn, arg.CampaignID, arg.Column2)
+	result, err := q.db.Exec(ctx, CampaignRemoveMembersNotIn, arg.CampaignID, arg.DomainIds)
 	if err != nil {
 		return 0, err
 	}

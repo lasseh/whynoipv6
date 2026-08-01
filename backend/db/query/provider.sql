@@ -13,8 +13,8 @@ INSERT INTO dns_provider (name, ns_suffixes) VALUES ($1, $2) RETURNING id;
 -- name: ProviderAppendSuffixes :exec
 UPDATE dns_provider
 SET ns_suffixes = (SELECT array_agg(DISTINCT s ORDER BY s)
-                   FROM unnest(ns_suffixes || $2::text[]) AS s)
-WHERE id = $1;
+                   FROM unnest(ns_suffixes || @suffixes::text[]) AS s)
+WHERE id = @id;
 
 -- name: ProviderDelete :execrows
 DELETE FROM dns_provider WHERE name = $1;
