@@ -129,8 +129,11 @@ Two verbs need more than `DATABASE_URL`:
 # geoip update — no DB, needs the token + the geoip volume (this is what geoip-init runs):
 docker compose run --rm geoip-init
 
-# export — needs the datasets volume, so base it on the api service:
-docker compose run --rm --entrypoint /v6ctl api export
+# export — needs the datasets volume, so base it on the api service. --user root
+# because the named volume is root-owned while the distroless image runs as
+# nonroot (same mismatch geoip-init solves with `user: root`); the api reads
+# the root-owned output files fine:
+docker compose run --rm --user root --entrypoint /v6ctl api export
 
 # campaign sync — the campaign volume (cloned/refreshed by campaign-init) is
 # mounted on the crawler service, which also sets CAMPAIGN_PULL/PUSH=false
