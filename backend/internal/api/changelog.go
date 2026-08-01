@@ -5,12 +5,12 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/lasseh/whynoipv6/internal/domain"
 	"github.com/lasseh/whynoipv6/internal/postgres"
 	db "github.com/lasseh/whynoipv6/internal/postgres/db"
 )
@@ -98,18 +98,8 @@ func (s *Server) listChangelog(w http.ResponseWriter, r *http.Request) {
 
 // listDomainChangelog is GET /domains/{host}/changelog (native PK read).
 func (s *Server) listDomainChangelog(w http.ResponseWriter, r *http.Request) {
-	host, err := domain.Canonicalize(chi.URLParam(r, "host"))
-	if err != nil {
-		NotFound(w, r, "Domain not found", "The host is not a valid public domain name.")
-		return
-	}
-	d, err := s.q.DomainByHost(r.Context(), host)
-	if errors.Is(err, pgx.ErrNoRows) {
-		NotFound(w, r, "Domain not found", "No such domain: "+host)
-		return
-	}
-	if err != nil {
-		InternalError(w, r, err)
+	d, ok := s.domainByPathHost(w, r)
+	if !ok {
 		return
 	}
 	s.serveChangelogFeed(w, r, &d.ID)
@@ -217,7 +207,7 @@ func (s *Server) listCountryChangelog(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := s.q.CountryIDByCode(r.Context(), code)
 	if errors.Is(err, pgx.ErrNoRows) {
-		NotFound(w, r, "Country not found", "No such country: "+code)
+		NotFound(w, r, "Country not found", "No such country: "+strings.ToUpper(code))
 		return
 	}
 	if err != nil {
@@ -254,18 +244,8 @@ func (s *Server) listCampaignDomainChangelog(w http.ResponseWriter, r *http.Requ
 	if !ok {
 		return
 	}
-	host, err := domain.Canonicalize(chi.URLParam(r, "host"))
-	if err != nil {
-		NotFound(w, r, "Domain not found", "The host is not a valid public domain name.")
-		return
-	}
-	d, err := s.q.DomainByHost(r.Context(), host)
-	if errors.Is(err, pgx.ErrNoRows) {
-		NotFound(w, r, "Domain not found", "No such domain: "+host)
-		return
-	}
-	if err != nil {
-		InternalError(w, r, err)
+	d, ok := s.domainByPathHost(w, r)
+	if !ok {
 		return
 	}
 	member, err := s.q.CampaignHasMember(r.Context(), db.CampaignHasMemberParams{
@@ -276,7 +256,7 @@ func (s *Server) listCampaignDomainChangelog(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	if !member {
-		NotFound(w, r, "Domain not found", host+" is not a member of this campaign.")
+		NotFound(w, r, "Domain not found", d.Host+" is not a member of this campaign.")
 		return
 	}
 	s.serveChangelogFeed(w, r, &d.ID)

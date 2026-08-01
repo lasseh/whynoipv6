@@ -518,18 +518,8 @@ func domainKey(sortKey string) func(*postgres.DomainRow) []any {
 // sub-collection (07 §4.3): host-ordered, exact count, rank-NULL rows
 // visible (sub-collection visibility, §2.2).
 func (s *Server) listSubdomains(w http.ResponseWriter, r *http.Request) {
-	host, err := domain.Canonicalize(chi.URLParam(r, "host"))
-	if err != nil {
-		NotFound(w, r, "Domain not found", "The host is not a valid public domain name.")
-		return
-	}
-	d, err := s.q.DomainByHost(r.Context(), host)
-	if errors.Is(err, pgx.ErrNoRows) {
-		NotFound(w, r, "Domain not found", "No such domain: "+host)
-		return
-	}
-	if err != nil {
-		InternalError(w, r, err)
+	d, ok := s.domainByPathHost(w, r)
+	if !ok {
 		return
 	}
 	q := r.URL.Query()
@@ -675,6 +665,26 @@ func pgTimePtr(t pgtype.Timestamptz) *time.Time {
 	}
 	u := t.Time.UTC()
 	return &u
+}
+
+// domainByPathHost resolves the {host} path param to its domain row
+// (path-parameter failure policy, 07 §2.8).
+func (s *Server) domainByPathHost(w http.ResponseWriter, r *http.Request) (db.DomainByHostRow, bool) {
+	host, err := domain.Canonicalize(chi.URLParam(r, "host"))
+	if err != nil {
+		NotFound(w, r, "Domain not found", "The host is not a valid public domain name.")
+		return db.DomainByHostRow{}, false
+	}
+	row, err := s.q.DomainByHost(r.Context(), host)
+	if errors.Is(err, pgx.ErrNoRows) {
+		NotFound(w, r, "Domain not found", "No such domain: "+host)
+		return row, false
+	}
+	if err != nil {
+		InternalError(w, r, err)
+		return row, false
+	}
+	return row, true
 }
 
 // getDomain is GET /domains/{host} (07 §4.3). Disabled and rank-NULL

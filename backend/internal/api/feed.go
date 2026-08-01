@@ -2,7 +2,6 @@ package api
 
 import (
 	"encoding/xml"
-	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -10,9 +9,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/jackc/pgx/v5"
 
-	"github.com/lasseh/whynoipv6/internal/domain"
 	"github.com/lasseh/whynoipv6/internal/postgres"
 )
 
@@ -223,18 +220,8 @@ func (s *Server) globalFeedScope(r *http.Request) (*feedScope, error) {
 }
 
 func (s *Server) domainFeedScope(w http.ResponseWriter, r *http.Request) (*feedScope, bool) {
-	host, err := domain.Canonicalize(chi.URLParam(r, "host"))
-	if err != nil {
-		NotFound(w, r, "Domain not found", "The host is not a valid public domain name.")
-		return nil, false
-	}
-	d, err := s.q.DomainByHost(r.Context(), host)
-	if errors.Is(err, pgx.ErrNoRows) {
-		NotFound(w, r, "Domain not found", "No such domain: "+host)
-		return nil, false
-	}
-	if err != nil {
-		InternalError(w, r, err)
+	d, ok := s.domainByPathHost(w, r)
+	if !ok {
 		return nil, false
 	}
 	rows, err := postgres.ListChangelog(r.Context(), s.pool,
@@ -249,28 +236,18 @@ func (s *Server) domainFeedScope(w http.ResponseWriter, r *http.Request) (*feedS
 		items[i] = changelogItem(&rows[i])
 	}
 	return &feedScope{
-		Title:   "WhyNoIPv6 — " + host,
-		ListURL: s.opts.PublicBaseURL + "/domains/" + host + "/changelog",
+		Title:   "WhyNoIPv6 — " + d.Host,
+		ListURL: s.opts.PublicBaseURL + "/domains/" + d.Host + "/changelog",
 		Items:   items,
 	}, true
 }
 
 func (s *Server) countryFeedScope(w http.ResponseWriter, r *http.Request) (*feedScope, bool) {
-	code := chi.URLParam(r, "code")
-	if len(code) != 2 {
-		NotFound(w, r, "Country not found", "Country codes are two-letter ISO 3166-1 alpha-2.")
+	c, ok := s.countryByPathCode(w, r)
+	if !ok {
 		return nil, false
 	}
-	c, err := s.q.CountryByCode(r.Context(), code)
-	if errors.Is(err, pgx.ErrNoRows) {
-		NotFound(w, r, "Country not found", "No such country: "+code)
-		return nil, false
-	}
-	if err != nil {
-		InternalError(w, r, err)
-		return nil, false
-	}
-	id, err := s.q.CountryIDByCode(r.Context(), code)
+	id, err := s.q.CountryIDByCode(r.Context(), strings.TrimSpace(c.Code))
 	if err != nil {
 		InternalError(w, r, err)
 		return nil, false

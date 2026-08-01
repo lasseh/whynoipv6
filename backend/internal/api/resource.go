@@ -46,18 +46,8 @@ func resourceHostBody(row *db.ResourceHostByHostRow) ResourceHostBody {
 // listDomainResources is GET /domains/{host}/resources — bounded small,
 // exact count, trivial page; items: [] while resources are dormant.
 func (s *Server) listDomainResources(w http.ResponseWriter, r *http.Request) {
-	host, err := domain.Canonicalize(chi.URLParam(r, "host"))
-	if err != nil {
-		NotFound(w, r, "Domain not found", "The host is not a valid public domain name.")
-		return
-	}
-	d, err := s.q.DomainByHost(r.Context(), host)
-	if errors.Is(err, pgx.ErrNoRows) {
-		NotFound(w, r, "Domain not found", "No such domain: "+host)
-		return
-	}
-	if err != nil {
-		InternalError(w, r, err)
+	d, ok := s.domainByPathHost(w, r)
+	if !ok {
 		return
 	}
 	generation, asOf, err := s.generation(r.Context())

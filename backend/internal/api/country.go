@@ -9,6 +9,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
+	db "github.com/lasseh/whynoipv6/internal/postgres/db"
 )
 
 // CountryBody is the §4.5 representation. v6_sites is the snake_case wire
@@ -93,20 +94,30 @@ func (s *Server) listCountries(w http.ResponseWriter, r *http.Request) {
 	WriteJSON(w, http.StatusOK, ListEnvelope{Items: items, Page: Page{}, Meta: meta})
 }
 
-// getCountry is GET /countries/{code} (07 §4.5).
-func (s *Server) getCountry(w http.ResponseWriter, r *http.Request) {
+// countryByPathCode resolves the {code} path param to its country row
+// (path-parameter failure policy, 07 §2.8).
+func (s *Server) countryByPathCode(w http.ResponseWriter, r *http.Request) (db.CountryByCodeRow, bool) {
 	code := chi.URLParam(r, "code")
 	if len(code) != 2 {
 		NotFound(w, r, "Country not found", "Country codes are two-letter ISO 3166-1 alpha-2.")
-		return
+		return db.CountryByCodeRow{}, false
 	}
 	row, err := s.q.CountryByCode(r.Context(), code)
 	if errors.Is(err, pgx.ErrNoRows) {
 		NotFound(w, r, "Country not found", "No such country: "+strings.ToUpper(code))
-		return
+		return row, false
 	}
 	if err != nil {
 		InternalError(w, r, err)
+		return row, false
+	}
+	return row, true
+}
+
+// getCountry is GET /countries/{code} (07 §4.5).
+func (s *Server) getCountry(w http.ResponseWriter, r *http.Request) {
+	row, ok := s.countryByPathCode(w, r)
+	if !ok {
 		return
 	}
 	generation, asOf, err := s.generation(r.Context())
@@ -126,18 +137,9 @@ func (s *Server) getCountry(w http.ResponseWriter, r *http.Request) {
 // listCountryDomains is GET /countries/{code}/domains — the country-scoped
 // leaderboard, ≡ /domains?country={code} (07 §4.5).
 func (s *Server) listCountryDomains(w http.ResponseWriter, r *http.Request) {
-	code := chi.URLParam(r, "code")
-	if len(code) != 2 {
-		NotFound(w, r, "Country not found", "Country codes are two-letter ISO 3166-1 alpha-2.")
+	row, ok := s.countryByPathCode(w, r)
+	if !ok {
 		return
 	}
-	if _, err := s.q.CountryByCode(r.Context(), code); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			NotFound(w, r, "Country not found", "No such country: "+strings.ToUpper(code))
-			return
-		}
-		InternalError(w, r, err)
-		return
-	}
-	s.serveDomainList(w, r, url.Values{paramCountry: {strings.ToUpper(code)}})
+	s.serveDomainList(w, r, url.Values{paramCountry: {strings.TrimSpace(row.Code)}})
 }
