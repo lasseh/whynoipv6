@@ -40,14 +40,6 @@ FROM (
 ) agg
 WHERE p.id = agg.dns_provider_id;
 
--- The attribution stamp: touches ONLY the pivot column, never the
--- commit/trust machine's columns (06-ingest.md §6.10).
--- name: DomainStampDNSProvider :exec
-UPDATE domain SET dns_provider_id = $2 WHERE id = $1;
-
--- name: DomainStampHostingProvider :exec
-UPDATE domain SET hosting_provider = $2 WHERE id = $1;
-
 -- provider remove clears referencing domains first (FK); they re-stamp on
 -- their next scan commit (06-ingest.md §6.11 self-healing).
 -- name: ProviderClearDomains :execrows

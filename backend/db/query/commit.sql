@@ -21,6 +21,11 @@ UPDATE domain SET
   latency_v4_ms = @latency_v4_ms, latency_v6_ms = @latency_v6_ms,
   classification = @classification, class_flags = @class_flags, saint = @saint,
   asn_id = @asn_id, country_id = @country_id,
+  -- The provider pivots ride the same fenced UPDATE (06 §6.10): stamped only
+  -- on definitive-base scans (the stamp flags), untouched otherwise — a lost
+  -- lease can no longer leave pivots from a discarded scan.
+  dns_provider_id = CASE WHEN @stamp_dns_provider_id::boolean THEN @dns_provider_id ELSE dns_provider_id END,
+  hosting_provider = CASE WHEN @stamp_hosting_provider::boolean THEN @hosting_provider ELSE hosting_provider END,
   disabled = @disabled, disabled_reason = @disabled_reason, disabled_at = @disabled_at,
   dead_streak = @dead_streak, error_streak = @error_streak,
   next_check_at = @next_check_at, last_checked_at = @ts, last_counted_at = @last_counted_at,

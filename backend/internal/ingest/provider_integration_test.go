@@ -11,8 +11,8 @@ import (
 )
 
 // TestProviderRoundTrip covers the P1.13 verbs surface: add → list
-// round-trips a suffix set; the stamping writer touches only the pivot
-// column; remove leaves stamped domains (self-healing on next commit).
+// round-trips a suffix set; the mapping resolves an observed NS set;
+// remove clears stamped domains (self-healing on next commit).
 func TestProviderRoundTrip(t *testing.T) {
 	pool := pgtest.NewDB(t)
 	ctx := context.Background()
@@ -44,26 +44,17 @@ func TestProviderRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := StampDNSProvider(ctx, q, m, domainID, []string{"gina.ns.cloudflare.com"}); err != nil {
+	stamp := m.ProviderForNSSet([]string{"gina.ns.cloudflare.com"})
+	if stamp == nil {
+		t.Fatal("mapping did not resolve the observed NS set")
+	}
+	// The write itself now rides the scan commit's fenced UPDATE
+	// (crawler.TestCommitPivots); stamp directly to stage the remove path.
+	if _, err := pool.Exec(ctx,
+		"UPDATE domain SET dns_provider_id = $2 WHERE id = $1", domainID, *stamp); err != nil {
 		t.Fatal(err)
 	}
-
-	// Read-back: pivot set; no scan/changelog rows; no confirmed-status writes.
 	var providerID *int64
-	var baseStatus *string
-	var scans, changelogs int
-	if err := pool.QueryRow(ctx, `SELECT d.dns_provider_id, d.base_status::text,
-		(SELECT count(*) FROM scan), (SELECT count(*) FROM changelog)
-		FROM domain d WHERE d.id=$1`, domainID).
-		Scan(&providerID, &baseStatus, &scans, &changelogs); err != nil {
-		t.Fatal(err)
-	}
-	if providerID == nil {
-		t.Error("dns_provider_id not stamped")
-	}
-	if baseStatus != nil || scans != 0 || changelogs != 0 {
-		t.Errorf("stamping wrote beyond the pivot: base=%v scans=%d changelog=%d", baseStatus, scans, changelogs)
-	}
 
 	// Remove: referencing domains are cleared first (FK), then the row is
 	// deleted; they re-stamp on their next scan commit (§6.11 self-heal).

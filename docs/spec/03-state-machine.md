@@ -302,6 +302,8 @@ UPDATE domain SET
   latency_v4_ms = @latency_v4_ms, latency_v6_ms = @latency_v6_ms,
   classification = @classification, class_flags = @class_flags, saint = @saint,
   asn_id = @asn_id, country_id = @country_id,
+  dns_provider_id = CASE WHEN @stamp_dns_provider_id::boolean THEN @dns_provider_id ELSE dns_provider_id END,
+  hosting_provider = CASE WHEN @stamp_hosting_provider::boolean THEN @hosting_provider ELSE hosting_provider END,
   disabled = @disabled, disabled_reason = @disabled_reason, disabled_at = @disabled_at,
   dead_streak = @dead_streak, error_streak = @error_streak,
   next_check_at = @next_check_at, last_checked_at = @t, last_counted_at = @last_counted_at,
@@ -309,7 +311,7 @@ UPDATE domain SET
 WHERE id = @domain_id AND claimed_at = @lease;          -- LEASE FENCE
 ```
 
-Columns deliberately NOT touched by the commit: `host, kind, parent_id, rank, created_by, orphaned_at, last_requested_at, created_at` (owned by ingest, the lifecycle sweep, and the API). While `crawler.resources.enabled=false` the `resources` dimension is excluded from the step-2 loop, so its parameters are not produced by the loop. `@resources_status`, `@resources_pending`, `@resources_pending_count`, `@resources_since` are bound from the claimed `DimState` (`Status`/`Pending`/`Since` = NULL, `PendingCount` = 0). **Decision:** `@resources_observed` is bound to NULL directly — the `DimState` snapshot (section 16) carries no `Observed` field, and `resources_observed` is provably always NULL while the flag is `false` (it is written only by the step-2 loop, which never runs for `resources` here), so `ComputeCommit` needs no snapshot `Observed` source. Net effect: all six `resources_*` columns stay NULL. (For every in-loop dimension `d_observed` is always set from `O[d]` in step 2 — even on `error`/`inconsistent` — so no in-loop `*_observed` param is ever written back from the snapshot.)
+Columns deliberately NOT touched by the commit: `host, kind, parent_id, rank, created_by, orphaned_at, last_requested_at, created_at` (owned by ingest, the lifecycle sweep, and the API). The two provider pivots (06-ingest.md §6.10) ride the same UPDATE behind their `@stamp_*` flags: false (a deferred scan, or no enricher) writes the column back to itself, so §6.6's never-touch timing rules hold inside the one fenced statement. While `crawler.resources.enabled=false` the `resources` dimension is excluded from the step-2 loop, so its parameters are not produced by the loop. `@resources_status`, `@resources_pending`, `@resources_pending_count`, `@resources_since` are bound from the claimed `DimState` (`Status`/`Pending`/`Since` = NULL, `PendingCount` = 0). **Decision:** `@resources_observed` is bound to NULL directly — the `DimState` snapshot (section 16) carries no `Observed` field, and `resources_observed` is provably always NULL while the flag is `false` (it is written only by the step-2 loop, which never runs for `resources` here), so `ComputeCommit` needs no snapshot `Observed` source. Net effect: all six `resources_*` columns stay NULL. (For every in-loop dimension `d_observed` is always set from `O[d]` in step 2 — even on `error`/`inconsistent` — so no in-loop `*_observed` param is ever written back from the snapshot.)
 
 **Statements 2..(1+k) — changelog rows** (k = `len(changelog_rows)`, 0–6; the single-row statement is queued once per transition — **Decision:** per-row queuing over multi-row VALUES, so the statement is a static sqlc query):
 

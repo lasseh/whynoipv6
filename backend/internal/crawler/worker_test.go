@@ -2,7 +2,6 @@ package crawler
 
 import (
 	"context"
-	"errors"
 	"testing"
 	"time"
 
@@ -37,15 +36,15 @@ func (f *fakeSink) Commit(_ context.Context, in *CommitInput) (CommitResult, err
 
 type fakeEnricher struct {
 	attribution *Attribution
-	stamped     int
+	pivots      *Pivots
 }
 
 func (f *fakeEnricher) Attribution(context.Context, *ClaimedDomain, checker.ScanResult) *Attribution {
 	return f.attribution
 }
 
-func (f *fakeEnricher) StampPivots(context.Context, *ClaimedDomain, checker.ScanResult) {
-	f.stamped++
+func (f *fakeEnricher) Pivots(checker.ScanResult) *Pivots {
+	return f.pivots
 }
 
 // scanOK is a definitive-base scan with a successful resource discovery.
@@ -144,8 +143,8 @@ func TestProcessCommitInput(t *testing.T) {
 	}
 }
 
-// TestProcessNilEnricher: without an enricher, attribution defers (nil) and
-// no pivot stamping is attempted.
+// TestProcessNilEnricher: without an enricher, attribution and the pivots
+// both defer (nil) — the commit leaves the pivot columns untouched.
 func TestProcessNilEnricher(t *testing.T) {
 	sink := &fakeSink{}
 	w := testWorker(sink, nil, scanOK())
@@ -153,30 +152,22 @@ func TestProcessNilEnricher(t *testing.T) {
 	if sink.in.Attribution != nil {
 		t.Errorf("attribution = %+v, want deferred nil", sink.in.Attribution)
 	}
+	if sink.in.Pivots != nil {
+		t.Errorf("pivots = %+v, want deferred nil", sink.in.Pivots)
+	}
 }
 
-// TestProcessPivotGate: pivots stamp only after a successful, non-lease-lost
-// commit.
-func TestProcessPivotGate(t *testing.T) {
-	cases := []struct {
-		name    string
-		res     CommitResult
-		err     error
-		stamped int
-	}{
-		{"success", CommitResult{}, nil, 1},
-		{"lease lost", CommitResult{LeaseLost: true}, nil, 0},
-		{"commit error", CommitResult{}, errors.New("boom"), 0},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			e := &fakeEnricher{}
-			w := testWorker(&fakeSink{res: tc.res, err: tc.err}, e, scanOK())
-			w.Process(context.Background(), claimed())
-			if e.stamped != tc.stamped {
-				t.Errorf("stamped = %d, want %d", e.stamped, tc.stamped)
-			}
-		})
+// TestProcessPivotsDelivery: the enricher's pivots ride the CommitInput —
+// the fenced UPDATE is what gates them on lease loss, so the worker's only
+// job is delivery.
+func TestProcessPivotsDelivery(t *testing.T) {
+	sink := &fakeSink{}
+	id := int64(4)
+	p := &Pivots{StampDNS: true, DNSProvider: &id}
+	w := testWorker(sink, &fakeEnricher{pivots: p}, scanOK())
+	w.Process(context.Background(), claimed())
+	if sink.in.Pivots != p {
+		t.Errorf("pivots = %+v, want the enricher's", sink.in.Pivots)
 	}
 }
 

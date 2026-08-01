@@ -32,11 +32,16 @@ UPDATE domain SET
   latency_v4_ms = $35, latency_v6_ms = $36,
   classification = $37, class_flags = $38, saint = $39,
   asn_id = $40, country_id = $41,
-  disabled = $42, disabled_reason = $43, disabled_at = $44,
-  dead_streak = $45, error_streak = $46,
-  next_check_at = $47, last_checked_at = $48, last_counted_at = $49,
+  -- The provider pivots ride the same fenced UPDATE (06 §6.10): stamped only
+  -- on definitive-base scans (the stamp flags), untouched otherwise — a lost
+  -- lease can no longer leave pivots from a discarded scan.
+  dns_provider_id = CASE WHEN $42::boolean THEN $43 ELSE dns_provider_id END,
+  hosting_provider = CASE WHEN $44::boolean THEN $45 ELSE hosting_provider END,
+  disabled = $46, disabled_reason = $47, disabled_at = $48,
+  dead_streak = $49, error_streak = $50,
+  next_check_at = $51, last_checked_at = $52, last_counted_at = $53,
   claimed_at = NULL, updated_at = now()
-WHERE id = $50 AND claimed_at = $51
+WHERE id = $54 AND claimed_at = $55
 `
 
 type CommitDomainParams struct {
@@ -81,6 +86,10 @@ type CommitDomainParams struct {
 	Saint                 bool               `json:"saint"`
 	AsnID                 int32              `json:"asn_id"`
 	CountryID             int32              `json:"country_id"`
+	StampDnsProviderID    bool               `json:"stamp_dns_provider_id"`
+	DnsProviderID         *int64             `json:"dns_provider_id"`
+	StampHostingProvider  bool               `json:"stamp_hosting_provider"`
+	HostingProvider       *string            `json:"hosting_provider"`
 	Disabled              bool               `json:"disabled"`
 	DisabledReason        *DisabledReason    `json:"disabled_reason"`
 	DisabledAt            pgtype.Timestamptz `json:"disabled_at"`
@@ -138,6 +147,10 @@ func (q *Queries) CommitDomain(ctx context.Context, arg CommitDomainParams) (int
 		arg.Saint,
 		arg.AsnID,
 		arg.CountryID,
+		arg.StampDnsProviderID,
+		arg.DnsProviderID,
+		arg.StampHostingProvider,
+		arg.HostingProvider,
 		arg.Disabled,
 		arg.DisabledReason,
 		arg.DisabledAt,

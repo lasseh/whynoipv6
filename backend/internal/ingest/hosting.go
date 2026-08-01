@@ -1,10 +1,7 @@
 package ingest
 
 import (
-	"context"
 	"strings"
-
-	db "github.com/lasseh/whynoipv6/internal/postgres/db"
 )
 
 // cdnSuffixTags maps the checker's fixed CDN-suffix list (01-engine.md §11.2,
@@ -60,12 +57,4 @@ func NormalizeHosting(cdnDetected bool, cnameChain []string, asn uint) *string {
 		return &t
 	}
 	return nil
-}
-
-// StampHostingProvider is the read-only attribution writer for the hosting
-// tag: it touches ONLY domain.hosting_provider.
-func StampHostingProvider(ctx context.Context, q *db.Queries, domainID int64, tag *string) error {
-	return q.DomainStampHostingProvider(ctx, db.DomainStampHostingProviderParams{
-		ID: domainID, HostingProvider: tag,
-	})
 }

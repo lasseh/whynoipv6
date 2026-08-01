@@ -177,3 +177,87 @@ func TestCommitTxnChangelog(t *testing.T) {
 		t.Errorf("changelog = %s→%s", old, newV)
 	}
 }
+
+// TestCommitPivots: the provider pivots ride the fenced UPDATE — stamped
+// with the unit, untouched on deferred scans, discarded with a lost lease.
+func TestCommitPivots(t *testing.T) {
+	pool := pgtest.NewDB(t)
+	ctx := context.Background()
+	c := NewCommitter(pool, testCommitCfg(false))
+
+	var providerID int64
+	if err := pool.QueryRow(ctx,
+		`INSERT INTO dns_provider (name, ns_suffixes) VALUES ('Cloudflare', '{ns.cloudflare.com}')
+		 RETURNING id`).Scan(&providerID); err != nil {
+		t.Fatal(err)
+	}
+	tag := "cloudflare"
+
+	snap := claimOne(t, pool)
+	f := NewFrontier(pool, FrontierConfig{BatchSize: 10, Order: "rank"})
+	reclaim := func() ClaimedDomain {
+		t.Helper()
+		if _, err := pool.Exec(ctx,
+			`UPDATE domain SET next_check_at = now() - interval '1 minute', claimed_at = NULL
+			 WHERE id=$1`, snap.ID); err != nil {
+			t.Fatal(err)
+		}
+		batch, err := f.ClaimBatch(ctx)
+		if err != nil || len(batch) != 1 {
+			t.Fatalf("reclaim: n=%d err=%v", len(batch), err)
+		}
+		return batch[0]
+	}
+	pivotState := func() (prov *int64, hosting *string) {
+		t.Helper()
+		if err := pool.QueryRow(ctx,
+			`SELECT dns_provider_id, hosting_provider FROM domain WHERE id=$1`, snap.ID).
+			Scan(&prov, &hosting); err != nil {
+			t.Fatal(err)
+		}
+		return prov, hosting
+	}
+
+	// Definitive scan with pivots: both columns land with the unit.
+	res, err := c.Commit(ctx, &CommitInput{
+		Snapshot: snap, Obs: stableObs(domain.DimBase, domain.ObsSupported),
+		Pivots:  &Pivots{StampDNS: true, DNSProvider: &providerID, Hosting: &tag},
+		Details: []byte(`{"results":{}}`), T: time.Now().UTC(),
+	})
+	if err != nil || res.LeaseLost {
+		t.Fatalf("commit: %+v err=%v", res, err)
+	}
+	prov, hosting := pivotState()
+	if prov == nil || *prov != providerID || hosting == nil || *hosting != tag {
+		t.Fatalf("pivots = (%v, %v), want (%d, %q)", prov, hosting, providerID, tag)
+	}
+
+	// Deferred scan (nil Pivots): both columns stay untouched.
+	snap2 := reclaim()
+	if res, err = c.Commit(ctx, &CommitInput{
+		Snapshot: snap2, Obs: stableObs(domain.DimBase, domain.ObsSupported),
+		Details:  []byte(`{"results":{}}`), T: time.Now().UTC(),
+	}); err != nil || res.LeaseLost {
+		t.Fatalf("deferred commit: %+v err=%v", res, err)
+	}
+	if prov, hosting = pivotState(); prov == nil || hosting == nil {
+		t.Fatal("deferred scan touched the pivots")
+	}
+
+	// Lost lease: a clearing stamp is discarded with the rest of the unit.
+	snap3 := reclaim()
+	if _, err := pool.Exec(ctx,
+		"UPDATE domain SET claimed_at = now() + interval '1 second' WHERE id=$1", snap.ID); err != nil {
+		t.Fatal(err)
+	}
+	if res, err = c.Commit(ctx, &CommitInput{
+		Snapshot: snap3, Obs: stableObs(domain.DimBase, domain.ObsSupported),
+		Pivots:   &Pivots{StampDNS: true, DNSProvider: nil, Hosting: nil},
+		Details:  []byte(`{"results":{}}`), T: time.Now().UTC(),
+	}); err != nil || !res.LeaseLost {
+		t.Fatalf("stale commit: %+v err=%v", res, err)
+	}
+	if prov, hosting = pivotState(); prov == nil || hosting == nil {
+		t.Fatal("fenced commit cleared the pivots")
+	}
+}

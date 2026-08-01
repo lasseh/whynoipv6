@@ -38,12 +38,13 @@ type CommitSink interface {
 	Commit(ctx context.Context, in *CommitInput) (CommitResult, error)
 }
 
-// Enricher computes this scan's attribution input and stamps the provider
-// pivots after a successful commit — *GeoEnricher in production; nil skips
-// both (attribution then defers to the snapshot on every scan).
+// Enricher computes this scan's attribution input and provider pivots —
+// *GeoEnricher in production; nil skips both (attribution then defers to
+// the snapshot on every scan). Both run before the commit; the pivots ride
+// the fenced UPDATE inside it.
 type Enricher interface {
 	Attribution(ctx context.Context, d *ClaimedDomain, sr checker.ScanResult) *Attribution
-	StampPivots(ctx context.Context, d *ClaimedDomain, sr checker.ScanResult)
+	Pivots(sr checker.ScanResult) *Pivots
 }
 
 // Worker is the per-domain slot body (04 §12 a–f): engine run → map →
@@ -97,8 +98,10 @@ func (w *Worker) Process(ctx context.Context, d ClaimedDomain) { //nolint:gocrit
 
 	unresolvable := Unresolvable(sr)
 	var attribution *Attribution
+	var pivots *Pivots
 	if w.Enrich != nil {
 		attribution = w.Enrich.Attribution(ctx, &d, sr)
+		pivots = w.Enrich.Pivots(sr)
 	}
 
 	details := buildDetails(sr, &obs)
@@ -112,6 +115,7 @@ func (w *Worker) Process(ctx context.Context, d ClaimedDomain) { //nolint:gocrit
 		Obs:          obs,
 		Unresolvable: unresolvable,
 		Attribution:  attribution,
+		Pivots:       pivots,
 		BreakerOpen:  breakerOpen,
 		Details:      details,
 		DurationMS:   int32(time.Since(start).Milliseconds()),
@@ -123,13 +127,8 @@ func (w *Worker) Process(ctx context.Context, d ClaimedDomain) { //nolint:gocrit
 	}
 
 	res, err := w.Committer.Commit(ctx, in)
-	if err == nil && !res.LeaseLost {
-		if w.Enrich != nil {
-			w.Enrich.StampPivots(ctx, &d, sr)
-		}
-		if res.Recovered {
-			w.Metrics.RecordRecovered()
-		}
+	if err == nil && !res.LeaseLost && res.Recovered {
+		w.Metrics.RecordRecovered()
 	}
 	w.Metrics.RecordScan(ctx, &obs, unresolvable, res, err, time.Since(start))
 	slog.Debug("domain processed", "domain", d.Host,
@@ -204,23 +203,23 @@ func (e *GeoEnricher) ensureASN(ctx context.Context, number int64, org string) (
 	return q.ASNIDByNumber(ctx, number) // conflict: re-read
 }
 
-// StampPivots writes the dns_provider_id / hosting_provider attribution
-// pivots after a successful commit (06 §6.10): definitive-base scans only,
-// idempotent, self-healing next scan. (03 §12.1's pinned fenced UPDATE does
-// not carry these columns, so they ride separate pivot-only statements.)
-func (e *GeoEnricher) StampPivots(ctx context.Context, d *ClaimedDomain, sr checker.ScanResult) {
+// Pivots computes the dns_provider_id / hosting_provider attribution
+// stamps (06 §6.10): definitive-base scans only, idempotent, self-healing
+// next scan. Pure snapshot/mmdb lookups — the write rides the commit's
+// fenced UPDATE, so a lost lease discards the pivots with the rest of the
+// scan.
+func (e *GeoEnricher) Pivots(sr checker.ScanResult) *Pivots {
 	baseSt, _, _ := sr.AAAABase()
 	definitive := baseSt == checker.StatusSupported ||
 		baseSt == checker.StatusUnsupported || baseSt == checker.StatusNotApplicable
 	if !definitive {
-		return // deferred scans never touch the pivots (06 §6.6)
+		return nil // deferred scans never touch the pivots (06 §6.6)
 	}
-	q := db.New(e.Pool)
 
+	p := &Pivots{}
 	if e.Providers != nil {
-		if err := ingest.StampDNSProvider(ctx, q, e.Providers, d.ID, nsHosts(sr)); err != nil {
-			slog.Warn("dns provider stamp failed", "domain", d.Host, "err", err.Error())
-		}
+		p.StampDNS = true
+		p.DNSProvider = e.Providers.ProviderForNSSet(nsHosts(sr))
 	}
 
 	// Hosting tag: CNAME-CDN detection from the www check + the resolved
@@ -234,10 +233,8 @@ func (e *GeoEnricher) StampPivots(ctx context.Context, d *ClaimedDomain, sr chec
 			asn = n
 		}
 	}
-	tag := ingest.NormalizeHosting(cdnDetected, chain, asn)
-	if err := ingest.StampHostingProvider(ctx, q, d.ID, tag); err != nil {
-		slog.Warn("hosting stamp failed", "domain", d.Host, "err", err.Error())
-	}
+	p.Hosting = ingest.NormalizeHosting(cdnDetected, chain, asn)
+	return p
 }
 
 // nsHosts extracts the observed nameserver-host set from the NS check

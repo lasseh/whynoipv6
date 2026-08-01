@@ -30,12 +30,23 @@ type Attribution struct {
 	CountryID int32
 }
 
+// Pivots carries this scan's provider attribution stamps (06 §6.10),
+// computed before the commit and written by the same fenced UPDATE. nil =
+// deferred (non-definitive base, or no enricher): both columns stay
+// untouched.
+type Pivots struct {
+	StampDNS    bool   // provider snapshot loaded: dns_provider_id ← DNSProvider
+	DNSProvider *int64 // nil clears — the domain moved off every known provider
+	Hosting     *string
+}
+
 // CommitInput carries one domain's commit unit inputs (03 §3, §16).
 type CommitInput struct {
 	Snapshot     ClaimedDomain
 	Obs          observe.Observations // core + informational + latency (02 §7.2)
 	Unresolvable bool                 // the dead signal U (03 §4)
 	Attribution  *Attribution         // nil = deferred (base non-definitive)
+	Pivots       *Pivots              // nil = deferred (base non-definitive)
 	Discovered   []string             // canonical resource hosts; consumed only when DiscoveryOK
 	DiscoveryOK  bool                 // resources enabled AND discovery status ok
 	BreakerOpen  bool                 // consensus.FastLaneSuppressed()
@@ -276,6 +287,14 @@ func ComputeCommit(in *CommitInput, cfg *CommitConfig) (*commitUnit, error) {
 	if disabledReason != nil {
 		r := db.DisabledReason(*disabledReason)
 		params.DisabledReason = &r
+	}
+	// Step 7b — the provider pivots ride the fenced UPDATE; deferred scans
+	// leave both columns untouched (06 §6.10).
+	if in.Pivots != nil {
+		params.StampDnsProviderID = in.Pivots.StampDNS
+		params.DnsProviderID = in.Pivots.DNSProvider
+		params.StampHostingProvider = true
+		params.HostingProvider = in.Pivots.Hosting
 	}
 	bindDim(&params.BaseStatus, &params.BaseObserved, &params.BasePending, &params.BasePendingCount, &params.BaseSince, work[domain.DimBase])
 	bindDim(&params.WwwStatus, &params.WwwObserved, &params.WwwPending, &params.WwwPendingCount, &params.WwwSince, work[domain.DimWWW])

@@ -130,10 +130,6 @@ type Querier interface {
 	// Forward list is bounded small (exact count, no cursor); the reverse
 	// dependents list is served by the domainlist builder.
 	DomainResourceList(ctx context.Context, domainID int64) ([]DomainResourceListRow, error)
-	// The attribution stamp: touches ONLY the pivot column, never the
-	// commit/trust machine's columns (06-ingest.md §6.10).
-	DomainStampDNSProvider(ctx context.Context, arg DomainStampDNSProviderParams) error
-	DomainStampHostingProvider(ctx context.Context, arg DomainStampHostingProviderParams) error
 	EnsureResourceHost(ctx context.Context, rhost string) error
 	// The nightly dataset export (07 §5.3): one parameterized read covers the
 	// three tiers — ranked_only for top100k/top1m, max_rank 0 = unbounded.

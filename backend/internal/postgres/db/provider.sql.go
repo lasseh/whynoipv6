@@ -9,36 +9,6 @@ import (
 	"context"
 )
 
-const DomainStampDNSProvider = `-- name: DomainStampDNSProvider :exec
-UPDATE domain SET dns_provider_id = $2 WHERE id = $1
-`
-
-type DomainStampDNSProviderParams struct {
-	ID            int64  `json:"id"`
-	DnsProviderID *int64 `json:"dns_provider_id"`
-}
-
-// The attribution stamp: touches ONLY the pivot column, never the
-// commit/trust machine's columns (06-ingest.md §6.10).
-func (q *Queries) DomainStampDNSProvider(ctx context.Context, arg DomainStampDNSProviderParams) error {
-	_, err := q.db.Exec(ctx, DomainStampDNSProvider, arg.ID, arg.DnsProviderID)
-	return err
-}
-
-const DomainStampHostingProvider = `-- name: DomainStampHostingProvider :exec
-UPDATE domain SET hosting_provider = $2 WHERE id = $1
-`
-
-type DomainStampHostingProviderParams struct {
-	ID              int64   `json:"id"`
-	HostingProvider *string `json:"hosting_provider"`
-}
-
-func (q *Queries) DomainStampHostingProvider(ctx context.Context, arg DomainStampHostingProviderParams) error {
-	_, err := q.db.Exec(ctx, DomainStampHostingProvider, arg.ID, arg.HostingProvider)
-	return err
-}
-
 const ProviderAppendSuffixes = `-- name: ProviderAppendSuffixes :exec
 UPDATE dns_provider
 SET ns_suffixes = (SELECT array_agg(DISTINCT s ORDER BY s)

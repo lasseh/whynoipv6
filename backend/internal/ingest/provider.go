@@ -83,15 +83,6 @@ func (m *ProviderMapping) ProviderForNSSet(nsHosts []string) *int64 {
 	return best
 }
 
-// StampDNSProvider is the read-only attribution writer: it derives the
-// provider from the scan's observed NS hosts and stamps ONLY
-// domain.dns_provider_id — never scan/changelog/confirmed-status columns.
-func StampDNSProvider(ctx context.Context, q *db.Queries, m *ProviderMapping, domainID int64, nsHosts []string) error {
-	return q.DomainStampDNSProvider(ctx, db.DomainStampDNSProviderParams{
-		ID: domainID, DnsProviderID: m.ProviderForNSSet(nsHosts),
-	})
-}
-
 // providerSeedEntry mirrors the `v6ctl provider add` arguments
 // (dns_provider.seed_path YAML — 06-ingest.md §6.11).
 type providerSeedEntry struct {

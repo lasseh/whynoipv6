@@ -27,11 +27,23 @@ func TestCommitStatementBinding(t *testing.T) {
 	}
 
 	t.Run("CommitDomain", func(t *testing.T) {
-		// UPDATE shape: every `col = $n` pair, in SET and WHERE.
-		re := regexp.MustCompile(`(\w+)\s*=\s*\$(\d+)`)
+		// UPDATE shape: every `col = $n` pair, in SET and WHERE, plus the
+		// conditional pivot shape `col = CASE WHEN $a::boolean THEN $b ELSE
+		// col END`, whose flag param is named stamp_<col> by convention.
+		caseRe := regexp.MustCompile(`(\w+)\s*=\s*CASE WHEN \$(\d+)::boolean THEN \$(\d+) ELSE \w+ END`)
 		byPlaceholder := map[int]string{}
+		for _, m := range caseRe.FindAllStringSubmatch(db.CommitDomain, -1) {
+			flag, _ := strconv.Atoi(m[2])
+			val, _ := strconv.Atoi(m[3])
+			byPlaceholder[flag] = "stamp_" + m[1]
+			byPlaceholder[val] = m[1]
+		}
+		re := regexp.MustCompile(`(\w+)\s*=\s*\$(\d+)`)
 		for _, m := range re.FindAllStringSubmatch(db.CommitDomain, -1) {
 			n, _ := strconv.Atoi(m[2])
+			if _, claimed := byPlaceholder[n]; claimed {
+				continue // a CASE-bound pivot param
+			}
 			col := m[1]
 			if a, ok := alias[col]; ok {
 				col = a
