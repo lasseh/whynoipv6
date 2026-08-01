@@ -52,11 +52,11 @@ onBeforeUnmount(() => {
         <!-- Site branding -->
         <div class="shrink-0 mr-4">
           <!-- Logo -->
-          <router-link to="/" class="block" aria-label="WhyNoIPv6">
+          <router-link to="/" class="block" aria-label="Why No IPv6 home">
             <div
               class="bg-gradient-to-r bg-clip-text text-2xl font-bold text-transparent from-fuchsia-500 to-fuchsia-700"
             >
-              Why No IPv6?
+              Why No IPv6
             </div>
           </router-link>
         </div>
@@ -190,7 +190,7 @@ onBeforeUnmount(() => {
                 <router-link
                   to="/campaigns"
                   class="flex font-medium text-gray-200 hover:text-gray-200 py-2"
-                  >Campaign</router-link
+                  >Campaigns</router-link
                 >
               </li>
               <li>

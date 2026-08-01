@@ -52,10 +52,10 @@ onUnmounted(() => {
               />
             </svg>
             <div>
-              <div class="font-medium text-slate-200 mb-1">No IPv6?!</div>
+              <div class="font-medium text-slate-200 mb-1">No IPv6?</div>
               <div>
-                Your internet connection does not seem to support current internet standards. Please
-                contact your internet provider and ask them about IPv6.
+                You're reading an IPv6 shame site over IPv4. Ask your ISP when they plan to catch up
+                with 1998.
               </div>
             </div>
           </div>

@@ -13,7 +13,7 @@
                 href="https://github.com/lasseh/whynoipv6"
                 target="_blank"
                 class="flex justify-center items-center text-fuchsia-600 bg-gray-800 hover:text-gray-100 hover:bg-fuchsia-600 rounded-full transition duration-150 ease-in-out"
-                aria-label="Github"
+                aria-label="GitHub"
               >
                 <svg
                   class="w-8 h-8 fill-current"
@@ -49,7 +49,7 @@
           <!-- Copyrights note -->
           <div class="text-gray-400 text-sm mr-4" data-nosnippet>
             <div>
-              Hosted on Native IPv6 co-location from
+              Hosted on native IPv6 co-location at
               <a
                 href="https://blix.com/"
                 class="underline whitespace-nowrap a-gradient"

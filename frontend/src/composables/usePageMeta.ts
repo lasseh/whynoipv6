@@ -26,7 +26,7 @@ function setMetaProperty(property: string, content: string): void {
  * stays as the pre-load fallback.
  */
 export function setPageTitle(title: string): void {
-  document.title = `${title} - Why No IPv6?`
+  document.title = `${title} - Why No IPv6`
 }
 
 export function installPageMeta(router: Router): void {

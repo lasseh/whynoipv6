@@ -17,9 +17,9 @@ const routes: RouteRecordRaw[] = [
     name: 'Home',
     component: () => import('@/pages/Home.vue'),
     meta: {
-      title: 'Why No IPv6? - IPv6 Adoption Tracker',
+      title: 'Why No IPv6 - IPv6 Adoption Tracker',
       description:
-        'Track IPv6 adoption across the web. See which domains support IPv6 and which still need to catch up.',
+        'Why No IPv6 scans the top million domains daily (www, nameservers, mail) and names the giants still IPv4-only. Sinners, Heroes, Saints. Shame on them.',
     },
   },
   {
@@ -27,8 +27,9 @@ const routes: RouteRecordRaw[] = [
     name: 'DomainList',
     component: () => import('@/pages/DomainList.vue'),
     meta: {
-      title: 'Domains - Why No IPv6?',
-      description: 'Browse all domains and their IPv6 support status.',
+      title: 'Domain Leaderboard - Why No IPv6',
+      description:
+        'Every domain we crawl, ranked by Tranco and checked for IPv6 (domain, www, nameservers, mail). Filter by tier: Sinners, Heroes, Saints.',
     },
   },
   {
@@ -36,8 +37,9 @@ const routes: RouteRecordRaw[] = [
     name: 'DomainNotFound',
     component: () => import('@/pages/DomainNotFound.vue'),
     meta: {
-      title: 'Domain Not Found - Why No IPv6?',
-      description: 'The requested domain could not be found in our database.',
+      title: 'Domain Not Found - Why No IPv6',
+      description:
+        "This domain isn't in our database: not yet crawled, outside the Tranco top million, or a typo.",
     },
   },
   {
@@ -45,8 +47,9 @@ const routes: RouteRecordRaw[] = [
     name: 'DomainDetail',
     component: () => import('@/pages/DomainDetail.vue'),
     meta: {
-      title: 'Domain Details - Why No IPv6?',
-      description: 'Detailed IPv6 support information for this domain.',
+      title: 'Domain Details - Why No IPv6',
+      description:
+        'The complete IPv6 report card for this domain: AAAA for domain and www, nameservers, MX, and whether it actually answers over IPv6.',
     },
   },
   {
@@ -54,8 +57,8 @@ const routes: RouteRecordRaw[] = [
     name: 'Search',
     component: () => import('@/pages/Search.vue'),
     meta: {
-      title: 'Search Results - Why No IPv6?',
-      description: 'Search results for domain IPv6 support.',
+      title: 'Search Results - Why No IPv6',
+      description: "Search the domains we crawl: who has IPv6 and who doesn't.",
     },
   },
   {
@@ -63,8 +66,9 @@ const routes: RouteRecordRaw[] = [
     name: 'LiveCheck',
     component: () => import('@/pages/LiveCheck.vue'),
     meta: {
-      title: 'Live IPv6 Check - Why No IPv6?',
-      description: 'Run a live IPv6 check on any domain — DNS, mail, and real connectivity.',
+      title: 'Live IPv6 Check - Why No IPv6',
+      description:
+        'Run a live IPv6 check on any domain: AAAA records, nameservers, MX, and a real connection attempt over IPv6. Answers come from DNS, not our cache.',
     },
   },
   {
@@ -72,8 +76,9 @@ const routes: RouteRecordRaw[] = [
     name: 'Metrics',
     component: () => import('@/pages/Metrics.vue'),
     meta: {
-      title: 'Metrics - Why No IPv6?',
-      description: 'IPv6 adoption metrics and statistics.',
+      title: 'IPv6 Adoption Metrics - Why No IPv6',
+      description:
+        "IPv6 adoption metrics for the top million domains, charted over time: how many publish AAAA records, how many don't, and how fast that's changing (slowly).",
     },
   },
   {
@@ -81,8 +86,9 @@ const routes: RouteRecordRaw[] = [
     name: 'CountryList',
     component: () => import('@/pages/CountryList.vue'),
     meta: {
-      title: 'Countries - Why No IPv6?',
-      description: 'IPv6 adoption by country.',
+      title: 'IPv6 Adoption by Country - Why No IPv6',
+      description:
+        'IPv6 adoption ranked by country: who leads, who trails, and where the Sinners cluster. National pride, now measurable in AAAA records.',
     },
   },
   {
@@ -90,8 +96,9 @@ const routes: RouteRecordRaw[] = [
     name: 'CountryDetail',
     component: () => import('@/pages/CountryDetail.vue'),
     meta: {
-      title: 'Country Details - Why No IPv6?',
-      description: 'IPv6 adoption details for this country.',
+      title: 'Country Details - Why No IPv6',
+      description:
+        "How this country's top domains score on IPv6: adoption rate, the local Heroes, and the Sinners dragging the national average down.",
     },
   },
   {
@@ -99,8 +106,9 @@ const routes: RouteRecordRaw[] = [
     name: 'CampaignList',
     component: () => import('@/pages/CampaignList.vue'),
     meta: {
-      title: 'Campaigns - Why No IPv6?',
-      description: 'IPv6 adoption campaigns and initiatives.',
+      title: 'Shame Campaigns - Why No IPv6',
+      description:
+        'Reader-submitted lists of big-name domains, tracked daily until the AAAA records show up. Shame as a Service.',
     },
   },
   {
@@ -108,8 +116,9 @@ const routes: RouteRecordRaw[] = [
     name: 'CampaignDetail',
     component: () => import('@/pages/CampaignDetail.vue'),
     meta: {
-      title: 'Campaign Details - Why No IPv6?',
-      description: 'Detailed information about this IPv6 campaign.',
+      title: 'Campaign Details - Why No IPv6',
+      description:
+        "Every domain in this campaign and its IPv6 status: who fixed it, who hasn't, and how the percentage is coming along.",
     },
   },
   {
@@ -117,8 +126,9 @@ const routes: RouteRecordRaw[] = [
     name: 'CampaignDomainNotFound',
     component: () => import('@/pages/DomainNotFound.vue'),
     meta: {
-      title: 'Campaign Domain Not Found - Why No IPv6?',
-      description: 'The requested domain could not be found in this campaign.',
+      title: 'Campaign Domain Not Found - Why No IPv6',
+      description:
+        "This domain isn't tracked in this campaign. Either it was never on the list, or that's a typo.",
     },
   },
   {
@@ -126,8 +136,9 @@ const routes: RouteRecordRaw[] = [
     name: 'CampaignDomain',
     component: () => import('@/pages/CampaignDomain.vue'),
     meta: {
-      title: 'Campaign Domain - Why No IPv6?',
-      description: 'Domain details within this campaign.',
+      title: 'Campaign Domain - Why No IPv6',
+      description:
+        "The full IPv6 checklist for this campaign domain: AAAA, nameservers, mail, and whether it's helping or hurting the campaign's numbers.",
     },
   },
   {
@@ -135,8 +146,9 @@ const routes: RouteRecordRaw[] = [
     name: 'Changelog',
     component: () => import('@/pages/Changelog.vue'),
     meta: {
-      title: 'Changelog - Why No IPv6?',
-      description: 'Recent changes and updates to IPv6 support tracking.',
+      title: 'Changelog - Why No IPv6',
+      description:
+        "Who fixed their IPv6 and who broke it, day by day. Every AAAA record that appeared or quietly disappeared, pulled from the crawler's daily runs.",
     },
   },
   {
@@ -144,8 +156,9 @@ const routes: RouteRecordRaw[] = [
     name: 'FAQ',
     component: () => import('@/pages/FAQ.vue'),
     meta: {
-      title: 'FAQ - Why No IPv6?',
-      description: 'Frequently asked questions about IPv6 adoption.',
+      title: 'FAQ - Why No IPv6',
+      description:
+        'How the crawler works, what the checks mean, and how to get your domain removed from the list. Short answer to that last one: start using IPv6.',
     },
   },
 
@@ -179,8 +192,9 @@ const routes: RouteRecordRaw[] = [
     name: 'PageNotFound',
     component: () => import('@/pages/PageNotFound.vue'),
     meta: {
-      title: 'Page Not Found - Why No IPv6?',
-      description: 'The page you are looking for could not be found.',
+      title: 'Page Not Found - Why No IPv6',
+      description:
+        "No route to this page. Unlike a missing AAAA record, this one probably isn't deliberate.",
     },
   },
 ]

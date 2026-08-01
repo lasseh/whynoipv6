@@ -10,20 +10,19 @@ import PageShell from '@/components/PageShell.vue'
           <div class="max-w-3xl mx-auto text-center">
             <!-- Top image -->
             <div class="relative inline-flex flex-col mb-6">
-              <img src="/images/WhyNoLogo.webp" width="196" height="186" alt="404" />
+              <img src="/images/WhyNoLogo.webp" width="196" height="186" alt="Why No IPv6 logo" />
             </div>
             <!-- 404 content -->
-            <h1 class="h2 mb-4">Shame! Shame! This page doesn't exist.</h1>
+            <h1 class="h2 mb-4">Shame on us. This page doesn't resolve.</h1>
             <p class="text-lg text-gray-400">
-              We checked every record — A, AAAA, even MX. Nothing here resolves. Unlike our IPv6
-              sinners, this URL has a valid excuse for being unreachable: it doesn't exist. Head to
-              our
+              We checked every record: A, AAAA, even MX. Unlike our Sinners, this URL has a valid
+              excuse for being unreachable: it doesn't exist. Double-check the URL, or head back to
+              the
               <router-link
                 to="/"
                 class="text-purple-600 hover:text-gray-200 transition duration-150 ease-in-out"
                 >homepage</router-link
-              >
-              that does exist, or double-check the URL.
+              >.
             </p>
           </div>
         </div>
