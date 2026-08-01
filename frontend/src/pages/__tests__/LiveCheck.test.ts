@@ -347,7 +347,7 @@ describe('LiveCheck page', () => {
 
     expect(wrapper.text()).toContain('Tracked status')
     expect(wrapper.text()).toContain('hero')
-    expect(wrapper.text()).toContain('saint')
+    expect(wrapper.text()).toContain('Saint')
     expect(wrapper.find('a[href="/domains/example.com"]').exists()).toBe(true)
   })
 })

@@ -9,7 +9,7 @@ const emit = defineEmits<{ 'update:modelValue': [value: string]; submit: [] }>()
 
 <template>
   <form action="/search" method="get" @submit.prevent="emit('submit')">
-    <label for="search" class="mb-2 text-sm font-medium sr-only text-white">Search</label>
+    <label for="search" class="mb-2 text-sm font-medium sr-only text-white">Search domains</label>
     <div class="relative">
       <div class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
         <svg
@@ -34,7 +34,7 @@ const emit = defineEmits<{ 'update:modelValue': [value: string]; submit: [] }>()
         name="q"
         :value="modelValue"
         class="block w-full p-4 pl-10 text-sm border rounded-sm bg-gray-800 border-gray-700 placeholder-gray-400 text-white focus:ring-fuchsia-900 focus:border-fuchsia-900"
-        placeholder="Search Domains"
+        placeholder="Search domains"
         required
         @input="emit('update:modelValue', ($event.target as HTMLInputElement).value)"
       />

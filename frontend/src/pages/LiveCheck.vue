@@ -74,7 +74,7 @@ const resourcesNote = computed(() => {
 // cosmetic but the phases are what the scan actually does.
 const SCAN_STAGES: [number, string][] = [
   [0, 'Resolving DNS records — AAAA, nameservers, mail…'],
-  [4, 'Cross-checking three public resolvers for consensus…'],
+  [4, 'Cross-checking three public resolvers; two must agree…'],
   [9, 'Connecting to the site over IPv6 only…'],
   [16, 'Checking mail servers and TLS over IPv6…'],
   [24, 'Fetching the page and discovering its resources…'],
@@ -342,8 +342,9 @@ watch([envelope, () => route.params.target], ([env]) => {
           <div class="text-center mb-8">
             <h1 class="h2 mb-4">Live IPv6 Check</h1>
             <p class="text-lg text-gray-400">
-              Runs a real scan from our crawler right now — DNS, mail, and an actual connection over
-              IPv6. Results are live observations, separate from the tracked, confirmed status.
+              Runs a real scan from our crawler right now: DNS, mail, and an actual connection over
+              IPv6. Results are live observations; the tracked, confirmed status updates on its own
+              schedule, not yours.
             </p>
           </div>
 
@@ -381,7 +382,7 @@ watch([envelope, () => route.params.target], ([env]) => {
             v-if="problem?.code === 'rate-limited'"
             class="mt-6 p-4 rounded-sm bg-gray-800 border border-amber-600/50 text-amber-500 text-sm"
           >
-            Rate limit reached — you can run another check in {{ retryLeft }}s.
+            Rate limit reached. Next check in {{ retryLeft }}s.
           </div>
           <!-- Other errors -->
           <ApiError v-else-if="problem" class="mt-6" :problem="problem" />
@@ -435,7 +436,7 @@ watch([envelope, () => route.params.target], ([env]) => {
                   class="text-xs text-gray-400 hover:text-fuchsia-400 underline underline-offset-2 cursor-pointer"
                   @click="copyLink"
                 >
-                  {{ copied ? 'Copied!' : 'Copy link' }}
+                  {{ copied ? 'Copied' : 'Copy link' }}
                 </button>
                 <span
                   class="text-xs uppercase tracking-wide text-gray-400 border border-gray-700 rounded px-2 py-0.5"
@@ -445,8 +446,7 @@ watch([envelope, () => route.params.target], ([env]) => {
             </div>
 
             <p v-if="envelope.cached" class="mb-4 text-sm text-gray-400">
-              Showing a stored result — a fresh check runs automatically once it is older than 7
-              days.
+              Showing a stored result. A fresh check runs automatically once it's older than 7 days.
             </p>
 
             <!-- Core dimensions -->
@@ -516,7 +516,7 @@ watch([envelope, () => route.params.target], ([env]) => {
                 <span class="text-gray-200 capitalize">{{
                   envelope.confirmed.classification
                 }}</span>
-                <span v-if="envelope.confirmed.saint" class="text-emerald-500"> · saint</span>
+                <span v-if="envelope.confirmed.saint" class="text-emerald-500"> · Saint</span>
               </span>
               <RouterLink
                 :to="`/domains/${envelope.host}`"

@@ -78,7 +78,7 @@ function submitSearch() {
             </svg>
             <div class="text-xl font-medium">Search the domain index</div>
             <p class="mt-2 text-gray-400">
-              Look up any tracked domain to see its IPv6 status — try
+              Look up any tracked domain: Saint, Sinner, or something in between. Try
               <router-link to="/search?q=google" class="text-fuchsia-500 hover:underline"
                 >google</router-link
               >.
@@ -99,7 +99,7 @@ function submitSearch() {
 
             <!-- Zero results: offer the live check as the escape hatch -->
             <p v-if="!loading && items.length === 0" class="mt-4 text-center text-gray-400">
-              Not in the index yet?
+              Nothing in the index by that name.
               <router-link :to="`/check/${activeQuery}`" class="text-fuchsia-500 hover:underline"
                 >Run a live check on {{ activeQuery }}</router-link
               >.
