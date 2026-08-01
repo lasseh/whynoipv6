@@ -73,7 +73,10 @@ func (r *Reader) load() error {
 		return fmt.Errorf("geoip: open %s: %w", liteFile, err)
 	}
 	if old := r.db.Swap(rdr); old != nil {
-		_ = old.Close()
+		// Retire the old reader after a grace period: in-flight lookups may
+		// still hold it, and maxminddb documents that Close during use can
+		// crash the process (munmap under a live Lookup).
+		time.AfterFunc(time.Minute, func() { _ = old.Close() })
 	}
 	r.mtime.Store(info.ModTime().UnixNano())
 	r.buildEpoch.Store(int64(rdr.Metadata.BuildEpoch)) //nolint:gosec // epoch seconds
@@ -102,8 +105,12 @@ func (r *Reader) MaybeReload() error {
 func (r *Reader) BuildEpoch() time.Time { return time.Unix(r.buildEpoch.Load(), 0).UTC() }
 
 func (r *Reader) ASN(addr netip.Addr) (number uint, org string) {
+	db := r.db.Load()
+	if db == nil {
+		return 0, "" // closed — miss
+	}
 	var rec liteRecord
-	res := r.db.Load().Lookup(addr)
+	res := db.Lookup(addr)
 	if !res.Found() || res.Decode(&rec) != nil {
 		return 0, ""
 	}
@@ -115,8 +122,12 @@ func (r *Reader) ASN(addr netip.Addr) (number uint, org string) {
 }
 
 func (r *Reader) CountryCode(addr netip.Addr) string {
+	db := r.db.Load()
+	if db == nil {
+		return "" // closed — miss
+	}
 	var rec liteRecord
-	res := r.db.Load().Lookup(addr)
+	res := db.Lookup(addr)
 	if !res.Found() || res.Decode(&rec) != nil {
 		return ""
 	}

@@ -105,8 +105,14 @@ func (c *ResourceDiscovery) fetchHTML(ctx context.Context, domain string, ip net
 
 	client := &http.Client{
 		Transport: transport,
-		CheckRedirect: func(_ *http.Request, via []*http.Request) error {
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			if len(via) >= 3 {
+				return http.ErrUseLastResponse
+			}
+			// Only follow redirects to the same domain: the transport dials
+			// the pinned original IP with the original SNI, so a cross-host
+			// redirect would fetch the wrong vhost's content.
+			if req.URL.Hostname() != domain {
 				return http.ErrUseLastResponse
 			}
 			return nil

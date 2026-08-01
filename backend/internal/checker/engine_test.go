@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net"
 	"net/url"
+	"os"
 	"strings"
 	"syscall"
 	"testing"
@@ -146,7 +147,8 @@ func TestCheckPanicIsolation(t *testing.T) {
 // TestHTTPErrorTypes (01 §14.6): the terminal classification helpers produce
 // the exact error_type inputs for refused / timeout / bad-cert / other.
 func TestHTTPErrorTypes(t *testing.T) {
-	refused := &net.OpError{Op: "dial", Err: func() *syscall.Errno { e := syscall.ECONNREFUSED; return &e }()}
+	// The realistic dial chain: *net.OpError → *os.SyscallError → syscall.Errno.
+	refused := &net.OpError{Op: "dial", Err: os.NewSyscallError("connect", syscall.ECONNREFUSED)}
 	if !isConnRefused(refused) {
 		t.Error("ECONNREFUSED not classified connection_refused")
 	}

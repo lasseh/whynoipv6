@@ -21,8 +21,8 @@ import (
 )
 
 // The three pinned provider names (§2.2). They are the identity of a provider
-// everywhere it is reported: breaker state, per-provider metrics, disagreement
-// counts and log attrs all key off these exact strings.
+// everywhere it is reported: breaker state and log attrs all key off these
+// exact strings.
 const (
 	providerCloudflare = "cloudflare"
 	providerGoogle     = "google"
@@ -101,12 +101,11 @@ type Resolver struct {
 
 	providers []*providerState // fixed order
 
-	mu           sync.Mutex
-	dropped      string // name of the dropped provider, "" = none
-	canaryOK     int    // consecutive canary successes for the dropped provider
-	fastOpen     bool
-	fastWindow   *window
-	disagreement map[string]int64
+	mu         sync.Mutex
+	dropped    string // name of the dropped provider, "" = none
+	canaryOK   int    // consecutive canary successes for the dropped provider
+	fastOpen   bool
+	fastWindow *window
 
 	stop chan struct{}
 	wg   sync.WaitGroup
@@ -117,13 +116,12 @@ type Resolver struct {
 // CD=1 lookups. alert posts one-line messages to the ops webhook.
 func New(cfg Config, bulk *checker.Resolver, alert func(ctx context.Context, msg string), logger *slog.Logger) *Resolver {
 	r := &Resolver{
-		cfg:          cfg,
-		bulk:         bulk,
-		alert:        alert,
-		logger:       logger,
-		fastWindow:   newWindow(cfg.FastLane.Window),
-		disagreement: map[string]int64{},
-		stop:         make(chan struct{}),
+		cfg:        cfg,
+		bulk:       bulk,
+		alert:      alert,
+		logger:     logger,
+		fastWindow: newWindow(cfg.FastLane.Window),
+		stop:       make(chan struct{}),
 	}
 	for _, def := range providerDefs {
 		res := checker.NewResolver(def.upstreams)
@@ -154,24 +152,6 @@ func (r *Resolver) FastLaneSuppressed() bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.fastOpen
-}
-
-// DroppedProvider returns the name of the currently dropped provider, or "".
-func (r *Resolver) DroppedProvider() string {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	return r.dropped
-}
-
-// DrainDisagreement returns and clears the per-provider outvoted-answer
-// tallies (§2.10 — consumed into crawler_metrics.dim_counters). Drained
-// once per metrics checkpoint so the payload stays a per-interval delta.
-func (r *Resolver) DrainDisagreement() map[string]int64 {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	out := r.disagreement
-	r.disagreement = map[string]int64{}
-	return out
 }
 
 // providerOutcome is one provider's reduced result for one lookup.
@@ -234,9 +214,6 @@ func (r *Resolver) LookupAAAA(ctx context.Context, name string) (checker.AAAAAns
 		for _, o := range outcomes {
 			if validSymbol(o.symbol) && o.symbol != quorum {
 				qi.Disagreed = true
-				r.mu.Lock()
-				r.disagreement[o.name]++
-				r.mu.Unlock()
 			}
 		}
 		r.recordFastLane(ctx, true)

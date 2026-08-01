@@ -4,13 +4,19 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"io"
 	"net"
 	"sort"
 	"strings"
 	"time"
 )
 
-const maxSMTPAttempts = 3
+const (
+	maxSMTPAttempts = 3
+	// maxSMTPReadBytes caps the total bytes read from an MX so a hostile
+	// server streaming bytes without newlines cannot buffer unbounded data.
+	maxSMTPReadBytes = 64 << 10 // 64KB
+)
 
 // SMTPIPv6 checks whether the domain's MX accepts SMTP over IPv6
 // (01-engine.md §11.10).
@@ -107,7 +113,7 @@ func (c *SMTPIPv6) tryMX(ctx context.Context, mxHost string, preference uint16) 
 		_ = conn.SetDeadline(deadline)
 	}
 
-	reader := bufio.NewReader(conn)
+	reader := bufio.NewReader(io.LimitReader(conn, maxSMTPReadBytes))
 
 	// Read banner.
 	banner, err := reader.ReadString('\n')

@@ -360,6 +360,13 @@ func TestConditionalCDLookup(t *testing.T) {
 	}
 }
 
+// droppedProvider reads the breaker's dropped-provider name under the lock.
+func droppedProvider(r *Resolver) string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.dropped
+}
+
 // TestBreakers: the fast-lane breaker opens/closes on the sampled rate; the
 // provider breaker drops at most one provider and the canary restores it
 // (10-testing §3 / 02 §8.5).
@@ -388,7 +395,7 @@ func TestBreakers(t *testing.T) {
 		_, _ = h2.r.LookupAAAA(context.Background(), "q9dark.example")
 	}
 	h2.r.evaluateBreakers()
-	if got := h2.r.DroppedProvider(); got != "quad9" {
+	if got := droppedProvider(h2.r); got != "quad9" {
 		t.Fatalf("dropped = %q, want quad9", got)
 	}
 
@@ -399,7 +406,7 @@ func TestBreakers(t *testing.T) {
 		_, _ = h2.r.LookupAAAA(context.Background(), "g8dark.example")
 	}
 	h2.r.evaluateBreakers()
-	if got := h2.r.DroppedProvider(); got != "quad9" {
+	if got := droppedProvider(h2.r); got != "quad9" {
 		t.Errorf("dropped = %q after second failure, want quad9 only (never a 2nd)", got)
 	}
 
@@ -419,7 +426,7 @@ func TestBreakers(t *testing.T) {
 	for range 3 {
 		h2.r.runCanary()
 	}
-	if got := h2.r.DroppedProvider(); got != "" {
+	if got := droppedProvider(h2.r); got != "" {
 		t.Errorf("dropped = %q after 3 canary passes, want restored", got)
 	}
 }

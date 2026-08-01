@@ -289,6 +289,10 @@ func (ti *TrancoImporter) applyList(ctx context.Context, rep *TrancoReport, rows
 	return nil
 }
 
+// maxTrancoLines bounds the decompressed line count (the list is ~1M rows)
+// so a high-ratio zip cannot exhaust memory.
+const maxTrancoLines = 10_000_000
+
 // parseTrancoZip unzips the single inner top-1m.csv and parses rank,domain
 // lines (CRLF, no header), canonicalizing hosts and deriving the ICANN tld
 // (06-ingest.md §2.2 steps 4–5).
@@ -321,6 +325,9 @@ func parseTrancoZip(zipBytes []byte) (rows [][]any, lineCount, rejected int, err
 			continue
 		}
 		lineCount++
+		if lineCount > maxTrancoLines {
+			return nil, 0, 0, fmt.Errorf("inner csv exceeds %d lines", maxTrancoLines)
+		}
 		rankStr, hostStr, ok := strings.Cut(line, ",")
 		if !ok {
 			rejected++

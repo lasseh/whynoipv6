@@ -5,6 +5,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"golang.org/x/net/publicsuffix"
 )
 
 // DNSNSIPv6 checks whether the domain's authoritative nameservers have AAAA
@@ -38,19 +40,19 @@ func (c *DNSNSIPv6) Check(ctx context.Context, domain string, kind Kind) (Result
 		if nsErr == nil && len(nameservers) > 0 {
 			break
 		}
-		// Move up one label: blog.example.com → example.com. Stop at the
-		// TLD/bare-name boundary (01-engine.md §11.3): never query a bare
-		// single-label name — answering TLD nameservers would fabricate a
-		// "zone" for nonexistent domains and break dead-detection branch (a)
-		// (03-state-machine.md §4).
+		// Move up one label: blog.example.co.uk → example.co.uk. Stop at the
+		// registrable-domain boundary (01-engine.md §11.3): never query the
+		// public suffix itself (com, co.uk, ...) — answering registry
+		// nameservers would fabricate a "zone" for nonexistent domains and
+		// break dead-detection branch (a) (03-state-machine.md §4).
 		idx := strings.Index(qname, ".")
 		if idx < 0 || idx == len(qname)-1 {
 			break // bare name or trailing dot
 		}
 		qname = qname[idx+1:]
-		if !strings.Contains(qname, ".") {
+		if suffix, _ := publicsuffix.PublicSuffix(qname); suffix == qname {
 			nameservers, nsErr = nil, nil
-			break // reached the TLD label
+			break // reached the public suffix
 		}
 	}
 

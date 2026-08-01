@@ -12,6 +12,10 @@ import (
 const (
 	trancoListIDURL = "https://tranco-list.eu/top-1m-id"
 	trancoListURL   = "https://tranco-list.eu/top-1m.csv.zip"
+
+	// maxZipBytes caps the downloaded artifact (normally ~5–10MB) so a
+	// misbehaving endpoint cannot balloon crawler memory.
+	maxZipBytes = 100 << 20 // 100MB
 )
 
 // HTTPTrancoSource is the production TrancoSource: 60 s total timeout per
@@ -73,9 +77,12 @@ func (s *HTTPTrancoSource) List(ctx context.Context, etag string) (*TrancoArchiv
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("list download: %s", resp.Status)
 	}
-	data, err := io.ReadAll(resp.Body)
+	data, err := io.ReadAll(io.LimitReader(resp.Body, maxZipBytes+1))
 	if err != nil {
 		return nil, err
+	}
+	if len(data) > maxZipBytes {
+		return nil, fmt.Errorf("list download exceeds %d bytes", maxZipBytes)
 	}
 	arch := &TrancoArchive{Zip: data, ETag: resp.Header.Get("ETag")}
 	if lm := resp.Header.Get("Last-Modified"); lm != "" {

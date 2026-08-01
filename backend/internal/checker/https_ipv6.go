@@ -29,9 +29,19 @@ func (c *HTTPSIPv6) Check(ctx context.Context, domain string, kind Kind) (Result
 
 	d := &HTTPDetail{}
 
-	// Resolve AAAA records.
+	// Resolve AAAA records. A resolver failure is transient (the consensus
+	// quorum already confirmed AAAA exists), so it must not produce a
+	// definitive unsupported observation.
 	ips, _, _, _, err := c.dialer.Resolver().LookupAAAA(ctx, domain)
-	if err != nil || len(ips) == 0 {
+	if err != nil {
+		d.Error = err.Error()
+		return Result{
+			Status:  StatusError,
+			Detail:  d,
+			Latency: time.Since(start),
+		}, nil
+	}
+	if len(ips) == 0 {
 		d.Reason = errNoAAAARecord
 		return Result{
 			Status:  StatusUnsupported,

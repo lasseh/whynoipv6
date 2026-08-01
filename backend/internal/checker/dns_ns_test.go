@@ -81,6 +81,41 @@ func TestDNSNSIPv6(t *testing.T) {
 				}
 			},
 		},
+		{
+			name:   "subdomain under multi-label suffix walks up to registrable domain",
+			domain: "blog.example.co.uk",
+			records: []string{
+				// No NS at blog.example.co.uk — the check walks up to example.co.uk.
+				"example.co.uk. 3600 IN NS ns1.example.co.uk.",
+				"ns1.example.co.uk. 3600 IN AAAA 2001:db8::53",
+			},
+			wantStatus: StatusSupported,
+			check: func(t *testing.T, d NSDetail) {
+				if d.Zone != "example.co.uk" {
+					t.Errorf("zone = %q, want example.co.uk (walked up)", d.Zone)
+				}
+			},
+		},
+		{
+			name:   "dead domain under multi-label suffix stops at public suffix",
+			domain: "deadsite.co.uk",
+			records: []string{
+				// Registry NS at co.uk must never be reached — the walk-up
+				// stops at the registrable-domain boundary so dead detection
+				// (no delegated zone) can fire.
+				"co.uk. 3600 IN NS ns1.nic.uk.",
+				"ns1.nic.uk. 3600 IN AAAA 2001:db8::53",
+			},
+			wantStatus: StatusError,
+			check: func(t *testing.T, d NSDetail) {
+				if d.Zone != "" {
+					t.Errorf("zone = %q, want empty (public suffix must not answer)", d.Zone)
+				}
+				if d.Error != "no NS records found" {
+					t.Errorf("error = %q, want %q", d.Error, "no NS records found")
+				}
+			},
+		},
 	}
 
 	for _, tc := range tests {

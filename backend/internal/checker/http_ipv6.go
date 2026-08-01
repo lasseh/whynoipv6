@@ -31,9 +31,19 @@ func (c *HTTPIPv6) Check(ctx context.Context, domain string, kind Kind) (Result,
 
 	d := &HTTPDetail{}
 
-	// Resolve AAAA records.
+	// Resolve AAAA records. A resolver failure is transient (the consensus
+	// quorum already confirmed AAAA exists), so it must not produce a
+	// definitive unsupported observation.
 	ips, _, _, _, err := c.dialer.Resolver().LookupAAAA(ctx, domain)
-	if err != nil || len(ips) == 0 {
+	if err != nil {
+		d.Error = err.Error()
+		return Result{
+			Status:  StatusError,
+			Detail:  d,
+			Latency: time.Since(start),
+		}, nil
+	}
+	if len(ips) == 0 {
 		d.Reason = errNoAAAARecord
 		return Result{
 			Status:  StatusUnsupported,
@@ -147,15 +157,9 @@ func (c *HTTPIPv6) tryHTTP(ctx context.Context, domain string, ip net.IP) (Resul
 	}, nil
 }
 
-// isConnRefused checks if an error is a connection refused error.
+// isConnRefused checks if an error is a connection refused error. The chain
+// for a refused dial is *net.OpError → *os.SyscallError → syscall.Errno (a
+// value, not a pointer), so match the whole chain with errors.Is.
 func isConnRefused(err error) bool {
-	if err == nil {
-		return false
-	}
-	if opErr, ok := errors.AsType[*net.OpError](err); ok {
-		if sysErr, ok := errors.AsType[*syscall.Errno](opErr.Err); ok {
-			return *sysErr == syscall.ECONNREFUSED
-		}
-	}
-	return false
+	return errors.Is(err, syscall.ECONNREFUSED)
 }
