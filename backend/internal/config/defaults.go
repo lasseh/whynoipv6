@@ -67,7 +67,7 @@ func registryDefaults(binary string) map[string]any {
 		"campaign.git_remote":           "origin",
 		"campaign.pull":                 true,
 		"campaign.push":                 true,
-		"campaign.max_domains_per_file": 1000,
+		"campaign.max_domains_per_file": 5000,
 
 		// §2.7 Live check.
 		"live_check.workers":              4,

@@ -427,12 +427,15 @@ The row returned in every `/domains*` collection:
   "hosting_provider": "Amazon CloudFront",
   "subdomain_count": 3,
   "disabled": false,
+  "mandates": [ { "uuid": "e75de078-71c9-424b-bc87-c2c93cf43e92", "name": "Dutch Central Government" } ],
   "last_checked_at": "2026-07-07T02:14:55Z",
   "created_at": "2022-05-01T00:00:00Z",
   "evidence": { "...": "latest scan_detail JSONB, per §5.1 shape (optional, ?include=evidence)" },
   "meta": { "as_of": "2026-07-07T03:41:12Z", "generation": 20260707 }
 }
 ```
+
+`mandates` (added 2026-08-01) lists the enabled `'mandate'`-tagged campaigns (§5.6) the domain belongs to — `[{uuid, name}]`, always present, `[]` when none. It drives the frontend's mandate badge; membership comes from `campaign_domain` at read time, bounded by the handful of tagged campaigns.
 
 `informational` dimensions are **advisory** — they never gate classification. They are served as latest-observation values with the **public-masking rule the trust model requires everywhere** (03 §1 / the 05 enum registry: `error` and `inconsistent` never reach public output; `partial` is public only for `ptr`/`parity`):
 

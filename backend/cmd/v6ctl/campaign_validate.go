@@ -23,7 +23,7 @@ func campaignValidateCmd() *cobra.Command {
 		// this verb never opens the DB (06 §4.3).
 		PersistentPreRunE: func(*cobra.Command, []string) error { return nil },
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			maxDomains := 1000 // campaign.max_domains_per_file default
+			maxDomains := 5000 // campaign.max_domains_per_file default
 			if v := os.Getenv("CAMPAIGN_MAX_DOMAINS_PER_FILE"); v != "" {
 				if n, err := strconv.Atoi(v); err == nil && n > 0 {
 					maxDomains = n

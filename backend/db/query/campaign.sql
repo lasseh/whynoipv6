@@ -58,3 +58,12 @@ FROM campaign c WHERE c.uuid = @uuid;
 -- name: CampaignAdoption :one
 SELECT day, domains, v6_ready FROM stats_campaign_daily
 WHERE campaign_id = @campaign_id ORDER BY day DESC LIMIT 1;
+
+-- The mandate campaigns a domain belongs to (07 §4.3): drives the domain
+-- detail's mandate badge. Bounded by the handful of tagged campaigns.
+-- name: DomainMandates :many
+SELECT c.uuid, c.name
+FROM campaign c
+JOIN campaign_domain cd ON cd.campaign_id = c.id
+WHERE cd.domain_id = @domain_id AND NOT c.disabled AND 'mandate' = ANY(c.tags)
+ORDER BY c.name;

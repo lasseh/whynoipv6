@@ -1004,6 +1004,12 @@ export interface components {
             /** Format: int64 */
             subdomain_count: number;
             disabled: boolean;
+            /** @description The government-mandate campaigns this domain belongs to (campaigns carrying the 'mandate' tag); empty when none. */
+            mandates: {
+                /** Format: uuid */
+                uuid: string;
+                name: string;
+            }[];
             /** Format: date-time */
             last_checked_at: string | null;
             /** Format: date-time */

@@ -7,6 +7,7 @@ import Breadcrumb from '@/components/Breadcrumb.vue'
 
 import ChangelogTable from '@/components/ChangelogTable.vue'
 import DomainStatusCard from '@/components/DomainStatusCard.vue'
+import MandateBadge from '@/components/MandateBadge.vue'
 
 import { getDomainChangelog } from '@/api'
 import { useDomainDetail } from '@/composables/useDomainDetail'
@@ -34,7 +35,13 @@ const { domain, changelogs, history, error } = useDomainDetail(host, {
           <template v-else-if="domain">
             <div class="flex justify-between items-center mb-8">
               <div class="text-left">
-                <h1 class="h2">{{ domain.host }}</h1>
+                <div class="flex items-center gap-3">
+                  <h1 class="h2">{{ domain.host }}</h1>
+                  <MandateBadge
+                    v-if="domain.mandates.length > 0"
+                    :names="domain.mandates.map((m) => m.name)"
+                  />
+                </div>
                 <p class="text-base text-gray-400 pl-1">
                   Provider: {{ domain.asn.name }} (AS{{ domain.asn.number }})
                 </p>

@@ -305,3 +305,38 @@ func (q *Queries) CampaignUpdateFromFile(ctx context.Context, arg CampaignUpdate
 	err := row.Scan(&id)
 	return id, err
 }
+
+const DomainMandates = `-- name: DomainMandates :many
+SELECT c.uuid, c.name
+FROM campaign c
+JOIN campaign_domain cd ON cd.campaign_id = c.id
+WHERE cd.domain_id = $1 AND NOT c.disabled AND 'mandate' = ANY(c.tags)
+ORDER BY c.name
+`
+
+type DomainMandatesRow struct {
+	Uuid pgtype.UUID `json:"uuid"`
+	Name string      `json:"name"`
+}
+
+// The mandate campaigns a domain belongs to (07 §4.3): drives the domain
+// detail's mandate badge. Bounded by the handful of tagged campaigns.
+func (q *Queries) DomainMandates(ctx context.Context, domainID int64) ([]DomainMandatesRow, error) {
+	rows, err := q.db.Query(ctx, DomainMandates, domainID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []DomainMandatesRow{}
+	for rows.Next() {
+		var i DomainMandatesRow
+		if err := rows.Scan(&i.Uuid, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

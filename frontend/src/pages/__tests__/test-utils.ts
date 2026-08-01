@@ -84,6 +84,7 @@ export const domainDetail: DomainDetail = {
   hosting_provider: null,
   subdomain_count: 0,
   disabled: false,
+  mandates: [],
   last_checked_at: '2026-07-10T12:00:00Z',
   created_at: '2024-01-01T00:00:00Z',
   meta: { as_of: '2026-07-11T00:00:00Z', generation: 20260711 },

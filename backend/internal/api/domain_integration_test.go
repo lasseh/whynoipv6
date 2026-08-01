@@ -299,6 +299,42 @@ func TestTierEquivalence(t *testing.T) {
 	}
 }
 
+// TestDomainMandates (07 §4.3): the detail lists the enabled
+// 'mandate'-tagged campaigns the domain belongs to; plain campaigns and
+// non-member domains contribute nothing.
+func TestDomainMandates(t *testing.T) {
+	srv, pool := newAPI(t)
+	ctx := context.Background()
+	for _, s := range []string{
+		`INSERT INTO campaign (uuid, name, description, source_file, tags)
+		 VALUES ('3fa85f64-5717-4562-b3fc-2c963f66afa6', 'EU Mandate', 'd', 'EU.yml', '{mandate,eu-2030}')`,
+		`INSERT INTO campaign (uuid, name, description, source_file, tags)
+		 VALUES ('7c9e6679-7425-40de-944b-e07fc1f90ae7', 'Plain Campaign', 'd', 'P.yml', '{}')`,
+		`INSERT INTO campaign_domain (campaign_id, domain_id)
+		 SELECT c.id, d.id FROM campaign c, domain d WHERE d.host = 'd1.example'`,
+	} {
+		if _, err := pool.Exec(ctx, s); err != nil {
+			t.Fatalf("seed: %v", err)
+		}
+	}
+
+	var detail struct {
+		Mandates []struct {
+			UUID string `json:"uuid"`
+			Name string `json:"name"`
+		} `json:"mandates"`
+	}
+	getJSON(t, srv.URL+"/domains/d1.example", &detail)
+	if len(detail.Mandates) != 1 || detail.Mandates[0].Name != "EU Mandate" ||
+		detail.Mandates[0].UUID != "3fa85f64-5717-4562-b3fc-2c963f66afa6" {
+		t.Errorf("d1 mandates = %+v, want the one mandate campaign", detail.Mandates)
+	}
+	getJSON(t, srv.URL+"/domains/d2.example", &detail)
+	if detail.Mandates == nil || len(detail.Mandates) != 0 {
+		t.Errorf("d2 mandates = %+v, want present-but-empty", detail.Mandates)
+	}
+}
+
 // TestScopeGuardrail (07 §3.3): a bare residual → 422 scope-required; two
 // residuals → 422 even when scoped; scoped single residual → 200.
 func TestScopeGuardrail(t *testing.T) {

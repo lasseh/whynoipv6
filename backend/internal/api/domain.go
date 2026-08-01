@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
@@ -611,10 +612,18 @@ type DomainDetail struct {
 	HostingProvider *string          `json:"hosting_provider"`
 	SubdomainCount  int64            `json:"subdomain_count"`
 	Disabled        bool             `json:"disabled"`
+	Mandates        []MandateRef     `json:"mandates"`
 	LastCheckedAt   *time.Time       `json:"last_checked_at"`
 	CreatedAt       time.Time        `json:"created_at"`
 	Evidence        *json.RawMessage `json:"evidence,omitempty"`
 	Meta            DetailMeta       `json:"meta"`
+}
+
+// MandateRef names one government-mandate campaign the domain belongs to
+// (07 §4.3) — the campaigns carrying the literal tag "mandate" (§5.6).
+type MandateRef struct {
+	UUID string `json:"uuid"`
+	Name string `json:"name"`
 }
 
 // Informational carries the advisory dimensions after §4.3 masking.
@@ -731,6 +740,16 @@ func (s *Server) getDomain(w http.ResponseWriter, r *http.Request) {
 	}
 	if row.ProviderID != nil && row.ProviderName != nil {
 		d.DNSProvider = &ProviderRef{ID: *row.ProviderID, Name: *row.ProviderName}
+	}
+
+	mandates, err := s.q.DomainMandates(r.Context(), row.ID)
+	if err != nil {
+		InternalError(w, r, err)
+		return
+	}
+	d.Mandates = make([]MandateRef, 0, len(mandates))
+	for _, m := range mandates {
+		d.Mandates = append(d.Mandates, MandateRef{UUID: uuid.UUID(m.Uuid.Bytes).String(), Name: m.Name})
 	}
 
 	if r.URL.Query().Get("include") == "evidence" {

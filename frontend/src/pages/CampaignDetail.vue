@@ -10,6 +10,7 @@ import DomainTable from '@/components/DomainTable.vue'
 import ChangelogTable from '@/components/ChangelogTable.vue'
 import Pagination from '@/components/Pagination.vue'
 import RatingBadge from '@/components/RatingBadge.vue'
+import MandateBadge from '@/components/MandateBadge.vue'
 import ProgressBar from '@/components/ProgressBar.vue'
 
 import { getCampaign, getCampaignChangelog } from '@/api'
@@ -76,7 +77,12 @@ getCampaignChangelog(uuid)
             <header ref="anchorTop" class="mb-8">
               <!-- Title and excerpt -->
               <div class="text-center md:text-left">
-                <h1 class="h2 mb-4">{{ campaign?.name ?? '' }}</h1>
+                <div
+                  class="mb-4 flex flex-col items-center gap-2 md:flex-row md:items-center md:gap-3"
+                >
+                  <h1 class="h2">{{ campaign?.name ?? '' }}</h1>
+                  <MandateBadge v-if="campaign?.tags.includes('mandate')" />
+                </div>
                 <p class="text-xl text-gray-400">{{ campaign?.description ?? '' }}</p>
               </div>
             </header>

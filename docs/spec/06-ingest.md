@@ -280,7 +280,7 @@ campaign:
   git_remote: origin                   # string; push target for the bot commit (deploy key)
   pull: true                           # bool; git pull before parsing — false in containers (no git in the distroless image)
   push: true                           # bool; commit+push the uuid write-back — false in containers
-  max_domains_per_file: 1000           # int; PR-validation size cap (§4)
+  max_domains_per_file: 5000           # int; PR-validation size cap (§4); >1,723 — the Dutch central-government register
 ```
 
 Ops (Ansible; definitions in 09-ops.md): the checkout and the GitHub deploy key (write access, campaign repo only) are provisioned for the single service user that runs both `crawler` and CI-invoked `v6ctl`.
@@ -320,7 +320,7 @@ A single workflow in the **campaign repository**, new and tiny. It runs only on 
   - Any other introduction or change of a `uuid:` value → fail with: `"uuid values are assigned by the import bot; remove the uuid field"`.
 - **Hostname validation (blocking):** per entry, `Canonicalize` (§1) plus the eTLD+1 check (§3.4 step 1: the host must have an ICANN-section registrable domain; both apexes and subdomains of it pass — a host that *is* a public suffix, or under an unknown TLD, fails). Failure lists file, line, entry, reason.
 - **Within-file duplicate (blocking):** two entries in the same file normalizing to the same host → error listing the host and both line numbers. Scope: the changed file only.
-- **Size cap (blocking):** ≤ `campaign.max_domains_per_file` (default 1000) list entries per file.
+- **Size cap (blocking):** ≤ `campaign.max_domains_per_file` (default 5000; raised from 1000 on 2026-08-01 — the live Dutch central-government file holds 1,723 hosts) list entries per file.
 - **Cross-file duplicate (informational only — NEVER blocking):** for each host added by the PR that already appears in another campaign file (**Decision:** compared against all other root-level `.yml`/`.yaml` files at the PR head), the bot comment notes ``"`host` is also in `<other campaign title>`"``. This is expected and legitimate: the membership model exists precisely so one domain belongs to several campaigns and is still checked once per day. Do NOT implement any code path that rejects, warns-as-failure, or auto-dedupes across files.
 - **Bot comment:** parsed summary per changed file (`"32 domains, 3 subdomains → parents auto-linked"` — subdomain count from the §3.4 PSL classification), plus the cross-file informational lines and any rename notices. Exit status reflects blocking checks only.
 
@@ -680,7 +680,7 @@ All keys below are introduced here and consolidated in the registry (09-ops.md),
 | `campaign.git_remote` | string | `origin` | crawler + v6ctl |
 | `campaign.pull` | bool | true | crawler + v6ctl |
 | `campaign.push` | bool | true | crawler + v6ctl |
-| `campaign.max_domains_per_file` | int | 1000 | v6ctl (validate) |
+| `campaign.max_domains_per_file` | int | 5000 | v6ctl (validate) |
 | `crawler.resources.enabled` | bool | false | crawler |
 | `GEOIP_PATH` | string | `/var/lib/GeoIP` | crawler |
 

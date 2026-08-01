@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 
 import PageShell from '@/components/PageShell.vue'
 import ApiError from '@/components/ApiError.vue'
+import MandateBadge from '@/components/MandateBadge.vue'
 
 import { listCampaigns } from '@/api'
 import type { CampaignListItem } from '@/api'
@@ -164,8 +165,9 @@ onMounted(() => {
               >
                 <div class="flex flex-col h-full p-5">
                   <div class="grow mt-2">
-                    <div class="inline-flex text-zinc-100 hover:text-white mb-1">
+                    <div class="inline-flex items-center gap-2 text-zinc-100 hover:text-white mb-1">
                       <h2 class="text-xl leading-snug font-semibold">{{ campaign.name }}</h2>
+                      <MandateBadge v-if="campaign.tags.includes('mandate')" />
                     </div>
                     <div class="text-sm">{{ campaign.description }}</div>
                   </div>

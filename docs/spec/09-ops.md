@@ -209,7 +209,7 @@ Provider names/addresses (`1.1.1.1`, `8.8.8.8`, `9.9.9.9` + their v6 forms), the
 | `campaign.git_remote` | `CAMPAIGN_GIT_REMOTE` | string | `origin` | 06 | Push target for the bot UUID write-back commit (deploy key). |
 | `campaign.pull` | `CAMPAIGN_PULL` | bool | `true` | 06 | `git pull --ff-only` before parsing. `false` in containers: the distroless image has no git — the checkout is a volume refreshed by `campaign-init`. |
 | `campaign.push` | `CAMPAIGN_PUSH` | bool | `true` | 06 | Commit + push the bot UUID write-back. `false` wherever no git/deploy key (containers); generated uuids are still written to files when the mount allows. |
-| `campaign.max_domains_per_file` | `CAMPAIGN_MAX_DOMAINS_PER_FILE` | int | `1000` | 06 | Per-YAML-file domain cap (schema validation). |
+| `campaign.max_domains_per_file` | `CAMPAIGN_MAX_DOMAINS_PER_FILE` | int | `5000` | 06 | Per-YAML-file domain cap (schema validation). Raised from 1000 (2026-08-01): the live repo's Dutch central-government register holds 1,723 hosts. |
 
 ### 2.7 Live check (api rate-limiter + crawler consumer)
 

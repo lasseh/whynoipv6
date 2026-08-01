@@ -1229,7 +1229,7 @@ components:
         latency_v6_ms: { type: integer, nullable: true }
     DomainDetail:
       type: object
-      required: [host, rank, kind, parent, classification, class_flags, saint, ipv6_only, status, informational, tld, country, asn, dns_provider, hosting_provider, subdomain_count, disabled, last_checked_at, created_at, meta]
+      required: [host, rank, kind, parent, classification, class_flags, saint, ipv6_only, status, informational, tld, country, asn, dns_provider, hosting_provider, subdomain_count, disabled, mandates, last_checked_at, created_at, meta]
       properties:
         host: { type: string }
         rank: { type: integer, nullable: true }
@@ -1255,6 +1255,15 @@ components:
         hosting_provider: { type: string, nullable: true }
         subdomain_count: { type: integer, format: int64 }
         disabled: { type: boolean }
+        mandates:
+          type: array
+          description: The government-mandate campaigns this domain belongs to (campaigns carrying the 'mandate' tag); empty when none.
+          items:
+            type: object
+            required: [uuid, name]
+            properties:
+              uuid: { type: string, format: uuid }
+              name: { type: string }
         last_checked_at: { type: string, format: date-time, nullable: true }
         created_at: { type: string, format: date-time }
         evidence:
