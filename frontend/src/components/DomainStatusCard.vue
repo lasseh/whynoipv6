@@ -56,7 +56,7 @@ function resourcesDesc(status: DomainDetail['status']): string {
     : 'Not applicable: the site isn’t reachable over IPv6, so page resources can’t be evaluated.'
 }
 
-// The four §7.1 rows (Apex / WWW / Nameserver / E-Mail) plus the derived
+// The four §7.1 rows (Apex / WWW / Nameserver / Mail (MX)) plus the derived
 // IPv6 Only fold (ADR 0002), which expands to its two source trackers.
 const rows = computed<Row[]>(() => {
   const status = props.domain.status
@@ -88,7 +88,7 @@ const rows = computed<Row[]>(() => {
     },
     {
       key: 'mx',
-      label: 'E-Mail',
+      label: 'Mail (MX)',
       value: status.mx.value,
       dims: [
         {

@@ -8,7 +8,7 @@ export const FIELD_LABELS: Record<Dimension, string> = {
   base: 'the base domain',
   www: 'www',
   ns: 'nameservers',
-  mx: 'e-mail',
+  mx: 'mail',
   conn: 'connectivity',
   resources: 'page resources',
 }

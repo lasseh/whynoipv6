@@ -73,7 +73,7 @@ type jsonFeedItem struct {
 // exact §7.4 labels; the frontend's utils/changelog.ts renders from the
 // same table and the goldens on both sides pin them together.
 var dimLabel = map[string]string{
-	"base": "the base domain", "www": "www", "ns": "nameservers", "mx": "e-mail",
+	"base": "the base domain", "www": "www", "ns": "nameservers", "mx": "mail",
 }
 
 // feedItemTitle derives the human title server-side at render time from

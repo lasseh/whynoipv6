@@ -38,14 +38,14 @@ describe('changelogParts', () => {
       field: 'mx',
       old_value: 'not_applicable',
       new_value: 'no_record',
-      message: 'example.com started publishing e-mail — without IPv6 records',
+      message: 'example.com started publishing mail — without IPv6 records',
       colorClass: 'text-amber-500',
     },
     {
       field: 'mx',
       old_value: 'supported',
       new_value: 'no_record',
-      message: 'example.com no longer publishes records for e-mail',
+      message: 'example.com no longer publishes records for mail',
       colorClass: 'text-amber-500',
     },
     {
@@ -107,7 +107,7 @@ describe('changelogParts', () => {
       base: 'the base domain',
       www: 'www',
       ns: 'nameservers',
-      mx: 'e-mail',
+      mx: 'mail',
       conn: 'connectivity',
       resources: 'page resources',
     })

@@ -161,8 +161,8 @@ watch(
                     There was nothing to grade — it never counts against a domain.
                   </p>
                   <p class="text-base text-gray-400 mb-2">
-                    For E-Mail it means the domain publishes no MX records: no mail service, nothing
-                    to check. A domain without mail can still become a hero.
+                    For Mail (MX) it means the domain publishes no MX records: no mail service,
+                    nothing to check. A domain without mail can still become a Hero.
                   </p>
                   <p class="text-base text-gray-400">
                     For Page resources it means one of two things: the page loads over IPv6 and

@@ -49,7 +49,7 @@ const hoverIndex = ref<number | null>(null)
           </th>
           <th class="px-2 py-3 whitespace-nowrap">
             <div class="font-semibold text-center md:block hidden">
-              <Tooltip text="Query MX record for domain.com">E-Mail</Tooltip>
+              <Tooltip text="Query MX record for domain.com">Mail (MX)</Tooltip>
             </div>
             <div class="font-semibold text-center md:hidden">MX</div>
           </th>
