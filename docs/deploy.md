@@ -233,9 +233,10 @@ across processes by Postgres advisory locks.
   `/datasets` as static files straight from the export directory.
 - `whynoipv6.com.conf` — serves the production frontend bundle from
   `/var/www/whynoipv6.com` (the deploy target of `frontend/dist/`) as a SPA,
-  including the legacy singular→plural 301 map (`/domain/x` → `/domains/x`). The
-  umami `/script.js` + `/api/send` proxy blocks are still commented out pending the
-  real umami host.
+  including the legacy singular→plural 301 map (`/domain/x` → `/domains/x`).
+  `/script.js` is proxied to Umami Cloud (`cloud.umami.is`, resolved at request
+  time via the host's unbound instances); the tracker POSTs directly to
+  `gateway.umami.is`, so there is no `/api/send` proxy.
 
 ### Backups ([`deploy/pgbackrest/`](../deploy/pgbackrest/))
 
