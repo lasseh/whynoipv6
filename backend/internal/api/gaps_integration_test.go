@@ -316,7 +316,5 @@ func TestGraphsEqualLists(t *testing.T) {
 // newServerOver serves the API over an existing (caller-seeded) pool.
 func newServerOver(t *testing.T, pool *pgxpool.Pool) *httptest.Server {
 	t.Helper()
-	srv := httptest.NewServer(api.NewRouter(pool, api.Options{}))
-	t.Cleanup(srv.Close)
-	return srv
+	return newServer(t, pool, api.Options{})
 }

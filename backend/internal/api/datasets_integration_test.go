@@ -3,7 +3,6 @@
 package api_test
 
 import (
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
@@ -18,8 +17,7 @@ import (
 func TestDatasetsEndpoint(t *testing.T) {
 	pool := pgtest.NewDB(t)
 	dir := t.TempDir()
-	srv := httptest.NewServer(api.NewRouter(pool, api.Options{DatasetsDir: dir}))
-	t.Cleanup(srv.Close)
+	srv := newServer(t, pool, api.Options{DatasetsDir: dir})
 
 	var problem struct {
 		Type   string `json:"type"`

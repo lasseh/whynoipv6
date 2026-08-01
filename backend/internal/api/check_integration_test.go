@@ -22,9 +22,7 @@ import (
 func newCheckAPI(t *testing.T, opts api.Options) (*httptest.Server, *pgxpool.Pool) {
 	t.Helper()
 	pool := pgtest.NewDB(t)
-	srv := httptest.NewServer(api.NewRouter(pool, opts))
-	t.Cleanup(srv.Close)
-	return srv, pool
+	return newServer(t, pool, opts), pool
 }
 
 func postCheck(t *testing.T, srv *httptest.Server, ip, body string) *http.Response {
@@ -40,14 +38,6 @@ func postCheck(t *testing.T, srv *httptest.Server, ip, body string) *http.Respon
 		t.Fatal(err)
 	}
 	return resp
-}
-
-func decodeBody(t *testing.T, resp *http.Response, out any) {
-	t.Helper()
-	defer resp.Body.Close()
-	if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
-		t.Fatal(err)
-	}
 }
 
 // fakeScanResult builds a stored engine ScanResult for the dedupe mapper.

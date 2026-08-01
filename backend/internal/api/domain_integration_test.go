@@ -6,18 +6,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/http"
-	"net/http/httptest"
-	"os"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-
-	"github.com/lasseh/whynoipv6/internal/api"
-	"github.com/lasseh/whynoipv6/internal/postgres/pgtest"
 )
-
-func TestMain(m *testing.M) { os.Exit(pgtest.Main(m)) }
 
 // seedLeaderboard: a small mixed population — heroes, sinners, partial, a
 // saint hero, a disabled row, a rank-NULL campaign row, and a shame pick.
@@ -70,55 +62,6 @@ func seedLeaderboard(t *testing.T, pool *pgxpool.Pool) {
 			t.Fatalf("seed: %v\n%s", err, s)
 		}
 	}
-}
-
-func newAPI(t *testing.T) (*httptest.Server, *pgxpool.Pool) {
-	t.Helper()
-	pool := pgtest.NewDB(t)
-	seedLeaderboard(t, pool)
-	srv := httptest.NewServer(api.NewRouter(pool, api.Options{}))
-	t.Cleanup(srv.Close)
-	return srv, pool
-}
-
-func getJSON(t *testing.T, url string, out any) *http.Response {
-	t.Helper()
-	resp, err := http.Get(url)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer resp.Body.Close()
-	if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
-		t.Fatalf("decode %s: %v", url, err)
-	}
-	return resp
-}
-
-type envelope struct {
-	Items []map[string]json.RawMessage `json:"items"`
-	Page  struct {
-		NextCursor *string `json:"next_cursor"`
-		PrevCursor *string `json:"prev_cursor"`
-		HasMore    bool    `json:"has_more"`
-	} `json:"page"`
-	Meta struct {
-		AsOf          string `json:"as_of"`
-		Generation    int32  `json:"generation"`
-		Count         *int64 `json:"count"`
-		CountEstimate *int64 `json:"count_estimate"`
-		License       string `json:"license"`
-	} `json:"meta"`
-}
-
-func hosts(t *testing.T, items []map[string]json.RawMessage) []string {
-	t.Helper()
-	out := make([]string, len(items))
-	for i, it := range items {
-		if err := json.Unmarshal(it["host"], &out[i]); err != nil {
-			t.Fatal(err)
-		}
-	}
-	return out
 }
 
 // TestDomainRowShape (07 §4.2): real 4-value enum + JSON null, rank

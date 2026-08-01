@@ -6,25 +6,9 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"encoding/xml"
-	"io"
-	"net/http"
 	"strings"
 	"testing"
 )
-
-func fetch(t *testing.T, url string) (*http.Response, []byte) {
-	t.Helper()
-	resp, err := http.Get(url)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return resp, body
-}
 
 // TestFeeds (P4.15 / 07 §5.4): every scope×format feed carries the required
 // top-level members, the latest-50 window, and the composite item id.
