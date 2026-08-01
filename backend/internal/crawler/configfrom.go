@@ -1,6 +1,9 @@
 package crawler
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
 
 // ConfigSource is the consumer-side view of the config registry — satisfied
 // by *config.Config without importing it.
@@ -9,6 +12,7 @@ type ConfigSource interface {
 	Int(key string) int
 	Bool(key string) bool
 	Duration(key string) time.Duration
+	UnmarshalKey(key string, out any) error
 }
 
 // The ConfigFrom constructors below bind the crawler's registry keys
@@ -24,6 +28,21 @@ func ScheduleConfigFrom(src ConfigSource) ScheduleConfig {
 		RecheckBackoffMax:   src.Duration("recheck_backoff_max"),
 		SlowLaneEvery:       src.Duration("lifecycle.slow_lane_every"),
 	}
+}
+
+// BandsFrom decodes and validates the YAML-only cadence.bands key. It is
+// the one binder that can fail: a malformed band must abort startup
+// (04 §4 Decision), so it stays out of ScheduleConfigFrom's error-free
+// signature and cmd wiring assigns the result.
+func BandsFrom(src ConfigSource) ([]Band, error) {
+	var bands []Band
+	if err := src.UnmarshalKey("cadence.bands", &bands); err != nil {
+		return nil, fmt.Errorf("cadence.bands: %w", err)
+	}
+	if err := ValidateBands(bands); err != nil {
+		return nil, err
+	}
+	return bands, nil
 }
 
 // CommitConfigFrom binds the commit machine's keys (schedule included).

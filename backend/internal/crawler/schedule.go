@@ -7,11 +7,12 @@ import (
 	"github.com/lasseh/whynoipv6/internal/domain"
 )
 
-// Band is one cadence band (config cadence.bands; 04 §4).
+// Band is one cadence band (config cadence.bands; 04 §4). The mapstructure
+// tags carry the 09-ops §2.7 YAML shape through BandsFrom.
 type Band struct {
-	MinRank int32         // 0 = no lower bound
-	MaxRank int32         // 0 = no upper bound
-	Every   time.Duration // > 0
+	MinRank int32         `mapstructure:"min_rank"` // 0 = no lower bound
+	MaxRank int32         `mapstructure:"max_rank"` // 0 = no upper bound
+	Every   time.Duration `mapstructure:"every"`    // > 0
 }
 
 // ScheduleConfig carries the §9/§5 scheduling knobs (registry: 09-ops.md).

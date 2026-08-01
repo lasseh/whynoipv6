@@ -87,7 +87,12 @@ func run() error {
 		return err
 	}
 
-	committer := crawler.NewCommitter(pool, crawler.CommitConfigFrom(cfg))
+	commitCfg := crawler.CommitConfigFrom(cfg)
+	commitCfg.Schedule.Bands, err = crawler.BandsFrom(cfg)
+	if err != nil {
+		return err
+	}
+	committer := crawler.NewCommitter(pool, commitCfg)
 
 	runID := uuid.New()
 	hostname, _ := os.Hostname()
