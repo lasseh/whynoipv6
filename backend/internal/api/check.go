@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math"
 	"net/http"
 	"net/netip"
@@ -264,28 +265,51 @@ func (s *Server) jobEnvelope(r *http.Request, j *jobFields) CheckEnvelope {
 	return env
 }
 
-// dedupeEnvelope builds the §5.1.1 step-4 synthetic done envelope from the
-// latest scan_detail via the shared mapper.
-func (s *Server) dedupeEnvelope(r *http.Request, row *db.DomainConfirmedRow, host string) (CheckEnvelope, bool) {
-	raw, err := s.q.LatestScanDetail(r.Context(), row.ID)
+// storedEvidence renders the latest stored scan_detail through the shared
+// live mapper — the §5.1.3 result shape, never the raw engine
+// serialization (07 §4.3). The stored detail is a real crawl: preflight was
+// necessarily fresh at scan time, so both clock inputs anchor to the scan
+// timestamp. Returns (nil, nil) when there is no stored detail or it cannot
+// be parsed; a non-ErrNoRows failure is returned as an error.
+func (s *Server) storedEvidence(r *http.Request, domainID int64, host string,
+	kind db.DomainKind, scanTS time.Time,
+) (json.RawMessage, error) {
+	raw, err := s.q.LatestScanDetail(r.Context(), domainID)
 	if err != nil {
-		return CheckEnvelope{}, false
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	if raw == nil {
+		return nil, nil
 	}
 	var sr checker.ScanResult
 	if err := json.Unmarshal(raw, &sr); err != nil {
+		slog.Warn("evidence detail unparseable, omitted", "domain", host, "err", err.Error())
+		return nil, nil
+	}
+	links := observe.LiveLinks(r.Context(), s.pool, sr, s.opts.ResourcesEnabled)
+	result := observe.MapLiveResult(domain.Kind(kind), sr, scanTS, scanTS, links, s.opts.ResourcesEnabled)
+	resultRaw, err := json.Marshal(result)
+	if err != nil {
+		return nil, nil
+	}
+	return resultRaw, nil
+}
+
+// dedupeEnvelope builds the §5.1.1 step-4 synthetic done envelope from the
+// latest scan_detail via the shared mapper.
+func (s *Server) dedupeEnvelope(r *http.Request, row *db.DomainConfirmedRow, host string) (CheckEnvelope, bool) {
+	scanTS := row.LastCheckedAt.Time.UTC()
+	ev, err := s.storedEvidence(r, row.ID, host, row.Kind, scanTS)
+	if err != nil || ev == nil {
 		return CheckEnvelope{}, false
 	}
-	scanTS := row.LastCheckedAt.Time.UTC()
-	// The stored detail is a real crawl: preflight was necessarily fresh at
-	// scan time, so both clock inputs anchor to the scan timestamp.
-	links := observe.LiveLinks(r.Context(), s.pool, sr, s.opts.ResourcesEnabled)
-	result := observe.MapLiveResult(domain.Kind(row.Kind), sr, scanTS, scanTS, links, s.opts.ResourcesEnabled)
-	resultRaw, _ := json.Marshal(result)
-
 	return CheckEnvelope{
 		ID: nil, Host: host, Status: "done", Cached: true,
 		CreatedAt: scanTS, CompletedAt: &scanTS,
-		Result:    resultRaw,
+		Result:    ev,
 		Confirmed: confirmedBlock(row),
 	}, true
 }

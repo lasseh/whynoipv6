@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log/slog"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -17,9 +16,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/lasseh/whynoipv6/internal/checker"
 	"github.com/lasseh/whynoipv6/internal/domain"
-	"github.com/lasseh/whynoipv6/internal/observe"
 	"github.com/lasseh/whynoipv6/internal/postgres"
 	db "github.com/lasseh/whynoipv6/internal/postgres/db"
 )
@@ -763,27 +760,13 @@ func (s *Server) getDomain(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.URL.Query().Get("include") == "evidence" {
-		raw, err := s.q.LatestScanDetail(r.Context(), row.ID)
-		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		ev, err := s.storedEvidence(r, row.ID, host, row.Kind, row.LastCheckedAt.Time.UTC())
+		if err != nil {
 			InternalError(w, r, err)
 			return
 		}
-		// Evidence is the §5.1.3 result shape via the shared mapper — the
-		// same rendering as the live-check dedupe path, never the raw
-		// engine serialization (07 §4.3).
-		if raw != nil {
-			var sr checker.ScanResult
-			if err := json.Unmarshal(raw, &sr); err != nil {
-				slog.Warn("evidence detail unparseable, omitted", "domain", host, "err", err.Error())
-			} else {
-				scanTS := row.LastCheckedAt.Time.UTC()
-				links := observe.LiveLinks(r.Context(), s.pool, sr, s.opts.ResourcesEnabled)
-				mapped := observe.MapLiveResult(domain.Kind(row.Kind), sr, scanTS, scanTS, links, s.opts.ResourcesEnabled)
-				if evRaw, err := json.Marshal(mapped); err == nil {
-					ev := json.RawMessage(evRaw)
-					d.Evidence = &ev
-				}
-			}
+		if ev != nil {
+			d.Evidence = &ev
 		}
 	}
 
