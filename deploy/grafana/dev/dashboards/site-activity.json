@@ -1,0 +1,184 @@
+{
+  "uid": "wni6-activity",
+  "title": "WhyNoIPv6 — Site Activity",
+  "description": "Live view of what visitors are doing on the site, built entirely from check_job — the API's one user-driven write path (07-api.md §5.1). Operational counterpart to 'Public Engagement' (wni6-engagement), which holds the 30-day strategic view. NOTE: this is not a webserver dashboard — no nginx access-log telemetry is collected anywhere (09-ops.md §12 pins Grafana to read Postgres directly), so HTTP status codes and page-view counts are not available. check_job retention is 30 days (live_check.retention=720h), which bounds every range here.",
+  "tags": ["whynoipv6", "engagement"],
+  "links": [{"type": "dashboards", "title": "Dashboards", "tags": ["whynoipv6"], "asDropdown": true, "keepTime": false, "includeVars": false, "targetBlank": false, "icon": "external link", "tooltip": "", "url": ""}],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "refresh": "1m",
+  "time": {"from": "now-24h", "to": "now"},
+  "panels": [
+    {
+      "type": "stat", "title": "Checks", "gridPos": {"x": 0, "y": 0, "w": 4, "h": 4},
+      "description": "Live checks requested in the selected range.",
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "table",
+        "rawSql": "SELECT count(*) AS checks FROM check_job WHERE $__timeFilter(created_at)"}],
+      "fieldConfig": {"defaults": {"unit": "short", "color": {"mode": "fixed", "fixedColor": "text"}}, "overrides": []}
+    },
+    {
+      "type": "stat", "title": "Unique requesters", "gridPos": {"x": 4, "y": 0, "w": 4, "h": 4},
+      "description": "Distinct requester IPs in range — the closest thing to a visitor count without webserver logs.",
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "table",
+        "rawSql": "SELECT count(DISTINCT requester_ip) AS requesters FROM check_job WHERE $__timeFilter(created_at)"}],
+      "fieldConfig": {"defaults": {"unit": "short", "color": {"mode": "fixed", "fixedColor": "text"}}, "overrides": []}
+    },
+    {
+      "type": "stat", "title": "In queue now", "gridPos": {"x": 8, "y": 0, "w": 4, "h": 4},
+      "description": "Jobs currently pending or processing. Ignores the time picker — this is a right-now gauge. A number that only grows means the crawler-side consumer is not draining.",
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "table",
+        "rawSql": "SELECT count(*) AS queued FROM check_job WHERE status IN ('pending', 'processing')"}],
+      "fieldConfig": {"defaults": {"unit": "short", "thresholds": {"mode": "absolute", "steps": [{"value": null, "color": "green"}, {"value": 20, "color": "yellow"}, {"value": 100, "color": "red"}]}}, "overrides": []}
+    },
+    {
+      "type": "stat", "title": "Oldest in queue", "gridPos": {"x": 12, "y": 0, "w": 4, "h": 4},
+      "description": "Age of the oldest un-completed job. Yellow at 5 min (live_check.reclaim_after — a lease should have been reclaimed by now); red at 15 min (live_check.fail_after — the reaper should have failed it).",
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "table",
+        "rawSql": "SELECT coalesce(extract(epoch FROM now() - min(created_at)), 0) AS age FROM check_job WHERE status IN ('pending', 'processing')"}],
+      "fieldConfig": {"defaults": {"unit": "s", "decimals": 0, "thresholds": {"mode": "absolute", "steps": [{"value": null, "color": "green"}, {"value": 300, "color": "yellow"}, {"value": 900, "color": "red"}]}}, "overrides": []}
+    },
+    {
+      "type": "stat", "title": "Failure rate", "gridPos": {"x": 16, "y": 0, "w": 4, "h": 4},
+      "description": "Share of completed jobs in range that failed.",
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "table",
+        "rawSql": "SELECT count(*) FILTER (WHERE status = 'failed')::float / nullif(count(*) FILTER (WHERE status IN ('done', 'failed')), 0) AS ratio FROM check_job WHERE $__timeFilter(created_at)"}],
+      "fieldConfig": {"defaults": {"unit": "percentunit", "decimals": 1, "thresholds": {"mode": "absolute", "steps": [{"value": null, "color": "green"}, {"value": 0.05, "color": "yellow"}, {"value": 0.2, "color": "red"}]}}, "overrides": []}
+    },
+    {
+      "type": "stat", "title": "p95 wait", "gridPos": {"x": 20, "y": 0, "w": 4, "h": 4},
+      "description": "95th-percentile wall time from request to result — what a visitor actually waits on the /check page.",
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "table",
+        "rawSql": "SELECT percentile_cont(0.95) WITHIN GROUP (ORDER BY extract(epoch FROM completed_at - created_at)) AS p95 FROM check_job WHERE status = 'done' AND $__timeFilter(created_at)"}],
+      "fieldConfig": {"defaults": {"unit": "s", "decimals": 1, "thresholds": {"mode": "absolute", "steps": [{"value": null, "color": "green"}, {"value": 30, "color": "yellow"}, {"value": 90, "color": "red"}]}}, "overrides": []}
+    },
+
+    {
+      "type": "timeseries", "title": "Check traffic by outcome", "gridPos": {"x": 0, "y": 4, "w": 14, "h": 9},
+      "description": "Request volume over time, split by job outcome. The shape of site usage — bucket width follows the time picker.",
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "time_series",
+        "rawSql": "SELECT $__timeGroup(created_at, $__interval) AS time, count(*) FILTER (WHERE status = 'done') AS done, count(*) FILTER (WHERE status = 'failed') AS failed, count(*) FILTER (WHERE status IN ('pending', 'processing')) AS in_flight FROM check_job WHERE $__timeFilter(created_at) GROUP BY 1 ORDER BY 1"}],
+      "fieldConfig": {"defaults": {"unit": "short", "custom": {"drawStyle": "bars", "fillOpacity": 70, "lineWidth": 0, "stacking": {"mode": "normal"}}}, "overrides": [
+        {"matcher": {"id": "byName", "options": "done"}, "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "green"}}]},
+        {"matcher": {"id": "byName", "options": "failed"}, "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "red"}}]},
+        {"matcher": {"id": "byName", "options": "in_flight"}, "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "blue"}}]}
+      ]}
+    },
+    {
+      "type": "piechart", "title": "What visitors are finding (base AAAA)", "gridPos": {"x": 14, "y": 4, "w": 10, "h": 9},
+      "description": "Raw observation status of the apex AAAA across completed checks — the answer visitors actually got. Vocabulary is the live-check raw-observation set (07-api.md §5.1.4), not confirmed state.",
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "table",
+        "rawSql": "SELECT coalesce(result->'checks'->'base'->>'status', 'unknown') AS outcome, count(*) AS checks FROM check_job WHERE status = 'done' AND $__timeFilter(created_at) GROUP BY 1 ORDER BY 2 DESC"}],
+      "options": {"reduceOptions": {"values": true, "calcs": [], "fields": ""}, "legend": {"displayMode": "table", "placement": "right", "values": ["value", "percent"]}, "pieType": "donut"},
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": [
+        {"matcher": {"id": "byName", "options": "supported"}, "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "green"}}]},
+        {"matcher": {"id": "byName", "options": "unsupported"}, "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "red"}}]},
+        {"matcher": {"id": "byName", "options": "partial"}, "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "orange"}}]},
+        {"matcher": {"id": "byName", "options": "no_record"}, "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "yellow"}}]},
+        {"matcher": {"id": "byName", "options": "inconsistent"}, "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "purple"}}]},
+        {"matcher": {"id": "byName", "options": "error"}, "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "text"}}]}
+      ]}
+    },
+
+    {
+      "type": "table", "title": "Latest live checks", "gridPos": {"x": 0, "y": 13, "w": 24, "h": 11},
+      "description": "The 50 most recent checks, newest first — who asked about what, and what they got back. Deliberately NOT time-filtered: this is a live feed, so it always shows the newest activity regardless of the time picker. 'Wait' is request→result wall time; 'Scan' is the engine's own duration.",
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "table",
+        "rawSql": "SELECT created_at AS \"Requested\", host AS \"Domain\", status::text AS \"Job\", coalesce(result->'checks'->'base'->>'status', '-') AS \"Base AAAA\", coalesce(result->'checks'->'www'->>'status', '-') AS \"WWW AAAA\", coalesce(result->'checks'->'mx'->>'status', '-') AS \"MX\", coalesce(result->'checks'->'ns'->>'status', '-') AS \"NS\", round(extract(epoch FROM completed_at - created_at)::numeric, 1) AS \"Wait s\", (result->>'duration_ms')::numeric AS \"Scan ms\", coalesce(error, '') AS \"Error\" FROM check_job ORDER BY created_at DESC LIMIT 50"}],
+      "options": {"sortBy": [{"displayName": "Requested", "desc": true}]},
+      "fieldConfig": {"defaults": {"custom": {"align": "left", "cellOptions": {"type": "auto"}}}, "overrides": [
+        {"matcher": {"id": "byName", "options": "Job"}, "properties": [
+          {"id": "custom.cellOptions", "value": {"type": "color-text"}},
+          {"id": "custom.width", "value": 100},
+          {"id": "mappings", "value": [{"type": "value", "options": {
+            "done": {"color": "green", "index": 0},
+            "failed": {"color": "red", "index": 1},
+            "processing": {"color": "blue", "index": 2},
+            "pending": {"color": "yellow", "index": 3}}}]}
+        ]},
+        {"matcher": {"id": "byRegexp", "options": "Base AAAA|WWW AAAA|MX|NS"}, "properties": [
+          {"id": "custom.cellOptions", "value": {"type": "color-text"}},
+          {"id": "custom.width", "value": 130},
+          {"id": "mappings", "value": [{"type": "value", "options": {
+            "supported": {"color": "green", "index": 0},
+            "partial": {"color": "orange", "index": 1},
+            "unsupported": {"color": "red", "index": 2},
+            "no_record": {"color": "yellow", "index": 3},
+            "not_applicable": {"color": "text", "index": 4},
+            "inconsistent": {"color": "purple", "index": 5},
+            "error": {"color": "text", "index": 6}}}]}
+        ]},
+        {"matcher": {"id": "byName", "options": "Wait s"}, "properties": [{"id": "unit", "value": "s"}, {"id": "custom.width", "value": 90}]},
+        {"matcher": {"id": "byName", "options": "Scan ms"}, "properties": [{"id": "unit", "value": "ms"}, {"id": "custom.width", "value": 90}]},
+        {"matcher": {"id": "byName", "options": "Requested"}, "properties": [{"id": "custom.width", "value": 180}]}
+      ]}
+    },
+
+    {
+      "type": "table", "title": "Most-checked domains", "gridPos": {"x": 0, "y": 24, "w": 8, "h": 9},
+      "description": "What visitors are looking up in the selected range. Repeat subjects are outreach candidates.",
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "table",
+        "rawSql": "SELECT host AS \"Domain\", count(*) AS \"Checks\", count(DISTINCT requester_ip) AS \"Requesters\", max(created_at) AS \"Last\" FROM check_job WHERE $__timeFilter(created_at) GROUP BY 1 ORDER BY 2 DESC, 4 DESC LIMIT 25"}],
+      "options": {"sortBy": [{"displayName": "Checks", "desc": true}]},
+      "fieldConfig": {"defaults": {"unit": "short", "custom": {"align": "left"}}, "overrides": [
+        {"matcher": {"id": "byName", "options": "Checks"}, "properties": [{"id": "custom.width", "value": 95}]},
+        {"matcher": {"id": "byName", "options": "Requesters"}, "properties": [{"id": "custom.width", "value": 95}]},
+        {"matcher": {"id": "byName", "options": "Last"}, "properties": [{"id": "unit", "value": "time:MM/DD HH:mm"}, {"id": "custom.width", "value": 105}]}
+      ]}
+    },
+    {
+      "type": "table", "title": "Top requesters", "gridPos": {"x": 8, "y": 24, "w": 8, "h": 9},
+      "description": "Requester concentration, grouped the way the rate limiter groups it — IPv6 collapsed to its /64 prefix, IPv4 exact (07-api.md §6.3). One prefix dominating with few distinct domains is a bot; the per-prefix budget is live_check.rate_ip_per_hour (10/h).",
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "table",
+        "rawSql": "SELECT CASE WHEN family(requester_ip) = 6 THEN set_masklen(requester_ip::cidr, 64)::text ELSE requester_ip::text END AS \"Requester\", count(*) AS \"Checks\", count(DISTINCT host) AS \"Domains\", max(created_at) AS \"Last\" FROM check_job WHERE $__timeFilter(created_at) GROUP BY 1 ORDER BY 2 DESC LIMIT 25"}],
+      "options": {"sortBy": [{"displayName": "Checks", "desc": true}]},
+      "fieldConfig": {"defaults": {"unit": "short", "custom": {"align": "left"}}, "overrides": [
+        {"matcher": {"id": "byName", "options": "Checks"}, "properties": [{"id": "custom.width", "value": 95}]},
+        {"matcher": {"id": "byName", "options": "Domains"}, "properties": [{"id": "custom.width", "value": 85}]},
+        {"matcher": {"id": "byName", "options": "Last"}, "properties": [{"id": "unit", "value": "time:MM/DD HH:mm"}, {"id": "custom.width", "value": 105}]}
+      ]}
+    },
+    {
+      "type": "table", "title": "Failure reasons", "gridPos": {"x": 16, "y": 24, "w": 8, "h": 9},
+      "description": "Grouped error text for failed jobs in range. 'timed out' is the reaper (live_check.fail_after); anything else comes from the engine.",
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "table",
+        "rawSql": "SELECT coalesce(error, '(no message)') AS \"Error\", count(*) AS \"Jobs\", max(created_at) AS \"Last\" FROM check_job WHERE status = 'failed' AND $__timeFilter(created_at) GROUP BY 1 ORDER BY 2 DESC LIMIT 25"}],
+      "options": {"sortBy": [{"displayName": "Jobs", "desc": true}]},
+      "fieldConfig": {"defaults": {"unit": "short", "custom": {"align": "left"}}, "overrides": [
+        {"matcher": {"id": "byName", "options": "Jobs"}, "properties": [{"id": "custom.cellOptions", "value": {"type": "color-text"}}, {"id": "color", "value": {"mode": "fixed", "fixedColor": "red"}}, {"id": "custom.width", "value": 70}]},
+        {"matcher": {"id": "byName", "options": "Last"}, "properties": [{"id": "unit", "value": "time:MM/DD HH:mm"}, {"id": "custom.width", "value": 105}]}
+      ]}
+    },
+
+    {
+      "type": "timeseries", "title": "Visitor wait time", "gridPos": {"x": 0, "y": 33, "w": 12, "h": 8},
+      "description": "Median and p95 request→result wall time for completed checks. This is the page-load experience on /check, not engine performance.",
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "time_series",
+        "rawSql": "SELECT $__timeGroup(created_at, $__interval) AS time, percentile_cont(0.5) WITHIN GROUP (ORDER BY extract(epoch FROM completed_at - created_at)) AS p50, percentile_cont(0.95) WITHIN GROUP (ORDER BY extract(epoch FROM completed_at - created_at)) AS p95 FROM check_job WHERE status = 'done' AND $__timeFilter(created_at) GROUP BY 1 ORDER BY 1"}],
+      "fieldConfig": {"defaults": {"unit": "s", "decimals": 1, "custom": {"drawStyle": "line", "lineWidth": 2, "fillOpacity": 10, "spanNulls": true}}, "overrides": [
+        {"matcher": {"id": "byName", "options": "p50"}, "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "blue"}}]},
+        {"matcher": {"id": "byName", "options": "p95"}, "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "orange"}}]}
+      ]}
+    },
+    {
+      "type": "timeseries", "title": "Hourly volume vs global rate cap", "gridPos": {"x": 12, "y": 33, "w": 12, "h": 8},
+      "description": "Checks per clock hour against live_check.rate_global_per_hour (500). Touching the line means real visitors are being turned away with 429s — raise the cap or investigate the source in 'Top requesters'.",
+      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
+      "targets": [{"refId": "A", "format": "time_series",
+        "rawSql": "SELECT $__timeGroup(created_at, '1h') AS time, count(*) AS checks FROM check_job WHERE $__timeFilter(created_at) GROUP BY 1 ORDER BY 1"}],
+      "fieldConfig": {"defaults": {"unit": "short", "custom": {"drawStyle": "bars", "fillOpacity": 60, "lineWidth": 0, "thresholdsStyle": {"mode": "line"}}, "thresholds": {"mode": "absolute", "steps": [{"value": null, "color": "blue"}, {"value": 500, "color": "red"}]}}, "overrides": []}
+    }
+  ]
+}

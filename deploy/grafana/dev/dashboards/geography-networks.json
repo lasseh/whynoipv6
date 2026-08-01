@@ -3,6 +3,7 @@
   "title": "WhyNoIPv6 — Geography & Networks",
   "description": "Where IPv6 is happening: country, ASN, DNS-provider, hosting, and TLD league tables. The advocacy dashboard — it names names.",
   "tags": ["whynoipv6", "data"],
+  "links": [{"type": "dashboards", "title": "Dashboards", "tags": ["whynoipv6"], "asDropdown": true, "keepTime": false, "includeVars": false, "targetBlank": false, "icon": "external link", "tooltip": "", "url": ""}],
   "timezone": "browser",
   "schemaVersion": 39,
   "refresh": "15m",

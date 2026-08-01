@@ -3,6 +3,7 @@
   "title": "WhyNoIPv6 — Rank-Weighted Adoption",
   "description": "Does the web that matters adopt IPv6? Adoption by Tranco rank band, the top-1000 trend, and the highest-ranked offenders.",
   "tags": ["whynoipv6", "data"],
+  "links": [{"type": "dashboards", "title": "Dashboards", "tags": ["whynoipv6"], "asDropdown": true, "keepTime": false, "includeVars": false, "targetBlank": false, "icon": "external link", "tooltip": "", "url": ""}],
   "timezone": "browser",
   "schemaVersion": 39,
   "refresh": "15m",

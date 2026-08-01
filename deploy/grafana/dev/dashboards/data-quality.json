@@ -2,116 +2,475 @@
   "uid": "wni6-quality",
   "title": "WhyNoIPv6 — Data Quality & Trust",
   "description": "Can we believe our own numbers? Observation quality, confirmation churn, flapping domains, and commit-machinery health. This dashboard guards the changelog's credibility.",
-  "tags": ["whynoipv6", "quality"],
+  "tags": [
+    "whynoipv6",
+    "quality"
+  ],
+  "links": [
+    {
+      "type": "dashboards",
+      "title": "Dashboards",
+      "tags": [
+        "whynoipv6"
+      ],
+      "asDropdown": true,
+      "keepTime": false,
+      "includeVars": false,
+      "targetBlank": false,
+      "icon": "external link",
+      "tooltip": "",
+      "url": ""
+    }
+  ],
   "timezone": "browser",
   "schemaVersion": 39,
   "refresh": "5m",
-  "time": {"from": "now-7d", "to": "now"},
+  "time": {
+    "from": "now-7d",
+    "to": "now"
+  },
   "panels": [
     {
-      "type": "stat", "title": "Non-definitive share (24h)", "gridPos": {"x": 0, "y": 0, "w": 4, "h": 4},
+      "type": "stat",
+      "title": "Non-definitive share (24h)",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
       "description": "Share of base observations landing on error/inconsistent in the last day. High = resolver trouble or network issues, and confirmed state stops advancing.",
-      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
-      "targets": [{"refId": "A", "format": "table",
-        "rawSql": "SELECT count(*) FILTER (WHERE base IN ('error', 'inconsistent'))::float / nullif(count(*), 0) AS share FROM scan WHERE ts > now() - interval '24 hours'"}],
-      "fieldConfig": {"defaults": {"unit": "percentunit", "decimals": 2, "thresholds": {"mode": "absolute", "steps": [{"value": null, "color": "green"}, {"value": 0.05, "color": "yellow"}, {"value": 0.15, "color": "red"}]}}, "overrides": []}
+      "datasource": {
+        "type": "postgres",
+        "uid": "whynoipv6-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT count(*) FILTER (WHERE base IN ('error', 'inconsistent'))::float / nullif(count(*), 0) AS share FROM scan WHERE ts > now() - interval '24 hours'"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "decimals": 2,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "value": null,
+                "color": "green"
+              },
+              {
+                "value": 0.05,
+                "color": "yellow"
+              },
+              {
+                "value": 0.15,
+                "color": "red"
+              }
+            ]
+          }
+        },
+        "overrides": []
+      }
     },
     {
-      "type": "stat", "title": "Unresolvable (24h)", "gridPos": {"x": 4, "y": 0, "w": 4, "h": 4},
+      "type": "stat",
+      "title": "Unresolvable (24h)",
+      "gridPos": {
+        "x": 4,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
       "description": "Scans that hit the dead signal (NXDOMAIN / lame delegation) in the last day, from crawler dim_counters.",
-      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
-      "targets": [{"refId": "A", "format": "table",
-        "rawSql": "SELECT coalesce(sum((dim_counters->>'unresolvable')::int), 0) AS unresolvable FROM crawler_metrics WHERE ts > now() - interval '24 hours'"}],
-      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []}
+      "datasource": {
+        "type": "postgres",
+        "uid": "whynoipv6-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT coalesce(sum((dim_counters->>'unresolvable')::int), 0) AS unresolvable FROM crawler_metrics WHERE ts > now() - interval '24 hours'"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      }
     },
     {
-      "type": "stat", "title": "Lease lost (24h)", "gridPos": {"x": 8, "y": 0, "w": 4, "h": 4},
+      "type": "stat",
+      "title": "Lease lost (24h)",
+      "gridPos": {
+        "x": 8,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
       "description": "Commits aborted by the lease fence — another worker reclaimed the domain mid-scan. A trickle is normal; a spike means slow scans or clock trouble.",
-      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
-      "targets": [{"refId": "A", "format": "table",
-        "rawSql": "SELECT coalesce(sum((dim_counters->>'lease_lost')::int), 0) AS lease_lost FROM crawler_metrics WHERE ts > now() - interval '24 hours'"}],
-      "fieldConfig": {"defaults": {"unit": "short", "thresholds": {"mode": "absolute", "steps": [{"value": null, "color": "green"}, {"value": 100, "color": "yellow"}, {"value": 1000, "color": "red"}]}}, "overrides": []}
+      "datasource": {
+        "type": "postgres",
+        "uid": "whynoipv6-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT coalesce(sum((dim_counters->>'lease_lost')::int), 0) AS lease_lost FROM crawler_metrics WHERE ts > now() - interval '24 hours'"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "value": null,
+                "color": "green"
+              },
+              {
+                "value": 100,
+                "color": "yellow"
+              },
+              {
+                "value": 1000,
+                "color": "red"
+              }
+            ]
+          }
+        },
+        "overrides": []
+      }
     },
     {
-      "type": "stat", "title": "Commit errors (24h)", "gridPos": {"x": 12, "y": 0, "w": 4, "h": 4},
+      "type": "stat",
+      "title": "Commit errors (24h)",
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
       "description": "Failed commit transactions in the last day. Should be zero.",
-      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
-      "targets": [{"refId": "A", "format": "table",
-        "rawSql": "SELECT coalesce(sum((dim_counters->>'commit_error')::int), 0) AS commit_errors FROM crawler_metrics WHERE ts > now() - interval '24 hours'"}],
-      "fieldConfig": {"defaults": {"unit": "short", "thresholds": {"mode": "absolute", "steps": [{"value": null, "color": "green"}, {"value": 1, "color": "red"}]}}, "overrides": []}
+      "datasource": {
+        "type": "postgres",
+        "uid": "whynoipv6-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT coalesce(sum((dim_counters->>'commit_error')::int), 0) AS commit_errors FROM crawler_metrics WHERE ts > now() - interval '24 hours'"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "value": null,
+                "color": "green"
+              },
+              {
+                "value": 1,
+                "color": "red"
+              }
+            ]
+          }
+        },
+        "overrides": []
+      }
     },
     {
-      "type": "stat", "title": "Error-streak domains", "gridPos": {"x": 16, "y": 0, "w": 4, "h": 4},
+      "type": "stat",
+      "title": "Error-streak domains",
+      "gridPos": {
+        "x": 16,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
       "description": "Domains whose recent base/www scans were consecutively non-definitive — their public state is going stale.",
-      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
-      "targets": [{"refId": "A", "format": "table",
-        "rawSql": "SELECT count(*) AS stale FROM domain WHERE error_streak > 0 AND NOT disabled"}],
-      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []}
+      "datasource": {
+        "type": "postgres",
+        "uid": "whynoipv6-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT count(*) AS stale FROM domain WHERE error_streak > 0 AND NOT disabled"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      }
     },
     {
-      "type": "stat", "title": "Dead-streak domains", "gridPos": {"x": 20, "y": 0, "w": 4, "h": 4},
+      "type": "stat",
+      "title": "Dead-streak domains",
+      "gridPos": {
+        "x": 20,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
       "description": "Domains partway to the dead verdict (consecutive unresolvable scans, not yet disabled).",
-      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
-      "targets": [{"refId": "A", "format": "table",
-        "rawSql": "SELECT count(*) AS dying FROM domain WHERE dead_streak > 0 AND NOT disabled"}],
-      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []}
+      "datasource": {
+        "type": "postgres",
+        "uid": "whynoipv6-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT count(*) AS dying FROM domain WHERE dead_streak > 0 AND NOT disabled"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      }
     },
     {
-      "type": "timeseries", "title": "Non-definitive observation share per dimension", "gridPos": {"x": 0, "y": 4, "w": 12, "h": 8},
+      "type": "timeseries",
+      "title": "Non-definitive observation share per dimension",
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 12,
+        "h": 8
+      },
       "description": "error + inconsistent share of all scans, per dimension per day. Scans the full scan hypertable — keep the time range short. The resources spike on first-scan days is the D-fold deferring until sweeps land (expected).",
-      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
-      "targets": [{"refId": "A", "format": "time_series",
-        "rawSql": "SELECT $__timeGroup(ts, '1d') AS time, count(*) FILTER (WHERE base IN ('error', 'inconsistent'))::float / count(*) AS base, count(*) FILTER (WHERE www IN ('error', 'inconsistent'))::float / count(*) AS www, count(*) FILTER (WHERE ns IN ('error', 'inconsistent'))::float / count(*) AS ns, count(*) FILTER (WHERE mx IN ('error', 'inconsistent'))::float / count(*) AS mx, count(*) FILTER (WHERE conn IN ('error', 'inconsistent'))::float / count(*) AS conn, count(*) FILTER (WHERE resources IN ('error', 'inconsistent'))::float / count(*) AS resources FROM scan WHERE $__timeFilter(ts) GROUP BY 1 ORDER BY 1"}],
-      "fieldConfig": {"defaults": {"unit": "percentunit", "min": 0, "custom": {"drawStyle": "line", "fillOpacity": 5}}, "overrides": []}
+      "datasource": {
+        "type": "postgres",
+        "uid": "whynoipv6-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "rawSql": "SELECT $__timeGroup(ts, '1d') AS time, count(*) FILTER (WHERE base IN ('error', 'inconsistent'))::float / count(*) AS base, count(*) FILTER (WHERE www IN ('error', 'inconsistent'))::float / count(*) AS www, count(*) FILTER (WHERE ns IN ('error', 'inconsistent'))::float / count(*) AS ns, count(*) FILTER (WHERE mx IN ('error', 'inconsistent'))::float / count(*) AS mx, count(*) FILTER (WHERE conn IN ('error', 'inconsistent'))::float / count(*) AS conn, count(*) FILTER (WHERE resources IN ('error', 'inconsistent'))::float / count(*) AS resources FROM scan WHERE $__timeFilter(ts) GROUP BY 1 ORDER BY 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 5
+          }
+        },
+        "overrides": []
+      }
     },
     {
-      "type": "timeseries", "title": "Commit-machinery incidents", "gridPos": {"x": 12, "y": 4, "w": 12, "h": 8},
+      "type": "timeseries",
+      "title": "Commit-machinery incidents",
+      "gridPos": {
+        "x": 12,
+        "y": 4,
+        "w": 12,
+        "h": 8
+      },
       "description": "Per-hour sums from crawler dim_counters: fence aborts, commit failures, dead-signal hits, and dead-domain recoveries.",
-      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
-      "targets": [{"refId": "A", "format": "time_series",
-        "rawSql": "SELECT $__timeGroup(ts, '1h') AS time, sum(coalesce((dim_counters->>'lease_lost')::int, 0)) AS lease_lost, sum(coalesce((dim_counters->>'commit_error')::int, 0)) AS commit_errors, sum(coalesce((dim_counters->>'unresolvable')::int, 0)) AS unresolvable, sum(coalesce((dim_counters->>'dead_triggered')::int, 0)) AS dead_triggered, sum(coalesce((dim_counters->>'recovered')::int, 0)) AS recovered FROM crawler_metrics WHERE $__timeFilter(ts) GROUP BY 1 ORDER BY 1"}],
-      "fieldConfig": {"defaults": {"unit": "short", "custom": {"drawStyle": "line", "fillOpacity": 10}}, "overrides": []}
+      "datasource": {
+        "type": "postgres",
+        "uid": "whynoipv6-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "rawSql": "SELECT $__timeGroup(ts, '1h') AS time, sum(coalesce((dim_counters->>'lease_lost')::int, 0)) AS lease_lost, sum(coalesce((dim_counters->>'commit_error')::int, 0)) AS commit_errors, sum(coalesce((dim_counters->>'unresolvable')::int, 0)) AS unresolvable, sum(coalesce((dim_counters->>'recovered')::int, 0)) AS recovered FROM crawler_metrics WHERE $__timeFilter(ts) GROUP BY 1 ORDER BY 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10
+          }
+        },
+        "overrides": []
+      }
     },
     {
-      "type": "bargauge", "title": "Pending confirmations per dimension", "gridPos": {"x": 0, "y": 12, "w": 8, "h": 8},
+      "type": "bargauge",
+      "title": "Pending confirmations per dimension",
+      "gridPos": {
+        "x": 0,
+        "y": 12,
+        "w": 8,
+        "h": 8
+      },
       "description": "Domains with a candidate value waiting out the anti-flap window, per dimension. Persistent growth means values are observed but never confirming — flapping or a stuck confirm loop.",
-      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
-      "targets": [{"refId": "A", "format": "table",
-        "rawSql": "SELECT count(*) FILTER (WHERE base_pending IS NOT NULL) AS base, count(*) FILTER (WHERE www_pending IS NOT NULL) AS www, count(*) FILTER (WHERE ns_pending IS NOT NULL) AS ns, count(*) FILTER (WHERE mx_pending IS NOT NULL) AS mx, count(*) FILTER (WHERE conn_pending IS NOT NULL) AS conn, count(*) FILTER (WHERE resources_pending IS NOT NULL) AS resources FROM domain WHERE NOT disabled"}],
-      "options": {"reduceOptions": {"values": false, "calcs": ["lastNotNull"]}, "displayMode": "gradient", "orientation": "horizontal"},
-      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []}
+      "datasource": {
+        "type": "postgres",
+        "uid": "whynoipv6-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT count(*) FILTER (WHERE base_pending IS NOT NULL) AS base, count(*) FILTER (WHERE www_pending IS NOT NULL) AS www, count(*) FILTER (WHERE ns_pending IS NOT NULL) AS ns, count(*) FILTER (WHERE mx_pending IS NOT NULL) AS mx, count(*) FILTER (WHERE conn_pending IS NOT NULL) AS conn, count(*) FILTER (WHERE resources_pending IS NOT NULL) AS resources FROM domain WHERE NOT disabled"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "displayMode": "gradient",
+        "orientation": "horizontal"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      }
     },
     {
-      "type": "timeseries", "title": "Confirmed transitions per dimension (daily)", "gridPos": {"x": 8, "y": 12, "w": 8, "h": 8},
+      "type": "timeseries",
+      "title": "Confirmed transitions per dimension (daily)",
+      "gridPos": {
+        "x": 8,
+        "y": 12,
+        "w": 8,
+        "h": 8
+      },
       "description": "Changelog rows per day, split by field. A dimension suddenly dominating the churn is the anomaly signature that catches classification bugs.",
-      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
-      "targets": [{"refId": "A", "format": "time_series",
-        "rawSql": "SELECT $__timeGroup(ts, '1d') AS time, field AS metric, count(*) AS transitions FROM changelog WHERE $__timeFilter(ts) GROUP BY 1, 2 ORDER BY 1"}],
-      "fieldConfig": {"defaults": {"unit": "short", "custom": {"drawStyle": "bars", "fillOpacity": 60, "stacking": {"mode": "normal"}}}, "overrides": []}
+      "datasource": {
+        "type": "postgres",
+        "uid": "whynoipv6-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "rawSql": "SELECT $__timeGroup(ts, '1d') AS time, field AS metric, count(*) AS transitions FROM changelog WHERE $__timeFilter(ts) GROUP BY 1, 2 ORDER BY 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 60,
+            "stacking": {
+              "mode": "normal"
+            }
+          }
+        },
+        "overrides": []
+      }
     },
     {
-      "type": "table", "title": "Flapping domains (14d)", "gridPos": {"x": 16, "y": 12, "w": 8, "h": 8},
+      "type": "table",
+      "title": "Flapping domains (14d)",
+      "gridPos": {
+        "x": 16,
+        "y": 12,
+        "w": 8,
+        "h": 8
+      },
       "description": "Domains with 4+ confirmed transitions in two weeks. Anti-flap should make this list nearly empty — entries here are either genuinely unstable infrastructure or a hysteresis bug.",
-      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
-      "targets": [{"refId": "A", "format": "table",
-        "rawSql": "SELECT d.host, count(*) AS flips, array_agg(DISTINCT c.field) AS fields FROM changelog c JOIN domain d ON d.id = c.domain_id WHERE c.ts > now() - interval '14 days' GROUP BY d.host HAVING count(*) >= 4 ORDER BY 2 DESC LIMIT 25"}],
-      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []}
+      "datasource": {
+        "type": "postgres",
+        "uid": "whynoipv6-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT d.host, count(*) AS flips, array_agg(DISTINCT c.field) AS fields FROM changelog c JOIN domain d ON d.id = c.domain_id WHERE c.ts > now() - interval '14 days' GROUP BY d.host HAVING count(*) >= 4 ORDER BY 2 DESC LIMIT 25"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      }
     },
     {
-      "type": "timeseries", "title": "Domains disabled per day", "gridPos": {"x": 0, "y": 20, "w": 12, "h": 8},
+      "type": "timeseries",
+      "title": "Domains disabled per day",
+      "gridPos": {
+        "x": 0,
+        "y": 20,
+        "w": 12,
+        "h": 8
+      },
       "description": "dead = confirmed non-existent; delisted = fell off Tranco past the grace window. Only currently-disabled rows are visible (re-enabled domains leave the count).",
-      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
-      "targets": [{"refId": "A", "format": "time_series",
-        "rawSql": "SELECT $__timeGroup(disabled_at, '1d') AS time, count(*) FILTER (WHERE disabled_reason = 'dead') AS dead, count(*) FILTER (WHERE disabled_reason = 'delisted') AS delisted FROM domain WHERE disabled AND $__timeFilter(disabled_at) GROUP BY 1 ORDER BY 1"}],
-      "fieldConfig": {"defaults": {"unit": "short", "custom": {"drawStyle": "bars", "fillOpacity": 60}}, "overrides": []}
+      "datasource": {
+        "type": "postgres",
+        "uid": "whynoipv6-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "rawSql": "SELECT $__timeGroup(disabled_at, '1d') AS time, count(*) FILTER (WHERE disabled_reason = 'dead') AS dead, count(*) FILTER (WHERE disabled_reason = 'delisted') AS delisted FROM domain WHERE disabled AND $__timeFilter(disabled_at) GROUP BY 1 ORDER BY 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 60
+          }
+        },
+        "overrides": []
+      }
     },
     {
-      "type": "table", "title": "Last Tranco imports", "gridPos": {"x": 12, "y": 20, "w": 12, "h": 8},
+      "type": "table",
+      "title": "Last Tranco imports",
+      "gridPos": {
+        "x": 12,
+        "y": 20,
+        "w": 12,
+        "h": 8
+      },
       "description": "Import provenance with rejection/duplicate counts and the abort guard. An aborted row means the sanity check refused a suspicious list.",
-      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
-      "targets": [{"refId": "A", "format": "table",
-        "rawSql": "SELECT imported_at, list_date, line_count, imported_count, rejected_count, duplicate_count, delisted, aborted, note FROM tranco_import ORDER BY imported_at DESC LIMIT 10"}],
-      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []}
+      "datasource": {
+        "type": "postgres",
+        "uid": "whynoipv6-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT imported_at, list_date, line_count, imported_count, rejected_count, duplicate_count, delisted, aborted, note FROM tranco_import ORDER BY imported_at DESC LIMIT 10"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      }
     }
   ]
 }

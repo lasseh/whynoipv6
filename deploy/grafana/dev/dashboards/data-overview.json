@@ -3,6 +3,7 @@
   "title": "WhyNoIPv6 — Data Overview",
   "description": "What the collected data represents: dataset shape, confirmation coverage, adoption trends, crawler output, and campaign progress.",
   "tags": ["whynoipv6", "data"],
+  "links": [{"type": "dashboards", "title": "Dashboards", "tags": ["whynoipv6"], "asDropdown": true, "keepTime": false, "includeVars": false, "targetBlank": false, "icon": "external link", "tooltip": "", "url": ""}],
   "timezone": "browser",
   "schemaVersion": 39,
   "refresh": "5m",

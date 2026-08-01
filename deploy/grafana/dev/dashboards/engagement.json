@@ -3,6 +3,7 @@
   "title": "WhyNoIPv6 — Public Engagement",
   "description": "What visitors do with the on-demand /check endpoint: volume, outcomes, popular hosts, and requester concentration. Mostly dormant until the site is public.",
   "tags": ["whynoipv6", "engagement"],
+  "links": [{"type": "dashboards", "title": "Dashboards", "tags": ["whynoipv6"], "asDropdown": true, "keepTime": false, "includeVars": false, "targetBlank": false, "icon": "external link", "tooltip": "", "url": ""}],
   "timezone": "browser",
   "schemaVersion": 39,
   "refresh": "5m",
