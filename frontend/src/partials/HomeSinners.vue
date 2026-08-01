@@ -19,7 +19,7 @@ const testimonials = [
     name: 'Scott Hogg',
     url: 'https://packetpushers.net/series/ipv6-buzz/',
     urlTitle: 'IPv6 Buzz',
-    imageUrl: '/images/scott.jpg',
+    imageUrl: '/images/scott.webp',
   },
   {
     statement:
@@ -27,7 +27,7 @@ const testimonials = [
     name: 'Ivan Pepelnjak',
     url: 'https://www.ipspace.net/',
     urlTitle: 'ipspace.net',
-    imageUrl: '/images/ivan.jpeg',
+    imageUrl: '/images/ivan.webp',
   },
   // Add more testimonials here
 ]
@@ -69,9 +69,10 @@ onMounted(() => {
               <div class="relative">
                 <img
                   class="hidden md:block md:max-w-none"
-                  src="/images/WhyNoLogo.png"
+                  src="/images/WhyNoLogo.webp"
                   width="540"
                   height="520"
+                  loading="lazy"
                   alt="Shame"
                 />
               </div>

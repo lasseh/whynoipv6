@@ -10,7 +10,7 @@ import PageShell from '@/components/PageShell.vue'
           <div class="max-w-3xl mx-auto text-center">
             <!-- Top image -->
             <div class="relative inline-flex flex-col mb-6">
-              <img src="/images/WhyNoLogo.png" width="196" height="186" alt="404" />
+              <img src="/images/WhyNoLogo.webp" width="196" height="186" alt="404" />
             </div>
             <!-- 404 content -->
             <h1 class="h2 mb-4">Shame! Shame! This page doesn't exist.</h1>
