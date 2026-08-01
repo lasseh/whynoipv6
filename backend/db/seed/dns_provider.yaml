@@ -17,6 +17,8 @@
 - name: Cloudflare
   suffixes:
     - ns.cloudflare.com
+    - foundationdns.com
+    - foundationdns.org
 
 # Route 53 gives each hosted zone four nameservers of the form
 # ns-<n>.awsdns-<nn>.<tld>, drawn from four TLDs with <nn> in 00-63.
@@ -386,19 +388,54 @@
   suffixes:
     - alidns.com
     - hichina.com
+    - alibabadns.com
 
 - name: Tencent DNSPod
   suffixes:
     - dnspod.net
     - dnspod.com
+    - dnsv2.com
+    - dnsv3.com
+    - dnsv4.com
+    - dnsv5.com
 
 - name: Yandex
   suffixes:
     - yandex.net
+    - yandexcloud.net
 
 - name: CSC
   suffixes:
     - cscdns.net
+    - cscdns.uk
+
+- name: Oracle Cloud DNS
+  suffixes:
+    - oraclecloud.net
+
+- name: Constellix
+  suffixes:
+    - constellix.com
+
+- name: Porkbun
+  suffixes:
+    - porkbun.com
+
+- name: Network Solutions
+  suffixes:
+    - worldnic.com
+
+- name: RU-CENTER
+  suffixes:
+    - nic.ru
+
+- name: REG.RU
+  suffixes:
+    - reg.ru
+
+- name: Selectel
+  suffixes:
+    - selectel.ru
 
 - name: MarkMonitor
   suffixes:
