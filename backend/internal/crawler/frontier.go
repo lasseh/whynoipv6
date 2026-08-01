@@ -108,10 +108,10 @@ func (f *Frontier) ClaimBatch(ctx context.Context) ([]ClaimedDomain, error) {
 
 // processOne wraps Process with the busy-slot count; the defer keeps a
 // panicking Process from leaking it.
-func (f *Frontier) processOne(ctx context.Context, d ClaimedDomain) {
+func (f *Frontier) processOne(ctx context.Context, d *ClaimedDomain) {
 	f.busy.Add(1)
 	defer f.busy.Add(-1)
-	f.Process(ctx, d)
+	f.Process(ctx, *d)
 }
 
 // ActiveSlots reports the worker slots currently processing a domain
@@ -128,7 +128,7 @@ func (f *Frontier) Run(ctx context.Context) {
 		go func() {
 			defer func() { done <- struct{}{} }()
 			for d := range slots {
-				f.processOne(ctx, d)
+				f.processOne(ctx, &d)
 			}
 		}()
 	}
