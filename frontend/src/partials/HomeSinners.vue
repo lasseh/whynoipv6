@@ -17,8 +17,8 @@ const testimonials = [
   {
     statement: "IPv6 is no longer an option, it's mandatory",
     name: 'Scott Hogg',
-    url: 'https://packetpushers.net/series/ipv6-buzz/',
-    urlTitle: 'IPv6 Buzz',
+    url: 'https://hoggnet.com/',
+    urlTitle: 'Hogg Networking',
     imageUrl: '/images/scott.webp',
   },
   {
