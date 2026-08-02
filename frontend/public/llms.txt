@@ -25,6 +25,11 @@ exemplary heroes.
 - [Live check](https://api.whynoipv6.com/docs#tag/check): POST /check runs a fresh scan of any host
 - [Badges](https://api.whynoipv6.com/docs#tag/badge): /badge/{host}.svg embeddable IPv6 status badge
 
+## Blog
+
+- [Blog](https://whynoipv6.com/blog): write-ups on the adoption data
+- [RSS feed](https://whynoipv6.com/blog/rss.xml): full-content syndication
+
 ## Examples
 
 - Domain detail: https://api.whynoipv6.com/domains/example.com

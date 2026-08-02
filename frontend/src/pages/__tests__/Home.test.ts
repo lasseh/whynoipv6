@@ -14,6 +14,7 @@ describe('Home (smoke)', () => {
           ...layoutStubs,
           HomeSaaS: { template: '<div />' },
           Searchbar: { template: '<div />' },
+          HomeBlog: { template: '<div />' },
           HomeSinners: { template: '<div />' },
           HomeDomains: { template: '<div />' },
           Notification: { template: '<div />' },

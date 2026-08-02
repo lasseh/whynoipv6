@@ -44,10 +44,38 @@
                 </svg>
               </a>
             </li>
+            <li class="ml-4">
+              <a
+                href="/blog/rss.xml"
+                class="flex justify-center items-center text-fuchsia-600 bg-gray-800 hover:text-gray-100 hover:bg-fuchsia-600 rounded-full transition duration-150 ease-in-out"
+                aria-label="Blog RSS feed"
+              >
+                <svg
+                  class="w-8 h-8"
+                  viewBox="-5 -4.5 34 34"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.5"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path d="M4 11a9 9 0 0 1 9 9" />
+                  <path d="M4 4a16 16 0 0 1 16 16" />
+                  <circle cx="5" cy="19" r="1.5" fill="currentColor" stroke="none" />
+                </svg>
+              </a>
+            </li>
           </ul>
 
           <!-- Copyrights note -->
           <div class="text-gray-400 text-sm mr-4" data-nosnippet>
+            <div>
+              Numbers with sentences on
+              <router-link to="/blog" class="underline whitespace-nowrap a-gradient"
+                >the blog</router-link
+              >
+            </div>
             <div>
               Hosted on native IPv6 co-location at
               <a

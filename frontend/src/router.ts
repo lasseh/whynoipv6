@@ -2,6 +2,7 @@ import { createWebHistory, createRouter } from 'vue-router'
 import type { RouteRecordRaw } from 'vue-router'
 import { installPageMeta } from '@/composables/usePageMeta'
 import { TIERS } from '@/tiers'
+import { BLOG_LIST_META, BLOG_POST_META } from '../scripts/blog-shared'
 
 // The tier collections (07 §2.3): /heroes /sinners /saints are
 // presets over the /domains leaderboard — one redirect per TIERS row.
@@ -150,6 +151,20 @@ const routes: RouteRecordRaw[] = [
       description:
         "Who fixed their IPv6 and who broke it, day by day. Every AAAA record that appeared or quietly disappeared, pulled from the crawler's daily runs.",
     },
+  },
+  {
+    path: '/blog',
+    name: 'BlogList',
+    component: () => import('@/pages/BlogList.vue'),
+    // Shared with the build-time prerender (scripts/blog-shared.ts) so the
+    // crawler head and the runtime head can't drift.
+    meta: BLOG_LIST_META,
+  },
+  {
+    path: '/blog/:slug([a-z0-9-]+)',
+    name: 'BlogPost',
+    component: () => import('@/pages/BlogPost.vue'),
+    meta: BLOG_POST_META,
   },
   {
     path: '/faq',

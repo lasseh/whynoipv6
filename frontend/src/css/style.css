@@ -5,6 +5,7 @@
 @import 'tailwindcss';
 @import './theme.css';
 @plugin '@tailwindcss/forms';
+@plugin '@tailwindcss/typography';
 
 /* Self-hosted Inter variable font (public/fonts/, preloaded in index.html) —
  * replaces the Google Fonts @import whose HTML→CSS→fonts-CSS→woff2 chain
@@ -174,6 +175,33 @@
   .form-radio {
     @apply text-purple-600;
   }
+}
+
+/* Blog article typography (BlogPost.vue's `prose prose-invert`). The
+ * typography plugin bakes stock-Tailwind grays into its invert vars;
+ * repoint them at the §2.2 tokens plus the fuchsia link accent so
+ * long-form articles match the rest of the site. Fuchsia values are hex
+ * because only the custom grays are guaranteed emitted as vars. */
+.prose {
+  --tw-prose-invert-body: var(--color-gray-300);
+  --tw-prose-invert-headings: var(--color-gray-100);
+  --tw-prose-invert-lead: var(--color-gray-400);
+  --tw-prose-invert-links: #d946ef; /* fuchsia-500 */
+  --tw-prose-invert-bold: var(--color-gray-100);
+  --tw-prose-invert-counters: var(--color-gray-400);
+  --tw-prose-invert-bullets: var(--color-gray-600);
+  --tw-prose-invert-hr: var(--color-gray-700);
+  --tw-prose-invert-quotes: var(--color-gray-200);
+  --tw-prose-invert-quote-borders: #a21caf; /* fuchsia-700 */
+  --tw-prose-invert-captions: var(--color-gray-500);
+  --tw-prose-invert-code: #f0abfc; /* fuchsia-300 */
+  --tw-prose-invert-pre-code: var(--color-gray-300);
+  --tw-prose-invert-pre-bg: var(--color-gray-800);
+  --tw-prose-invert-th-borders: var(--color-gray-600);
+  --tw-prose-invert-td-borders: var(--color-gray-700);
+}
+.prose a:hover {
+  color: #e879f9; /* fuchsia-400 */
 }
 
 /* Must live in the utilities layer: elements pair `.a-gradient` with color

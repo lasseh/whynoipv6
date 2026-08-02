@@ -423,3 +423,41 @@ Type safety is itself a gate: `vue-tsc` runs in `build`, and the generated `sche
 | OPEN-F8 | Trackers would render blank forever for never-flipped domains (review S3 — bootstrap confirmations write no changelog row, so the pure replay yields `points: []`). | **Resolved 2026-07-11: API amended** — 07 §4.9 seeds the reconstruction from the confirmed `(value, *_since)` baseline |
 | OPEN-F9 | Scroll animation: keep AOS behavior via IntersectionObserver, or remove? | **Resolved 2026-07-11: removed entirely** (owner: "visual bloat") — §2.1 |
 | OPEN-F10 | AI/Bing crawlability: prerender (vite-ssg) vs static machine-readable surface? | **Resolved 2026-07-11: static surface now** (JSON-LD `@graph` + site `llms.txt`, §9.6); prerender demoted to a §10 watch item with an explicit decision trigger |
+
+---
+
+## 14. Blog (added post-cutover, 2026-08)
+
+Long-form write-ups over the crawl data, same SPA, no second site. Content is
+repo-authored markdown — no DB tables, no admin surface, no CMS.
+
+- **Content:** `src/content/blog/<slug>.md` — the filename is the slug; frontmatter
+  is `title`/`description`/`date` (+ optional `image`). `scripts/posts.ts` compiles
+  markdown at build time (markdown-it; external links get `target="_blank"`),
+  validates frontmatter, and **throws on anything malformed** — same
+  fail-the-build posture as the §2.2 token gate.
+- **Modules:** the Vite plugin (`scripts/blog-plugin.ts`) emits two shapes per file:
+  `x.md?meta` (eager frontmatter, shared list/teaser chunk) and `x.md` (lazy
+  per-post chunk). No markdown runtime ships to the client. `src/blog.ts` is the
+  typed accessor; `scripts/blog-shared.ts` holds the contract (types + route-meta
+  copy) so the runtime head and the prerendered head cannot drift.
+- **Routes:** `/blog` (list) and `/blog/:slug([a-z0-9-]+)` (post; data-driven
+  title via `setPageTitle`, unknown slugs render an inline not-found).
+- **Prerendered heads:** after `vite build`, `closeBundle` writes
+  `dist/blog/<slug>/index.html` + `dist/blog/index.html` — the built shell with
+  title/description/OG/Twitter rewritten, canonical + `article:published_time` +
+  BlogPosting JSON-LD appended. This is **not** the §10 vite-ssg watch item
+  (OPEN-F10 stands): head-only, blog URLs only, so shared posts unfurl for the
+  no-JS crawlers (Slack/X/Mastodon). nginx serves the real files via the
+  existing `try_files $uri $uri/` before the SPA fallback; the `/blog/` location
+  adds the index.html no-cache rule.
+- **Feeds:** full-content RSS 2.0 at `/blog/rss.xml` (autodiscovery link in
+  index.html, icon in the footer + blog pages). `sitemap.xml` is now
+  **build-generated** by the same hook (§2.3's hand-frozen `public/sitemap.xml`
+  is retired); posts carry their publish date as lastmod.
+- **Surface (deliberate):** the header stays at seven links — the blog is reached
+  from the footer, a slim "From the blog" strip under the Home searchbar, and
+  contextual links inside content. Posts freeze their numbers at publish date
+  and link to the live pages for current figures.
+- **Typography:** `@tailwindcss/typography` (`prose prose-invert`), invert vars
+  repointed at the §2.2 tokens + fuchsia accents in `css/style.css`.
