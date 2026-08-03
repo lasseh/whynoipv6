@@ -19,6 +19,15 @@ describe('BlogPost', () => {
     // The compiled markdown body made it through v-html.
     expect(wrapper.find('.prose').exists()).toBe(true)
     expect(document.title).toBe(`${first?.title} - Why No IPv6`)
+
+    // The share tags must match the prerendered head, not the route's generic
+    // fallback — a JS-executing crawler reads these off the hydrated DOM.
+    const content = (sel: string) =>
+      document.head.querySelector<HTMLMetaElement>(sel)?.getAttribute('content')
+    expect(content('meta[property="og:title"]')).toBe(`${first?.title} - Why No IPv6`)
+    expect(content('meta[name="twitter:title"]')).toBe(`${first?.title} - Why No IPv6`)
+    expect(content('meta[property="og:description"]')).toBe(first?.description)
+    expect(content('meta[name="description"]')).toBe(first?.description)
     wrapper.unmount()
   })
 

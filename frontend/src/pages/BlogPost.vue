@@ -7,7 +7,7 @@ import Breadcrumb from '@/components/Breadcrumb.vue'
 
 import { loadPost } from '@/blog'
 import type { Post } from '@/blog'
-import { setPageTitle } from '@/composables/usePageMeta'
+import { setPageMeta } from '@/composables/usePageMeta'
 import { formatDate } from '@/utils/date'
 
 const route = useRoute()
@@ -28,7 +28,9 @@ watch(
     if (route.params.slug !== slug) return // raced a later navigation
     post.value = loaded
     missing.value = loaded === null
-    if (loaded) setPageTitle(loaded.meta.title)
+    // Full meta, not just the title: the router guard has already replaced the
+    // prerendered per-post share tags with the route's generic fallback.
+    if (loaded) setPageMeta(loaded.meta.title, loaded.meta.description)
   },
   { immediate: true },
 )
