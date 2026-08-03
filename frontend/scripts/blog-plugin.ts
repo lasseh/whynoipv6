@@ -6,10 +6,12 @@
 //   x.md?meta  →  export default PostMeta          (eager, main chunk)
 //   x.md       →  export default Post              (lazy, per-post chunk)
 //
-// closeBundle writes into dist/: blog/<slug>/index.html + blog/index.html
-// (real head tags for the no-JS crawlers social unfurls depend on),
-// blog/rss.xml, and sitemap.xml. nginx's try_files serves the files before
-// the SPA fallback — no server-side changes beyond cache headers.
+// closeBundle writes into dist/: blog/<slug>.html per post plus blog.html
+// and blog/index.html for the list (real head tags for the no-JS crawlers
+// social unfurls depend on), blog/rss.xml, and sitemap.xml. Flat .html
+// files, not <slug>/index.html dirs: nginx 301-appends a slash to a
+// directory URL, and the canonical slashless /blog/<slug> must 200
+// directly — try_files' $uri.html serves it without a redirect.
 import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { basename, join, resolve } from 'node:path'
 
@@ -77,11 +79,10 @@ export function blogPlugin(): Plugin {
       const posts = readPosts(config.root)
       const buildTime = new Date().toISOString()
 
+      mkdirSync(join(outDir, 'blog'), { recursive: true })
       for (const post of posts) {
-        const dir = join(outDir, 'blog', post.meta.slug)
-        mkdirSync(dir, { recursive: true })
         writeFileSync(
-          join(dir, 'index.html'),
+          join(outDir, 'blog', `${post.meta.slug}.html`),
           rewriteHead(template, {
             path: `/blog/${post.meta.slug}`,
             title: `${post.meta.title} - Why No IPv6`,
@@ -94,17 +95,17 @@ export function blogPlugin(): Plugin {
         )
       }
 
-      mkdirSync(join(outDir, 'blog'), { recursive: true })
-      writeFileSync(
-        join(outDir, 'blog', 'index.html'),
-        rewriteHead(template, {
-          path: '/blog',
-          title: BLOG_LIST_META.title,
-          description: BLOG_LIST_META.description,
-          ogType: 'website',
-          jsonLd: blogJsonLd(posts),
-        }),
-      )
+      // The list twice: blog.html answers /blog, blog/index.html answers
+      // /blog/ — both 200, both canonicalized to /blog.
+      const list = rewriteHead(template, {
+        path: '/blog',
+        title: BLOG_LIST_META.title,
+        description: BLOG_LIST_META.description,
+        ogType: 'website',
+        jsonLd: blogJsonLd(posts),
+      })
+      writeFileSync(join(outDir, 'blog.html'), list)
+      writeFileSync(join(outDir, 'blog', 'index.html'), list)
       writeFileSync(join(outDir, 'blog', 'rss.xml'), rssXml(posts))
       writeFileSync(
         join(outDir, 'sitemap.xml'),

@@ -443,14 +443,17 @@ repo-authored markdown — no DB tables, no admin surface, no CMS.
   copy) so the runtime head and the prerendered head cannot drift.
 - **Routes:** `/blog` (list) and `/blog/:slug([a-z0-9-]+)` (post; data-driven
   title via `setPageTitle`, unknown slugs render an inline not-found).
-- **Prerendered heads:** after `vite build`, `closeBundle` writes
-  `dist/blog/<slug>/index.html` + `dist/blog/index.html` — the built shell with
-  title/description/OG/Twitter rewritten, canonical + `article:published_time` +
-  BlogPosting JSON-LD appended. This is **not** the §10 vite-ssg watch item
+- **Prerendered heads:** after `vite build`, `closeBundle` writes flat
+  `dist/blog/<slug>.html` files plus `dist/blog.html` + `dist/blog/index.html`
+  for the list — the built shell with title/description/OG/Twitter rewritten,
+  canonical + `article:published_time` + BlogPosting JSON-LD appended. Flat
+  files, not `<slug>/index.html` dirs: nginx 301-appends a slash to directory
+  URLs, and the canonical slashless `/blog/<slug>` must 200 directly
+  (`try_files … $uri.html …`). This is **not** the §10 vite-ssg watch item
   (OPEN-F10 stands): head-only, blog URLs only, so shared posts unfurl for the
-  no-JS crawlers (Slack/X/Mastodon). nginx serves the real files via the
-  existing `try_files $uri $uri/` before the SPA fallback; the `/blog/` location
-  adds the index.html no-cache rule.
+  no-JS crawlers (Slack/X/Mastodon). The `/blog` + `/blog/` nginx locations
+  (both the prod vhost and the container conf) serve the files with the
+  index.html no-cache rule.
 - **Feeds:** full-content RSS 2.0 at `/blog/rss.xml` (autodiscovery link in
   index.html, icon in the footer + blog pages). `sitemap.xml` is now
   **build-generated** by the same hook (§2.3's hand-frozen `public/sitemap.xml`

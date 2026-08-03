@@ -46,6 +46,7 @@ describe('renderPost', () => {
   it.each([
     ['Bad File.md', /filename/],
     ['under_score.md', /filename/],
+    ['index.md', /reserved/],
   ])('rejects filename %s', (name, want) => {
     expect(() => renderPost(name, SRC)).toThrow(want)
   })

@@ -71,6 +71,11 @@ export function renderPost(fileName: string, src: string): Post {
   if (!SLUG.test(slug)) {
     throw new Error(`blog: ${fileName}: filename must be <slug>.md with [a-z0-9-] only`)
   }
+  if (slug === 'index') {
+    // dist/blog/index.html is the list page — a post named index.md would
+    // silently overwrite it.
+    throw new Error(`blog: ${fileName}: "index" is reserved for the list page`)
+  }
   let fields: Record<string, string>
   let body: string
   try {
