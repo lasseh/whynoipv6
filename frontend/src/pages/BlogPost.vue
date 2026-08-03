@@ -5,7 +5,7 @@ import { useRoute, useRouter } from 'vue-router'
 import PageShell from '@/components/PageShell.vue'
 import Breadcrumb from '@/components/Breadcrumb.vue'
 
-import { loadPost } from '@/blog'
+import { loadPost, posts } from '@/blog'
 import type { Post } from '@/blog'
 import { setPageMeta } from '@/composables/usePageMeta'
 import { formatDate } from '@/utils/date'
@@ -24,13 +24,17 @@ watch(
   () => route.params.slug,
   async (slug) => {
     if (typeof slug !== 'string') return // leaving the route
+    // Frontmatter is eager (src/blog.ts), so the share tags are restored
+    // synchronously — the router guard has just overwritten the prerendered
+    // ones with the route's generic fallback, and nothing should be able to
+    // observe that state, least of all a crawler waiting on the body chunk.
+    const meta = posts.find((p) => p.slug === slug)
+    if (meta) setPageMeta(meta.title, meta.description)
+
     const loaded = await loadPost(slug)
     if (route.params.slug !== slug) return // raced a later navigation
     post.value = loaded
     missing.value = loaded === null
-    // Full meta, not just the title: the router guard has already replaced the
-    // prerendered per-post share tags with the route's generic fallback.
-    if (loaded) setPageMeta(loaded.meta.title, loaded.meta.description)
   },
   { immediate: true },
 )
