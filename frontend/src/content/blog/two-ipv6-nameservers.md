@@ -64,6 +64,6 @@ Over the last ten days, our [changelog](/changelog) recorded 1,552 zones gaining
 
 We count AAAA records on a zone's NS hosts, up to four nameservers per zone. That measures publication, not service. The RFC demands servers that answer over IPv6. We only check that they have an address to answer on. Real non-compliance can only be higher than our numbers. In the other direction, zones with more than four nameservers can hide their IPv6 ones past our cap. The typical zone runs two or three, so that error is small. Full methodology is on the [FAQ](/faq).
 
-Credit where due: [Ching Chiao's post](https://www.linkedin.com/pulse/rfc-10001-just-made-ipv6-dns-requirement-most-zones-arent-ching-chiao-bblcc/) flagged the compliance angle. Its passive-DNS measurements put the whole namespace near 40% unresolvable over IPv6. The top million is the well-lit end of the street.
+Credit where due: [Ching Chiao's post](https://www.linkedin.com/pulse/rfc-10001-just-made-ipv6-dns-requirement-most-zones-arent-ching-chiao-bblcc/) flagged the compliance angle. Its passive-DNS measurements put the whole namespace near 40% unresolvable over IPv6. Worse than our number, because we only count the top million. Those are the zones somebody is paid to maintain.
 
 Your own zone takes ten seconds to grade on the [live check](/check). Or `dig AAAA` your NS records and count the answers yourself. Two is the bar.
