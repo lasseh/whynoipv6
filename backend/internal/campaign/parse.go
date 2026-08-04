@@ -129,17 +129,19 @@ func isYAML(name string) bool {
 // ListYAMLFiles returns the root-level *.yml/*.yaml files of the checkout,
 // sorted (06-ingest.md §3.2 — root only, no subdirectories).
 func ListYAMLFiles(repoPath string) ([]string, error) {
-	entries, err := os.ReadDir(repoPath)
+	return listYAMLIn(repoPath)
+}
+
+// listYAMLIn returns dir's sorted YAML files, ignoring subdirectories.
+func listYAMLIn(dir string) ([]string, error) {
+	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, err
 	}
 	var files []string
 	for _, e := range entries {
-		if e.IsDir() {
-			continue
-		}
-		if isYAML(e.Name()) {
-			files = append(files, filepath.Join(repoPath, e.Name()))
+		if !e.IsDir() && isYAML(e.Name()) {
+			files = append(files, filepath.Join(dir, e.Name()))
 		}
 	}
 	sort.Strings(files)

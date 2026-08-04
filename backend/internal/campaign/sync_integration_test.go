@@ -23,6 +23,13 @@ func writeFixture(t *testing.T, dir, name, content string) {
 	}
 }
 
+func mustExecTest(t *testing.T, pool *pgxpool.Pool, sql string, args ...any) {
+	t.Helper()
+	if _, err := pool.Exec(context.Background(), sql, args...); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func writeSubdomainFixture(t *testing.T, dir, name, content string) {
 	t.Helper()
 	sub := filepath.Join(dir, SubdomainsDir)
@@ -290,6 +297,22 @@ func TestSubdomainSync(t *testing.T) {
 	if createdBy != "live_check" {
 		t.Errorf("created_by = %s, want live_check kept (membership is not provenance)", createdBy)
 	}
+	// That row was created parentless (its apex was unknown at the time). The
+	// ingress must link it, or it stays off its parent's page and out of
+	// subdomain_count — both of which key on parent_id.
+	if err := pool.QueryRow(ctx,
+		"SELECT kind::text, parent_id FROM domain WHERE host='shop.a-one.no'").
+		Scan(&kind, &parentID); err != nil {
+		t.Fatal(err)
+	}
+	if kind != "subdomain" || parentID == nil {
+		t.Errorf("adopted host = %s parent=%v, want it linked to its apex", kind, parentID)
+	}
+	if n := count(`SELECT subdomain_count FROM (
+		SELECT (SELECT count(*) FROM domain ch WHERE ch.parent_id = d.id AND NOT ch.disabled)
+		AS subdomain_count FROM domain d WHERE d.host='a-one.no') s`); n != 3 {
+		t.Errorf("subdomain_count = %d, want all 3 children visible", n)
+	}
 
 	// --- dropping an entry drops membership only; the row stays for the sweep.
 	writeSubdomainFixture(t, dir, "a-one.no.yml", "subdomains:\n  - login\n  - api\n")
@@ -320,6 +343,44 @@ func TestSubdomainSync(t *testing.T) {
 	}
 	if disabled || !dueNow {
 		t.Errorf("re-listed host = disabled=%t dueNow=%t, want false/true", disabled, dueNow)
+	}
+
+	// --- a disabled apex: the list is skipped, but its hosts keep membership.
+	// Disabling a parent must not silently start its children's delist grace.
+	mustExecTest(t, pool, "UPDATE domain SET disabled=true, disabled_reason='manual' WHERE host='a-one.no'")
+	rep = run(t, pool, dir, false)
+	if reason, ok := rep.RejectedFiles["subdomains/a-one.no.yml"]; !ok ||
+		!strings.Contains(reason, "disabled") {
+		t.Errorf("disabled apex should be reported: %v", rep.RejectedFiles)
+	}
+	if rep.CuratedRemoves != 0 || listed("login.a-one.no") != 1 || listed("shop.a-one.no") != 1 {
+		t.Errorf("disabled apex unlisted its children: -%d", rep.CuratedRemoves)
+	}
+	mustExecTest(t, pool, `UPDATE domain SET disabled=false, disabled_reason=NULL WHERE host='a-one.no'`)
+
+	// --- two files claiming one apex: neither is applied, and removals are
+	// suspended, so whichever file sorts first cannot supersede the other.
+	writeSubdomainFixture(t, dir, "a-one.no.yaml", "subdomains:\n  - extra\n")
+	rep = run(t, pool, dir, false)
+	for _, name := range []string{"subdomains/a-one.no.yml", "subdomains/a-one.no.yaml"} {
+		if reason, ok := rep.RejectedFiles[name]; !ok || !strings.Contains(reason, "more than one file") {
+			t.Errorf("both claimants should be rejected, %s was not: %v", name, rep.RejectedFiles)
+		}
+	}
+	if rep.CuratedRemoves != 0 {
+		t.Errorf("removals ran with a duplicate apex present: -%d", rep.CuratedRemoves)
+	}
+	if !rep.CuratedFrozen {
+		t.Error("a suspended removal diff must be visible in the report")
+	}
+	if listed("login.a-one.no") != 1 {
+		t.Error("a duplicate-apex rejection unlisted the established file's hosts")
+	}
+	if n := count("SELECT count(*) FROM domain WHERE host='extra.a-one.no'"); n != 0 {
+		t.Error("a rejected duplicate list still created rows")
+	}
+	if err := os.Remove(filepath.Join(dir, SubdomainsDir, "a-one.no.yaml")); err != nil {
+		t.Fatal(err)
 	}
 
 	// --- a file that fails to parse must not unlist anything.

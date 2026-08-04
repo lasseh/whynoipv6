@@ -106,6 +106,10 @@ type Querier interface {
 	// transaction. The removal must only run on a complete parse — a partial file
 	// set would drop live membership and start its 30-day delist grace.
 	CuratedSubdomainAdd(ctx context.Context, domainID int64) (int64, error)
+	// What one apex currently has listed. Read when the sync skips a list (its apex
+	// is disabled) so those ids still enter the membership set: skipping a file must
+	// leave it alone, not silently start its hosts' 30-day delist grace.
+	CuratedSubdomainIDsByParent(ctx context.Context, parentID *int64) ([]int64, error)
 	// An empty (not NULL) array deletes every row: an emptied subdomains/ directory
 	// drops all membership, recoverable within the delist grace (04 §8). A NULL
 	// array matches nothing and would silently skip the diff.
@@ -126,6 +130,12 @@ type Querier interface {
 	// The consumer's entity insert (07 §5.1.5 step 2): parent only if it
 	// ALREADY exists — live checks never auto-ensure parents.
 	DomainInsertLiveCheck(ctx context.Context, arg DomainInsertLiveCheckParams) (int64, error)
+	// Link an existing row to the parent it belongs under. A host first seen by an
+	// ingress that could not resolve a parent (a live check before the apex was
+	// tracked) keeps parent_id NULL, which hides it from its parent's subdomain
+	// list and from subdomain_count. Only ever fills a NULL — an established link
+	// is never rewritten.
+	DomainLinkParent(ctx context.Context, arg DomainLinkParentParams) (int64, error)
 	// Lifecycle re-entry (07 §5.1.6): every POST /check on an existing host.
 	DomainLiveCheckReentry(ctx context.Context, host string) error
 	// The mandate campaigns a domain belongs to (07 §4.3): drives the domain

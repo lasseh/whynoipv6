@@ -7,7 +7,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -141,30 +140,37 @@ func apexFromFilename(path string) (string, error) {
 // checkout. A repo without the directory is not an error: the lists are
 // optional, and campaign repos predate them.
 func ListSubdomainFiles(repoPath string) ([]string, error) {
-	dir := filepath.Join(repoPath, SubdomainsDir)
-	entries, err := os.ReadDir(dir)
+	files, err := listYAMLIn(filepath.Join(repoPath, SubdomainsDir))
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil
 	}
-	if err != nil {
-		return nil, err
-	}
-	var files []string
-	for _, e := range entries {
-		if e.IsDir() {
-			continue
-		}
-		if isYAML(e.Name()) {
-			files = append(files, filepath.Join(dir, e.Name()))
-		}
-	}
-	sort.Strings(files)
-	return files, nil
+	return files, err
+}
+
+// subdomainReportKey is a list's repo-relative path, the key it is reported
+// under. Parsing yields the same value as SubdomainFile.Path; this derives it
+// from the path alone, for files that failed to parse.
+func subdomainReportKey(path string) string {
+	return filepath.Join(SubdomainsDir, filepath.Base(path))
 }
 
 // validateSubdomainFiles runs the subdomain half of the PR validation, sharing
 // the campaign checks' file:line failure format and bot-comment section style.
 func validateSubdomainFiles(repo string, files []changedFile, maxSubdomains int, res *ValidateResult, comment *strings.Builder) {
+	// Every list in the repo head, so a PR adding nrk.no.yaml next to an
+	// existing nrk.no.yml is caught even though only one of them is in the
+	// diff. One parent, one file (06 §3.7).
+	claimedBy := map[string]string{}
+	if all, err := ListSubdomainFiles(repo); err == nil {
+		for _, p := range all {
+			if f, err := ParseSubdomainFile(p, maxSubdomains); err == nil {
+				if first, dup := claimedBy[f.Apex]; !dup || f.Path < first {
+					claimedBy[f.Apex] = f.Path
+				}
+			}
+		}
+	}
+
 	for _, ch := range files {
 		if ch.status == 'D' {
 			continue // dropping a list is always allowed
@@ -181,6 +187,13 @@ func validateSubdomainFiles(repo string, files []changedFile, maxSubdomains int,
 			}
 			res.Failures = append(res.Failures,
 				fmt.Sprintf("%s:%d: %s", ch.name, line, err))
+			continue
+		}
+
+		if first, dup := claimedBy[parsed.Apex]; dup && first != parsed.Path {
+			res.Failures = append(res.Failures, fmt.Sprintf(
+				"%s:1: `%s` is already listed by `%s` — one file per domain, merge them",
+				ch.name, parsed.Apex, first))
 			continue
 		}
 

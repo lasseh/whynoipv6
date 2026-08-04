@@ -13,3 +13,11 @@ INSERT INTO curated_subdomain (domain_id) VALUES ($1) ON CONFLICT DO NOTHING;
 -- array matches nothing and would silently skip the diff.
 -- name: CuratedSubdomainRemoveNotIn :execrows
 DELETE FROM curated_subdomain WHERE domain_id <> ALL(@domain_ids::bigint[]);
+
+-- What one apex currently has listed. Read when the sync skips a list (its apex
+-- is disabled) so those ids still enter the membership set: skipping a file must
+-- leave it alone, not silently start its hosts' 30-day delist grace.
+-- name: CuratedSubdomainIDsByParent :many
+SELECT cs.domain_id FROM curated_subdomain cs
+JOIN domain d ON d.id = cs.domain_id
+WHERE d.parent_id = @parent_id;

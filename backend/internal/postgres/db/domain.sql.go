@@ -580,6 +580,29 @@ func (q *Queries) DomainInsertLiveCheck(ctx context.Context, arg DomainInsertLiv
 	return id, err
 }
 
+const DomainLinkParent = `-- name: DomainLinkParent :execrows
+UPDATE domain SET kind = 'subdomain', parent_id = $1, updated_at = now()
+WHERE id = $2 AND parent_id IS NULL
+`
+
+type DomainLinkParentParams struct {
+	ParentID *int64 `json:"parent_id"`
+	ID       int64  `json:"id"`
+}
+
+// Link an existing row to the parent it belongs under. A host first seen by an
+// ingress that could not resolve a parent (a live check before the apex was
+// tracked) keeps parent_id NULL, which hides it from its parent's subdomain
+// list and from subdomain_count. Only ever fills a NULL — an established link
+// is never rewritten.
+func (q *Queries) DomainLinkParent(ctx context.Context, arg DomainLinkParentParams) (int64, error) {
+	result, err := q.db.Exec(ctx, DomainLinkParent, arg.ParentID, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const DomainLiveCheckReentry = `-- name: DomainLiveCheckReentry :exec
 UPDATE domain SET
   last_requested_at = now(),

@@ -40,20 +40,20 @@ withDefaults(
             </th>
             <th class="px-2 py-3 whitespace-nowrap">
               <div class="font-semibold text-center md:block hidden">
-                <Tooltip text="MX hosts for this subdomain, each checked for an AAAA record"
-                  >Mail (MX)</Tooltip
-                >
-              </div>
-              <div class="font-semibold text-center md:hidden">MX</div>
-            </th>
-            <th class="px-2 py-3 whitespace-nowrap">
-              <div class="font-semibold text-center md:block hidden">
                 <Tooltip
                   text="Authoritative nameservers for this subdomain, each checked for an AAAA record"
                   >Nameservers</Tooltip
                 >
               </div>
               <div class="font-semibold text-center md:hidden">NS</div>
+            </th>
+            <th class="px-2 py-3 whitespace-nowrap">
+              <div class="font-semibold text-center md:block hidden">
+                <Tooltip text="MX hosts for this subdomain, each checked for an AAAA record"
+                  >Mail (MX)</Tooltip
+                >
+              </div>
+              <div class="font-semibold text-center md:hidden">MX</div>
             </th>
             <th class="px-5 py-3 whitespace-nowrap">
               <div class="font-semibold text-center md:block hidden">
@@ -82,12 +82,12 @@ withDefaults(
             </td>
             <td class="px-2 py-3 whitespace-nowrap w-px md:w-[12%] text-center">
               <div class="inline-flex px-2.5 py-1">
-                <StatusIcon :value="sub.status.mx.value" />
+                <StatusIcon :value="sub.status.ns.value" />
               </div>
             </td>
             <td class="px-2 py-3 whitespace-nowrap w-px md:w-[12%] text-center">
               <div class="inline-flex px-2.5 py-1">
-                <StatusIcon :value="sub.status.ns.value" />
+                <StatusIcon :value="sub.status.mx.value" />
               </div>
             </td>
             <td class="px-2 py-3 whitespace-nowrap w-px md:w-[12%] text-center">

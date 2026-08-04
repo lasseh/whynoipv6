@@ -836,6 +836,7 @@ One file per subject area. This file owns only the layout; the query contents ar
 | `db/query/scan.sql` | scan + scan_detail inserts, per-domain history reads, latest-detail read | 03, 07 |
 | `db/query/changelog.sql` | changelog inserts, the scoped country/campaign feed windows, replay + latency-overlay reads, dataset reads — **not** the paginating global/per-domain feed walks, which are builder-built (below) | 03, 07 |
 | `db/query/campaign.sql` | campaign list/detail/search, membership upserts, sync soft-delete | 06, 07 |
+| `db/query/curated_subdomain.sql` | curated-list membership add/diff, and the per-parent read that keeps a skipped list's hosts listed | 06 |
 | `db/query/resource.sql` | resource_host upsert/claim/confirm, domain_resource link/prune, dependents | 06, 07 |
 | `db/query/check_job.sql` | enqueue, claim (SKIP LOCKED), complete/fail, reaper, purge, rate-limit counts, host dedupe | 07 |
 | `db/query/stats.sql` | the four `stats_*` snapshot upserts, stats read endpoints, `scan_daily_adoption` reads | 06, 07 |

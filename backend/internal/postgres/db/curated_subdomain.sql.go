@@ -28,6 +28,35 @@ func (q *Queries) CuratedSubdomainAdd(ctx context.Context, domainID int64) (int6
 	return result.RowsAffected(), nil
 }
 
+const CuratedSubdomainIDsByParent = `-- name: CuratedSubdomainIDsByParent :many
+SELECT cs.domain_id FROM curated_subdomain cs
+JOIN domain d ON d.id = cs.domain_id
+WHERE d.parent_id = $1
+`
+
+// What one apex currently has listed. Read when the sync skips a list (its apex
+// is disabled) so those ids still enter the membership set: skipping a file must
+// leave it alone, not silently start its hosts' 30-day delist grace.
+func (q *Queries) CuratedSubdomainIDsByParent(ctx context.Context, parentID *int64) ([]int64, error) {
+	rows, err := q.db.Query(ctx, CuratedSubdomainIDsByParent, parentID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var domain_id int64
+		if err := rows.Scan(&domain_id); err != nil {
+			return nil, err
+		}
+		items = append(items, domain_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const CuratedSubdomainRemoveNotIn = `-- name: CuratedSubdomainRemoveNotIn :execrows
 DELETE FROM curated_subdomain WHERE domain_id <> ALL($1::bigint[])
 `

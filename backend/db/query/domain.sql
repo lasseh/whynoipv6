@@ -10,6 +10,15 @@ VALUES ($1, $2, $3, NULL, $4, $5, $6, $7, now())
 ON CONFLICT (host) DO NOTHING
 RETURNING id;
 
+-- Link an existing row to the parent it belongs under. A host first seen by an
+-- ingress that could not resolve a parent (a live check before the apex was
+-- tracked) keeps parent_id NULL, which hides it from its parent's subdomain
+-- list and from subdomain_count. Only ever fills a NULL — an established link
+-- is never rewritten.
+-- name: DomainLinkParent :execrows
+UPDATE domain SET kind = 'subdomain', parent_id = @parent_id, updated_at = now()
+WHERE id = @id AND parent_id IS NULL;
+
 -- name: DomainMembershipReEntry :exec
 UPDATE domain SET
   disabled        = CASE WHEN disabled_reason = 'delisted' THEN false ELSE disabled END,

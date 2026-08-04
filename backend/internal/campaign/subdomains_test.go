@@ -248,6 +248,25 @@ func TestValidateSubdomains(t *testing.T) {
 		}
 	})
 
+	// The canonical-filename rule stops two spellings of one apex, but not
+	// two extensions, so the validator compares against the whole repo head.
+	t.Run("two files for one domain fail", func(t *testing.T) {
+		r := setup(t)
+		r.write("subdomains/bank.no.yml", "subdomains:\n  - login\n")
+		r.commitAll("first list")
+		r.run("checkout", "-b", "pr2")
+		r.write("subdomains/bank.no.yaml", "subdomains:\n  - api\n")
+		r.commitAll("second list for the same domain")
+		res, err := Validate(ctx, r.dir, "main", 1000, 20)
+		if err != nil {
+			t.Fatal(err)
+		}
+		joined := strings.Join(res.Failures, "\n")
+		if res.OK() || !strings.Contains(joined, "one file per domain") {
+			t.Errorf("failures = %v, want a duplicate-domain failure", res.Failures)
+		}
+	})
+
 	t.Run("deleting a list is allowed", func(t *testing.T) {
 		r := setup(t)
 		r.write("subdomains/bank.no.yml", "subdomains:\n  - login\n")

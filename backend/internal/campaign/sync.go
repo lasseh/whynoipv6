@@ -45,8 +45,10 @@ type Report struct {
 
 	// Curated subdomain lists (subdomains/<apex>.yml). Skipped lists land in
 	// RejectedFiles under their repo-relative path.
-	CuratedAdds    int
-	CuratedRemoves int
+	CuratedFiles   int  // lists applied
+	CuratedAdds    int  // memberships gained
+	CuratedRemoves int  // memberships dropped
+	CuratedFrozen  bool // a rejected list suspended the removal diff this run
 
 	RejectedFiles map[string]string
 	RejectedHosts map[string]string
@@ -197,7 +199,8 @@ func Sync(ctx context.Context, cfg Config, pool *pgxpool.Pool) (*Report, error) 
 		"renamed", len(rep.Renamed), "re_enabled", len(rep.ReEnabled),
 		"disabled", len(rep.Disabled), "member_adds", rep.MembershipAdds,
 		"member_removes", rep.MembershipRemoves,
-		"curated_adds", rep.CuratedAdds, "curated_removes", rep.CuratedRemoves,
+		"curated_files", rep.CuratedFiles, "curated_adds", rep.CuratedAdds,
+		"curated_removes", rep.CuratedRemoves, "curated_frozen", rep.CuratedFrozen,
 		"rejected_files", len(rep.RejectedFiles), "rejected_hosts", len(rep.RejectedHosts),
 		"write_back", rep.WriteBack)
 	return rep, nil
@@ -272,19 +275,36 @@ func syncSubdomains(ctx context.Context, q *db.Queries, ens *entityEnsurer, cfg 
 		return fmt.Errorf("campaign sync: list subdomain files: %w", err)
 	}
 
-	listed := []int64{} // every domain id listed this run; empty (not nil) so an
-	// emptied subdomains/ directory drops all membership
-	parseFailures := 0
+	rejected := 0
+	lists := make([]*SubdomainFile, 0, len(paths))
+	claims := map[string]int{} // apex -> how many files name it
 	for _, p := range paths {
 		f, err := ParseSubdomainFile(p, cfg.MaxSubdomainsPerDomain)
 		if err != nil {
-			rep.RejectedFiles[filepath.Join(SubdomainsDir, filepath.Base(p))] = err.Error()
-			parseFailures++
+			rep.RejectedFiles[subdomainReportKey(p)] = err.Error()
+			rejected++
+			continue
+		}
+		lists = append(lists, f)
+		claims[f.Apex]++
+	}
+
+	listed := []int64{} // every domain id listed this run; empty (not nil) so an
+	// emptied subdomains/ directory drops all membership
+	for _, f := range lists {
+		// One parent, one file. The canonical-filename rule stops two
+		// *spellings* of one apex but not nrk.no.yml beside nrk.no.yaml, and
+		// picking a winner by filename order would let a new file quietly
+		// supersede an established one. Reject every claimant instead: with
+		// removals suspended below, that freezes the apex rather than letting
+		// either file win.
+		if claims[f.Apex] > 1 {
+			rep.RejectedFiles[f.Path] = "apex " + f.Apex + " is listed by more than one file — merge them"
+			rejected++
 			continue
 		}
 		// The apex must already be tracked: this ingress adds subdomains to the
-		// index, it is not a side door for new apexes. A file naming an unknown
-		// apex can have no rows of its own, so skipping it costs nothing.
+		// index, it is not a side door for new apexes.
 		parent, err := q.DomainByHost(ctx, f.Apex)
 		switch {
 		case isNoRows(err):
@@ -293,7 +313,15 @@ func syncSubdomains(ctx context.Context, q *db.Queries, ens *entityEnsurer, cfg 
 		case err != nil:
 			return fmt.Errorf("campaign sync: lookup apex %s: %w", f.Apex, err)
 		case parent.Disabled:
+			// Skip means leave it alone. Its hosts stay in the membership set,
+			// or the removal below would start their delist grace as a side
+			// effect of an operator disabling the parent.
 			rep.RejectedFiles[f.Path] = "apex " + f.Apex + " is disabled"
+			keep, err := q.CuratedSubdomainIDsByParent(ctx, &parent.ID)
+			if err != nil {
+				return fmt.Errorf("campaign sync: listed children of %s: %w", f.Apex, err)
+			}
+			listed = append(listed, keep...)
 			continue
 		}
 		ids, err := applySubdomainFile(ctx, q, ens, f, parent.ID, rep)
@@ -301,15 +329,17 @@ func syncSubdomains(ctx context.Context, q *db.Queries, ens *entityEnsurer, cfg 
 			return err
 		}
 		listed = append(listed, ids...)
+		rep.CuratedFiles++
 	}
 
-	// A file that failed to parse leaves its hosts out of `listed`, so running
-	// the diff would unlist them over a typo and start a 30-day grace. Removals
-	// wait until the repo parses clean again; a rejected apex does not block
-	// them (it owns no rows).
-	if parseFailures > 0 {
-		slog.Warn("curated subdomain removals skipped: some lists failed to parse",
-			"failed_files", parseFailures)
+	// A rejected file leaves its hosts out of `listed`, so running the diff
+	// would unlist them over a typo and start a 30-day grace. Removals wait
+	// until the repo reads clean again. The two skips above are not rejections:
+	// an unknown apex owns no rows, and a disabled one keeps the rows it has.
+	if rejected > 0 {
+		rep.CuratedFrozen = true
+		slog.Warn("curated subdomain removals skipped: some lists were rejected",
+			"rejected_files", rejected)
 		return nil
 	}
 	removed, err := q.CuratedSubdomainRemoveNotIn(ctx, listed)
@@ -337,6 +367,17 @@ func applySubdomainFile(ctx context.Context, q *db.Queries, ens *entityEnsurer, 
 			return nil, fmt.Errorf("campaign sync: ensure %s: %w", host, err)
 		}
 		ids = append(ids, id)
+		if existed {
+			// ensureRow leaves an existing row's shape alone, so a host the
+			// live check created before its apex was tracked still has
+			// parent_id NULL — which would keep it off the very page this
+			// feature exists to fill.
+			if _, err := q.DomainLinkParent(ctx, db.DomainLinkParentParams{
+				ID: id, ParentID: &parentID,
+			}); err != nil {
+				return nil, fmt.Errorf("campaign sync: link %s to parent: %w", host, err)
+			}
+		}
 
 		added, err := q.CuratedSubdomainAdd(ctx, id)
 		if err != nil {
