@@ -35,7 +35,11 @@ func (r *gitRepo) run(args ...string) {
 
 func (r *gitRepo) write(name, content string) {
 	r.t.Helper()
-	if err := os.WriteFile(filepath.Join(r.dir, name), []byte(content), 0o644); err != nil {
+	path := filepath.Join(r.dir, name)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		r.t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		r.t.Fatal(err)
 	}
 }
@@ -86,7 +90,7 @@ func TestCampaignValidate(t *testing.T) {
 		r := setup()
 		r.write("new.yml", "title: New\ndescription: d\nuuid: 99999999-8888-7777-6666-555555555555\ndomains:\n  - example.no\n")
 		r.commitAll("add with uuid")
-		res, err := Validate(ctx, r.dir, "main", 1000)
+		res, err := Validate(ctx, r.dir, "main", 1000, 20)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -100,7 +104,7 @@ func TestCampaignValidate(t *testing.T) {
 		r.write("nordic-banks.yml", strings.Replace(baseCampaign,
 			"11111111-2222-3333-4444-555555555555", "99999999-8888-7777-6666-555555555555", 1))
 		r.commitAll("mutate uuid")
-		res, err := Validate(ctx, r.dir, "main", 1000)
+		res, err := Validate(ctx, r.dir, "main", 1000, 20)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -114,7 +118,7 @@ func TestCampaignValidate(t *testing.T) {
 		r.rm("nordic-banks.yml")
 		r.write("norse-banks.yml", baseCampaign)
 		r.commitAll("rename")
-		res, err := Validate(ctx, r.dir, "main", 1000)
+		res, err := Validate(ctx, r.dir, "main", 1000, 20)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -131,7 +135,7 @@ func TestCampaignValidate(t *testing.T) {
 		r := setup()
 		r.write("dup.yml", "title: Dup\ndescription: d\ndomains:\n  - bank.se\n  - other.se\n  - BANK.se\n")
 		r.commitAll("dup")
-		res, err := Validate(ctx, r.dir, "main", 1000)
+		res, err := Validate(ctx, r.dir, "main", 1000, 20)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -150,7 +154,7 @@ func TestCampaignValidate(t *testing.T) {
 		}
 		r.write("big.yml", b.String())
 		r.commitAll("big")
-		res, err := Validate(ctx, r.dir, "main", 1000)
+		res, err := Validate(ctx, r.dir, "main", 1000, 20)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -163,7 +167,7 @@ func TestCampaignValidate(t *testing.T) {
 		r := setup()
 		r.write("bad.yml", "title: Bad\ndescription: d\ndomains:\n  - ok.no\n  - not_a_host!\n  - co.uk\n")
 		r.commitAll("bad hosts")
-		res, err := Validate(ctx, r.dir, "main", 1000)
+		res, err := Validate(ctx, r.dir, "main", 1000, 20)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -177,7 +181,7 @@ func TestCampaignValidate(t *testing.T) {
 		r := setup()
 		r.write("more.yml", "title: More\ndescription: d\ndomains:\n  - bank.no\n")
 		r.commitAll("cross dup")
-		res, err := Validate(ctx, r.dir, "main", 1000)
+		res, err := Validate(ctx, r.dir, "main", 1000, 20)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -193,7 +197,7 @@ func TestCampaignValidate(t *testing.T) {
 		r := setup()
 		r.write("extra.yml", "title: X\ndescription: d\nowner: someone\ndomains:\n  - x.no\n")
 		r.commitAll("extra key")
-		res, err := Validate(ctx, r.dir, "main", 1000)
+		res, err := Validate(ctx, r.dir, "main", 1000, 20)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -208,7 +212,7 @@ func TestCampaignValidate(t *testing.T) {
 			[]byte("title: A\ndescription: d\nuuid: 11111111-2222-3333-4444-555555555555\ndomains:\n  - a.no\n"), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		res, err := Validate(context.Background(), dir, "", 1000)
+		res, err := Validate(context.Background(), dir, "", 1000, 20)
 		if err != nil {
 			t.Fatal(err)
 		}

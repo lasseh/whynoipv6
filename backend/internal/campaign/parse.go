@@ -120,6 +120,12 @@ func ParseFile(path string, maxDomains int) (*File, error) {
 	return f, nil
 }
 
+// isYAML reports whether a filename carries one of the repo's YAML extensions.
+func isYAML(name string) bool {
+	ext := filepath.Ext(name)
+	return ext == ".yml" || ext == ".yaml"
+}
+
 // ListYAMLFiles returns the root-level *.yml/*.yaml files of the checkout,
 // sorted (06-ingest.md §3.2 — root only, no subdirectories).
 func ListYAMLFiles(repoPath string) ([]string, error) {
@@ -132,7 +138,7 @@ func ListYAMLFiles(repoPath string) ([]string, error) {
 		if e.IsDir() {
 			continue
 		}
-		if ext := filepath.Ext(e.Name()); ext == ".yml" || ext == ".yaml" {
+		if isYAML(e.Name()) {
 			files = append(files, filepath.Join(repoPath, e.Name()))
 		}
 	}

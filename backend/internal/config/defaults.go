@@ -68,6 +68,9 @@ func registryDefaults(binary string) map[string]any {
 		"campaign.push":                 true,
 		"campaign.max_domains_per_file": 5000,
 
+		// Curated subdomain lists: subdomains/<apex>.yml in the same repo.
+		"campaign.max_subdomains_per_domain": 20,
+
 		// §2.7 Live check.
 		"live_check.workers":              4,
 		"live_check.job_budget":           "60s",

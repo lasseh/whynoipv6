@@ -14,10 +14,11 @@ type ConfigSource interface {
 // with the caller — it is invocation policy, not registry state.
 func ConfigFrom(src ConfigSource) Config {
 	return Config{
-		RepoPath:          src.String("campaign.repo_path"),
-		GitRemote:         src.String("campaign.git_remote"),
-		MaxDomainsPerFile: src.Int("campaign.max_domains_per_file"),
-		Pull:              src.Bool("campaign.pull"),
-		Push:              src.Bool("campaign.push"),
+		RepoPath:               src.String("campaign.repo_path"),
+		GitRemote:              src.String("campaign.git_remote"),
+		MaxDomainsPerFile:      src.Int("campaign.max_domains_per_file"),
+		MaxSubdomainsPerDomain: src.Int("campaign.max_subdomains_per_domain"),
+		Pull:                   src.Bool("campaign.pull"),
+		Push:                   src.Bool("campaign.push"),
 	}
 }

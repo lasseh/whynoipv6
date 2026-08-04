@@ -23,13 +23,9 @@ func campaignValidateCmd() *cobra.Command {
 		// this verb never opens the DB (06 §4.3).
 		PersistentPreRunE: func(*cobra.Command, []string) error { return nil },
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			maxDomains := 5000 // campaign.max_domains_per_file default
-			if v := os.Getenv("CAMPAIGN_MAX_DOMAINS_PER_FILE"); v != "" {
-				if n, err := strconv.Atoi(v); err == nil && n > 0 {
-					maxDomains = n
-				}
-			}
-			res, err := campaign.Validate(cmd.Context(), repo, base, maxDomains)
+			maxDomains := envInt("CAMPAIGN_MAX_DOMAINS_PER_FILE", 5000)       // campaign.max_domains_per_file
+			maxSubdomains := envInt("CAMPAIGN_MAX_SUBDOMAINS_PER_DOMAIN", 20) // campaign.max_subdomains_per_domain
+			res, err := campaign.Validate(cmd.Context(), repo, base, maxDomains, maxSubdomains)
 			if err != nil {
 				return err
 			}
@@ -53,4 +49,15 @@ func campaignValidateCmd() *cobra.Command {
 	cmd.Flags().StringVar(&base, "base", "", "git ref of the merge base (CI mode); omit for local mode")
 	cmd.Flags().StringVar(&commentFile, "comment-file", "", "write the bot-comment Markdown here (default stdout)")
 	return cmd
+}
+
+// envInt reads a positive integer override for a registry default; CI has no
+// config file, so the caps arrive as environment variables.
+func envInt(key string, def int) int {
+	if v := os.Getenv(key); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			return n
+		}
+	}
+	return def
 }

@@ -23,12 +23,13 @@ import (
 
 // Config drives one sync run (keys: 09-ops.md §2.6).
 type Config struct {
-	RepoPath          string
-	GitRemote         string
-	MaxDomainsPerFile int
-	AdoptUnknownUUIDs bool // v6ctl --adopt-unknown-uuids only; never cron/webhook
-	Pull              bool // git pull --ff-only before parsing (prod: true)
-	Push              bool // commit+push the uuid write-back (prod: true)
+	RepoPath               string
+	GitRemote              string
+	MaxDomainsPerFile      int
+	MaxSubdomainsPerDomain int
+	AdoptUnknownUUIDs      bool // v6ctl --adopt-unknown-uuids only; never cron/webhook
+	Pull                   bool // git pull --ff-only before parsing (prod: true)
+	Push                   bool // commit+push the uuid write-back (prod: true)
 }
 
 // Report is the §3.3 step-7 sync report.
@@ -41,6 +42,11 @@ type Report struct {
 
 	MembershipAdds    int
 	MembershipRemoves int
+
+	// Curated subdomain lists (subdomains/<apex>.yml). Skipped lists land in
+	// RejectedFiles under their repo-relative path.
+	CuratedAdds    int
+	CuratedRemoves int
 
 	RejectedFiles map[string]string
 	RejectedHosts map[string]string
@@ -174,6 +180,11 @@ func Sync(ctx context.Context, cfg Config, pool *pgxpool.Pool) (*Report, error) 
 		slog.Info("campaign disabled (file removed)", "name", d.Name, "uuid", uuidString(d.Uuid))
 	}
 
+	// Step 5b: curated subdomain lists, same transaction.
+	if err := syncSubdomains(ctx, q, ens, cfg, rep); err != nil {
+		return nil, err
+	}
+
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("campaign sync: commit: %w", err)
 	}
@@ -186,6 +197,7 @@ func Sync(ctx context.Context, cfg Config, pool *pgxpool.Pool) (*Report, error) 
 		"renamed", len(rep.Renamed), "re_enabled", len(rep.ReEnabled),
 		"disabled", len(rep.Disabled), "member_adds", rep.MembershipAdds,
 		"member_removes", rep.MembershipRemoves,
+		"curated_adds", rep.CuratedAdds, "curated_removes", rep.CuratedRemoves,
 		"rejected_files", len(rep.RejectedFiles), "rejected_hosts", len(rep.RejectedHosts),
 		"write_back", rep.WriteBack)
 	return rep, nil
@@ -248,6 +260,99 @@ func syncMembers(ctx context.Context, q *db.Queries, ens *entityEnsurer, campaig
 	}
 	rep.MembershipRemoves += int(removed)
 	return nil
+}
+
+// syncSubdomains applies the curated subdomain lists (subdomains/<apex>.yml).
+// Membership is the only lifecycle lever this ingress has: it never disables a
+// row, it drops the curated_subdomain entry and lets the daily sweep run the
+// 30-day grace (04 §8).
+func syncSubdomains(ctx context.Context, q *db.Queries, ens *entityEnsurer, cfg Config, rep *Report) error {
+	paths, err := ListSubdomainFiles(cfg.RepoPath)
+	if err != nil {
+		return fmt.Errorf("campaign sync: list subdomain files: %w", err)
+	}
+
+	listed := []int64{} // every domain id listed this run; empty (not nil) so an
+	// emptied subdomains/ directory drops all membership
+	parseFailures := 0
+	for _, p := range paths {
+		f, err := ParseSubdomainFile(p, cfg.MaxSubdomainsPerDomain)
+		if err != nil {
+			rep.RejectedFiles[filepath.Join(SubdomainsDir, filepath.Base(p))] = err.Error()
+			parseFailures++
+			continue
+		}
+		// The apex must already be tracked: this ingress adds subdomains to the
+		// index, it is not a side door for new apexes. A file naming an unknown
+		// apex can have no rows of its own, so skipping it costs nothing.
+		parent, err := q.DomainByHost(ctx, f.Apex)
+		switch {
+		case isNoRows(err):
+			rep.RejectedFiles[f.Path] = "apex " + f.Apex + " is not tracked — it must enter via Tranco or a campaign first"
+			continue
+		case err != nil:
+			return fmt.Errorf("campaign sync: lookup apex %s: %w", f.Apex, err)
+		case parent.Disabled:
+			rep.RejectedFiles[f.Path] = "apex " + f.Apex + " is disabled"
+			continue
+		}
+		ids, err := applySubdomainFile(ctx, q, ens, f, parent.ID, rep)
+		if err != nil {
+			return err
+		}
+		listed = append(listed, ids...)
+	}
+
+	// A file that failed to parse leaves its hosts out of `listed`, so running
+	// the diff would unlist them over a typo and start a 30-day grace. Removals
+	// wait until the repo parses clean again; a rejected apex does not block
+	// them (it owns no rows).
+	if parseFailures > 0 {
+		slog.Warn("curated subdomain removals skipped: some lists failed to parse",
+			"failed_files", parseFailures)
+		return nil
+	}
+	removed, err := q.CuratedSubdomainRemoveNotIn(ctx, listed)
+	if err != nil {
+		return fmt.Errorf("campaign sync: remove curated subdomains: %w", err)
+	}
+	rep.CuratedRemoves = int(removed)
+	return nil
+}
+
+// applySubdomainFile ensures one list's child rows and their membership,
+// returning the domain ids it listed.
+func applySubdomainFile(ctx context.Context, q *db.Queries, ens *entityEnsurer, f *SubdomainFile, parentID int64, rep *Report) ([]int64, error) {
+	_, tld, err := PSLParse(f.Apex)
+	if err != nil {
+		return nil, fmt.Errorf("campaign sync: psl %s: %w", f.Apex, err)
+	}
+	ids := make([]int64, 0, len(f.Hosts))
+	for _, host := range f.Hosts {
+		// created_by='curated' only sticks on rows this ingress creates; a host
+		// already known from another ingress keeps its origin and just gains
+		// membership.
+		id, existed, err := ens.ensureRow(ctx, host, "subdomain", &parentID, "curated", tld)
+		if err != nil {
+			return nil, fmt.Errorf("campaign sync: ensure %s: %w", host, err)
+		}
+		ids = append(ids, id)
+
+		added, err := q.CuratedSubdomainAdd(ctx, id)
+		if err != nil {
+			return nil, fmt.Errorf("campaign sync: add curated %s: %w", host, err)
+		}
+		if added > 0 {
+			rep.CuratedAdds += int(added)
+			if existed {
+				// Re-entry rule: a delisted row re-listed by a file comes back.
+				if err := q.DomainMembershipReEntry(ctx, id); err != nil {
+					return nil, fmt.Errorf("campaign sync: re-entry %s: %w", host, err)
+				}
+			}
+		}
+	}
+	return ids, nil
 }
 
 // dedupeUUIDs applies the §3.3 step-2 duplicate-uuid guard.

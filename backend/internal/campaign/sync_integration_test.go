@@ -23,11 +23,21 @@ func writeFixture(t *testing.T, dir, name, content string) {
 	}
 }
 
+func writeSubdomainFixture(t *testing.T, dir, name, content string) {
+	t.Helper()
+	sub := filepath.Join(dir, SubdomainsDir)
+	if err := os.MkdirAll(sub, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeFixture(t, sub, name, content)
+}
+
 func run(t *testing.T, pool *pgxpool.Pool, dir string, adopt bool) *Report {
 	t.Helper()
 	rep, err := Sync(context.Background(), Config{
 		RepoPath: dir, GitRemote: "origin", MaxDomainsPerFile: 1000,
-		AdoptUnknownUUIDs: adopt, Pull: false, Push: false,
+		MaxSubdomainsPerDomain: 20,
+		AdoptUnknownUUIDs:      adopt, Pull: false, Push: false,
 	}, pool)
 	if err != nil {
 		t.Fatalf("sync: %v", err)
@@ -191,6 +201,153 @@ domains:
 	}
 	if disabled || !dueNow {
 		t.Errorf("delisted member re-entry = disabled=%t dueNow=%t, want false/true", disabled, dueNow)
+	}
+}
+
+// TestSubdomainSync covers the curated-list ingress: creation, membership,
+// the apex precondition, re-entry, and the parse-failure removal guard.
+func TestSubdomainSync(t *testing.T) {
+	pool := pgtest.NewDB(t)
+	ctx := context.Background()
+	dir := t.TempDir()
+
+	// campA seeds a-one.no (created_by='campaign'), the apex the lists hang off.
+	writeFixture(t, dir, "a.yml", campA)
+	run(t, pool, dir, false)
+
+	count := func(query string, args ...any) int {
+		t.Helper()
+		var n int
+		if err := pool.QueryRow(ctx, query, args...).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	listed := func(host string) int {
+		t.Helper()
+		return count(`SELECT count(*) FROM curated_subdomain cs
+			JOIN domain d ON d.id = cs.domain_id WHERE d.host = $1`, host)
+	}
+
+	// --- a list whose apex is not tracked: reported, and no rows created.
+	writeSubdomainFixture(t, dir, "unknown-apex.no.yml", "subdomains:\n  - api\n")
+	rep := run(t, pool, dir, false)
+	if reason, ok := rep.RejectedFiles["subdomains/unknown-apex.no.yml"]; !ok ||
+		!strings.Contains(reason, "not tracked") {
+		t.Errorf("unknown apex should be reported: %v", rep.RejectedFiles)
+	}
+	if n := count("SELECT count(*) FROM domain WHERE host='api.unknown-apex.no'"); n != 0 {
+		t.Errorf("unknown apex created %d rows, want 0", n)
+	}
+	if err := os.Remove(filepath.Join(dir, SubdomainsDir, "unknown-apex.no.yml")); err != nil {
+		t.Fatal(err)
+	}
+
+	// --- a tracked apex: children created and listed, parent untouched.
+	writeSubdomainFixture(t, dir, "a-one.no.yml", "subdomains:\n  - login\n  - api\n")
+	rep = run(t, pool, dir, false)
+	if rep.CuratedAdds != 2 || rep.CuratedRemoves != 0 {
+		t.Fatalf("first apply = +%d/-%d, want +2/-0", rep.CuratedAdds, rep.CuratedRemoves)
+	}
+	var kind, createdBy string
+	var parentID *int64
+	if err := pool.QueryRow(ctx,
+		"SELECT kind::text, created_by::text, parent_id FROM domain WHERE host='login.a-one.no'").
+		Scan(&kind, &createdBy, &parentID); err != nil {
+		t.Fatalf("child row: %v", err)
+	}
+	if kind != "subdomain" || createdBy != "curated" || parentID == nil {
+		t.Errorf("child = %s/%s parent=%v, want subdomain/curated with a parent", kind, createdBy, parentID)
+	}
+	if err := pool.QueryRow(ctx, "SELECT created_by::text FROM domain WHERE host='a-one.no'").
+		Scan(&createdBy); err != nil {
+		t.Fatal(err)
+	}
+	if createdBy != "campaign" {
+		t.Errorf("parent created_by = %s, want the original campaign origin", createdBy)
+	}
+
+	// --- idempotent re-run.
+	if rep = run(t, pool, dir, false); rep.CuratedAdds != 0 || rep.CuratedRemoves != 0 {
+		t.Errorf("re-run should be churn-free: +%d/-%d", rep.CuratedAdds, rep.CuratedRemoves)
+	}
+
+	// --- a host already known from another ingress keeps its origin.
+	if _, err := pool.Exec(ctx, `INSERT INTO domain (host, kind, created_by, asn_id, country_id, tld)
+		VALUES ('shop.a-one.no', 'subdomain', 'live_check',
+		        (SELECT id FROM asn WHERE number=0), (SELECT id FROM country WHERE code='UN'), 'no')`); err != nil {
+		t.Fatal(err)
+	}
+	writeSubdomainFixture(t, dir, "a-one.no.yml", "subdomains:\n  - login\n  - api\n  - shop\n")
+	rep = run(t, pool, dir, false)
+	if rep.CuratedAdds != 1 {
+		t.Errorf("adding a known host = +%d, want +1", rep.CuratedAdds)
+	}
+	if err := pool.QueryRow(ctx, "SELECT created_by::text FROM domain WHERE host='shop.a-one.no'").
+		Scan(&createdBy); err != nil {
+		t.Fatal(err)
+	}
+	if createdBy != "live_check" {
+		t.Errorf("created_by = %s, want live_check kept (membership is not provenance)", createdBy)
+	}
+
+	// --- dropping an entry drops membership only; the row stays for the sweep.
+	writeSubdomainFixture(t, dir, "a-one.no.yml", "subdomains:\n  - login\n  - api\n")
+	rep = run(t, pool, dir, false)
+	if rep.CuratedRemoves != 1 {
+		t.Errorf("dropping an entry = -%d, want -1", rep.CuratedRemoves)
+	}
+	if listed("shop.a-one.no") != 0 {
+		t.Error("dropped entry still listed")
+	}
+	if n := count("SELECT count(*) FROM domain WHERE host='shop.a-one.no' AND NOT disabled"); n != 1 {
+		t.Error("sync disabled a row itself; that belongs to the lifecycle sweep")
+	}
+
+	// --- re-listing a delisted host re-enables it and makes it due.
+	if _, err := pool.Exec(ctx, `UPDATE domain SET disabled=true, disabled_reason='delisted',
+		disabled_at=now(), orphaned_at=now(), next_check_at=now()+interval '9 hours'
+		WHERE host='shop.a-one.no'`); err != nil {
+		t.Fatal(err)
+	}
+	writeSubdomainFixture(t, dir, "a-one.no.yml", "subdomains:\n  - login\n  - api\n  - shop\n")
+	run(t, pool, dir, false)
+	var disabled, dueNow bool
+	if err := pool.QueryRow(ctx,
+		"SELECT disabled, next_check_at <= now() FROM domain WHERE host='shop.a-one.no'").
+		Scan(&disabled, &dueNow); err != nil {
+		t.Fatal(err)
+	}
+	if disabled || !dueNow {
+		t.Errorf("re-listed host = disabled=%t dueNow=%t, want false/true", disabled, dueNow)
+	}
+
+	// --- a file that fails to parse must not unlist anything.
+	writeSubdomainFixture(t, dir, "a-two.no.yml", "subdomains:\n  - www\n")
+	rep = run(t, pool, dir, false)
+	if _, ok := rep.RejectedFiles["subdomains/a-two.no.yml"]; !ok {
+		t.Errorf("broken list should be reported: %v", rep.RejectedFiles)
+	}
+	if rep.CuratedRemoves != 0 {
+		t.Errorf("removals ran with a broken list present: -%d", rep.CuratedRemoves)
+	}
+	if listed("login.a-one.no") != 1 || listed("shop.a-one.no") != 1 {
+		t.Error("a broken list unlisted a healthy list's hosts")
+	}
+
+	// --- fixing the repo lets removals resume.
+	if err := os.Remove(filepath.Join(dir, SubdomainsDir, "a-two.no.yml")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(filepath.Join(dir, SubdomainsDir, "a-one.no.yml")); err != nil {
+		t.Fatal(err)
+	}
+	rep = run(t, pool, dir, false)
+	if rep.CuratedRemoves != 3 {
+		t.Errorf("emptied directory = -%d, want -3", rep.CuratedRemoves)
+	}
+	if n := count("SELECT count(*) FROM curated_subdomain"); n != 0 {
+		t.Errorf("%d membership rows survived an emptied directory", n)
 	}
 }
 

@@ -35,6 +35,7 @@ func campaignCmd() *cobra.Command {
 			fmt.Printf("created: %d updated: %d renamed: %d re-enabled: %d disabled: %d\n",
 				len(rep.Created), len(rep.Updated), len(rep.Renamed), len(rep.ReEnabled), len(rep.Disabled))
 			fmt.Printf("membership adds: %d removes: %d\n", rep.MembershipAdds, rep.MembershipRemoves)
+			fmt.Printf("curated subdomains added: %d removed: %d\n", rep.CuratedAdds, rep.CuratedRemoves)
 			for f, reason := range rep.RejectedFiles {
 				fmt.Printf("rejected file %s: %s\n", f, reason)
 			}

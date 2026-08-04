@@ -40,14 +40,15 @@ type changedFile struct {
 
 // Validate runs the §4.2 checks. base != "" is CI mode: only the files
 // changed vs the merge base are evaluated and the UUID diff rule applies;
-// base == "" is local mode: every root-level YAML, no git required.
-// The verb never touches the DB or the network.
-func Validate(ctx context.Context, repo, base string, maxDomains int) (*ValidateResult, error) {
+// base == "" is local mode: every root-level YAML plus every curated
+// subdomain list, no git required. The verb never touches the DB or the
+// network.
+func Validate(ctx context.Context, repo, base string, maxDomains, maxSubdomains int) (*ValidateResult, error) {
 	res := &ValidateResult{}
 	var comment strings.Builder
 	comment.WriteString("## Campaign validation\n\n")
 
-	var files []changedFile
+	var files, subFiles []changedFile
 	if base != "" {
 		out, err := git(ctx, repo, "diff", "--name-status", "--no-renames", base+"...HEAD")
 		if err != nil {
@@ -58,13 +59,18 @@ func Validate(ctx context.Context, repo, base string, maxDomains int) (*Validate
 				continue
 			}
 			parts := strings.Fields(line)
-			if len(parts) != 2 || strings.Contains(parts[1], "/") {
-				continue // root-level files only
-			}
-			if ext := filepath.Ext(parts[1]); ext != ".yml" && ext != ".yaml" {
+			if len(parts) != 2 {
 				continue
 			}
-			files = append(files, changedFile{name: parts[1], status: parts[0][0]})
+			if !isYAML(parts[1]) {
+				continue
+			}
+			switch dir, _ := filepath.Split(parts[1]); dir {
+			case "": // root-level campaign file
+				files = append(files, changedFile{name: parts[1], status: parts[0][0]})
+			case SubdomainsDir + "/":
+				subFiles = append(subFiles, changedFile{name: parts[1], status: parts[0][0]})
+			}
 		}
 	} else {
 		list, err := ListYAMLFiles(repo)
@@ -74,9 +80,18 @@ func Validate(ctx context.Context, repo, base string, maxDomains int) (*Validate
 		for _, p := range list {
 			files = append(files, changedFile{name: filepath.Base(p), status: 'M'})
 		}
+		subList, err := ListSubdomainFiles(repo)
+		if err != nil {
+			return nil, err
+		}
+		for _, p := range subList {
+			subFiles = append(subFiles, changedFile{
+				name: filepath.Join(SubdomainsDir, filepath.Base(p)), status: 'M',
+			})
+		}
 	}
-	if len(files) == 0 {
-		comment.WriteString("No campaign files changed.\n")
+	if len(files) == 0 && len(subFiles) == 0 {
+		comment.WriteString("No campaign or subdomain files changed.\n")
 		res.Comment = comment.String()
 		return res, nil
 	}
@@ -204,6 +219,8 @@ func Validate(ctx context.Context, repo, base string, maxDomains int) (*Validate
 		}
 	}
 
+	validateSubdomainFiles(repo, subFiles, maxSubdomains, res, &comment)
+
 	if res.OK() {
 		comment.WriteString("✅ all blocking checks passed\n")
 	} else {
@@ -218,7 +235,11 @@ func Validate(ctx context.Context, repo, base string, maxDomains int) (*Validate
 
 // domainEntries extracts the domains[] items with their source lines via a
 // yaml.Node walk (ParseFile is line-blind).
-func domainEntries(path string) ([]hostEntry, error) {
+func domainEntries(path string) ([]hostEntry, error) { return sequenceEntries(path, "domains") }
+
+// sequenceEntries returns the items of one top-level string sequence with the
+// line each was written on.
+func sequenceEntries(path, key string) ([]hostEntry, error) {
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
@@ -232,7 +253,7 @@ func domainEntries(path string) ([]hostEntry, error) {
 	}
 	m := root.Content[0]
 	for i := 0; i+1 < len(m.Content); i += 2 {
-		if m.Content[i].Value != "domains" || m.Content[i+1].Kind != yaml.SequenceNode {
+		if m.Content[i].Value != key || m.Content[i+1].Kind != yaml.SequenceNode {
 			continue
 		}
 		var out []hostEntry

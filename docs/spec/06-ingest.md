@@ -281,6 +281,7 @@ campaign:
   pull: true                           # bool; git pull before parsing — false in containers (no git in the distroless image)
   push: true                           # bool; commit+push the uuid write-back — false in containers
   max_domains_per_file: 5000           # int; PR-validation size cap (§4); >1,723 — the Dutch central-government register
+  max_subdomains_per_domain: 20        # int; entry cap for one subdomains/<apex>.yml list (§3.7)
 ```
 
 Ops (Ansible; definitions in 09-ops.md): the checkout and the GitHub deploy key (write access, campaign repo only) are provisioned for the single service user that runs both `crawler` and CI-invoked `v6ctl`.
@@ -299,6 +300,36 @@ linked := EXISTS (SELECT 1 FROM campaign_domain cd
 ```
 
 Without the `NOT c.disabled` join, a disabled campaign's kept membership rows (§3.3 step 5) would pin its rank-NULL domains in the frontier forever. With it, they enter the normal `orphaned_at` → 30-day grace → `delisted` path, and campaign re-enable (§3.3 step 3) restores linkage before the next sweep or via the delisted re-entry rule.
+
+### 3.7 Curated subdomain lists (`subdomains/<apex>.yml`)
+
+Apex + www passing does not mean the *service* works over IPv6: login portals, APIs and checkout hosts live on subdomains that can be v4-only while the homepage scores green. Curated lists let a contributor name those hosts so the crawler checks them like any other domain. Results are **informational** — they never feed classification or the aggregate stats, because coverage is uneven by construction (a domain would otherwise score worse merely because someone bothered to list its API host).
+
+Format — one file per parent, in the same repo and the same sync:
+
+```yaml
+# subdomains/nrk.no.yml
+subdomains:
+  - tv
+  - radio
+  - secure.login
+```
+
+Entries are labels **relative to the apex**, which is what keeps a list from reaching outside its own parent (the requester's reference format allows cross-domain hosts; this one deliberately does not — that is auto-discovery's job, §5). Rules, enforced by the parser and by PR validation (§4):
+
+- The filename is the parent, and must be the canonical registrable apex in lowercase punycode: two spellings normalizing to one apex would otherwise be two files for one parent, last sync winning.
+- Labels are validated by joining them to the apex and running `Canonicalize` (§1) — the same IDN mapping, LDH and length rules as every other host. Multi-level labels (`secure.login`) are allowed.
+- The bare label `www` is rejected: the apex's own `www` dimension already covers it.
+- Duplicates after normalization, and lists over `campaign.max_subdomains_per_domain`, are rejected. One bad entry rejects the whole file — the lists are small, and partial application would silently unlist the entries that did parse.
+- An empty list is valid and equivalent to deleting the file.
+
+Sync (step 5b of §3.3, same transaction):
+
+1. The apex must already be tracked and enabled. A list naming an unknown apex is skipped and reported — this ingress adds subdomains to the index, it is not a side door for new apexes (contrast §3.4, where campaign entries *do* auto-create `parent_link` parents). Such a file owns no rows, so skipping it changes nothing.
+2. Each host is ensured as `kind='subdomain'` with `parent_id`, `rank NULL`, `created_by='curated'`. A host already known from another ingress keeps its origin: `created_by` is provenance, `curated_subdomain` is membership.
+3. Membership is refreshed, then one set-based delete removes everything no longer listed.
+
+Removal is the whole lifecycle story: this ingress never disables a row. Dropping the membership row removes the linkage arm (§3.6), so the daily sweep stamps the host and delists it after the 30-day grace, and re-listing re-enables it through the sweep's symmetric re-entry. Because of that, a file that fails to *parse* suspends the removal diff entirely — otherwise a typo in one merged file would start a 30-day grace for every host it lists.
 
 ---
 
@@ -682,6 +713,7 @@ All keys below are introduced here and consolidated in the registry (09-ops.md),
 | `campaign.pull` | bool | true | crawler + v6ctl |
 | `campaign.push` | bool | true | crawler + v6ctl |
 | `campaign.max_domains_per_file` | int | 5000 | v6ctl (validate) |
+| `campaign.max_subdomains_per_domain` | int | 20 | crawler + v6ctl |
 | `crawler.resources.enabled` | bool | false | crawler |
 | `GEOIP_PATH` | string | `/var/lib/GeoIP` | crawler |
 
