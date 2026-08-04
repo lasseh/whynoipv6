@@ -159,6 +159,26 @@ watch(
                   </p>
                 </li>
                 <li class="py-4">
+                  <h4 class="text-xl font-medium mb-2">Why does a domain list subdomains?</h4>
+                  <p class="text-base text-gray-400 mb-2">
+                    An apex can score green while the part people actually use, the login portal or
+                    the API, is still IPv4 only. Anyone can list those hosts for a domain, and the
+                    crawler then checks them exactly like any other domain.
+                  </p>
+                  <p class="text-base text-gray-400">
+                    Subdomain results are informational: they never change the parent domain's
+                    rating or any of the country and campaign numbers. What gets listed depends on
+                    who took the time to list it, and a domain should not score worse for having
+                    attentive users. Add one by opening a PR on the
+                    <a
+                      href="https://github.com/lasseh/whynoipv6-campaign"
+                      target="_blank"
+                      class="a-gradient"
+                      >campaign repo</a
+                    >.
+                  </p>
+                </li>
+                <li class="py-4">
                   <h4 class="text-xl font-medium mb-2">Crawler Errors</h4>
                   <p class="text-base text-gray-400">
                     Found a bug in the crawler? PRs are welcome.

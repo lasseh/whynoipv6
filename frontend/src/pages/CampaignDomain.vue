@@ -9,6 +9,7 @@ import Breadcrumb from '@/components/Breadcrumb.vue'
 import ChangelogTable from '@/components/ChangelogTable.vue'
 import DomainStatusCard from '@/components/DomainStatusCard.vue'
 import MandateBadge from '@/components/MandateBadge.vue'
+import SubdomainTable from '@/components/SubdomainTable.vue'
 
 import { getCampaign, getCampaignDomainChangelog } from '@/api'
 import { useDomainDetail } from '@/composables/useDomainDetail'
@@ -23,7 +24,7 @@ const domainRoute = (h: string) => ({
   params: { uuid: uuid.value, domain: h },
 })
 
-const { domain, changelogs, history, error } = useDomainDetail(
+const { domain, changelogs, history, subdomains, error } = useDomainDetail(
   () => route.params.domain as string,
   {
     notFoundRoute: (h) => ({
@@ -82,6 +83,8 @@ watch(domain, (d) => {
             </div>
 
             <DomainStatusCard :domain="domain" :history="history" align="start" />
+
+            <SubdomainTable :subdomains="subdomains" :total="domain.subdomain_count" />
           </template>
         </div>
       </div>

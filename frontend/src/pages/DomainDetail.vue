@@ -9,6 +9,7 @@ import Breadcrumb from '@/components/Breadcrumb.vue'
 import ChangelogTable from '@/components/ChangelogTable.vue'
 import DomainStatusCard from '@/components/DomainStatusCard.vue'
 import MandateBadge from '@/components/MandateBadge.vue'
+import SubdomainTable from '@/components/SubdomainTable.vue'
 
 import { getDomainChangelog } from '@/api'
 import { useDomainDetail } from '@/composables/useDomainDetail'
@@ -16,7 +17,7 @@ import { setPageTitle } from '@/composables/usePageMeta'
 
 const route = useRoute()
 
-const { domain, changelogs, history, error } = useDomainDetail(
+const { domain, changelogs, history, subdomains, error } = useDomainDetail(
   () => route.params.domain as string,
   {
     notFoundRoute: (h) => ({ name: 'DomainNotFound', params: { domain: h } }),
@@ -66,6 +67,8 @@ watch(domain, (d) => {
             </div>
 
             <DomainStatusCard :domain="domain" :history="history" />
+
+            <SubdomainTable :subdomains="subdomains" :total="domain.subdomain_count" />
           </template>
         </div>
       </div>

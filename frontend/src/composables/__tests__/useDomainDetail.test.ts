@@ -6,16 +6,17 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import type { Router } from 'vue-router'
 import { useDomainDetail } from '@/composables/useDomainDetail'
 import type { DomainDetailOptions } from '@/composables/useDomainDetail'
-import { getDomain, getDomainHistory } from '@/api'
-import type { DomainDetail, HistoryPoint } from '@/api'
+import { getDomain, getDomainHistory, listSubdomains } from '@/api'
+import type { DomainDetail, DomainSummary, HistoryPoint } from '@/api'
 import { ApiProblem } from '@/api/problem'
 
 vi.mock('@/api', () => ({
   getDomain: vi.fn(),
   getDomainHistory: vi.fn(),
+  listSubdomains: vi.fn(),
 }))
 
-const domainFixture = { host: 'bad.example' } as unknown as DomainDetail
+const domainFixture = { host: 'bad.example', subdomain_count: 0 } as unknown as DomainDetail
 const historyPoint = { date: '2026-07-11' } as unknown as HistoryPoint
 
 type Detail = ReturnType<typeof useDomainDetail>
@@ -57,9 +58,10 @@ describe('useDomainDetail', () => {
   beforeEach(() => {
     vi.mocked(getDomain).mockReset()
     vi.mocked(getDomainHistory).mockReset()
+    vi.mocked(listSubdomains).mockReset()
   })
 
-  it('loads the domain and the two non-fatal side surfaces', async () => {
+  it('loads the domain and the non-fatal side surfaces', async () => {
     vi.mocked(getDomain).mockResolvedValue(domainFixture)
     vi.mocked(getDomainHistory).mockResolvedValue({
       host: 'bad.example',
@@ -73,6 +75,42 @@ describe('useDomainDetail', () => {
     expect(detail.changelogs.value).toEqual([{ id: 1 }])
     expect(detail.history.value).toEqual([historyPoint])
     expect(detail.error.value).toBeNull()
+  })
+
+  // Most domains have no children, and the detail response already says so —
+  // the extra request is only worth making when it can return something.
+  it('skips the subdomain fetch when the domain has no children', async () => {
+    vi.mocked(getDomain).mockResolvedValue(domainFixture)
+    vi.mocked(getDomainHistory).mockResolvedValue({
+      host: 'bad.example',
+      points: [],
+      meta: { as_of: '2026-07-11T00:00:00Z', retention_days: 90 },
+    })
+    const { detail } = await setup()
+    expect(listSubdomains).not.toHaveBeenCalled()
+    expect(detail.subdomains.value).toEqual([])
+  })
+
+  it('loads subdomains when the domain has children', async () => {
+    const childRow = { host: 'api.bad.example' } as unknown as DomainSummary
+    vi.mocked(getDomain).mockResolvedValue({
+      ...domainFixture,
+      subdomain_count: 2,
+    } as unknown as DomainDetail)
+    vi.mocked(getDomainHistory).mockResolvedValue({
+      host: 'bad.example',
+      points: [],
+      meta: { as_of: '2026-07-11T00:00:00Z', retention_days: 90 },
+    })
+    vi.mocked(listSubdomains).mockResolvedValue({
+      items: [childRow],
+      page: { next_cursor: null, has_more: false },
+      meta: { as_of: '2026-07-11T00:00:00Z', count: 2 },
+    } as unknown as Awaited<ReturnType<typeof listSubdomains>>)
+
+    const { detail } = await setup()
+    expect(vi.mocked(listSubdomains).mock.calls.at(-1)?.[0]).toBe('bad.example')
+    expect(detail.subdomains.value).toEqual([childRow])
   })
 
   it('redirects to the not-found route on a 404', async () => {

@@ -55,6 +55,12 @@ export const getDomainHistory = (
   signal?: AbortSignal,
 ) => get('/domains/{host}/history', { path: { host }, query, signal })
 
+export const listSubdomains = (
+  host: string,
+  query?: GetQuery<'/domains/{host}/subdomains'>,
+  signal?: AbortSignal,
+) => get('/domains/{host}/subdomains', { path: { host }, query, signal })
+
 export const listCountries = (signal?: AbortSignal) => get('/countries', { signal })
 
 export const getCountry = (code: string, signal?: AbortSignal) =>
