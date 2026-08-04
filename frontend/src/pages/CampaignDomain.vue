@@ -79,6 +79,15 @@ watch(domain, (d) => {
                 <p class="text-base text-gray-400 pl-1">
                   Provider: {{ domain.asn.name }} (AS{{ domain.asn.number }})
                 </p>
+                <p v-if="domain.parent" class="text-base text-gray-400 pl-1">
+                  Subdomain of
+                  <router-link
+                    :to="{ name: 'DomainDetail', params: { domain: domain.parent } }"
+                    class="text-fuchsia-500 hover:text-fuchsia-400 underline underline-offset-2"
+                  >
+                    {{ domain.parent }}
+                  </router-link>
+                </p>
               </div>
             </div>
 

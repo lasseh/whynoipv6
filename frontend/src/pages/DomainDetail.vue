@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { watch } from 'vue'
+import { computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
 import PageShell from '@/components/PageShell.vue'
@@ -25,6 +25,17 @@ const { domain, changelogs, history, subdomains, error } = useDomainDetail(
   },
 )
 
+// A subdomain gets its parent as a crumb, so the hierarchy is visible from
+// the top of the page rather than implied by the hostname.
+const trail = computed(() => {
+  const crumbs = [{ label: 'Domains', to: '/domains' }]
+  const parent = domain.value?.parent
+  if (parent) {
+    crumbs.push({ label: parent, to: `/domains/${parent}` })
+  }
+  return crumbs
+})
+
 // Data-driven title once the domain loads — the "does example.com support
 // IPv6" long-tail query, mirrored by CampaignDomain.
 watch(domain, (d) => {
@@ -38,7 +49,7 @@ watch(domain, (d) => {
     <section class="relative">
       <div class="max-w-6xl mx-auto px-4 sm:px-6">
         <div class="pt-20 pb-4 md:pt-24 md:pb-4">
-          <Breadcrumb :trail="[{ label: 'Domains', to: '/domains' }]" />
+          <Breadcrumb :trail="trail" />
 
           <!-- Error state -->
           <ApiError v-if="error" :problem="error" />
@@ -55,6 +66,15 @@ watch(domain, (d) => {
                 </div>
                 <p class="text-base text-gray-400 pl-1">
                   Provider: {{ domain.asn.name }} (AS{{ domain.asn.number }})
+                </p>
+                <p v-if="domain.parent" class="text-base text-gray-400 pl-1">
+                  Subdomain of
+                  <router-link
+                    :to="{ name: 'DomainDetail', params: { domain: domain.parent } }"
+                    class="text-fuchsia-500 hover:text-fuchsia-400 underline underline-offset-2"
+                  >
+                    {{ domain.parent }}
+                  </router-link>
                 </p>
               </div>
               <div v-if="domain.rank !== null" class="text-center">

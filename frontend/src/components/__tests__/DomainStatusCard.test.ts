@@ -38,6 +38,37 @@ async function expandIPv6Only(wrapper: ReturnType<typeof mountCard>) {
   await row!.trigger('click')
 }
 
+function mountKind(kind: DomainDetail['kind'], parent: string | null) {
+  const domain: DomainDetail = { ...domainDetail, host: 'psapi.nrk.no', kind, parent }
+  return mount(DomainStatusCard, {
+    props: { domain, history: [point] },
+    global: { stubs: { RouterLink: true } },
+  })
+}
+
+// www.<subdomain> is never looked up — the engine stores a fixed
+// not_applicable — so showing the row would invent a hostname.
+describe('DomainStatusCard www row for subdomains', () => {
+  it('drops the www row and its star on a subdomain', () => {
+    const wrapper = mountKind('subdomain', 'nrk.no')
+    expect(wrapper.text()).not.toContain('www.psapi.nrk.no')
+    expect(wrapper.findAll('svg[viewBox="0 0 22 20"]')).toHaveLength(3)
+  })
+
+  it('describes the host rather than "the apex domain"', () => {
+    const wrapper = mountKind('subdomain', 'nrk.no')
+    expect(wrapper.text()).toContain('This hostname publishes an AAAA record')
+    expect(wrapper.text()).not.toContain('The apex domain publishes')
+  })
+
+  it('keeps the www row and four stars on an apex', () => {
+    const wrapper = mountKind('apex', null)
+    expect(wrapper.text()).toContain('www.psapi.nrk.no')
+    expect(wrapper.findAll('svg[viewBox="0 0 22 20"]')).toHaveLength(4)
+    expect(wrapper.text()).toContain('The apex domain publishes')
+  })
+})
+
 // "Not applicable" on resources is ambiguous without the connection check:
 // discovery only runs when the site loads over IPv6, so the same value means
 // either "no external dependencies" or "couldn't evaluate".

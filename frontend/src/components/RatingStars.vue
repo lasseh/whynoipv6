@@ -1,18 +1,22 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { StatusBlock } from '@/api'
+import type { Dimension, StatusBlock } from '@/api'
 import { STAR_CLASS, statusStarKind, type StarKind } from '@/utils/status'
 import Tooltip from '@/components/Tooltip.vue'
 
 // The 4-star detail rating (§7.3, resolved OPEN-F1): one star per rated
 // dimension (base/www/ns/mx); the status→star trichotomy and hues live in
 // utils/status. Stars render filled-first to keep the old left-filled look.
-const props = defineProps<{ status: StatusBlock }>()
+// `dims` narrows the set for entities that have fewer rated dimensions — a
+// subdomain has no www — so the stars always match the rows below them.
+const props = withDefaults(defineProps<{ status: StatusBlock; dims?: Dimension[] }>(), {
+  dims: () => ['base', 'www', 'ns', 'mx'],
+})
 
 const STAR_ORDER: Record<StarKind, number> = { filled: 0, muted: 1, empty: 2 }
 
 const stars = computed<StarKind[]>(() =>
-  (['base', 'www', 'ns', 'mx'] as const)
+  props.dims
     .map((dim) => statusStarKind(props.status[dim].value))
     .sort((a, b) => STAR_ORDER[a] - STAR_ORDER[b]),
 )

@@ -56,7 +56,17 @@ function resourcesDesc(status: DomainDetail['status']): string {
     : 'Not applicable: the site isn’t reachable over IPv6, so page resources can’t be evaluated.'
 }
 
-// The four §7.1 rows (Apex / WWW / Nameserver / Mail (MX)) plus the derived
+// A subdomain has no www dimension: the engine never checks www.<subdomain>
+// and stores a fixed not_applicable (01 §runner). Showing that row would
+// invent a hostname (www.psapi.nrk.no) that was never looked up, so the row
+// and its star are dropped rather than displayed as "not applicable".
+const isSubdomain = computed(() => props.domain.kind === 'subdomain')
+
+const ratedDims = computed<Dimension[]>(() =>
+  isSubdomain.value ? ['base', 'ns', 'mx'] : ['base', 'www', 'ns', 'mx'],
+)
+
+// The §7.1 rows (host / WWW / Nameserver / Mail (MX)) plus the derived
 // IPv6 Only fold (ADR 0002), which expands to its two source trackers.
 const rows = computed<Row[]>(() => {
   const status = props.domain.status
@@ -68,16 +78,22 @@ const rows = computed<Row[]>(() => {
       dims: [
         {
           dim: 'base',
-          desc: 'The apex domain publishes an AAAA record, cross-checked against three independent resolvers.',
+          desc: isSubdomain.value
+            ? 'This hostname publishes an AAAA record, cross-checked against three independent resolvers.'
+            : 'The apex domain publishes an AAAA record, cross-checked against three independent resolvers.',
         },
       ],
     },
-    {
-      key: 'www',
-      label: `www.${props.domain.host}`,
-      value: status.www.value,
-      dims: [{ dim: 'www', desc: 'The www hostname publishes an AAAA record.' }],
-    },
+    ...(isSubdomain.value
+      ? []
+      : [
+          {
+            key: 'www' as const,
+            label: `www.${props.domain.host}`,
+            value: status.www.value,
+            dims: [{ dim: 'www' as const, desc: 'The www hostname publishes an AAAA record.' }],
+          },
+        ]),
     {
       key: 'ns',
       label: 'Nameservers',
@@ -130,7 +146,7 @@ const formattedTsCheck = computed(() =>
     </div>
     <!-- Rating Stars -->
     <div class="text-center">
-      <RatingStars :status="domain.status" />
+      <RatingStars :status="domain.status" :dims="ratedDims" />
     </div>
   </div>
 
