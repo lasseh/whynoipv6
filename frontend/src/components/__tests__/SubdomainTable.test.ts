@@ -53,6 +53,28 @@ describe('SubdomainTable', () => {
     expect(wrapper.text()).toContain('IPv6 Only')
   })
 
+  // The column is a full height of dashes for most parents, but some children
+  // do run their own mail and that verdict must stay visible.
+  it('drops the Mail column when no child has a verdict', () => {
+    const wrapper = mount(SubdomainTable, {
+      props: { subdomains: [child('api.example.com'), child('login.example.com')], total: 2 },
+      global: { stubs },
+    })
+    expect(wrapper.text()).not.toContain('Mail (MX)')
+    expect(wrapper.findAll('thead th')).toHaveLength(4)
+  })
+
+  it('keeps the Mail column when a child runs mail', () => {
+    const withMail = child('mail.example.com')
+    withMail.status.mx = { value: 'unsupported', since: null }
+    const wrapper = mount(SubdomainTable, {
+      props: { subdomains: [child('api.example.com'), withMail], total: 2 },
+      global: { stubs },
+    })
+    expect(wrapper.text()).toContain('Mail (MX)')
+    expect(wrapper.findAll('thead th')).toHaveLength(5)
+  })
+
   it('says the rating is unaffected, since coverage is uneven by design', () => {
     const wrapper = mount(SubdomainTable, {
       props: { subdomains: [child('api.example.com')], total: 1 },

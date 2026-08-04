@@ -62,9 +62,23 @@ function resourcesDesc(status: DomainDetail['status']): string {
 // and its star are dropped rather than displayed as "not applicable".
 const isSubdomain = computed(() => props.domain.kind === 'subdomain')
 
-const ratedDims = computed<Dimension[]>(() =>
-  isSubdomain.value ? ['base', 'ns', 'mx'] : ['base', 'www', 'ns', 'mx'],
+// MX is not www: the check does run for subdomains, and one with its own MX
+// records gets a real verdict (graph.facebook.com, m.youtube.com). Only the
+// no-MX case is a structural skip — the engine refuses the apex's implicit-MX
+// fallback because "the AAAA accepts mail" is not evidence for a subdomain
+// (01-engine.md §11.4). So the row goes only when there was nothing to grade;
+// an apex keeps it either way, where "no mail configured" is a real answer.
+const showMx = computed(
+  () => !isSubdomain.value || props.domain.status.mx.value !== 'not_applicable',
 )
+
+const ratedDims = computed<Dimension[]>(() => {
+  const dims: Dimension[] = ['base']
+  if (!isSubdomain.value) dims.push('www')
+  dims.push('ns')
+  if (showMx.value) dims.push('mx')
+  return dims
+})
 
 // The §7.1 rows (host / WWW / Nameserver / Mail (MX)) plus the derived
 // IPv6 Only fold (ADR 0002), which expands to its two source trackers.
@@ -102,17 +116,21 @@ const rows = computed<Row[]>(() => {
         { dim: 'ns', desc: 'The domain’s DNS is served by at least one IPv6-capable nameserver.' },
       ],
     },
-    {
-      key: 'mx',
-      label: 'Mail (MX)',
-      value: status.mx.value,
-      dims: [
-        {
-          dim: 'mx',
-          desc: 'Mail servers (MX) are reachable over IPv6 — or no mail is configured.',
-        },
-      ],
-    },
+    ...(showMx.value
+      ? [
+          {
+            key: 'mx' as const,
+            label: 'Mail (MX)',
+            value: status.mx.value,
+            dims: [
+              {
+                dim: 'mx' as const,
+                desc: 'Mail servers (MX) are reachable over IPv6 — or no mail is configured.',
+              },
+            ],
+          },
+        ]
+      : []),
     {
       key: 'ipv6_only',
       label: 'IPv6-only',

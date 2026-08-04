@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import type { DomainSummary } from '@/api'
 import StatusIcon from '@/components/StatusIcon.vue'
 import Tooltip from '@/components/Tooltip.vue'
@@ -9,13 +10,21 @@ import Tooltip from '@/components/Tooltip.vue'
 // had, and the parent's score must not follow that.
 // Columns drop DomainTable's Rank and WWW: a child is always rank-NULL, and
 // the engine records www as not applicable for kind='subdomain'.
-withDefaults(
+const props = withDefaults(
   defineProps<{
     subdomains?: DomainSummary[]
     /** Children the API reports, which can exceed one page. */
     total?: number
   }>(),
   { subdomains: () => [], total: 0 },
+)
+
+// Most subdomains carry no MX of their own, and the engine gives them no
+// implicit-MX fallback (01-engine.md §11.4), so the column is usually a full
+// height of dashes. Show it only when some row has something to say — plenty
+// of subdomains do run mail (graph.facebook.com, m.youtube.com).
+const showMx = computed(() =>
+  props.subdomains.some((s) => s.status.mx.value && s.status.mx.value !== 'not_applicable'),
 )
 </script>
 
@@ -47,7 +56,7 @@ withDefaults(
               </div>
               <div class="font-semibold text-center md:hidden">NS</div>
             </th>
-            <th class="px-2 py-3 whitespace-nowrap">
+            <th v-if="showMx" class="px-2 py-3 whitespace-nowrap">
               <div class="font-semibold text-center md:block hidden">
                 <Tooltip text="MX hosts for this subdomain, each checked for an AAAA record"
                   >Mail (MX)</Tooltip
@@ -85,7 +94,7 @@ withDefaults(
                 <StatusIcon :value="sub.status.ns.value" />
               </div>
             </td>
-            <td class="px-2 py-3 whitespace-nowrap w-px md:w-[12%] text-center">
+            <td v-if="showMx" class="px-2 py-3 whitespace-nowrap w-px md:w-[12%] text-center">
               <div class="inline-flex px-2.5 py-1">
                 <StatusIcon :value="sub.status.mx.value" />
               </div>

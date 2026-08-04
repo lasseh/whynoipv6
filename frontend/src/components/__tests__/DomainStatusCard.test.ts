@@ -38,8 +38,14 @@ async function expandIPv6Only(wrapper: ReturnType<typeof mountCard>) {
   await row!.trigger('click')
 }
 
-function mountKind(kind: DomainDetail['kind'], parent: string | null) {
-  const domain: DomainDetail = { ...domainDetail, host: 'psapi.nrk.no', kind, parent }
+function mountKind(kind: DomainDetail['kind'], parent: string | null, mx: StatusValue = null) {
+  const domain: DomainDetail = {
+    ...domainDetail,
+    host: 'psapi.nrk.no',
+    kind,
+    parent,
+    status: { ...domainDetail.status, mx: { value: mx, since: null } },
+  }
   return mount(DomainStatusCard, {
     props: { domain, history: [point] },
     global: { stubs: { RouterLink: true } },
@@ -66,6 +72,29 @@ describe('DomainStatusCard www row for subdomains', () => {
     expect(wrapper.text()).toContain('www.psapi.nrk.no')
     expect(wrapper.findAll('svg[viewBox="0 0 22 20"]')).toHaveLength(4)
     expect(wrapper.text()).toContain('The apex domain publishes')
+  })
+})
+
+// MX, unlike www, is genuinely checked for subdomains — it is only skipped
+// when the host publishes no MX of its own, since the engine grants no
+// implicit-MX fallback there.
+describe('DomainStatusCard mx row for subdomains', () => {
+  it('drops the mx row when there was no mail to grade', () => {
+    const wrapper = mountKind('subdomain', 'nrk.no', 'not_applicable')
+    expect(wrapper.text()).not.toContain('Mail (MX)')
+    expect(wrapper.findAll('svg[viewBox="0 0 22 20"]')).toHaveLength(2)
+  })
+
+  it('keeps a real mx verdict on a subdomain', () => {
+    const wrapper = mountKind('subdomain', 'nrk.no', 'unsupported')
+    expect(wrapper.text()).toContain('Mail (MX)')
+    expect(wrapper.findAll('svg[viewBox="0 0 22 20"]')).toHaveLength(3)
+  })
+
+  it('keeps the mx row on an apex with no mail, where that is an answer', () => {
+    const wrapper = mountKind('apex', null, 'not_applicable')
+    expect(wrapper.text()).toContain('Mail (MX)')
+    expect(wrapper.findAll('svg[viewBox="0 0 22 20"]')).toHaveLength(4)
   })
 })
 
