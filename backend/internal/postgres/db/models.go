@@ -108,6 +108,7 @@ const (
 	CreatedByCampaign   CreatedBy = "campaign"
 	CreatedByParentLink CreatedBy = "parent_link"
 	CreatedByLiveCheck  CreatedBy = "live_check"
+	CreatedByCurated    CreatedBy = "curated"
 )
 
 func (e *CreatedBy) Scan(src interface{}) error {
@@ -434,6 +435,11 @@ type CrawlerMetric struct {
 	DimCounters     []byte             `json:"dim_counters"`
 	GeoipBuildEpoch pgtype.Timestamptz `json:"geoip_build_epoch"`
 	IsFinal         bool               `json:"is_final"`
+}
+
+type CuratedSubdomain struct {
+	DomainID int64              `json:"domain_id"`
+	AddedAt  pgtype.Timestamptz `json:"added_at"`
 }
 
 type DnsProvider struct {

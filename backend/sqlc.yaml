@@ -6,6 +6,7 @@ sql:
       - "db/migrations/000003_seed.up.sql"
       - "db/migrations/000004_launch_indexes.up.sql"
       - "db/migrations/000005_drop_active_slots.up.sql"
+      - "db/migrations/000006_curated_subdomains.up.sql"
     queries: "db/query"
     engine: "postgresql"
     gen:

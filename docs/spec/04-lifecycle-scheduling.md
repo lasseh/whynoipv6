@@ -281,10 +281,13 @@ The **linkage predicate**, spelled identically in every statement below (sqlc du
              JOIN campaign c ON c.id = cd.campaign_id AND NOT c.disabled
              WHERE cd.domain_id = d.id)
   OR EXISTS (SELECT 1 FROM domain ch WHERE ch.parent_id = d.id)
+  OR EXISTS (SELECT 1 FROM curated_subdomain cs WHERE cs.domain_id = d.id)
   OR d.last_requested_at >= now() - $1
 ```
 
 Campaign membership counts **only while the campaign itself is enabled** — without the `AND NOT c.disabled` join condition, a disabled campaign's kept membership rows would pin its rank-NULL domains in the frontier forever, contradicting the delist grace.
+
+Curated-subdomain membership (000006, 06) is linkage on the same terms: a curated child is rank-NULL, has no children of its own and usually no campaign, so without this clause it would be stamped the day it is added. Deleting the membership row is therefore the whole removal mechanism — the sync never disables a row itself; it drops membership and lets S4/S5 run their course, and re-listing restores linkage through S2's symmetric re-entry.
 
 Statements, in order, one transaction:
 

@@ -34,6 +34,20 @@ func mkDomain(t *testing.T, pool *pgxpool.Pool, host, createdBy string) int64 {
 	return id
 }
 
+// mkSubdomain inserts a rank-NULL child of parentID and returns its id.
+func mkSubdomain(t *testing.T, pool *pgxpool.Pool, host string, parentID int64) int64 {
+	t.Helper()
+	var id int64
+	if err := pool.QueryRow(context.Background(), `
+		INSERT INTO domain (host, kind, parent_id, created_by, asn_id, country_id, tld)
+		VALUES ($1, 'subdomain', $2, 'curated',
+		        (SELECT id FROM asn WHERE number=0), (SELECT id FROM country WHERE code='UN'), 'example')
+		RETURNING id`, host, parentID).Scan(&id); err != nil {
+		t.Fatal(err)
+	}
+	return id
+}
+
 func mkCampaign(t *testing.T, pool *pgxpool.Pool, name string, memberID int64) int32 {
 	t.Helper()
 	var cid int32
@@ -137,6 +151,74 @@ func TestSweep(t *testing.T) {
 	}
 	if got := *get(d).orphaned; !got.Equal(dStamp) {
 		t.Errorf("grace stamp moved: %v → %v", dStamp, got)
+	}
+}
+
+// TestSweepCuratedLinkage: curated_subdomain membership is sweep linkage — a
+// rank-NULL curated child keeps the frontier while its subdomains/<apex>.yml
+// file lists it, and enters the normal grace → delist path once dropped.
+func TestSweepCuratedLinkage(t *testing.T) {
+	pool := pgtest.NewDB(t)
+	ctx := context.Background()
+
+	parent := mkDomain(t, pool, "curated.example", "tranco")
+	mustExec(t, pool, "UPDATE domain SET rank = 42 WHERE id=$1", parent)
+	child := mkSubdomain(t, pool, "api.curated.example", parent)
+	mustExec(t, pool, "INSERT INTO curated_subdomain (domain_id) VALUES ($1)", child)
+
+	state := func(id int64) (disabled bool, reason *string, orphaned *time.Time) {
+		t.Helper()
+		if err := pool.QueryRow(ctx,
+			"SELECT disabled, disabled_reason::text, orphaned_at FROM domain WHERE id=$1", id).
+			Scan(&disabled, &reason, &orphaned); err != nil {
+			t.Fatal(err)
+		}
+		return
+	}
+	sweep := func() SweepResult {
+		t.Helper()
+		res, err := Sweep(ctx, pool, sweepCfg())
+		if err != nil {
+			t.Fatal(err)
+		}
+		return res
+	}
+
+	// Listed: no campaign, no children, never live-checked — linked anyway.
+	if res := sweep(); res.OrphansStamped != 0 {
+		t.Fatalf("listed curated child stamped: %+v", res)
+	}
+	if _, _, orphaned := state(child); orphaned != nil {
+		t.Error("listed curated child carries an orphan mark")
+	}
+
+	// Dropped from the file: S4 stamps it, grace starts.
+	mustExec(t, pool, "DELETE FROM curated_subdomain WHERE domain_id=$1", child)
+	if res := sweep(); res.OrphansStamped != 1 {
+		t.Fatalf("unlisted curated child not stamped: %+v", res)
+	}
+
+	// Grace expired: S5 delists.
+	mustExec(t, pool, "UPDATE domain SET orphaned_at = now() - interval '31 days' WHERE id=$1", child)
+	if res := sweep(); res.Delisted != 1 {
+		t.Fatalf("expired-grace curated child not delisted: %+v", res)
+	}
+	if disabled, reason, _ := state(child); !disabled || *reason != "delisted" {
+		t.Errorf("curated child state = disabled=%t reason=%v, want true/delisted", disabled, reason)
+	}
+
+	// Re-listed: S2 re-enables symmetrically (04 §7).
+	mustExec(t, pool, "INSERT INTO curated_subdomain (domain_id) VALUES ($1)", child)
+	if res := sweep(); res.Reenabled != 1 {
+		t.Fatalf("re-listed curated child not re-enabled: %+v", res)
+	}
+	if disabled, _, orphaned := state(child); disabled || orphaned != nil {
+		t.Errorf("re-listed curated child = disabled=%t orphaned=%v, want false/nil", disabled, orphaned)
+	}
+
+	// The ranked parent is never touched by any of this.
+	if disabled, _, orphaned := state(parent); disabled || orphaned != nil {
+		t.Errorf("ranked parent = disabled=%t orphaned=%v, want false/nil", disabled, orphaned)
 	}
 }
 

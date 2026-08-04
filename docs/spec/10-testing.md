@@ -1061,6 +1061,7 @@ Seed rows and run the daily lifecycle-sweep transaction; assert the set-based ou
 | linked_campaign_clears_orphan | rank NULL, member of an **enabled** campaign, `orphaned_at` set | `orphaned_at = NULL` (linked) |
 | disabled_campaign_no_linkage | rank NULL, member of a **disabled** campaign only | treated as unlinked → `orphaned_at` set/kept |
 | child_clears_orphan | rank NULL, has a child (`parent_id` points at it) | `orphaned_at = NULL` |
+| curated_listed_keeps_frontier | rank NULL subdomain, no campaign, row in `curated_subdomain` | never stamped; after the membership row is deleted it stamps, delists past grace, and re-listing re-enables it |
 | recent_livecheck_clears | rank NULL, `last_requested_at` within `live_check_linkage` (168h) | `orphaned_at = NULL` |
 | livecheck_expired_delist | rank NULL, `created_by='live_check'`, unlinked, `last_requested_at` aged out | disabled immediately `reason='delisted'`, `next_check_at=now()+slow_lane_every` (no 30-day grace) |
 | other_unlinked_grace | rank NULL, unlinked, not live_check, `orphaned_at` just now | `orphaned_at=now()`, still scanned normally |

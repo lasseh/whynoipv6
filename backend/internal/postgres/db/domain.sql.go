@@ -645,6 +645,7 @@ WHERE d.orphaned_at IS NOT NULL
                JOIN campaign c ON c.id = cd.campaign_id AND NOT c.disabled
                WHERE cd.domain_id = d.id)
     OR EXISTS (SELECT 1 FROM domain ch WHERE ch.parent_id = d.id)
+    OR EXISTS (SELECT 1 FROM curated_subdomain cs WHERE cs.domain_id = d.id)
     OR d.last_requested_at >= now() - $1::interval)
 `
 
@@ -669,6 +670,7 @@ WHERE NOT d.disabled AND d.rank IS NULL AND d.created_by <> 'live_check'
                JOIN campaign c ON c.id = cd.campaign_id AND NOT c.disabled
                WHERE cd.domain_id = d.id)
     OR EXISTS (SELECT 1 FROM domain ch WHERE ch.parent_id = d.id)
+    OR EXISTS (SELECT 1 FROM curated_subdomain cs WHERE cs.domain_id = d.id)
     -- NULL-safe (deviation from 04 §8's literal text): a never-live-checked
     -- row has last_requested_at NULL; the raw >= comparison makes NOT(...)
     -- NULL and silently exempts the row from S3–S5.
@@ -700,6 +702,7 @@ WHERE NOT d.disabled AND d.rank IS NULL AND d.created_by = 'live_check'
                JOIN campaign c ON c.id = cd.campaign_id AND NOT c.disabled
                WHERE cd.domain_id = d.id)
     OR EXISTS (SELECT 1 FROM domain ch WHERE ch.parent_id = d.id)
+    OR EXISTS (SELECT 1 FROM curated_subdomain cs WHERE cs.domain_id = d.id)
     -- NULL-safe (deviation from 04 §8's literal text): a never-live-checked
     -- row has last_requested_at NULL; the raw >= comparison makes NOT(...)
     -- NULL and silently exempts the row from S3–S5.
@@ -729,6 +732,7 @@ WHERE d.disabled AND d.disabled_reason = 'delisted'
                JOIN campaign c ON c.id = cd.campaign_id AND NOT c.disabled
                WHERE cd.domain_id = d.id)
     OR EXISTS (SELECT 1 FROM domain ch WHERE ch.parent_id = d.id)
+    OR EXISTS (SELECT 1 FROM curated_subdomain cs WHERE cs.domain_id = d.id)
     OR d.last_requested_at >= now() - $1::interval)
 `
 
@@ -749,6 +753,7 @@ WHERE NOT d.disabled AND d.rank IS NULL AND d.created_by <> 'live_check'
                JOIN campaign c ON c.id = cd.campaign_id AND NOT c.disabled
                WHERE cd.domain_id = d.id)
     OR EXISTS (SELECT 1 FROM domain ch WHERE ch.parent_id = d.id)
+    OR EXISTS (SELECT 1 FROM curated_subdomain cs WHERE cs.domain_id = d.id)
     -- NULL-safe (deviation from 04 §8's literal text): a never-live-checked
     -- row has last_requested_at NULL; the raw >= comparison makes NOT(...)
     -- NULL and silently exempts the row from S3–S5.

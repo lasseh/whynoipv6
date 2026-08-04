@@ -100,6 +100,16 @@ type Querier interface {
 	// The in-memory country.tld -> id map for insert-time/commit attribution
 	// (06-ingest.md §6.5); loaded once per run.
 	CountryTLDMap(ctx context.Context) ([]CountryTLDMapRow, error)
+	// db/query/curated_subdomain.sql — sqlc query source (layout: 05-schema.md §10.2).
+	// Membership of the curated subdomain lists (subdomains/<apex>.yml, 06): adds
+	// first, then one set-based removal of everything no longer listed, in the sync
+	// transaction. The removal must only run on a complete parse — a partial file
+	// set would drop live membership and start its 30-day delist grace.
+	CuratedSubdomainAdd(ctx context.Context, domainID int64) (int64, error)
+	// An empty (not NULL) array deletes every row: an emptied subdomains/ directory
+	// drops all membership, recoverable within the delist grace (04 §8). A NULL
+	// array matches nothing and would silently skip the diff.
+	CuratedSubdomainRemoveNotIn(ctx context.Context, domainIds []int64) (int64, error)
 	// db/query/service_candidate.sql — sqlc query source (layout: 05-schema.md §10.2).
 	// Tick step 4 — candidate detection, never auto-disable (04 §9).
 	DetectServiceCandidatesApex(ctx context.Context) (int64, error)

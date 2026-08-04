@@ -294,6 +294,7 @@ linked := EXISTS (SELECT 1 FROM campaign_domain cd
                   JOIN campaign c ON c.id = cd.campaign_id AND NOT c.disabled
                   WHERE cd.domain_id = d.id)
           OR EXISTS child
+          OR EXISTS (SELECT 1 FROM curated_subdomain cs WHERE cs.domain_id = d.id)
           OR last_requested_at >= now() - lifecycle.live_check_linkage
 ```
 

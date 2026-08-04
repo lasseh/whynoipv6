@@ -116,7 +116,8 @@ CREATE TYPE observation AS ENUM
    'error', 'inconsistent');
 
 CREATE TYPE domain_kind     AS ENUM ('apex', 'subdomain');
-CREATE TYPE created_by      AS ENUM ('tranco', 'campaign', 'parent_link', 'live_check');
+CREATE TYPE created_by      AS ENUM ('tranco', 'campaign', 'parent_link', 'live_check',
+                                     'curated');  -- 'curated' added in 000006
 CREATE TYPE classification  AS ENUM ('unknown', 'inactive', 'sinner', 'partial', 'hero');
 CREATE TYPE disabled_reason AS ENUM ('dead', 'service', 'manual', 'delisted');
 CREATE TYPE resource_source AS ENUM ('discovered', 'manual');
@@ -322,6 +323,17 @@ CREATE TABLE campaign_domain (
   PRIMARY KEY (campaign_id, domain_id)
 );
 CREATE INDEX idx_campaign_domain_domain ON campaign_domain (domain_id);
+
+-- Added in 000006. Membership of the curated subdomain lists
+-- (subdomains/<apex>.yml, 06), not provenance: a row exists exactly while the
+-- host is listed in a file, whatever ingress created the domain row itself.
+-- Read as lifecycle-sweep linkage (04 §8) so a rank-NULL curated child keeps
+-- the frontier; drop from the file and it enters the normal grace → delist
+-- path. No ON DELETE CASCADE on domain_id, matching campaign_domain.
+CREATE TABLE curated_subdomain (
+  domain_id BIGINT PRIMARY KEY REFERENCES domain(id),
+  added_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 
 -- -----------------------------------------------------------------------------
 -- Resources (issue #23) — globally deduped host registry + dependency links
@@ -766,7 +778,7 @@ Created inside the import transaction (`ON COMMIT DROP` guarantees cleanup on bo
 | `ipv6_status` | `supported`, `unsupported`, `no_record`, `not_applicable` | Public status model. The only status type the API and classification read. Stored in `domain.*_status`/`*_pending`, `resource_host.aaaa_*`, `changelog.old_value`/`new_value`. |
 | `observation` | `supported`, `partial`, `unsupported`, `no_record`, `not_applicable`, `error`, `inconsistent` | Internal only. Raw per-scan outcomes (`scan.*`, `domain.*_observed`). `partial`, `error`, `inconsistent` never reach public output. `partial` exists for the informational `parity`/`ptr` dimensions. |
 | `domain_kind` | `apex`, `subdomain` | Tranco contributes only `apex`; campaign YAML entries may be subdomains (PSL split at import time, 06). |
-| `created_by` | `tranco`, `campaign`, `parent_link`, `live_check` | Origin audit of how a domain entered the frontier. No `import` value — start-fresh cutover, no history import (OPEN-9, 08). |
+| `created_by` | `tranco`, `campaign`, `parent_link`, `live_check`, `curated` | Origin audit of how a domain entered the frontier. No `import` value — start-fresh cutover, no history import (OPEN-9, 08). `curated` (000006) marks rows first created by the subdomain-list ingress; a host already present under another origin keeps it, so read `curated_subdomain` — not this column — to ask whether a host is listed today. |
 | `classification` | `unknown`, `inactive`, `sinner`, `partial`, `hero` | Materialized output of the deterministic ladder (03). No grades, no scores. |
 | `disabled_reason` | `dead`, `service`, `manual`, `delisted` | Lifecycle table in 04. `dead`/`delisted` stay claimable on the slow lane (the `idx_domain_due` predicate admits them); `service`/`manual` leave the frontier entirely. |
 | `resource_source` | `discovered`, `manual` | `manual` links are never pruned; operator add upgrades `discovered`→`manual` (06). |
@@ -863,6 +875,7 @@ Every table, its writers, its readers, and the spec files that quote DML against
 | `domain` | Tranco upsert + lifecycle sweep (06); claim stamp + scan commit (04, 03); campaign sync entity-ensure (06); live-check `last_requested_at` touch (07); `v6ctl` disable/enable | claim query (04); all public list/detail/search endpoints + badge (07); stats snapshot + candidate detection (06); datasets (07) | 03, 04, 06, 07 |
 | `campaign` | campaign sync (06) | campaign + `/mandates` endpoints and the `?tag=` filter over `campaign.tags` (07); lifecycle sweep linkage (06) | 06, 07 |
 | `campaign_domain` | campaign sync membership diff (06) | campaign endpoints, campaign changelog/scan joins (07); lifecycle sweep linkage (06); stats snapshot (06) | 06, 07 |
+| `curated_subdomain` | subdomain-list sync membership diff (06) | lifecycle sweep linkage (04 §8, 06) | 04, 06 |
 | `resource_host` | discovery upsert (inside scan commit, 03/06); sweep worker confirm (06) | roll-up read (03); `/domain/{domain}/resources`, `/resource/{host}/dependents` (07); service-candidate heuristic (06) | 03, 06, 07 |
 | `domain_resource` | discovery link/refresh/prune (06); `v6ctl resource add/remove` | roll-up read (03); resource endpoints (07) | 03, 06, 07 |
 | `service_candidate` | tick candidate detection (`ON CONFLICT DO NOTHING`, 06); `v6ctl service-candidates confirm/dismiss` | `v6ctl service-candidates list`; weekly webhook digest (09-ops.md) | 06 |
