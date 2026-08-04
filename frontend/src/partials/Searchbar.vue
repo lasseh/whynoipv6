@@ -17,7 +17,7 @@ function submitSearch() {
 <template>
   <section class="relative">
     <div class="max-w-6xl mx-auto px-4 sm:px-6">
-      <div class="p-2 pb-2 md:pt-2 md:pb-2">
+      <div class="py-2 md:py-2">
         <DomainSearchForm v-model="searchString" @submit="submitSearch" />
       </div>
     </div>
