@@ -393,7 +393,7 @@ jobs:
           go-version: stable
       - name: build v6ctl
         run: cd .backend/backend && go build -o /tmp/v6ctl ./cmd/v6ctl
-      - name: validate changed campaign files
+      - name: validate changed campaign and subdomain files
         run: |
           /tmp/v6ctl campaign validate \
             --repo . \
