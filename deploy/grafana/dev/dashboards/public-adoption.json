@@ -303,7 +303,7 @@
         "w": 12,
         "h": 8
       },
-      "description": "Every tracked domain lands in exactly one tier each day. Saints serve IPv6 only, heroes are fully dual stack, partial got some of the way, sinners have none, inactive are not serving anything.",
+      "description": "Daily classification split. These five partition the tracked set exactly (hero + partial + sinner + inactive + unknown = domains); Saints are excluded because a Saint is already counted as a Hero.",
       "datasource": {
         "type": "postgres",
         "uid": "whynoipv6-pg"
@@ -312,7 +312,7 @@
         {
           "refId": "A",
           "format": "time_series",
-          "rawSql": "SELECT day::timestamptz AS time, heroes, saints, partial, sinners, inactive FROM stats_global_daily WHERE $__timeFilter(day::timestamptz) ORDER BY 1"
+          "rawSql": "SELECT day::timestamptz AS time, heroes, partial, sinners, inactive, unknown FROM stats_global_daily WHERE $__timeFilter(day::timestamptz) ORDER BY 1"
         }
       ],
       "options": {

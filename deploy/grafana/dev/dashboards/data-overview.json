@@ -1,6 +1,6 @@
 {
   "uid": "wni6-data",
-  "title": "WhyNoIPv6 — Data Overview",
+  "title": "WhyNoIPv6 \u2014 Data Overview",
   "description": "What the collected data represents: dataset shape, confirmation coverage, adoption trends, crawler output, and campaign progress.",
   "tags": [
     "whynoipv6",
@@ -40,7 +40,7 @@
         "w": 4,
         "h": 4
       },
-      "description": "Active (non-disabled) domains in the registry — the population every other number on this dashboard describes.",
+      "description": "Active (non-disabled) domains in the registry \u2014 the population every other number on this dashboard describes.",
       "datasource": {
         "type": "postgres",
         "uid": "whynoipv6-pg"
@@ -124,7 +124,7 @@
         "w": 4,
         "h": 4
       },
-      "description": "Heroes whose page resources (scripts, fonts, images) also load from IPv6-capable hosts — usable end-to-end IPv6-only.",
+      "description": "Heroes whose page resources (scripts, fonts, images) also load from IPv6-capable hosts \u2014 usable end-to-end IPv6-only.",
       "datasource": {
         "type": "postgres",
         "uid": "whynoipv6-pg"
@@ -256,7 +256,7 @@
         "w": 4,
         "h": 4
       },
-      "description": "Share of domains with a confirmed apex verdict that publish AAAA — the headline adoption number.",
+      "description": "Share of domains with a confirmed apex verdict that publish AAAA \u2014 the headline adoption number.",
       "datasource": {
         "type": "postgres",
         "uid": "whynoipv6-pg"
@@ -651,7 +651,7 @@
         "w": 12,
         "h": 8
       },
-      "description": "Daily tier counts. Saints dropped to ~0 on 2026-07-25 when the confirmed resources columns were reset post D-fold fix; the rebuild curve is the re-confirmation.",
+      "description": "Daily classification split. These five partition the tracked set exactly (hero + partial + sinner + inactive + unknown = domains); Saints are excluded because a Saint is already counted as a Hero.",
       "datasource": {
         "type": "postgres",
         "uid": "whynoipv6-pg"
@@ -660,7 +660,7 @@
         {
           "refId": "A",
           "format": "time_series",
-          "rawSql": "SELECT day::timestamptz AS time, heroes, saints, partial, sinners, inactive FROM stats_global_daily WHERE $__timeFilter(day::timestamptz) ORDER BY 1"
+          "rawSql": "SELECT day::timestamptz AS time, heroes, partial, sinners, inactive, unknown FROM stats_global_daily WHERE $__timeFilter(day::timestamptz) ORDER BY 1"
         }
       ],
       "fieldConfig": {
@@ -875,7 +875,7 @@
         "w": 4,
         "h": 4
       },
-      "description": "Domains with a pending value on any dimension — observed change waiting for the 3-consecutive-scans anti-flap confirmation.",
+      "description": "Domains with a pending value on any dimension \u2014 observed change waiting for the 3-consecutive-scans anti-flap confirmation.",
       "datasource": {
         "type": "postgres",
         "uid": "whynoipv6-pg"
@@ -915,7 +915,7 @@
         "w": 4,
         "h": 4
       },
-      "description": "All confirmed transitions ever recorded — the credibility surface, kept forever.",
+      "description": "All confirmed transitions ever recorded \u2014 the credibility surface, kept forever.",
       "datasource": {
         "type": "postgres",
         "uid": "whynoipv6-pg"
@@ -993,7 +993,7 @@
         "w": 4,
         "h": 4
       },
-      "description": "Active curated domain lists (government, banks, ISPs, …) imported from the campaign YAML repo.",
+      "description": "Active curated domain lists (government, banks, ISPs, \u2026) imported from the campaign YAML repo.",
       "datasource": {
         "type": "postgres",
         "uid": "whynoipv6-pg"
@@ -1073,7 +1073,7 @@
         "w": 20,
         "h": 8
       },
-      "description": "Per-campaign confirmed state from the latest daily snapshot. v6_ready = apex + nameservers supported, www supported or absent — the campaign readiness bar.",
+      "description": "Per-campaign confirmed state from the latest daily snapshot. v6_ready = apex + nameservers supported, www supported or absent \u2014 the campaign readiness bar.",
       "datasource": {
         "type": "postgres",
         "uid": "whynoipv6-pg"
@@ -1151,7 +1151,7 @@
         "w": 12,
         "h": 8
       },
-      "description": "v6_ready share per campaign from the daily snapshots — the advocacy progress curve.",
+      "description": "v6_ready share per campaign from the daily snapshots \u2014 the advocacy progress curve.",
       "datasource": {
         "type": "postgres",
         "uid": "whynoipv6-pg"
@@ -1292,7 +1292,7 @@
         "w": 6,
         "h": 8
       },
-      "description": "IPv4-only third-party hosts blocking the most domains from saint status — the highest-leverage advocacy targets.",
+      "description": "IPv4-only third-party hosts blocking the most domains from saint status \u2014 the highest-leverage advocacy targets.",
       "datasource": {
         "type": "postgres",
         "uid": "whynoipv6-pg"
