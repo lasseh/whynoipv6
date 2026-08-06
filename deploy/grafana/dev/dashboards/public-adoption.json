@@ -641,7 +641,7 @@
         "w": 12,
         "h": 9
       },
-      "description": "Apex IPv6 share for the ten networks holding the most tracked domains. Flat lines are the story here: these are the networks that could move the needle and mostly are not.",
+      "description": "Apex IPv6 share for the ten networks holding the most tracked domains. Flat lines are the story here: these are the networks that could move the needle and mostly are not. Series are keyed by AS number, not name: `asn.name` is not unique \u2014 five ASNs are called \"Google LLC\", six \"Microsoft Corporation\" \u2014 and Grafana groups a timeseries by its metric column, so a bare name silently merges unrelated networks into one line.",
       "datasource": {
         "type": "postgres",
         "uid": "whynoipv6-pg"
@@ -650,7 +650,7 @@
         {
           "refId": "A",
           "format": "time_series",
-          "rawSql": "SELECT $__timeGroup(s.day, '1d') AS time, a.name AS metric, s.v6_domains::float / nullif(s.domains, 0) AS share FROM stats_asn_daily s JOIN asn a ON a.id = s.asn_id WHERE $__timeFilter(s.day) AND a.name <> 'Unknown' AND s.asn_id IN (SELECT asn_id FROM stats_asn_daily WHERE day = (SELECT max(day) FROM stats_asn_daily) AND asn_id IN (SELECT id FROM asn WHERE name <> 'Unknown') ORDER BY domains DESC LIMIT 10) ORDER BY 1"
+          "rawSql": "SELECT $__timeGroup(s.day, '1d') AS time, a.name || ' \u00b7 AS' || a.number AS metric, s.v6_domains::float / nullif(s.domains, 0) AS share FROM stats_asn_daily s JOIN asn a ON a.id = s.asn_id WHERE $__timeFilter(s.day) AND a.name <> 'Unknown' AND s.asn_id IN (SELECT asn_id FROM stats_asn_daily WHERE day = (SELECT max(day) FROM stats_asn_daily) AND asn_id IN (SELECT id FROM asn WHERE name <> 'Unknown') ORDER BY domains DESC LIMIT 10) ORDER BY 1"
         }
       ],
       "options": {

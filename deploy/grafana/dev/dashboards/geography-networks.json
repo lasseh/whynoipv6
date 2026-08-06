@@ -1,7 +1,7 @@
 {
   "uid": "wni6-geo",
-  "title": "WhyNoIPv6 — Geography & Networks",
-  "description": "Where IPv6 is happening: country, ASN, DNS-provider, hosting, and TLD league tables. The advocacy dashboard — it names names.",
+  "title": "WhyNoIPv6 \u2014 Geography & Networks",
+  "description": "Where IPv6 is happening: country, ASN, DNS-provider, hosting, and TLD league tables. The advocacy dashboard \u2014 it names names.",
   "tags": [
     "whynoipv6",
     "data"
@@ -241,7 +241,7 @@
         "w": 12,
         "h": 8
       },
-      "description": "Absolute confirmed-no-IPv6 counts from the latest daily snapshot — where the biggest piles of v4-only domains sit.",
+      "description": "Absolute confirmed-no-IPv6 counts from the latest daily snapshot \u2014 where the biggest piles of v4-only domains sit.",
       "datasource": {
         "type": "postgres",
         "uid": "whynoipv6-pg"
@@ -272,14 +272,14 @@
     {
       "id": 5,
       "type": "table",
-      "title": "ASN league (≥100 domains)",
+      "title": "ASN league (\u2265100 domains)",
       "gridPos": {
         "x": 0,
         "y": 18,
         "w": 12,
         "h": 9
       },
-      "description": "Per-network adoption from the daily tick. v6 = hero or partial. Sorted by size — scan the v6 % column for who is dragging the average.",
+      "description": "Per-network adoption from the daily tick. v6 = hero or partial. Sorted by size \u2014 scan the v6 % column for who is dragging the average.",
       "datasource": {
         "type": "postgres",
         "uid": "whynoipv6-pg"
@@ -357,7 +357,7 @@
         "w": 12,
         "h": 9
       },
-      "description": "Apex IPv6 share per network, for the ten ASNs holding the most tracked domains. This is the only view of stats_asn_daily — the ASN league beside it is a point-in-time snapshot and cannot show a network moving.",
+      "description": "Apex IPv6 share per network, for the ten ASNs holding the most tracked domains. This is the only view of stats_asn_daily \u2014 the ASN league beside it is a point-in-time snapshot and cannot show a network moving. Series are keyed by AS number, not name: `asn.name` is not unique \u2014 five ASNs are called \"Google LLC\", six \"Microsoft Corporation\" \u2014 and Grafana groups a timeseries by its metric column, so a bare name silently merges unrelated networks into one line.",
       "datasource": {
         "type": "postgres",
         "uid": "whynoipv6-pg"
@@ -366,7 +366,7 @@
         {
           "refId": "A",
           "format": "time_series",
-          "rawSql": "SELECT $__timeGroup(s.day, '1d') AS time, a.name AS metric, s.v6_domains::float / nullif(s.domains, 0) AS share FROM stats_asn_daily s JOIN asn a ON a.id = s.asn_id WHERE $__timeFilter(s.day) AND a.name <> 'Unknown' AND s.asn_id IN (SELECT asn_id FROM stats_asn_daily WHERE day = (SELECT max(day) FROM stats_asn_daily) AND asn_id IN (SELECT id FROM asn WHERE name <> 'Unknown') ORDER BY domains DESC LIMIT 10) ORDER BY 1"
+          "rawSql": "SELECT $__timeGroup(s.day, '1d') AS time, a.name || ' \u00b7 AS' || a.number AS metric, s.v6_domains::float / nullif(s.domains, 0) AS share FROM stats_asn_daily s JOIN asn a ON a.id = s.asn_id WHERE $__timeFilter(s.day) AND a.name <> 'Unknown' AND s.asn_id IN (SELECT asn_id FROM stats_asn_daily WHERE day = (SELECT max(day) FROM stats_asn_daily) AND asn_id IN (SELECT id FROM asn WHERE name <> 'Unknown') ORDER BY domains DESC LIMIT 10) ORDER BY 1"
         }
       ],
       "options": {
@@ -486,7 +486,7 @@
         "w": 12,
         "h": 9
       },
-      "description": "The normalized hosting tag (CNAME-chain CDN detection + resolved-IP ASN). Shows which platforms carry the web — and whether being on them means having IPv6.",
+      "description": "The normalized hosting tag (CNAME-chain CDN detection + resolved-IP ASN). Shows which platforms carry the web \u2014 and whether being on them means having IPv6.",
       "datasource": {
         "type": "postgres",
         "uid": "whynoipv6-pg"
@@ -517,14 +517,14 @@
     {
       "id": 9,
       "type": "table",
-      "title": "TLD league (≥1000 domains)",
+      "title": "TLD league (\u22651000 domains)",
       "gridPos": {
         "x": 0,
         "y": 36,
         "w": 24,
         "h": 9
       },
-      "description": "Apex AAAA adoption per public suffix. ccTLDs with registry-driven v6 incentives (.cz, .no, …) should stand out.",
+      "description": "Apex AAAA adoption per public suffix. ccTLDs with registry-driven v6 incentives (.cz, .no, \u2026) should stand out.",
       "datasource": {
         "type": "postgres",
         "uid": "whynoipv6-pg"

@@ -12,7 +12,13 @@ import { fmtCompact, fmtPercent, shareColor } from '@/components/charts/chart'
 export interface LeagueRow {
   key: string | number
   name: string
-  /** Secondary identifier: "AS13335", a slug, whatever scopes the name. */
+  /**
+   * The identifier that actually distinguishes the row, rendered in mono so it
+   * reads as an identity rather than a footnote. One organisation legitimately
+   * holds many ASNs — Google runs AS15169 and AS396982, and they are 37.9% and
+   * 11.3% IPv6 — so two rows sharing a name is correct data, and only the
+   * number tells them apart.
+   */
   sub?: string
   total: number
   v6: number
@@ -41,7 +47,9 @@ const view = computed(() =>
       <div class="mb-1.5 flex items-baseline justify-between gap-3">
         <span class="truncate text-sm font-medium text-zinc-100">
           {{ row.name }}
-          <span v-if="row.sub" class="pl-1.5 text-xs font-normal text-gray-500">{{ row.sub }}</span>
+          <span v-if="row.sub" class="pl-1.5 font-mono text-xs font-normal text-gray-400">{{
+            row.sub
+          }}</span>
         </span>
         <span class="shrink-0 font-mono text-sm" :style="{ color: row.color }">
           {{ fmtPercent(row.share) }}
