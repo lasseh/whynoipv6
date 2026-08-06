@@ -31,6 +31,7 @@
   },
   "panels": [
     {
+      "id": 1,
       "type": "stat",
       "title": "Domains tracked",
       "gridPos": {
@@ -70,6 +71,7 @@
       }
     },
     {
+      "id": 2,
       "type": "stat",
       "title": "Heroes",
       "gridPos": {
@@ -113,6 +115,7 @@
       }
     },
     {
+      "id": 3,
       "type": "stat",
       "title": "Saints",
       "gridPos": {
@@ -156,6 +159,7 @@
       }
     },
     {
+      "id": 4,
       "type": "stat",
       "title": "Sinners",
       "gridPos": {
@@ -199,6 +203,7 @@
       }
     },
     {
+      "id": 5,
       "type": "stat",
       "title": "Partial",
       "gridPos": {
@@ -242,6 +247,7 @@
       }
     },
     {
+      "id": 6,
       "type": "stat",
       "title": "Apex IPv6 adoption",
       "gridPos": {
@@ -299,6 +305,7 @@
       }
     },
     {
+      "id": 7,
       "type": "piechart",
       "title": "Classification breakdown",
       "gridPos": {
@@ -419,6 +426,7 @@
       }
     },
     {
+      "id": 8,
       "type": "bargauge",
       "title": "Confirmed coverage per dimension",
       "gridPos": {
@@ -477,6 +485,7 @@
       }
     },
     {
+      "id": 9,
       "type": "bargauge",
       "title": "IPv6 support per dimension",
       "gridPos": {
@@ -535,6 +544,7 @@
       }
     },
     {
+      "id": 10,
       "type": "bargauge",
       "title": "Scan freshness",
       "gridPos": {
@@ -583,6 +593,7 @@
       }
     },
     {
+      "id": 11,
       "type": "timeseries",
       "title": "IPv6 support per dimension over time",
       "gridPos": {
@@ -631,6 +642,7 @@
       }
     },
     {
+      "id": 12,
       "type": "timeseries",
       "title": "Tiers over time",
       "gridPos": {
@@ -725,6 +737,7 @@
       }
     },
     {
+      "id": 13,
       "type": "timeseries",
       "title": "IPv6 gained vs lost (per day)",
       "gridPos": {
@@ -804,6 +817,7 @@
       }
     },
     {
+      "id": 14,
       "type": "timeseries",
       "title": "Scans recorded (per day)",
       "gridPos": {
@@ -852,6 +866,7 @@
       }
     },
     {
+      "id": 15,
       "type": "stat",
       "title": "Mid-confirmation",
       "gridPos": {
@@ -891,6 +906,7 @@
       }
     },
     {
+      "id": 16,
       "type": "stat",
       "title": "Changelog rows (total)",
       "gridPos": {
@@ -930,6 +946,7 @@
       }
     },
     {
+      "id": 17,
       "type": "table",
       "title": "Disabled domains by reason",
       "gridPos": {
@@ -967,6 +984,7 @@
       }
     },
     {
+      "id": 18,
       "type": "stat",
       "title": "Campaigns",
       "gridPos": {
@@ -1006,6 +1024,7 @@
       }
     },
     {
+      "id": 19,
       "type": "stat",
       "title": "Campaign domains",
       "gridPos": {
@@ -1045,6 +1064,7 @@
       }
     },
     {
+      "id": 20,
       "type": "table",
       "title": "Campaign league table (latest snapshot)",
       "gridPos": {
@@ -1122,6 +1142,7 @@
       }
     },
     {
+      "id": 21,
       "type": "timeseries",
       "title": "Campaign readiness over time (top 10 by size)",
       "gridPos": {
@@ -1171,6 +1192,7 @@
       }
     },
     {
+      "id": 22,
       "type": "piechart",
       "title": "Resource-host registry",
       "gridPos": {
@@ -1261,6 +1283,7 @@
       }
     },
     {
+      "id": 23,
       "type": "table",
       "title": "Most-depended-on v4-only resources",
       "gridPos": {

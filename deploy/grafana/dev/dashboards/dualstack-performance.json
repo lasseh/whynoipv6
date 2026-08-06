@@ -31,6 +31,7 @@
   },
   "panels": [
     {
+      "id": 1,
       "type": "stat",
       "title": "Median TTFB v4 / v6 / delta",
       "gridPos": {
@@ -100,6 +101,7 @@
       }
     },
     {
+      "id": 2,
       "type": "stat",
       "title": "IPv6 faster",
       "gridPos": {
@@ -144,6 +146,7 @@
       }
     },
     {
+      "id": 3,
       "type": "stat",
       "title": "IPv6 slower",
       "gridPos": {
@@ -188,6 +191,7 @@
       }
     },
     {
+      "id": 4,
       "type": "stat",
       "title": "Measured domains",
       "gridPos": {
@@ -227,6 +231,7 @@
       }
     },
     {
+      "id": 5,
       "type": "stat",
       "title": "Content parity failures",
       "gridPos": {
@@ -283,6 +288,7 @@
       }
     },
     {
+      "id": 6,
       "type": "bargauge",
       "title": "v6 − v4 TTFB delta distribution",
       "gridPos": {
@@ -331,6 +337,7 @@
       }
     },
     {
+      "id": 7,
       "type": "timeseries",
       "title": "Average TTFB over time",
       "gridPos": {
@@ -379,6 +386,7 @@
       }
     },
     {
+      "id": 8,
       "type": "table",
       "title": "v6 penalty by country (≥1000 measured)",
       "gridPos": {
@@ -416,6 +424,7 @@
       }
     },
     {
+      "id": 9,
       "type": "table",
       "title": "v6 penalty by hosting (≥1000 measured)",
       "gridPos": {
@@ -453,6 +462,7 @@
       }
     },
     {
+      "id": 10,
       "type": "piechart",
       "title": "Response parity",
       "gridPos": {

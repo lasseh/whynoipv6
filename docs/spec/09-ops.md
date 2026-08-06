@@ -975,6 +975,63 @@ warnings, the consensus fast-lane/provider breakers, backup/WAL/export failures
 the weekly service-candidate digest, and campaign-sync reports. `ops.webhook_url` empty =
 no webhook (dev).
 
+### 12.1 The public dashboard (`wni6-public`)
+
+`deploy/grafana/dev/dashboards/public-adoption.json` is the one dashboard meant for
+people who are not us. Everything else in the folder is operational and stays behind
+login.
+
+**What may go on it.** Two rules, both load-bearing:
+
+1. *It describes the state of IPv6, not the state of our infrastructure.* Country/ASN/
+   TLD/rank-band adoption, the changelog, top shame: yes. Queue depth, error ratios,
+   worker identities, resolver stats, database sizes, Tranco import provenance, the
+   service-candidate queue, flapping domains: no. Crawl **scale and freshness**
+   (domains checked, checks per second, data age) is deliberately included — it is
+   what makes the numbers credible — but crawl **health** is not.
+2. *It never touches `scan` or `scan_detail`.* Those hypertables cost ~1.6 s per query
+   and a public dashboard is unauthenticated, so an anonymous visitor decides how
+   often they run. Use `stats_global_daily`, `stats_country_daily`, `stats_asn_daily`,
+   `scan_daily_adoption`, the denormalised `asn`/`country`/`dns_provider` counters,
+   `top_shame`, `changelog`, and `domain`.
+
+Also: `links` stays empty and the `whynoipv6` tag is omitted, or the dashboard dropdown
+advertises the titles of the private dashboards to anonymous visitors. Every panel needs
+an explicit `id` — file provisioning does not assign them, and the public query endpoint
+resolves panels by id, so a dashboard without ids renders with no data.
+
+**Enabling sharing.** The share config lives in Grafana's own database, not in the
+provisioned file, so it does not survive a Grafana volume rebuild and is not in git:
+
+```sh
+curl -u admin:admin -X POST \
+  http://localhost:3000/api/dashboards/uid/wni6-public/public-dashboards/ \
+  -H 'Content-Type: application/json' \
+  -d '{"isEnabled":true,"share":"public","annotationsEnabled":false,"timeSelectionEnabled":false}'
+```
+
+The response carries an `accessToken`; the URL is `/public-dashboards/<accessToken>`.
+`timeSelectionEnabled:false` is intentional: it keeps visitors on one time range, which
+keeps the query cache warm.
+
+Grafana runs only the panel's own stored SQL and ignores any query sent in the request
+body, so the endpoint is not an injection surface (verified: posting a
+`SELECT ... FROM check_job` against a valid panel id returns that panel's own result).
+
+**Static alternative.** `deploy/grafana/snapshot-public.py` publishes the dashboard as a
+Grafana *snapshot*: it runs each panel's query once, embeds the results, strips the SQL
+and the datasource, and refuses to publish if any survive. Viewers never reach Postgres,
+so there is no query cost and no live path to the database at all. It also drops
+`meta.executedQueryString`, which Grafana otherwise stamps into every frame and which
+would publish our table and column names. Each run rotates: new snapshot published, the
+previous one deleted. Run it on a timer; the tradeoff is freshness, not safety.
+
+**Known gap.** The `whynoipv6-pg` datasource connects as the `whynoipv6` role, which is
+a Postgres **superuser**. Grafana's own layer is what currently prevents an anonymous
+visitor from reaching anything else, so the blast radius of a Grafana bug or a
+mis-scoped panel is the whole database. A dedicated read-only role for Grafana
+(`GRANT SELECT` on the dashboard tables only, plus a `statement_timeout`) is the fix.
+
 ---
 
 ## 13. Logging conventions (normative — all three binaries)

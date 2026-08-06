@@ -31,6 +31,7 @@
   },
   "panels": [
     {
+      "id": 1,
       "type": "stat",
       "title": "PTR coverage (v6 hosts)",
       "gridPos": {
@@ -75,6 +76,7 @@
       }
     },
     {
+      "id": 2,
       "type": "stat",
       "title": "SMTP answers over v6",
       "gridPos": {
@@ -119,6 +121,7 @@
       }
     },
     {
+      "id": 3,
       "type": "stat",
       "title": "Paper-v6 mail",
       "gridPos": {
@@ -175,6 +178,7 @@
       }
     },
     {
+      "id": 4,
       "type": "bargauge",
       "title": "SMTP over v6 by tier",
       "gridPos": {
@@ -263,6 +267,7 @@
       }
     },
     {
+      "id": 5,
       "type": "piechart",
       "title": "SMTP over IPv6 (MX with AAAA)",
       "gridPos": {
@@ -354,6 +359,7 @@
       }
     },
     {
+      "id": 6,
       "type": "bargauge",
       "title": "PTR verdicts (v6-enabled apexes)",
       "gridPos": {
@@ -439,6 +445,7 @@
       }
     },
     {
+      "id": 7,
       "type": "timeseries",
       "title": "Hygiene trends (share of scans per day)",
       "gridPos": {

@@ -31,6 +31,7 @@
   },
   "panels": [
     {
+      "id": 1,
       "type": "stat",
       "title": "Top-1000 web IPv6",
       "gridPos": {
@@ -88,6 +89,7 @@
       }
     },
     {
+      "id": 2,
       "type": "stat",
       "title": "Top-1000 v6 nameservers",
       "gridPos": {
@@ -145,6 +147,7 @@
       }
     },
     {
+      "id": 3,
       "type": "stat",
       "title": "Ranked domains",
       "gridPos": {
@@ -184,6 +187,7 @@
       }
     },
     {
+      "id": 4,
       "type": "stat",
       "title": "Top-100 sinners",
       "gridPos": {
@@ -240,6 +244,7 @@
       }
     },
     {
+      "id": 5,
       "type": "bargauge",
       "title": "Apex IPv6 adoption by rank band (cumulative top-N)",
       "gridPos": {
@@ -298,6 +303,7 @@
       }
     },
     {
+      "id": 6,
       "type": "bargauge",
       "title": "Hero share by rank band",
       "gridPos": {
@@ -356,6 +362,7 @@
       }
     },
     {
+      "id": 7,
       "type": "timeseries",
       "title": "Top-1000 adoption over time",
       "gridPos": {
@@ -405,6 +412,7 @@
       }
     },
     {
+      "id": 8,
       "type": "table",
       "title": "Highest-ranked sinners",
       "gridPos": {
@@ -442,6 +450,7 @@
       }
     },
     {
+      "id": 9,
       "type": "table",
       "title": "Editorial top shame",
       "gridPos": {

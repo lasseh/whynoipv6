@@ -31,6 +31,7 @@
   },
   "panels": [
     {
+      "id": 1,
       "type": "geomap",
       "title": "Apex IPv6 adoption by country",
       "gridPos": {
@@ -104,6 +105,7 @@
       }
     },
     {
+      "id": 2,
       "type": "table",
       "title": "Country league",
       "gridPos": {
@@ -181,6 +183,7 @@
       }
     },
     {
+      "id": 3,
       "type": "timeseries",
       "title": "Country adoption over time (10 largest)",
       "gridPos": {
@@ -229,6 +232,7 @@
       }
     },
     {
+      "id": 4,
       "type": "table",
       "title": "Most sinners by country (latest)",
       "gridPos": {
@@ -266,6 +270,7 @@
       }
     },
     {
+      "id": 5,
       "type": "table",
       "title": "ASN league (≥100 domains)",
       "gridPos": {
@@ -343,6 +348,7 @@
       }
     },
     {
+      "id": 6,
       "type": "timeseries",
       "title": "ASN adoption over time (10 largest)",
       "gridPos": {
@@ -393,6 +399,7 @@
       }
     },
     {
+      "id": 7,
       "type": "table",
       "title": "DNS-provider league",
       "gridPos": {
@@ -470,6 +477,7 @@
       }
     },
     {
+      "id": 8,
       "type": "table",
       "title": "Hosting / CDN breakdown",
       "gridPos": {
@@ -507,6 +515,7 @@
       }
     },
     {
+      "id": 9,
       "type": "table",
       "title": "TLD league (≥1000 domains)",
       "gridPos": {

@@ -31,6 +31,7 @@
   },
   "panels": [
     {
+      "id": 1,
       "type": "row",
       "title": "Observation quality",
       "gridPos": {
@@ -43,6 +44,7 @@
       "panels": []
     },
     {
+      "id": 2,
       "type": "stat",
       "title": "Non-definitive share (24h)",
       "gridPos": {
@@ -100,6 +102,7 @@
       }
     },
     {
+      "id": 3,
       "type": "stat",
       "title": "Unresolvable (24h)",
       "gridPos": {
@@ -143,6 +146,7 @@
       }
     },
     {
+      "id": 4,
       "type": "stat",
       "title": "Lease lost (24h)",
       "gridPos": {
@@ -199,6 +203,7 @@
       }
     },
     {
+      "id": 5,
       "type": "stat",
       "title": "Commit errors (24h)",
       "gridPos": {
@@ -251,6 +256,7 @@
       }
     },
     {
+      "id": 6,
       "type": "stat",
       "title": "Error-streak domains",
       "gridPos": {
@@ -294,6 +300,7 @@
       }
     },
     {
+      "id": 7,
       "type": "stat",
       "title": "Dead-streak domains",
       "gridPos": {
@@ -337,6 +344,7 @@
       }
     },
     {
+      "id": 8,
       "type": "timeseries",
       "title": "Non-definitive observation share per dimension",
       "gridPos": {
@@ -386,6 +394,7 @@
       }
     },
     {
+      "id": 9,
       "type": "timeseries",
       "title": "Commit-machinery incidents",
       "gridPos": {
@@ -495,6 +504,7 @@
       }
     },
     {
+      "id": 10,
       "type": "row",
       "title": "Confirmation & churn",
       "gridPos": {
@@ -507,6 +517,7 @@
       "panels": []
     },
     {
+      "id": 11,
       "type": "bargauge",
       "title": "Pending confirmations per dimension",
       "gridPos": {
@@ -549,6 +560,7 @@
       }
     },
     {
+      "id": 12,
       "type": "timeseries",
       "title": "Confirmed transitions per dimension (daily)",
       "gridPos": {
@@ -600,6 +612,7 @@
       }
     },
     {
+      "id": 13,
       "type": "table",
       "title": "Flapping domains (14d)",
       "gridPos": {
@@ -671,6 +684,7 @@
       }
     },
     {
+      "id": 14,
       "type": "timeseries",
       "title": "Domains disabled per day",
       "gridPos": {
@@ -750,6 +764,7 @@
       }
     },
     {
+      "id": 15,
       "type": "table",
       "title": "Last Tranco imports",
       "gridPos": {
@@ -823,6 +838,7 @@
       }
     },
     {
+      "id": 16,
       "type": "row",
       "title": "Review queue & public checks",
       "gridPos": {
@@ -835,6 +851,7 @@
       "panels": []
     },
     {
+      "id": 17,
       "type": "stat",
       "title": "Service candidates pending",
       "gridPos": {
@@ -891,6 +908,7 @@
       }
     },
     {
+      "id": 18,
       "type": "stat",
       "title": "Public checks (30d)",
       "gridPos": {
@@ -934,6 +952,7 @@
       }
     },
     {
+      "id": 19,
       "type": "stat",
       "title": "Unique hosts checked (30d)",
       "gridPos": {
@@ -977,6 +996,7 @@
       }
     },
     {
+      "id": 20,
       "type": "stat",
       "title": "Check failure rate (30d)",
       "gridPos": {
@@ -1034,6 +1054,7 @@
       }
     },
     {
+      "id": 21,
       "type": "timeseries",
       "title": "Service candidates detected per day",
       "gridPos": {
@@ -1116,6 +1137,7 @@
       }
     },
     {
+      "id": 22,
       "type": "table",
       "title": "Latest public checks",
       "gridPos": {

@@ -31,6 +31,7 @@
   },
   "panels": [
     {
+      "id": 1,
       "type": "row",
       "title": "Crawl health",
       "gridPos": {
@@ -43,6 +44,7 @@
       "panels": []
     },
     {
+      "id": 2,
       "type": "stat",
       "title": "Queue depth",
       "gridPos": {
@@ -99,6 +101,7 @@
       }
     },
     {
+      "id": 3,
       "type": "stat",
       "title": "Throughput now",
       "gridPos": {
@@ -156,6 +159,7 @@
       }
     },
     {
+      "id": 4,
       "type": "stat",
       "title": "Processed (24h)",
       "gridPos": {
@@ -199,6 +203,7 @@
       }
     },
     {
+      "id": 5,
       "type": "stat",
       "title": "Failure ratio (1h)",
       "gridPos": {
@@ -256,6 +261,7 @@
       }
     },
     {
+      "id": 6,
       "type": "stat",
       "title": "Domains classified",
       "gridPos": {
@@ -299,6 +305,7 @@
       }
     },
     {
+      "id": 7,
       "type": "stat",
       "title": "Changelog rows (7d)",
       "gridPos": {
@@ -342,6 +349,7 @@
       }
     },
     {
+      "id": 8,
       "type": "timeseries",
       "title": "Crawl throughput (per 5m)",
       "gridPos": {
@@ -421,6 +429,7 @@
       }
     },
     {
+      "id": 9,
       "type": "timeseries",
       "title": "Scan latency",
       "gridPos": {
@@ -500,6 +509,7 @@
       }
     },
     {
+      "id": 10,
       "type": "timeseries",
       "title": "Queue depth over time",
       "gridPos": {
@@ -552,6 +562,7 @@
       }
     },
     {
+      "id": 11,
       "type": "timeseries",
       "title": "Throughput per worker (per 5m)",
       "gridPos": {
@@ -616,6 +627,7 @@
       }
     },
     {
+      "id": 12,
       "type": "row",
       "title": "Resolvers (Unbound)",
       "gridPos": {
@@ -628,6 +640,7 @@
       "panels": []
     },
     {
+      "id": 13,
       "type": "timeseries",
       "title": "Unbound queries (per 5m)",
       "gridPos": {
@@ -676,6 +689,7 @@
       }
     },
     {
+      "id": 14,
       "type": "timeseries",
       "title": "Unbound cache hit ratio",
       "gridPos": {
@@ -726,6 +740,7 @@
       }
     },
     {
+      "id": 15,
       "type": "timeseries",
       "title": "Unbound SERVFAIL / NXDOMAIN (per 5m)",
       "gridPos": {
@@ -805,6 +820,7 @@
       }
     },
     {
+      "id": 16,
       "type": "row",
       "title": "Storage & background jobs",
       "gridPos": {
@@ -817,6 +833,7 @@
       "panels": []
     },
     {
+      "id": 17,
       "type": "table",
       "title": "Timescale background jobs",
       "gridPos": {
@@ -920,6 +937,7 @@
       }
     },
     {
+      "id": 18,
       "type": "table",
       "title": "Hypertable sizes",
       "gridPos": {
@@ -976,6 +994,7 @@
       }
     },
     {
+      "id": 19,
       "type": "stat",
       "title": "Database size",
       "gridPos": {
