@@ -95,10 +95,24 @@ export const adoptionDelta: { day: string; gained: number; lost: number }[] = [
   { day: '2026-08-05', gained: 3007, lost: 1091 },
 ]
 
-/** Share of each network's hosted domains answering over IPv6, per day (%). */
+/**
+ * Share of each network's hosted domains answering over IPv6, per day (%).
+ *
+ * Keyed by AS number, never by name: `asn.name` is not unique, and grouping on
+ * it silently averages unrelated networks together. Five separate ASNs are
+ * called "Google LLC", six "Microsoft Corporation", four "Hetzner Online GmbH".
+ *
+ * The first crawl day is excluded because coverage was still ramping (AS13335
+ * held 35,117 domains that day against 324,319 now), which would have shown as
+ * a share swing that was really a denominator swing.
+ *
+ * Read the levels, not the slopes. Coverage is still expanding across this
+ * whole window, so a network's line moving by a fraction of a point says more
+ * about how many of its domains we had reached than about anything it
+ * deployed. Nothing here moved more than 0.8pp in thirteen days.
+ */
 export const networkAdoption = {
   days: [
-    '2026-07-24',
     '2026-07-25',
     '2026-07-26',
     '2026-07-27',
@@ -115,47 +129,47 @@ export const networkAdoption = {
   ],
   networks: [
     {
+      asn: 13335,
       name: 'Cloudflare, Inc.',
       share: [
-        85.59, 85.26, 85.85, 85.84, 85.81, 85.8, 85.81, 85.84, 85.85, 85.87, 85.83, 85.72, 85.71,
-        85.74,
+        85.26, 85.85, 85.84, 85.81, 85.8, 85.81, 85.84, 85.85, 85.87, 85.83, 85.72, 85.71, 85.74,
       ],
     },
     {
-      name: 'Hetzner Online GmbH',
-      share: [
-        27.17, 22.32, 22.29, 22.3, 22.32, 22.34, 22.34, 22.3, 22.23, 22.23, 22.17, 22.06, 22.01,
-        22.11,
-      ],
-    },
-    {
-      name: 'OVH SAS',
-      share: [
-        13.91, 15.04, 14.77, 14.74, 14.76, 14.76, 14.7, 14.42, 14.46, 14.51, 14.38, 14.33, 14.32,
-        14.29,
-      ],
-    },
-    {
-      name: 'Google LLC',
-      share: [
-        13.98, 11.69, 11.29, 11.31, 11.34, 11.32, 11.42, 11.4, 11.44, 11.47, 11.53, 11.44, 11.39,
-        11.35,
-      ],
-    },
-    {
+      asn: 16509,
       name: 'Amazon.com, Inc.',
       share: [
-        11.09, 10.39, 10.2, 10.21, 5.19, 10.22, 10.21, 10.18, 5.24, 5.21, 10.23, 10.19, 10.18,
-        10.18,
+        10.39, 10.2, 10.21, 10.21, 10.22, 10.21, 10.18, 10.18, 10.18, 10.23, 10.19, 10.18, 10.18,
       ],
     },
     {
-      name: 'Microsoft Corporation',
-      share: [6.94, 4.7, 4.57, 4.56, 4.57, 4.58, 4.61, 4.65, 4.66, 4.67, 4.68, 4.65, 4.68, 4.69],
+      asn: 24940,
+      name: 'Hetzner Online GmbH',
+      share: [
+        22.32, 22.29, 22.3, 22.32, 22.34, 22.34, 22.3, 22.23, 22.23, 22.17, 22.06, 22.01, 22.11,
+      ],
     },
     {
+      asn: 16276,
+      name: 'OVH SAS',
+      share: [
+        15.04, 14.77, 14.74, 14.76, 14.76, 14.7, 14.42, 14.46, 14.51, 14.38, 14.33, 14.32, 14.29,
+      ],
+    },
+    {
+      asn: 209242,
       name: 'Cloudflare London, LLC',
-      share: [0.73, 0.76, 0.81, 0.82, 0.81, 0.84, 0.82, 0.86, 0.82, 0.82, 0.77, 0.8, 0.76, 0.77],
+      share: [0.76, 0.81, 0.82, 0.81, 0.84, 0.82, 0.86, 0.82, 0.82, 0.77, 0.8, 0.76, 0.77],
+    },
+    {
+      asn: 8075,
+      name: 'Microsoft Corporation',
+      share: [4.7, 4.57, 4.56, 4.57, 4.58, 4.61, 4.65, 4.66, 4.67, 4.68, 4.65, 4.68, 4.69],
+    },
+    {
+      asn: 14618,
+      name: 'Amazon.com, Inc.',
+      share: [4.87, 5.26, 5.27, 5.19, 5.21, 5.18, 5.16, 5.24, 5.21, 5.24, 5.25, 5.28, 5.26],
     },
   ],
 }

@@ -6,11 +6,35 @@
 // utilities instead, so it resolves through style.css's `@theme` tokens and
 // stays on the right side of the drift gate documented there.
 
+import { onUnmounted, ref, type Ref } from 'vue'
+
 export interface ChartSeries {
   key: string
   label: string
   /** Hex, because SVG fill/stroke on a data-driven series cannot be a class. */
   color: string
+}
+
+/**
+ * True on viewports wide enough for a wide viewBox.
+ *
+ * A chart's viewBox width is really its text-size control: the SVG stretches to
+ * its container, so a viewBox of 800 on a 340px phone scales every axis label
+ * down by 2.4x and the chart becomes unreadable. Every chart narrows its
+ * viewBox below the `sm` breakpoint, so the query lives here rather than being
+ * re-derived per chart type.
+ */
+export function useWideViewport(): Ref<boolean> {
+  const wide = ref(true)
+  // jsdom has no matchMedia, and the tests never assert the narrow layout.
+  if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+    const mq = window.matchMedia('(min-width: 640px)')
+    wide.value = mq.matches
+    const sync = (e: MediaQueryListEvent) => (wide.value = e.matches)
+    mq.addEventListener('change', sync)
+    onUnmounted(() => mq.removeEventListener('change', sync))
+  }
+  return wide
 }
 
 /**
@@ -45,17 +69,19 @@ export const DIMENSION_COLOR = {
 
 export const DELTA_COLOR = { gained: '#10b981', lost: '#e11d48' } as const
 
-/** Categorical ramp for the per-network lines — distinguishable at 375px. */
-export const CATEGORICAL = [
-  '#d946ef',
-  '#38bdf8',
-  '#10b981',
-  '#f59e0b',
-  '#818cf8',
-  '#2dd4bf',
-  '#fb7185',
-  '#a3e635',
-]
+/**
+ * Adoption percentage → its verdict colour, on the §2.1 thresholds that
+ * utils/rating.ts already uses for badges and progress bars.
+ *
+ * One function rather than per-component class maps, so a provider is the same
+ * colour in the scatter as in the league row beside it.
+ */
+export function shareColor(pct: number): string {
+  if (pct >= 60) return '#10b981' // emerald-500
+  if (pct >= 40) return '#f59e0b' // amber-500
+  if (pct >= 15) return '#fb7185' // rose-400
+  return '#e11d48' // rose-600
+}
 
 const compact = new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 })
 const full = new Intl.NumberFormat('en')

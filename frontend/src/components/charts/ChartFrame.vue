@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, onUnmounted, ref } from 'vue'
-import { fmtAxisDate, type ChartSeries } from './chart'
+import { computed, ref } from 'vue'
+import { fmtAxisDate, useWideViewport, type ChartSeries } from './chart'
 
 // The one chart chassis: viewBox, grid, axes, legend, hover crosshair and
 // tooltip. Chart bodies render into the default slot and receive the scales,
@@ -29,19 +29,7 @@ const props = withDefaults(
   { yMin: 0, height: 260, band: false },
 )
 
-// The viewBox width is really the text-size control. The SVG stretches to its
-// container, so a viewBox of 800 on a 340px phone scales every label down by
-// 2.4× and the axis becomes illegible. Narrowing the viewBox on small screens
-// keeps labels near their nominal size and, because the height is fixed, also
-// makes the plot taller relative to its width — which is what a phone wants.
-const wide = ref(true)
-if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
-  const mq = window.matchMedia('(min-width: 640px)')
-  wide.value = mq.matches
-  const sync = (e: MediaQueryListEvent) => (wide.value = e.matches)
-  mq.addEventListener('change', sync)
-  onUnmounted(() => mq.removeEventListener('change', sync))
-}
+const wide = useWideViewport()
 
 const W = computed(() => (wide.value ? 800 : 360))
 const PAD = computed(() => ({ l: wide.value ? 46 : 38, r: 10, t: 10, b: 26 }))
