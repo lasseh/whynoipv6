@@ -21,7 +21,7 @@ import {
 import { getOverviewStats } from '@/api'
 import type { GlobalStatsPoint } from '@/api'
 import { ApiProblem } from '@/api/problem'
-import { adoptionDelta, crawlerToday, mail, reverseDns } from '@/fixtures/metrics'
+import { adoptionDelta, crawlerToday, mail, reverseDns, tracked } from '@/fixtures/metrics'
 
 // GET /stats/overview is fetched once and used twice: the last point drives the
 // tiles, the whole series drives the two charts. The old version threw the
@@ -143,11 +143,15 @@ const smtpShare = computed(() => pct(mail.answering, smtpGraded))
     </header>
 
     <div class="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <!-- The whole tracked set, so campaign and curated entries are in it.
+           The tiers below are scored against the ranked list, which is why the
+           hint spells the split out rather than leaving two numbers to clash. -->
       <StatTile
-        :value="fmtCompact(latest.domains)"
-        label="Domains ranked"
-        hint="The Tranco list, minus the ones that stopped resolving."
+        :value="fmtCompact(tracked.domains)"
+        label="Domains tracked"
+        :hint="`${fmtCompact(tracked.ranked)} carry a Tranco rank. The rest are campaign entries, curated lists, and domains that fell off it.`"
         tone="muted"
+        sample
       />
       <StatTile
         :value="fmtPercent(apexShare)"
@@ -171,13 +175,10 @@ const smtpShare = computed(() => pct(mail.answering, smtpGraded))
         hint="No AAAA anywhere. One DNS change from the exit."
         tone="bad"
       />
-      <!-- This exceeds "Domains ranked" on purpose: the tile above counts the
-           ranked list, while the crawler also sweeps subdomains and campaign
-           hosts. Two populations, so both labels have to name theirs. -->
       <StatTile
         :value="fmtCompact(crawlerToday.checked)"
         label="Hosts checked today"
-        hint="Every host in a 24-hour sweep, subdomains and campaign entries included."
+        hint="The whole set sweeps every 24 hours, re-checks on top."
         tone="muted"
         sample
       />

@@ -12,6 +12,11 @@
 //
 // What each block still needs on the backend:
 //
+//   tracked                      — count(*) over `domain` WHERE NOT disabled.
+//                                  /stats/overview reports the ranked list only,
+//                                  and unfiltered /domains answers with MaxRank
+//                                  rather than a row count, so the size of the
+//                                  whole tracked set is not currently served.
 //   crawlerToday                 — an aggregate over `crawler_metrics`; the
 //                                  table is internal telemetry, so the endpoint
 //                                  must expose throughput only, never per-worker
@@ -30,13 +35,30 @@
 //                                  exists; there is no /hosting resource at all.
 
 /**
+ * Everything the crawler keeps score on, not just the ranked list.
+ *
+ * `stats_global_daily.domains` counts rows carrying a Tranco rank. The rest of
+ * the live set is domains that have since fallen off the list plus the ones
+ * that were never on it, and it is not a rounding error:
+ *
+ *   ranked            989,808
+ *   unranked          102,946   (94.4k ex-Tranco, 8,261 campaign,
+ *                                161 curated, 281 parent links, 3 live checks)
+ *   ------------------------
+ *   live domains    1,092,754   = count(*) FROM domain WHERE NOT disabled
+ *
+ * 1,454 of those are subdomains; the other 1,091,300 are apexes.
+ */
+export const tracked = {
+  domains: 1092754,
+  ranked: 989808,
+}
+
+/**
  * Rolling 24-hour throughput and the newest observation timestamp.
  *
- * `checked` counts every host the crawler swept, which is a larger population
- * than stats_global_daily's `domains`: that series covers the ranked list
- * (989,808 live rows with a rank), while the crawler also works through
- * 102,946 unranked subdomains and campaign entries. The tile labels have to
- * keep saying which population they mean.
+ * `checked` slightly exceeds `tracked.domains` because a host can be re-checked
+ * inside the same 24 hours (a live check, a campaign refresh, a retry).
  */
 export const crawlerToday = {
   checked: 1095290,
