@@ -2,6 +2,7 @@
 import { describe, expect, it } from 'vitest'
 import { mount } from '@vue/test-utils'
 import LeagueTable from '@/components/LeagueTable.vue'
+import { shareColor } from '@/components/charts/chart'
 
 describe('LeagueTable', () => {
   it('fills the bar to the IPv6 share and reports both counts', () => {
@@ -20,14 +21,24 @@ describe('LeagueTable', () => {
   })
 
   it('colours the bar on the same ramp the scatter uses', () => {
+    // Asserted against shareColor itself, not against literal hexes: the
+    // invariant is that the league and the scatter agree, and pinning the
+    // palette here just means re-editing this test every time it is retuned.
+    const rgb = (hex: string) => {
+      const n = parseInt(hex.slice(1), 16)
+      return `rgb(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255})`
+    }
     const at = (total: number, v6: number) =>
       mount(LeagueTable, { props: { rows: [{ key: 'k', name: 'n', total, v6 }] } })
         .find('[role="progressbar"]')
         .attributes('style')
 
-    expect(at(100, 85)).toContain('rgb(16, 185, 129)') // emerald, >= 60
-    expect(at(100, 45)).toContain('rgb(245, 158, 11)') // amber, >= 40
-    expect(at(100, 4)).toContain('rgb(225, 29, 72)') // rose, the rest
+    for (const pct of [85, 45, 25, 4]) {
+      expect(at(100, pct)).toContain(rgb(shareColor(pct)))
+    }
+    // And the ramp really does distinguish the bands, so the loop above is not
+    // trivially satisfied by one colour.
+    expect(new Set([85, 45, 25, 4].map(shareColor)).size).toBe(4)
   })
 
   it('renders a zero-total row without dividing by zero', () => {

@@ -38,6 +38,29 @@ export function useWideViewport(): Ref<boolean> {
 }
 
 /**
+ * Tokyo Night, the source palette for every data colour on this page.
+ *
+ * Verbatim from enkia's theme so the values stay checkable against it:
+ * github.com/tokyo-night/tokyo-night-vscode-theme. Chart *structure* — grid,
+ * axes, borders — deliberately keeps using the site's own gray tokens through
+ * Tailwind classes; only the data itself is Tokyo Night, so the panels still
+ * read as part of the site rather than as an embedded terminal screenshot.
+ */
+export const TOKYO = {
+  red: '#f7768e',
+  orange: '#ff9e64',
+  yellow: '#e0af68',
+  green: '#9ece6a',
+  teal: '#73daca',
+  cyan: '#2ac3de',
+  cyanBright: '#7dcfff',
+  blue: '#7aa2f7',
+  purple: '#bb9af7',
+  comment: '#565f89',
+  black: '#414868',
+} as const
+
+/**
  * The classification ramp, mirroring utils/rating.ts (Good → Medium → Bad).
  *
  * These five partition the tracked set exactly — hero + partial + sinner +
@@ -46,28 +69,43 @@ export function useWideViewport(): Ref<boolean> {
  * over IPv6, so stacking the two double-counts ~156k domains.
  */
 export const TIER_COLOR = {
-  heroes: '#10b981', // emerald-500
-  partial: '#f59e0b', // amber-500
-  sinners: '#e11d48', // rose-600
-  inactive: '#707d86', // gray-500, the style.css token
-  unknown: '#55595f', // gray-600 — dimmer than inactive, which is a real verdict
+  heroes: TOKYO.green,
+  partial: TOKYO.yellow,
+  sinners: TOKYO.red,
+  inactive: TOKYO.comment,
+  unknown: TOKYO.black, // dimmer than inactive, which is at least a real verdict
 } as const
 
 /**
- * One colour per check, in the canonical order the copy guide fixes. Six lines
- * share one axis here, so the hues are spread right around the wheel — two
- * neighbouring purples or two greens are indistinguishable at line width.
+ * One colour per check, in the canonical order the copy guide fixes.
+ *
+ * Six lines share one axis, and Tokyo Night is a cool palette, so this walks
+ * the widest arc it offers — magenta, blue, cyan, teal, green, orange. The
+ * softer `cyanBright` is deliberately skipped: next to `blue` at line width the
+ * two are the same colour.
  */
 export const DIMENSION_COLOR = {
-  base: '#d946ef', // fuchsia-500, the brand accent leads
-  www: '#818cf8', // indigo-400
-  ns: '#38bdf8', // sky-400
-  mx: '#2dd4bf', // teal-400
-  conn: '#a3e635', // lime-400
-  resources: '#f59e0b', // amber-500
+  base: TOKYO.purple,
+  www: TOKYO.blue,
+  ns: TOKYO.cyan,
+  mx: TOKYO.teal,
+  conn: TOKYO.green,
+  resources: TOKYO.orange,
 } as const
 
-export const DELTA_COLOR = { gained: '#10b981', lost: '#e11d48' } as const
+export const DELTA_COLOR = { gained: TOKYO.green, lost: TOKYO.red } as const
+
+/** The accent for reference lines and annotations drawn over a plot. */
+export const ANNOTATION_COLOR = TOKYO.purple
+
+/**
+ * The empty part of a bar.
+ *
+ * Tokyo Night's black, dimmed. At full strength it is light enough to read as
+ * a bar in its own right, so a provider sitting at 0.8% looked almost full —
+ * the same misreading the old two-tone split bar caused, in a new hue.
+ */
+export const TRACK_COLOR = 'rgba(65, 72, 104, 0.55)'
 
 /**
  * Adoption percentage → its verdict colour, on the §2.1 thresholds that
@@ -77,10 +115,10 @@ export const DELTA_COLOR = { gained: '#10b981', lost: '#e11d48' } as const
  * colour in the scatter as in the league row beside it.
  */
 export function shareColor(pct: number): string {
-  if (pct >= 60) return '#10b981' // emerald-500
-  if (pct >= 40) return '#f59e0b' // amber-500
-  if (pct >= 15) return '#fb7185' // rose-400
-  return '#e11d48' // rose-600
+  if (pct >= 60) return TOKYO.green
+  if (pct >= 40) return TOKYO.yellow
+  if (pct >= 15) return TOKYO.orange
+  return TOKYO.red
 }
 
 const compact = new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 })

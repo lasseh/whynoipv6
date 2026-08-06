@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import SampleBadge from '@/components/SampleBadge.vue'
+import { TOKYO } from '@/components/charts/chart'
 
 // One headline number. `tone` carries the verdict so a grid of tiles reads at
-// a glance instead of six identical fuchsia numbers: the ramp is the same one
-// utils/rating.ts uses for badges and progress bars.
+// a glance instead of six identical fuchsia numbers.
 withDefaults(
   defineProps<{
     value: string
@@ -15,18 +15,28 @@ withDefaults(
   { tone: 'brand', sample: false },
 )
 
+// good/bad are the same verdict the charts encode, so they take the same Tokyo
+// Night hues: a Heroes tile in emerald above a Heroes band in Tokyo green reads
+// as two different measurements. `brand` stays the site's fuchsia — it is the
+// wordmark accent, not a verdict — and `muted` stays a plain gray token.
 const TONE = {
   brand: 'text-fuchsia-600',
-  good: 'text-emerald-500',
-  bad: 'text-rose-600',
   muted: 'text-gray-200',
 } as const
+
+const TONE_HEX = { good: TOKYO.green, bad: TOKYO.red } as const
+
+const isHex = (tone: string): tone is keyof typeof TONE_HEX => tone in TONE_HEX
 </script>
 
 <template>
   <div class="flex flex-col rounded border border-gray-700 bg-gray-800/60 p-5">
     <div class="mb-2 flex items-start justify-between gap-2">
-      <div class="text-3xl font-bold leading-none tracking-tighter md:text-4xl" :class="TONE[tone]">
+      <div
+        class="text-3xl font-bold leading-none tracking-tighter md:text-4xl"
+        :class="isHex(tone) ? undefined : TONE[tone]"
+        :style="isHex(tone) ? { color: TONE_HEX[tone] } : undefined"
+      >
         {{ value }}
       </div>
       <SampleBadge v-if="sample" />

@@ -11,7 +11,7 @@ import SegmentedTabs from '@/components/SegmentedTabs.vue'
 import ChartPanel from '@/components/charts/ChartPanel.vue'
 import ScatterChart from '@/components/charts/ScatterChart.vue'
 import Sparkline from '@/components/charts/Sparkline.vue'
-import { fmtCompact, fmtFull, fmtPercent, shareColor } from '@/components/charts/chart'
+import { TRACK_COLOR, fmtCompact, fmtFull, fmtPercent, shareColor } from '@/components/charts/chart'
 
 import { listASNs, listProviders } from '@/api'
 import type { ASN, Provider } from '@/api'
@@ -375,7 +375,10 @@ const ptrShare = ptrGraded > 0 ? (reverseDns.withPtr / ptrGraded) * 100 : 0
             of {{ fmtCompact(ptrGraded) }} IPv6 hosts resolve back to a name
           </span>
         </div>
-        <div class="mb-1.5 flex h-1.5 overflow-hidden rounded-full bg-gray-700">
+        <div
+          class="mb-1.5 flex h-1.5 overflow-hidden rounded-full"
+          :style="{ backgroundColor: TRACK_COLOR }"
+        >
           <div
             class="rounded-full"
             :style="{ width: `${ptrShare.toFixed(2)}%`, backgroundColor: shareColor(ptrShare) }"

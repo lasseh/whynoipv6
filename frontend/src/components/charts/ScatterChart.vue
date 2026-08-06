@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { fmtCompact, fmtPercent, shareColor, useWideViewport } from './chart'
+import { ANNOTATION_COLOR, fmtCompact, fmtPercent, shareColor, useWideViewport } from './chart'
 
 // Size against adoption, one dot per provider.
 //
@@ -173,7 +173,8 @@ const tip = computed(() => {
            is the headline all by itself. -->
       <template v-if="median !== null">
         <line
-          class="stroke-fuchsia-700"
+          :stroke="ANNOTATION_COLOR"
+          stroke-opacity="0.7"
           stroke-dasharray="4 4"
           :x1="PAD.l"
           :x2="W - PAD.r"
@@ -184,7 +185,8 @@ const tip = computed(() => {
           :x="W - PAD.r - 4"
           :y="yAt(median) - 6"
           text-anchor="end"
-          class="fill-fuchsia-600 text-[11px]"
+          :fill="ANNOTATION_COLOR"
+          class="text-[11px]"
         >
           median {{ fmtPercent(median) }}
         </text>

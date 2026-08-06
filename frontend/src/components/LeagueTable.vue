@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { fmtCompact, fmtPercent, shareColor } from '@/components/charts/chart'
+import { TRACK_COLOR, fmtCompact, fmtPercent, shareColor } from '@/components/charts/chart'
 
 // The provider ranking, one row per network/DNS/hosting operator.
 //
@@ -55,7 +55,14 @@ const view = computed(() =>
           {{ fmtPercent(row.share) }}
         </span>
       </div>
-      <div class="flex h-1.5 overflow-hidden rounded-full bg-gray-700">
+      <!-- Track is Tokyo Night's own neutral rather than the site's gray-700:
+           it sits inside the bar, so it belongs to the data, and against the
+           card border a blue-leaning track reads as an empty measurement
+           instead of a second piece of chrome. -->
+      <div
+        class="flex h-1.5 overflow-hidden rounded-full"
+        :style="{ backgroundColor: TRACK_COLOR }"
+      >
         <div
           class="rounded-full"
           :style="{ width: row.width, backgroundColor: row.color }"
