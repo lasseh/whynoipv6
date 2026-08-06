@@ -31,11 +31,23 @@
   },
   "panels": [
     {
+      "type": "row",
+      "title": "Observation quality",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 1
+      },
+      "collapsed": false,
+      "panels": []
+    },
+    {
       "type": "stat",
       "title": "Non-definitive share (24h)",
       "gridPos": {
         "x": 0,
-        "y": 0,
+        "y": 1,
         "w": 4,
         "h": 4
       },
@@ -51,6 +63,17 @@
           "rawSql": "SELECT count(*) FILTER (WHERE base IN ('error', 'inconsistent'))::float / nullif(count(*), 0) AS share FROM scan WHERE ts > now() - interval '24 hours'"
         }
       ],
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto"
+      },
       "fieldConfig": {
         "defaults": {
           "unit": "percentunit",
@@ -81,7 +104,7 @@
       "title": "Unresolvable (24h)",
       "gridPos": {
         "x": 4,
-        "y": 0,
+        "y": 1,
         "w": 4,
         "h": 4
       },
@@ -97,9 +120,24 @@
           "rawSql": "SELECT coalesce(sum((dim_counters->>'unresolvable')::int), 0) AS unresolvable FROM crawler_metrics WHERE ts > now() - interval '24 hours'"
         }
       ],
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto"
+      },
       "fieldConfig": {
         "defaults": {
-          "unit": "short"
+          "unit": "short",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "yellow"
+          }
         },
         "overrides": []
       }
@@ -109,7 +147,7 @@
       "title": "Lease lost (24h)",
       "gridPos": {
         "x": 8,
-        "y": 0,
+        "y": 1,
         "w": 4,
         "h": 4
       },
@@ -125,6 +163,17 @@
           "rawSql": "SELECT coalesce(sum((dim_counters->>'lease_lost')::int), 0) AS lease_lost FROM crawler_metrics WHERE ts > now() - interval '24 hours'"
         }
       ],
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto"
+      },
       "fieldConfig": {
         "defaults": {
           "unit": "short",
@@ -154,7 +203,7 @@
       "title": "Commit errors (24h)",
       "gridPos": {
         "x": 12,
-        "y": 0,
+        "y": 1,
         "w": 4,
         "h": 4
       },
@@ -170,6 +219,17 @@
           "rawSql": "SELECT coalesce(sum((dim_counters->>'commit_error')::int), 0) AS commit_errors FROM crawler_metrics WHERE ts > now() - interval '24 hours'"
         }
       ],
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto"
+      },
       "fieldConfig": {
         "defaults": {
           "unit": "short",
@@ -195,7 +255,7 @@
       "title": "Error-streak domains",
       "gridPos": {
         "x": 16,
-        "y": 0,
+        "y": 1,
         "w": 4,
         "h": 4
       },
@@ -211,9 +271,24 @@
           "rawSql": "SELECT count(*) AS stale FROM domain WHERE error_streak > 0 AND NOT disabled"
         }
       ],
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto"
+      },
       "fieldConfig": {
         "defaults": {
-          "unit": "short"
+          "unit": "short",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "yellow"
+          }
         },
         "overrides": []
       }
@@ -223,7 +298,7 @@
       "title": "Dead-streak domains",
       "gridPos": {
         "x": 20,
-        "y": 0,
+        "y": 1,
         "w": 4,
         "h": 4
       },
@@ -239,9 +314,24 @@
           "rawSql": "SELECT count(*) AS dying FROM domain WHERE dead_streak > 0 AND NOT disabled"
         }
       ],
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto"
+      },
       "fieldConfig": {
         "defaults": {
-          "unit": "short"
+          "unit": "short",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "orange"
+          }
         },
         "overrides": []
       }
@@ -251,7 +341,7 @@
       "title": "Non-definitive observation share per dimension",
       "gridPos": {
         "x": 0,
-        "y": 4,
+        "y": 5,
         "w": 12,
         "h": 8
       },
@@ -267,13 +357,29 @@
           "rawSql": "SELECT $__timeGroup(ts, '1d') AS time, count(*) FILTER (WHERE base IN ('error', 'inconsistent'))::float / count(*) AS base, count(*) FILTER (WHERE www IN ('error', 'inconsistent'))::float / count(*) AS www, count(*) FILTER (WHERE ns IN ('error', 'inconsistent'))::float / count(*) AS ns, count(*) FILTER (WHERE mx IN ('error', 'inconsistent'))::float / count(*) AS mx, count(*) FILTER (WHERE conn IN ('error', 'inconsistent'))::float / count(*) AS conn, count(*) FILTER (WHERE resources IN ('error', 'inconsistent'))::float / count(*) AS resources FROM scan WHERE $__timeFilter(ts) GROUP BY 1 ORDER BY 1"
         }
       ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
       "fieldConfig": {
         "defaults": {
           "unit": "percentunit",
           "min": 0,
+          "decimals": 2,
           "custom": {
             "drawStyle": "line",
-            "fillOpacity": 5
+            "lineWidth": 2,
+            "fillOpacity": 5,
+            "gradientMode": "none",
+            "showPoints": "never",
+            "spanNulls": false
           }
         },
         "overrides": []
@@ -284,7 +390,7 @@
       "title": "Commit-machinery incidents",
       "gridPos": {
         "x": 12,
-        "y": 4,
+        "y": 5,
         "w": 12,
         "h": 8
       },
@@ -300,23 +406,112 @@
           "rawSql": "SELECT $__timeGroup(ts, '1h') AS time, sum(coalesce((dim_counters->>'lease_lost')::int, 0)) AS lease_lost, sum(coalesce((dim_counters->>'commit_error')::int, 0)) AS commit_errors, sum(coalesce((dim_counters->>'unresolvable')::int, 0)) AS unresolvable, sum(coalesce((dim_counters->>'recovered')::int, 0)) AS recovered FROM crawler_metrics WHERE $__timeFilter(ts) GROUP BY 1 ORDER BY 1"
         }
       ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
       "fieldConfig": {
         "defaults": {
           "unit": "short",
+          "min": 0,
           "custom": {
             "drawStyle": "line",
-            "fillOpacity": 10
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "gradientMode": "opacity",
+            "showPoints": "never",
+            "spanNulls": false
           }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "lease_lost"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "orange"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "commit_errors"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "unresolvable"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "yellow"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "recovered"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          }
+        ]
       }
+    },
+    {
+      "type": "row",
+      "title": "Confirmation & churn",
+      "gridPos": {
+        "x": 0,
+        "y": 13,
+        "w": 24,
+        "h": 1
+      },
+      "collapsed": false,
+      "panels": []
     },
     {
       "type": "bargauge",
       "title": "Pending confirmations per dimension",
       "gridPos": {
         "x": 0,
-        "y": 12,
+        "y": 14,
         "w": 8,
         "h": 8
       },
@@ -340,11 +535,15 @@
           ]
         },
         "displayMode": "gradient",
-        "orientation": "horizontal"
+        "orientation": "horizontal",
+        "showUnfilled": true
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "short"
+          "unit": "short",
+          "color": {
+            "mode": "continuous-BlYlRd"
+          }
         },
         "overrides": []
       }
@@ -354,7 +553,7 @@
       "title": "Confirmed transitions per dimension (daily)",
       "gridPos": {
         "x": 8,
-        "y": 12,
+        "y": 14,
         "w": 8,
         "h": 8
       },
@@ -370,15 +569,31 @@
           "rawSql": "SELECT $__timeGroup(ts, '1d') AS time, field AS metric, count(*) AS transitions FROM changelog WHERE $__timeFilter(ts) GROUP BY 1, 2 ORDER BY 1"
         }
       ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
       "fieldConfig": {
         "defaults": {
           "unit": "short",
+          "min": 0,
           "custom": {
             "drawStyle": "bars",
-            "fillOpacity": 60,
+            "lineWidth": 1,
+            "fillOpacity": 70,
+            "gradientMode": "none",
+            "showPoints": "never",
             "stacking": {
               "mode": "normal"
-            }
+            },
+            "spanNulls": false
           }
         },
         "overrides": []
@@ -389,7 +604,7 @@
       "title": "Flapping domains (14d)",
       "gridPos": {
         "x": 16,
-        "y": 12,
+        "y": 14,
         "w": 8,
         "h": 8
       },
@@ -405,11 +620,54 @@
           "rawSql": "SELECT d.host, count(*) AS flips, array_agg(DISTINCT c.field) AS fields FROM changelog c JOIN domain d ON d.id = c.domain_id WHERE c.ts > now() - interval '14 days' GROUP BY d.host HAVING count(*) >= 4 ORDER BY 2 DESC LIMIT 25"
         }
       ],
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      },
       "fieldConfig": {
         "defaults": {
-          "unit": "short"
+          "unit": "short",
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            }
+          }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "flips"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "value": null,
+                      "color": "yellow"
+                    },
+                    {
+                      "value": 10,
+                      "color": "red"
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
       }
     },
     {
@@ -417,7 +675,7 @@
       "title": "Domains disabled per day",
       "gridPos": {
         "x": 0,
-        "y": 20,
+        "y": 22,
         "w": 12,
         "h": 8
       },
@@ -433,15 +691,62 @@
           "rawSql": "SELECT $__timeGroup(disabled_at, '1d') AS time, count(*) FILTER (WHERE disabled_reason = 'dead') AS dead, count(*) FILTER (WHERE disabled_reason = 'delisted') AS delisted FROM domain WHERE disabled AND $__timeFilter(disabled_at) GROUP BY 1 ORDER BY 1"
         }
       ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
       "fieldConfig": {
         "defaults": {
           "unit": "short",
+          "min": 0,
           "custom": {
             "drawStyle": "bars",
-            "fillOpacity": 60
+            "lineWidth": 1,
+            "fillOpacity": 70,
+            "gradientMode": "none",
+            "showPoints": "never",
+            "spanNulls": false
           }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "dead"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "delisted"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "text"
+                }
+              }
+            ]
+          }
+        ]
       }
     },
     {
@@ -449,7 +754,7 @@
       "title": "Last Tranco imports",
       "gridPos": {
         "x": 12,
-        "y": 20,
+        "y": 22,
         "w": 12,
         "h": 8
       },
@@ -465,11 +770,442 @@
           "rawSql": "SELECT imported_at, list_date, line_count, imported_count, rejected_count, duplicate_count, delisted, aborted, note FROM tranco_import ORDER BY imported_at DESC LIMIT 10"
         }
       ],
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      },
       "fieldConfig": {
         "defaults": {
-          "unit": "short"
+          "unit": "short",
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "aborted"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "true": {
+                        "color": "red",
+                        "index": 0
+                      },
+                      "false": {
+                        "color": "green",
+                        "index": 1
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "type": "row",
+      "title": "Review queue & public checks",
+      "gridPos": {
+        "x": 0,
+        "y": 30,
+        "w": 24,
+        "h": 1
+      },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "type": "stat",
+      "title": "Service candidates pending",
+      "gridPos": {
+        "x": 0,
+        "y": 31,
+        "w": 6,
+        "h": 4
+      },
+      "description": "Domains auto-flagged as probable shared services and awaiting a human verdict. Nothing dismisses them automatically, so this only shrinks when someone reviews the queue.",
+      "datasource": {
+        "type": "postgres",
+        "uid": "whynoipv6-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT count(*) AS pending FROM service_candidate WHERE NOT dismissed"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "value": null,
+                "color": "green"
+              },
+              {
+                "value": 1000,
+                "color": "yellow"
+              },
+              {
+                "value": 25000,
+                "color": "red"
+              }
+            ]
+          }
         },
         "overrides": []
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Public checks (30d)",
+      "gridPos": {
+        "x": 6,
+        "y": 31,
+        "w": 6,
+        "h": 4
+      },
+      "description": "Visitor-submitted checks from the site's check-a-domain box over the last 30 days.",
+      "datasource": {
+        "type": "postgres",
+        "uid": "whynoipv6-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT count(*) AS checks FROM check_job WHERE created_at > now() - interval '30 days'"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "blue"
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Unique hosts checked (30d)",
+      "gridPos": {
+        "x": 12,
+        "y": 31,
+        "w": 6,
+        "h": 4
+      },
+      "description": "Distinct hostnames visitors asked about in the last 30 days.",
+      "datasource": {
+        "type": "postgres",
+        "uid": "whynoipv6-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT count(DISTINCT host) AS hosts FROM check_job WHERE created_at > now() - interval '30 days'"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "purple"
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Check failure rate (30d)",
+      "gridPos": {
+        "x": 18,
+        "y": 31,
+        "w": 6,
+        "h": 4
+      },
+      "description": "Share of visitor checks that ended in failure rather than a verdict. Null when nobody has run a check in the window.",
+      "datasource": {
+        "type": "postgres",
+        "uid": "whynoipv6-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT count(*) FILTER (WHERE status = 'failed')::float / nullif(count(*) FILTER (WHERE status IN ('done', 'failed')), 0) AS ratio FROM check_job WHERE created_at > now() - interval '30 days'"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "decimals": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "value": null,
+                "color": "green"
+              },
+              {
+                "value": 0.05,
+                "color": "yellow"
+              },
+              {
+                "value": 0.2,
+                "color": "red"
+              }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Service candidates detected per day",
+      "gridPos": {
+        "x": 0,
+        "y": 35,
+        "w": 12,
+        "h": 8
+      },
+      "description": "New shared-service candidates flagged by the daily detector. A sustained rate with a flat dismissal count means the queue is growing unattended.",
+      "datasource": {
+        "type": "postgres",
+        "uid": "whynoipv6-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "rawSql": "SELECT $__timeGroup(detected_at, '1d') AS time, count(*) FILTER (WHERE NOT dismissed) AS pending, count(*) FILTER (WHERE dismissed) AS dismissed FROM service_candidate WHERE $__timeFilter(detected_at) GROUP BY 1 ORDER BY 1"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "custom": {
+            "drawStyle": "bars",
+            "lineWidth": 1,
+            "fillOpacity": 70,
+            "gradientMode": "none",
+            "showPoints": "never",
+            "stacking": {
+              "mode": "normal"
+            },
+            "spanNulls": false
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "pending"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "yellow"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "dismissed"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "type": "table",
+      "title": "Latest public checks",
+      "gridPos": {
+        "x": 12,
+        "y": 35,
+        "w": 12,
+        "h": 8
+      },
+      "description": "Most recent visitor-submitted checks with the time each took to complete. Independent of the dashboard time range.",
+      "datasource": {
+        "type": "postgres",
+        "uid": "whynoipv6-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT created_at, host, status::text AS status, requester_ip::text AS requester, round(extract(epoch FROM completed_at - created_at)::numeric, 1) AS secs FROM check_job ORDER BY created_at DESC LIMIT 20"
+        }
+      ],
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "status"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "done": {
+                        "color": "green",
+                        "index": 0
+                      },
+                      "failed": {
+                        "color": "red",
+                        "index": 1
+                      },
+                      "pending": {
+                        "color": "yellow",
+                        "index": 2
+                      },
+                      "processing": {
+                        "color": "blue",
+                        "index": 3
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "secs"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              }
+            ]
+          }
+        ]
       }
     }
   ]

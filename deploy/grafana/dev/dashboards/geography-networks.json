@@ -2,109 +2,586 @@
   "uid": "wni6-geo",
   "title": "WhyNoIPv6 — Geography & Networks",
   "description": "Where IPv6 is happening: country, ASN, DNS-provider, hosting, and TLD league tables. The advocacy dashboard — it names names.",
-  "tags": ["whynoipv6", "data"],
-  "links": [{"type": "dashboards", "title": "Dashboards", "tags": ["whynoipv6"], "asDropdown": true, "keepTime": false, "includeVars": false, "targetBlank": false, "icon": "external link", "tooltip": "", "url": ""}],
+  "tags": [
+    "whynoipv6",
+    "data"
+  ],
+  "links": [
+    {
+      "type": "dashboards",
+      "title": "Dashboards",
+      "tags": [
+        "whynoipv6"
+      ],
+      "asDropdown": true,
+      "keepTime": false,
+      "includeVars": false,
+      "targetBlank": false,
+      "icon": "external link",
+      "tooltip": "",
+      "url": ""
+    }
+  ],
   "timezone": "browser",
   "schemaVersion": 39,
   "refresh": "15m",
-  "time": {"from": "now-90d", "to": "now"},
+  "time": {
+    "from": "now-30d",
+    "to": "now"
+  },
   "panels": [
     {
-      "type": "geomap", "title": "Apex IPv6 adoption by country", "gridPos": {"x": 0, "y": 0, "w": 12, "h": 10},
-      "description": "Share of confirmed apex domains publishing AAAA, per attributed country (GeoIP + ccTLD attribution). Red = lagging, green = leading.",
-      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
-      "targets": [{"refId": "A", "format": "table",
-        "rawSql": "SELECT c.code, count(*) FILTER (WHERE d.base_status = 'supported')::float / nullif(count(d.base_status), 0) AS adoption FROM domain d JOIN country c ON c.id = d.country_id WHERE NOT d.disabled GROUP BY 1 HAVING count(d.base_status) >= 100"}],
-      "options": {
-        "view": {"id": "zero", "lat": 20, "lon": 10, "zoom": 1.3},
-        "basemap": {"type": "default", "name": "Basemap"},
-        "controls": {"showZoom": true, "mouseWheelZoom": false},
-        "layers": [{"type": "markers", "name": "Countries",
-          "location": {"mode": "lookup", "gazetteer": "public/gazetteer/countries.json", "lookup": "code"},
-          "config": {"style": {"size": {"fixed": 6}, "color": {"field": "adoption"}, "fillOpacity": 0.7}},
-          "tooltip": true}]
+      "type": "geomap",
+      "title": "Apex IPv6 adoption by country",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 10
       },
-      "fieldConfig": {"defaults": {"unit": "percentunit", "decimals": 1, "color": {"mode": "continuous-RdYlGr"}, "min": 0, "max": 0.7}, "overrides": []}
+      "description": "Share of confirmed apex domains publishing AAAA, per attributed country (GeoIP + ccTLD attribution). Red = lagging, green = leading.",
+      "datasource": {
+        "type": "postgres",
+        "uid": "whynoipv6-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT c.code, count(*) FILTER (WHERE d.base_status = 'supported')::float / nullif(count(d.base_status), 0) AS adoption FROM domain d JOIN country c ON c.id = d.country_id WHERE NOT d.disabled GROUP BY 1 HAVING count(d.base_status) >= 100"
+        }
+      ],
+      "options": {
+        "view": {
+          "id": "zero",
+          "lat": 20,
+          "lon": 10,
+          "zoom": 1.3
+        },
+        "basemap": {
+          "type": "default",
+          "name": "Basemap"
+        },
+        "controls": {
+          "showZoom": true,
+          "mouseWheelZoom": false
+        },
+        "layers": [
+          {
+            "type": "markers",
+            "name": "Countries",
+            "location": {
+              "mode": "lookup",
+              "gazetteer": "public/gazetteer/countries.json",
+              "lookup": "code"
+            },
+            "config": {
+              "style": {
+                "size": {
+                  "fixed": 6
+                },
+                "color": {
+                  "field": "adoption"
+                },
+                "fillOpacity": 0.7
+              }
+            },
+            "tooltip": true
+          }
+        ]
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "decimals": 1,
+          "color": {
+            "mode": "continuous-RdYlGr"
+          },
+          "min": 0,
+          "max": 0.7
+        },
+        "overrides": []
+      }
     },
     {
-      "type": "table", "title": "Country league", "gridPos": {"x": 12, "y": 0, "w": 12, "h": 10},
+      "type": "table",
+      "title": "Country league",
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 12,
+        "h": 10
+      },
       "description": "Per-country totals from the daily tick (country.sites / v6sites / percent). v6 = classification hero or partial.",
-      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
-      "targets": [{"refId": "A", "format": "table",
-        "rawSql": "SELECT c.code, c.name, c.sites AS domains, c.v6sites AS v6_domains, c.percent AS \"v6 %\" FROM country c WHERE c.sites >= 100 ORDER BY c.percent DESC LIMIT 30"}],
-      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": [
-        {"matcher": {"id": "byName", "options": "v6 %"}, "properties": [
-          {"id": "unit", "value": "percent"},
-          {"id": "custom.cellOptions", "value": {"type": "color-background", "mode": "gradient"}},
-          {"id": "thresholds", "value": {"mode": "absolute", "steps": [{"value": null, "color": "red"}, {"value": 30, "color": "yellow"}, {"value": 50, "color": "green"}]}}
-        ]}
-      ]}
+      "datasource": {
+        "type": "postgres",
+        "uid": "whynoipv6-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT c.code, c.name, c.sites AS domains, c.v6sites AS v6_domains, c.percent AS \"v6 %\" FROM country c WHERE c.sites >= 100 ORDER BY c.percent DESC LIMIT 30"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "align": "auto"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "v6 %"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "gradient"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "value": null,
+                      "color": "red"
+                    },
+                    {
+                      "value": 30,
+                      "color": "yellow"
+                    },
+                    {
+                      "value": 50,
+                      "color": "green"
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      }
     },
     {
-      "type": "timeseries", "title": "Country adoption over time (10 largest)", "gridPos": {"x": 0, "y": 10, "w": 12, "h": 8},
+      "type": "timeseries",
+      "title": "Country adoption over time (10 largest)",
+      "gridPos": {
+        "x": 0,
+        "y": 10,
+        "w": 12,
+        "h": 8
+      },
       "description": "base_supported share per day from stats_country_daily for the ten countries with the most tracked domains.",
-      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
-      "targets": [{"refId": "A", "format": "time_series",
-        "rawSql": "SELECT s.day::timestamptz AS time, c.name AS metric, 100.0 * s.base_supported / nullif(s.domains, 0) AS pct FROM stats_country_daily s JOIN country c ON c.id = s.country_id WHERE $__timeFilter(s.day::timestamptz) AND s.country_id IN (SELECT country_id FROM stats_country_daily WHERE day = (SELECT max(day) FROM stats_country_daily) ORDER BY domains DESC LIMIT 10) ORDER BY 1"}],
-      "fieldConfig": {"defaults": {"unit": "percent", "min": 0, "custom": {"drawStyle": "line", "fillOpacity": 5}}, "overrides": []}
+      "datasource": {
+        "type": "postgres",
+        "uid": "whynoipv6-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "rawSql": "SELECT s.day::timestamptz AS time, c.name AS metric, 100.0 * s.base_supported / nullif(s.domains, 0) AS pct FROM stats_country_daily s JOIN country c ON c.id = s.country_id WHERE $__timeFilter(s.day::timestamptz) AND s.country_id IN (SELECT country_id FROM stats_country_daily WHERE day = (SELECT max(day) FROM stats_country_daily) ORDER BY domains DESC LIMIT 10) ORDER BY 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 5,
+            "lineWidth": 2,
+            "gradientMode": "opacity",
+            "showPoints": "never",
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
     },
     {
-      "type": "table", "title": "Most sinners by country (latest)", "gridPos": {"x": 12, "y": 10, "w": 12, "h": 8},
+      "type": "table",
+      "title": "Most sinners by country (latest)",
+      "gridPos": {
+        "x": 12,
+        "y": 10,
+        "w": 12,
+        "h": 8
+      },
       "description": "Absolute confirmed-no-IPv6 counts from the latest daily snapshot — where the biggest piles of v4-only domains sit.",
-      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
-      "targets": [{"refId": "A", "format": "table",
-        "rawSql": "SELECT c.name AS country, s.sinners, s.domains, round(100.0 * s.sinners / nullif(s.domains, 0), 1) AS \"sinner %\" FROM stats_country_daily s JOIN country c ON c.id = s.country_id WHERE s.day = (SELECT max(day) FROM stats_country_daily) ORDER BY s.sinners DESC LIMIT 20"}],
-      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []}
+      "datasource": {
+        "type": "postgres",
+        "uid": "whynoipv6-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT c.name AS country, s.sinners, s.domains, round(100.0 * s.sinners / nullif(s.domains, 0), 1) AS \"sinner %\" FROM stats_country_daily s JOIN country c ON c.id = s.country_id WHERE s.day = (SELECT max(day) FROM stats_country_daily) ORDER BY s.sinners DESC LIMIT 20"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "align": "auto"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      }
     },
     {
-      "type": "table", "title": "ASN league (≥100 domains)", "gridPos": {"x": 0, "y": 18, "w": 12, "h": 9},
+      "type": "table",
+      "title": "ASN league (≥100 domains)",
+      "gridPos": {
+        "x": 0,
+        "y": 18,
+        "w": 12,
+        "h": 9
+      },
       "description": "Per-network adoption from the daily tick. v6 = hero or partial. Sorted by size — scan the v6 % column for who is dragging the average.",
-      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
-      "targets": [{"refId": "A", "format": "table",
-        "rawSql": "SELECT a.number AS asn, a.name, a.count_total AS domains, a.count_v6 AS v6_domains, round(100.0 * a.count_v6 / nullif(a.count_total, 0), 1) AS \"v6 %\" FROM asn a WHERE a.count_total >= 100 ORDER BY a.count_total DESC LIMIT 30"}],
-      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": [
-        {"matcher": {"id": "byName", "options": "v6 %"}, "properties": [
-          {"id": "unit", "value": "percent"},
-          {"id": "custom.cellOptions", "value": {"type": "color-background", "mode": "gradient"}},
-          {"id": "thresholds", "value": {"mode": "absolute", "steps": [{"value": null, "color": "red"}, {"value": 30, "color": "yellow"}, {"value": 60, "color": "green"}]}}
-        ]}
-      ]}
+      "datasource": {
+        "type": "postgres",
+        "uid": "whynoipv6-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT a.number AS asn, a.name, a.count_total AS domains, a.count_v6 AS v6_domains, round(100.0 * a.count_v6 / nullif(a.count_total, 0), 1) AS \"v6 %\" FROM asn a WHERE a.count_total >= 100 ORDER BY a.count_total DESC LIMIT 30"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "align": "auto"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "v6 %"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "gradient"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "value": null,
+                      "color": "red"
+                    },
+                    {
+                      "value": 30,
+                      "color": "yellow"
+                    },
+                    {
+                      "value": 60,
+                      "color": "green"
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      }
     },
     {
-      "type": "table", "title": "DNS-provider league", "gridPos": {"x": 12, "y": 18, "w": 12, "h": 9},
+      "type": "timeseries",
+      "title": "ASN adoption over time (10 largest)",
+      "gridPos": {
+        "x": 12,
+        "y": 18,
+        "w": 12,
+        "h": 9
+      },
+      "description": "Apex IPv6 share per network, for the ten ASNs holding the most tracked domains. This is the only view of stats_asn_daily — the ASN league beside it is a point-in-time snapshot and cannot show a network moving.",
+      "datasource": {
+        "type": "postgres",
+        "uid": "whynoipv6-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "rawSql": "SELECT $__timeGroup(s.day, '1d') AS time, a.name AS metric, s.v6_domains::float / nullif(s.domains, 0) AS share FROM stats_asn_daily s JOIN asn a ON a.id = s.asn_id WHERE $__timeFilter(s.day) AND a.name <> 'Unknown' AND s.asn_id IN (SELECT asn_id FROM stats_asn_daily WHERE day = (SELECT max(day) FROM stats_asn_daily) AND asn_id IN (SELECT id FROM asn WHERE name <> 'Unknown') ORDER BY domains DESC LIMIT 10) ORDER BY 1"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "decimals": 1,
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "showPoints": "never",
+            "spanNulls": true
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "table",
+      "title": "DNS-provider league",
+      "gridPos": {
+        "x": 0,
+        "y": 27,
+        "w": 12,
+        "h": 9
+      },
       "description": "Domains per mapped DNS provider (nameserver-suffix mapping) and how many are v6 (hero|partial). Providers whose infrastructure gives customers IPv6 nameservers for free.",
-      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
-      "targets": [{"refId": "A", "format": "table",
-        "rawSql": "SELECT p.name AS provider, p.count_total AS domains, p.count_v6 AS v6_domains, round(100.0 * p.count_v6 / nullif(p.count_total, 0), 1) AS \"v6 %\" FROM dns_provider p WHERE p.count_total > 0 ORDER BY p.count_total DESC LIMIT 30"}],
-      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": [
-        {"matcher": {"id": "byName", "options": "v6 %"}, "properties": [
-          {"id": "unit", "value": "percent"},
-          {"id": "custom.cellOptions", "value": {"type": "color-background", "mode": "gradient"}},
-          {"id": "thresholds", "value": {"mode": "absolute", "steps": [{"value": null, "color": "red"}, {"value": 30, "color": "yellow"}, {"value": 60, "color": "green"}]}}
-        ]}
-      ]}
+      "datasource": {
+        "type": "postgres",
+        "uid": "whynoipv6-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT p.name AS provider, p.count_total AS domains, p.count_v6 AS v6_domains, round(100.0 * p.count_v6 / nullif(p.count_total, 0), 1) AS \"v6 %\" FROM dns_provider p WHERE p.count_total > 0 ORDER BY p.count_total DESC LIMIT 30"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "align": "auto"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "v6 %"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "gradient"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "value": null,
+                      "color": "red"
+                    },
+                    {
+                      "value": 30,
+                      "color": "yellow"
+                    },
+                    {
+                      "value": 60,
+                      "color": "green"
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      }
     },
     {
-      "type": "table", "title": "Hosting / CDN breakdown", "gridPos": {"x": 0, "y": 27, "w": 12, "h": 9},
+      "type": "table",
+      "title": "Hosting / CDN breakdown",
+      "gridPos": {
+        "x": 12,
+        "y": 27,
+        "w": 12,
+        "h": 9
+      },
       "description": "The normalized hosting tag (CNAME-chain CDN detection + resolved-IP ASN). Shows which platforms carry the web — and whether being on them means having IPv6.",
-      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
-      "targets": [{"refId": "A", "format": "table",
-        "rawSql": "SELECT coalesce(hosting_provider, 'unattributed') AS hosting, count(*) AS domains, round(100.0 * count(*) FILTER (WHERE base_status = 'supported') / nullif(count(base_status), 0), 1) AS \"apex v6 %\", round(100.0 * count(*) FILTER (WHERE conn_status = 'supported') / nullif(count(conn_status), 0), 1) AS \"reachable v6 %\" FROM domain WHERE NOT disabled GROUP BY 1 ORDER BY 2 DESC LIMIT 20"}],
-      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []}
+      "datasource": {
+        "type": "postgres",
+        "uid": "whynoipv6-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT coalesce(hosting_provider, 'unattributed') AS hosting, count(*) AS domains, round(100.0 * count(*) FILTER (WHERE base_status = 'supported') / nullif(count(base_status), 0), 1) AS \"apex v6 %\", round(100.0 * count(*) FILTER (WHERE conn_status = 'supported') / nullif(count(conn_status), 0), 1) AS \"reachable v6 %\" FROM domain WHERE NOT disabled GROUP BY 1 ORDER BY 2 DESC LIMIT 20"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "align": "auto"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      }
     },
     {
-      "type": "table", "title": "TLD league (≥1000 domains)", "gridPos": {"x": 12, "y": 27, "w": 12, "h": 9},
+      "type": "table",
+      "title": "TLD league (≥1000 domains)",
+      "gridPos": {
+        "x": 0,
+        "y": 36,
+        "w": 24,
+        "h": 9
+      },
       "description": "Apex AAAA adoption per public suffix. ccTLDs with registry-driven v6 incentives (.cz, .no, …) should stand out.",
-      "datasource": {"type": "postgres", "uid": "whynoipv6-pg"},
-      "targets": [{"refId": "A", "format": "table",
-        "rawSql": "SELECT tld, count(*) AS domains, round(100.0 * count(*) FILTER (WHERE base_status = 'supported') / nullif(count(base_status), 0), 1) AS \"apex v6 %\" FROM domain WHERE NOT disabled AND tld IS NOT NULL GROUP BY 1 HAVING count(*) >= 1000 ORDER BY 3 DESC NULLS LAST LIMIT 30"}],
-      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": [
-        {"matcher": {"id": "byName", "options": "apex v6 %"}, "properties": [
-          {"id": "unit", "value": "percent"},
-          {"id": "custom.cellOptions", "value": {"type": "color-background", "mode": "gradient"}},
-          {"id": "thresholds", "value": {"mode": "absolute", "steps": [{"value": null, "color": "red"}, {"value": 30, "color": "yellow"}, {"value": 50, "color": "green"}]}}
-        ]}
-      ]}
+      "datasource": {
+        "type": "postgres",
+        "uid": "whynoipv6-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT tld, count(*) AS domains, round(100.0 * count(*) FILTER (WHERE base_status = 'supported') / nullif(count(base_status), 0), 1) AS \"apex v6 %\" FROM domain WHERE NOT disabled AND tld IS NOT NULL GROUP BY 1 HAVING count(*) >= 1000 ORDER BY 3 DESC NULLS LAST LIMIT 30"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "align": "auto"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "apex v6 %"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "gradient"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "value": null,
+                      "color": "red"
+                    },
+                    {
+                      "value": 30,
+                      "color": "yellow"
+                    },
+                    {
+                      "value": 50,
+                      "color": "green"
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      }
     }
   ]
 }

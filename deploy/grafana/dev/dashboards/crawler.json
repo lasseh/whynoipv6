@@ -1,6 +1,7 @@
 {
   "uid": "wni6-crawler",
   "title": "WhyNoIPv6 — Crawler & Backend",
+  "description": "Is the crawl running, how fast, and is the storage behind it healthy? Operational only — the numbers the site publishes live on Data Overview.",
   "tags": [
     "whynoipv6",
     "crawler"
@@ -30,14 +31,27 @@
   },
   "panels": [
     {
+      "type": "row",
+      "title": "Crawl health",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 1
+      },
+      "collapsed": false,
+      "panels": []
+    },
+    {
       "type": "stat",
       "title": "Queue depth",
       "gridPos": {
         "x": 0,
-        "y": 0,
+        "y": 1,
         "w": 4,
         "h": 4
       },
+      "description": "Domains currently due for a check (next_check_at in the past). Sustained growth means the crawl is falling behind its recheck cadence.",
       "datasource": {
         "type": "postgres",
         "uid": "whynoipv6-pg"
@@ -49,6 +63,17 @@
           "rawSql": "SELECT queue_depth FROM crawler_metrics WHERE queue_depth IS NOT NULL ORDER BY ts DESC LIMIT 1"
         }
       ],
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "textMode": "auto"
+      },
       "fieldConfig": {
         "defaults": {
           "unit": "short",
@@ -75,13 +100,71 @@
     },
     {
       "type": "stat",
-      "title": "Processed (24h)",
+      "title": "Throughput now",
       "gridPos": {
-        "x": 8,
-        "y": 0,
+        "x": 4,
+        "y": 1,
         "w": 4,
         "h": 4
       },
+      "description": "Combined domains-per-second across every live worker, from each worker's most recent sample.",
+      "datasource": {
+        "type": "postgres",
+        "uid": "whynoipv6-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT coalesce(sum(qps), 0) AS qps FROM (SELECT DISTINCT ON (worker) worker, qps FROM crawler_metrics WHERE ts > now() - interval '10 minutes' ORDER BY worker, ts DESC) t"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "value": null,
+                "color": "red"
+              },
+              {
+                "value": 1,
+                "color": "yellow"
+              },
+              {
+                "value": 5,
+                "color": "green"
+              }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Processed (24h)",
+      "gridPos": {
+        "x": 8,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      },
+      "description": "Domains scanned in the last day, summed across workers.",
       "datasource": {
         "type": "postgres",
         "uid": "whynoipv6-pg"
@@ -93,9 +176,24 @@
           "rawSql": "SELECT coalesce(sum(processed),0) AS processed FROM crawler_metrics WHERE ts > now() - interval '24 hours'"
         }
       ],
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto"
+      },
       "fieldConfig": {
         "defaults": {
-          "unit": "short"
+          "unit": "short",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "blue"
+          }
         },
         "overrides": []
       }
@@ -105,10 +203,11 @@
       "title": "Failure ratio (1h)",
       "gridPos": {
         "x": 12,
-        "y": 0,
+        "y": 1,
         "w": 4,
         "h": 4
       },
+      "description": "Failed scans over processed scans in the last hour. Zero is the healthy state; this is the signal behind alert A3.",
       "datasource": {
         "type": "postgres",
         "uid": "whynoipv6-pg"
@@ -120,9 +219,21 @@
           "rawSql": "SELECT coalesce(sum(failed)::float / nullif(sum(processed),0), 0) AS ratio FROM crawler_metrics WHERE ts > now() - interval '1 hour'"
         }
       ],
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto"
+      },
       "fieldConfig": {
         "defaults": {
           "unit": "percentunit",
+          "decimals": 2,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -149,10 +260,11 @@
       "title": "Domains classified",
       "gridPos": {
         "x": 16,
-        "y": 0,
+        "y": 1,
         "w": 4,
         "h": 4
       },
+      "description": "Domains that have been scanned at least once and therefore carry a public verdict.",
       "datasource": {
         "type": "postgres",
         "uid": "whynoipv6-pg"
@@ -164,9 +276,24 @@
           "rawSql": "SELECT count(*) AS classified FROM domain WHERE last_checked_at IS NOT NULL"
         }
       ],
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto"
+      },
       "fieldConfig": {
         "defaults": {
-          "unit": "short"
+          "unit": "short",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "blue"
+          }
         },
         "overrides": []
       }
@@ -176,10 +303,11 @@
       "title": "Changelog rows (7d)",
       "gridPos": {
         "x": 20,
-        "y": 0,
+        "y": 1,
         "w": 4,
         "h": 4
       },
+      "description": "Confirmed state transitions recorded in the last week — the churn feeding the public changelog.",
       "datasource": {
         "type": "postgres",
         "uid": "whynoipv6-pg"
@@ -191,9 +319,24 @@
           "rawSql": "SELECT count(*) AS changes FROM changelog WHERE ts > now() - interval '7 days'"
         }
       ],
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto"
+      },
       "fieldConfig": {
         "defaults": {
-          "unit": "short"
+          "unit": "short",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "purple"
+          }
         },
         "overrides": []
       }
@@ -203,10 +346,11 @@
       "title": "Crawl throughput (per 5m)",
       "gridPos": {
         "x": 0,
-        "y": 4,
+        "y": 5,
         "w": 12,
         "h": 8
       },
+      "description": "Processed and failed scans per five-minute bucket across all workers. failed sitting flat on zero is the expected picture.",
       "datasource": {
         "type": "postgres",
         "uid": "whynoipv6-pg"
@@ -218,15 +362,46 @@
           "rawSql": "SELECT $__timeGroup(ts, '5m') AS time, sum(processed) AS processed, sum(failed) AS failed FROM crawler_metrics WHERE $__timeFilter(ts) GROUP BY 1 ORDER BY 1"
         }
       ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
       "fieldConfig": {
         "defaults": {
           "unit": "short",
+          "min": 0,
           "custom": {
             "drawStyle": "line",
-            "fillOpacity": 10
+            "lineWidth": 2,
+            "fillOpacity": 15,
+            "gradientMode": "opacity",
+            "showPoints": "never",
+            "spanNulls": false
           }
         },
         "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "processed"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              }
+            ]
+          },
           {
             "matcher": {
               "id": "byName",
@@ -250,10 +425,11 @@
       "title": "Scan latency",
       "gridPos": {
         "x": 12,
-        "y": 4,
+        "y": 5,
         "w": 12,
         "h": 8
       },
+      "description": "Median and worst-case time to complete one domain's full scan. p99 climbing while p50 holds means a slow tail, usually DNS timeouts.",
       "datasource": {
         "type": "postgres",
         "uid": "whynoipv6-pg"
@@ -265,15 +441,62 @@
           "rawSql": "SELECT $__timeGroup(ts, '5m') AS time, avg(p50_ms) AS p50, max(p99_ms) AS p99 FROM crawler_metrics WHERE $__timeFilter(ts) GROUP BY 1 ORDER BY 1"
         }
       ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
       "fieldConfig": {
         "defaults": {
           "unit": "ms",
+          "min": 0,
           "custom": {
             "drawStyle": "line",
-            "fillOpacity": 10
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "gradientMode": "opacity",
+            "showPoints": "never",
+            "spanNulls": false
           }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "p50"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "p99"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "orange"
+                }
+              }
+            ]
+          }
+        ]
       }
     },
     {
@@ -281,10 +504,11 @@
       "title": "Queue depth over time",
       "gridPos": {
         "x": 0,
-        "y": 12,
+        "y": 13,
         "w": 12,
         "h": 8
       },
+      "description": "Backlog of due domains. A rising sawtooth is normal (recheck waves); a monotonic climb means throughput no longer keeps up.",
       "datasource": {
         "type": "postgres",
         "uid": "whynoipv6-pg"
@@ -296,26 +520,47 @@
           "rawSql": "SELECT $__timeGroup(ts, '5m') AS time, max(queue_depth) AS queue_depth FROM crawler_metrics WHERE $__timeFilter(ts) AND queue_depth IS NOT NULL GROUP BY 1 ORDER BY 1"
         }
       ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
       "fieldConfig": {
         "defaults": {
           "unit": "short",
+          "min": 0,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "purple"
+          },
           "custom": {
             "drawStyle": "line",
-            "fillOpacity": 10
+            "lineWidth": 2,
+            "fillOpacity": 20,
+            "gradientMode": "opacity",
+            "showPoints": "never",
+            "spanNulls": false
           }
         },
         "overrides": []
       }
     },
     {
-      "type": "table",
-      "title": "Classification breakdown",
+      "type": "timeseries",
+      "title": "Throughput per worker (per 5m)",
       "gridPos": {
         "x": 12,
-        "y": 12,
-        "w": 6,
+        "y": 13,
+        "w": 12,
         "h": 8
       },
+      "description": "Processed scans split by worker. Lines should track each other — one flatlining while the others continue is a dead or wedged worker that the combined view hides.",
       "datasource": {
         "type": "postgres",
         "uid": "whynoipv6-pg"
@@ -323,54 +568,75 @@
       "targets": [
         {
           "refId": "A",
-          "format": "table",
-          "rawSql": "SELECT classification::text, count(*) AS domains FROM domain WHERE last_checked_at IS NOT NULL GROUP BY 1 ORDER BY 2 DESC"
+          "format": "time_series",
+          "rawSql": "SELECT $__timeGroup(ts, '5m') AS time, worker AS metric, sum(processed) AS processed FROM crawler_metrics WHERE $__timeFilter(ts) GROUP BY 1, 2 ORDER BY 1"
         }
       ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
       "fieldConfig": {
         "defaults": {
-          "unit": "short"
+          "unit": "short",
+          "min": 0,
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 5,
+            "gradientMode": "none",
+            "showPoints": "never",
+            "spanNulls": false
+          }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "processed"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              }
+            ]
+          }
+        ]
       }
     },
     {
-      "type": "table",
-      "title": "Tranco imports",
+      "type": "row",
+      "title": "Resolvers (Unbound)",
       "gridPos": {
-        "x": 18,
-        "y": 12,
-        "w": 6,
-        "h": 8
+        "x": 0,
+        "y": 21,
+        "w": 24,
+        "h": 1
       },
-      "datasource": {
-        "type": "postgres",
-        "uid": "whynoipv6-pg"
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "format": "table",
-          "rawSql": "SELECT imported_at, list_id, line_count, imported_count, delisted, aborted, note FROM tranco_import ORDER BY imported_at DESC LIMIT 10"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short"
-        },
-        "overrides": []
-      }
+      "collapsed": false,
+      "panels": []
     },
     {
       "type": "timeseries",
       "title": "Unbound queries (per 5m)",
       "gridPos": {
         "x": 0,
-        "y": 20,
+        "y": 22,
         "w": 8,
         "h": 8
       },
-      "description": "Empty in dev unless the unbound-stats scraper runs (v6ctl ops unbound-stats; needs unbound remote-control).",
+      "description": "Query volume per resolver instance. Empty in dev unless the unbound-stats scraper runs (v6ctl ops unbound-stats; needs unbound remote-control).",
       "datasource": {
         "type": "postgres",
         "uid": "whynoipv6-pg"
@@ -382,12 +648,28 @@
           "rawSql": "SELECT $__timeGroup(ts, '5m') AS time, host AS metric, sum(num_queries) AS queries FROM unbound_stats WHERE $__timeFilter(ts) GROUP BY 1, 2 ORDER BY 1"
         }
       ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
       "fieldConfig": {
         "defaults": {
           "unit": "short",
+          "min": 0,
           "custom": {
             "drawStyle": "line",
-            "fillOpacity": 10
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "gradientMode": "opacity",
+            "showPoints": "never",
+            "spanNulls": false
           }
         },
         "overrides": []
@@ -398,10 +680,11 @@
       "title": "Unbound cache hit ratio",
       "gridPos": {
         "x": 8,
-        "y": 20,
+        "y": 22,
         "w": 8,
         "h": 8
       },
+      "description": "Share of queries served from cache. A sharp drop means the crawl moved onto fresh names, or the cache was flushed.",
       "datasource": {
         "type": "postgres",
         "uid": "whynoipv6-pg"
@@ -413,13 +696,30 @@
           "rawSql": "SELECT $__timeGroup(ts, '5m') AS time, host AS metric, sum(cache_hits)::float / nullif(sum(cache_hits) + sum(cache_miss), 0) AS hit_ratio FROM unbound_stats WHERE $__timeFilter(ts) GROUP BY 1, 2 ORDER BY 1"
         }
       ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
       "fieldConfig": {
         "defaults": {
           "unit": "percentunit",
+          "min": 0,
           "max": 1,
+          "decimals": 1,
           "custom": {
             "drawStyle": "line",
-            "fillOpacity": 10
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "gradientMode": "opacity",
+            "showPoints": "never",
+            "spanNulls": false
           }
         },
         "overrides": []
@@ -430,10 +730,11 @@
       "title": "Unbound SERVFAIL / NXDOMAIN (per 5m)",
       "gridPos": {
         "x": 16,
-        "y": 20,
+        "y": 22,
         "w": 8,
         "h": 8
       },
+      "description": "Resolver-level failure rcodes. NXDOMAIN tracks dead domains in the list; a SERVFAIL spike points at the resolver or upstream, not the domains.",
       "datasource": {
         "type": "postgres",
         "uid": "whynoipv6-pg"
@@ -445,59 +746,86 @@
           "rawSql": "SELECT $__timeGroup(ts, '5m') AS time, sum(rcode_servfail) AS servfail, sum(rcode_nxdomain) AS nxdomain FROM unbound_stats WHERE $__timeFilter(ts) GROUP BY 1 ORDER BY 1"
         }
       ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
       "fieldConfig": {
         "defaults": {
           "unit": "short",
+          "min": 0,
           "custom": {
             "drawStyle": "line",
-            "fillOpacity": 10
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "gradientMode": "opacity",
+            "showPoints": "never",
+            "spanNulls": false
           }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "servfail"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "nxdomain"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "yellow"
+                }
+              }
+            ]
+          }
+        ]
       }
     },
     {
-      "type": "timeseries",
-      "title": "Global classification over time (daily stats)",
+      "type": "row",
+      "title": "Storage & background jobs",
       "gridPos": {
         "x": 0,
-        "y": 28,
+        "y": 30,
         "w": 24,
-        "h": 8
+        "h": 1
       },
-      "description": "Populated by the daily stats snapshot (v6ctl stats recalc / daily tick).",
-      "datasource": {
-        "type": "postgres",
-        "uid": "whynoipv6-pg"
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "format": "time_series",
-          "rawSql": "SELECT day::timestamptz AS time, heroes, saints, partial, sinners, inactive FROM stats_global_daily WHERE $__timeFilter(day::timestamptz) ORDER BY 1"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "custom": {
-            "drawStyle": "line",
-            "fillOpacity": 10
-          }
-        },
-        "overrides": []
-      }
+      "collapsed": false,
+      "panels": []
     },
     {
       "type": "table",
       "title": "Timescale background jobs",
       "gridPos": {
         "x": 0,
-        "y": 36,
+        "y": 31,
         "w": 12,
         "h": 8
       },
-      "description": "Cagg refresh, compression, and retention jobs. A failed last run or growing total_failures silently breaks the stats pipeline — this is the panel that notices.",
+      "description": "Cagg refresh, compression, and retention jobs. A failed last run or growing total_failures silently breaks the stats pipeline — this is the panel that notices, and the signal behind alert A4.",
       "datasource": {
         "type": "postgres",
         "uid": "whynoipv6-pg"
@@ -509,9 +837,21 @@
           "rawSql": "SELECT j.application_name AS job, coalesce(j.hypertable_name, '-') AS target, s.last_run_status, s.last_successful_finish, s.total_runs, s.total_failures FROM timescaledb_information.jobs j JOIN timescaledb_information.job_stats s USING (job_id) ORDER BY s.total_failures DESC, j.application_name"
         }
       ],
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      },
       "fieldConfig": {
         "defaults": {
-          "unit": "short"
+          "unit": "short",
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            }
+          }
         },
         "overrides": [
           {
@@ -545,6 +885,36 @@
                 }
               }
             ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "total_failures"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "value": null,
+                      "color": "green"
+                    },
+                    {
+                      "value": 1,
+                      "color": "red"
+                    }
+                  ]
+                }
+              }
+            ]
           }
         ]
       }
@@ -554,7 +924,7 @@
       "title": "Hypertable sizes",
       "gridPos": {
         "x": 12,
-        "y": 36,
+        "y": 31,
         "w": 8,
         "h": 8
       },
@@ -570,11 +940,39 @@
           "rawSql": "SELECT hypertable_name, hypertable_size(format('%I.%I', hypertable_schema, hypertable_name)::regclass) AS size FROM timescaledb_information.hypertables ORDER BY 2 DESC"
         }
       ],
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      },
       "fieldConfig": {
         "defaults": {
-          "unit": "bytes"
+          "unit": "bytes",
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            }
+          }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "size"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "gauge",
+                  "mode": "gradient"
+                }
+              }
+            ]
+          }
+        ]
       }
     },
     {
@@ -582,7 +980,7 @@
       "title": "Database size",
       "gridPos": {
         "x": 20,
-        "y": 36,
+        "y": 31,
         "w": 4,
         "h": 8
       },
@@ -598,9 +996,24 @@
           "rawSql": "SELECT pg_database_size(current_database()) AS size"
         }
       ],
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto"
+      },
       "fieldConfig": {
         "defaults": {
-          "unit": "bytes"
+          "unit": "bytes",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "blue"
+          }
         },
         "overrides": []
       }
