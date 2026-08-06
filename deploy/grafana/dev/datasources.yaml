@@ -15,5 +15,14 @@ datasources:
       database: whynoipv6
       sslmode: disable
       timescaledb: true
+      # Must stay under whynoipv6_ro's CONNECTION LIMIT 20 (05-schema.md §2.3).
+      # Grafana's own default ceiling is far higher, so leaving these unset
+      # would let the pool open more connections than the role is allowed and
+      # fail with "too many connections for role" the moment §12.2's cutover
+      # happens. A public dashboard is exactly the workload that spikes
+      # concurrency, so this is pinned before the switch, not after.
+      maxOpenConns: 16
+      maxIdleConns: 8
+      connMaxLifetime: 14400
     isDefault: true
     editable: false

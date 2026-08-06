@@ -12,3 +12,6 @@ backend/bin/
 backend/dist/
 backend/coverage.out
 backend/coverage.html
+
+# snapshot-public.py rotation state (holds a snapshot deleteKey)
+deploy/grafana/.snapshot-state

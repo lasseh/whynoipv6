@@ -1051,14 +1051,36 @@ Then point the datasource at it (`deploy/grafana/dev/datasources.yaml`, `user:` 
 `secureJsonData.password`) and restart Grafana so provisioning re-reads the file. The
 `uid` must stay `whynoipv6-pg` — `alerts.yaml` and every dashboard reference it.
 
-Two things to know before cutting over. The alert rules in `alerts.yaml` run through the
-same datasource and are also pure `SELECT`, so they move with it. And the API and
-crawler keep their own superuser connection string: this role is for Grafana only.
+Three things to know before cutting over:
 
-Verified on the current dashboard set: all 117 panel queries across the eight
-dashboards run to completion under `SET LOCAL ROLE whynoipv6_ro`, including the
-`scan_daily_adoption` continuous aggregate and the `timescaledb_information` job and
-hypertable views.
+- **The pool ceiling must stay under the role's `CONNECTION LIMIT`.** `jsonData` pins
+  `maxOpenConns: 16` against a limit of 20. Grafana's own default is much higher, so
+  had those been left unset the pool could open more connections than the role permits
+  and fail with *"too many connections for role"* under exactly the concurrency a
+  public dashboard produces. Raise both together or neither. Note that **datasource
+  provisioning is read at startup only** — unlike the dashboard provider, which
+  re-reads every 30 s — so these values, the `user:`, and the password all land in the
+  same restart.
+- The alert rules in `alerts.yaml` run through the same datasource and are also pure
+  `SELECT`, so they move with it.
+- The API and crawler keep their own superuser connection string. This role is for
+  Grafana only.
+
+**What has been verified, and what has not.** All 117 panel queries across the eight
+dashboards run to completion as `whynoipv6_ro` — including the `scan_daily_adoption`
+continuous aggregate and the `timescaledb_information` job and hypertable views — with
+`SET TRANSACTION READ ONLY` and a 30 s `statement_timeout` in force, so the grants and
+those two settings are both proven.
+
+That test ran via `SET LOCAL ROLE`, not a real login. `ALTER ROLE ... SET` applies at
+**authentication**, so the role's stored GUCs were reproduced by hand rather than
+exercised, and `CONNECTION LIMIT` cannot be exercised that way at all. Both only take
+effect once something actually logs in as the role, which is the first thing to watch
+after the cutover.
+
+One number worth tracking: data-quality's non-definitive-share panels scan the `scan`
+hypertable, which measured ~1.6 s over 30 days at 13M rows and grows ~1M rows/day.
+That is the query that will hit the 30 s `statement_timeout` first.
 
 ---
 
