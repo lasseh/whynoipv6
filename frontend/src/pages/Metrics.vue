@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import PageShell from '@/components/PageShell.vue'
+import SampleBadge from '@/components/SampleBadge.vue'
 import SegmentedTabs from '@/components/SegmentedTabs.vue'
 
 import MetricCrawler from '@/partials/MetricCrawler.vue'
@@ -39,6 +40,19 @@ const applyFilterAndUpdateRoute = (filterType: string) => {
                 </p>
               </div>
             </div>
+          </div>
+
+          <!-- Every panel fed by src/fixtures/metrics.ts also carries its own
+               badge; this says it once at the top so the state of the page is
+               clear before anyone scrolls. Remove both together. -->
+          <div
+            class="mb-4 flex items-start gap-3 rounded border border-amber-600/40 bg-amber-600/5 px-4 py-3 text-sm text-gray-400"
+          >
+            <SampleBadge />
+            <p>
+              Panels with this badge are not live yet. The numbers are real crawler observations,
+              copied once and frozen, standing in until the API serves them.
+            </p>
           </div>
 
           <!-- Tab Buttons -->
