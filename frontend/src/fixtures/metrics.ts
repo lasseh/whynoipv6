@@ -12,7 +12,7 @@
 //
 // What each block still needs on the backend:
 //
-//   crawlerDaily / crawlerToday  — an aggregate over `crawler_metrics`; the
+//   crawlerToday                 — an aggregate over `crawler_metrics`; the
 //                                  table is internal telemetry, so the endpoint
 //                                  must expose throughput only, never per-worker
 //                                  or per-lease detail.
@@ -29,26 +29,15 @@
 //   hostingLeague                — a GROUP BY domain.hosting_provider. The column
 //                                  exists; there is no /hosting resource at all.
 
-/** Domains the crawler completed per day. */
-export const crawlerDaily: { day: string; processed: number }[] = [
-  { day: '2026-07-22', processed: 0 },
-  { day: '2026-07-23', processed: 100886 },
-  { day: '2026-07-24', processed: 673131 },
-  { day: '2026-07-25', processed: 1032016 },
-  { day: '2026-07-26', processed: 1034214 },
-  { day: '2026-07-27', processed: 876774 },
-  { day: '2026-07-28', processed: 415204 },
-  { day: '2026-07-29', processed: 1046671 },
-  { day: '2026-07-30', processed: 1043630 },
-  { day: '2026-07-31', processed: 1050103 },
-  { day: '2026-08-01', processed: 1059017 },
-  { day: '2026-08-02', processed: 1072121 },
-  { day: '2026-08-03', processed: 1079523 },
-  { day: '2026-08-04', processed: 1083525 },
-  { day: '2026-08-05', processed: 1088064 },
-]
-
-/** Rolling 24-hour throughput and the newest observation timestamp. */
+/**
+ * Rolling 24-hour throughput and the newest observation timestamp.
+ *
+ * `checked` counts every host the crawler swept, which is a larger population
+ * than stats_global_daily's `domains`: that series covers the ranked list
+ * (989,808 live rows with a rank), while the crawler also works through
+ * 102,946 unranked subdomains and campaign entries. The tile labels have to
+ * keep saying which population they mean.
+ */
 export const crawlerToday = {
   checked: 1095290,
   latest: '2026-08-06T18:49:28Z',

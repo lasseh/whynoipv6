@@ -31,10 +31,20 @@ const points = ref<GlobalStatsPoint[]>([])
 const isLoading = ref(true)
 const error = ref<ApiProblem | null>(null)
 
+// The endpoint defaults to `to − 90d`, but a chart's x-axis should be stated
+// by whoever draws it, not inherited from a server default that can move.
+const WINDOW_DAYS = 90
+
+function windowStart(): string {
+  const start = new Date()
+  start.setUTCDate(start.getUTCDate() - WINDOW_DAYS)
+  return start.toISOString().slice(0, 10)
+}
+
 async function load() {
   error.value = null
   try {
-    const response = await getOverviewStats()
+    const response = await getOverviewStats({ from: windowStart() })
     // A snapshot with no domains in it is the stats job having run before the
     // crawler's first pass finished, not a day on which the list was empty.
     // Charting it draws a cliff out of nothing.
@@ -135,8 +145,8 @@ const smtpShare = computed(() => pct(mail.answering, smtpGraded))
     <div class="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
       <StatTile
         :value="fmtCompact(latest.domains)"
-        label="Domains tracked"
-        hint="Ranked by Tranco, minus the ones that stopped resolving."
+        label="Domains ranked"
+        hint="The Tranco list, minus the ones that stopped resolving."
         tone="muted"
       />
       <StatTile
@@ -161,10 +171,13 @@ const smtpShare = computed(() => pct(mail.answering, smtpGraded))
         hint="No AAAA anywhere. One DNS change from the exit."
         tone="bad"
       />
+      <!-- This exceeds "Domains ranked" on purpose: the tile above counts the
+           ranked list, while the crawler also sweeps subdomains and campaign
+           hosts. Two populations, so both labels have to name theirs. -->
       <StatTile
         :value="fmtCompact(crawlerToday.checked)"
-        label="Domains checked today"
-        hint="The crawler sweeps the whole list every 24 hours."
+        label="Hosts checked today"
+        hint="Every host in a 24-hour sweep, subdomains and campaign entries included."
         tone="muted"
         sample
       />
