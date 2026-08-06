@@ -86,6 +86,39 @@ _Status: Round 3.0 — API redesign folded in (docs/history/api-design-research.
 - `CREATE EXTENSION IF NOT EXISTS timescaledb` (top of 000001) requires `shared_preload_libraries = 'timescaledb'` in the server config — provisioning is an ops concern (09-ops.md); the dev/CI image `timescale/timescaledb:latest-pg18` has it preset.
 - **Acceptance criterion (fixtures in 10-testing.md):** all three migrations apply green, in order, via `v6ctl migrate up` against a fresh `timescale/timescaledb:latest-pg18` container; the `proc_name`-filtered policy-job query in §4 returns exactly the **10** policy jobs defined in 000002 (**5 columnstore**, 4 retention, 1 cagg refresh) — the built-in telemetry job is excluded by that filter; a second `v6ctl migrate up` is a no-op.
 
+### 2.3 Roles and grants (000007)
+
+`whynoipv6_ro` is a read-only login role, created by `000007_readonly_role`. It exists
+so Grafana stops connecting as the owning superuser (09-ops.md §12.1–12.2): the
+dashboards only ever `SELECT`, and a public dashboard makes the difference material.
+
+Roles are **cluster-level state while migrations run per-database**, which drives three
+properties of that file:
+
+- Everything is idempotent, including the `CREATE ROLE`, which additionally traps
+  `duplicate_object` — the integration harness migrates several databases
+  concurrently and both can pass the `EXISTS` check before either `CREATE` lands.
+- The role is created **`NOLOGIN` with no password**. A credential in git is a
+  credential that ships to production; each environment sets its own and a re-run
+  never resets it.
+- `ALTER DEFAULT PRIVILEGES` is scoped to `current_user` rather than a literal owner,
+  so a new table is readable without a follow-up migration and the file still works
+  where the owning role is not `whynoipv6`.
+
+Granted: `CONNECT` on the database, `USAGE` on `public`, `SELECT` on all tables in
+`public` plus future ones. Denied by omission: every write privilege, `CREATE` on both
+the schema and the database. Belt-and-braces role settings:
+`default_transaction_read_only = on`, `statement_timeout = 30s`,
+`idle_in_transaction_session_timeout = 60s`, `CONNECTION LIMIT 20`.
+
+`timescaledb_information` needs no grant — TimescaleDB already exposes those views to
+`PUBLIC`, which the crawler dashboard's job/hypertable panels rely on.
+
+- **Acceptance criterion:** `has_table_privilege` reports `SELECT` on all 24 tables in
+  `public` and `INSERT`/`UPDATE`/`DELETE`/`TRUNCATE` on none; every dashboard panel
+  query in `deploy/grafana/dev/dashboards/` runs to completion under
+  `SET LOCAL ROLE whynoipv6_ro`.
+
 ---
 
 ## 3. Migration 000001 — base schema

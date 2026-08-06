@@ -1026,11 +1026,39 @@ so there is no query cost and no live path to the database at all. It also drops
 would publish our table and column names. Each run rotates: new snapshot published, the
 previous one deleted. Run it on a timer; the tradeoff is freshness, not safety.
 
-**Known gap.** The `whynoipv6-pg` datasource connects as the `whynoipv6` role, which is
-a Postgres **superuser**. Grafana's own layer is what currently prevents an anonymous
-visitor from reaching anything else, so the blast radius of a Grafana bug or a
-mis-scoped panel is the whole database. A dedicated read-only role for Grafana
-(`GRANT SELECT` on the dashboard tables only, plus a `statement_timeout`) is the fix.
+### 12.2 The read-only role (`whynoipv6_ro`)
+
+The `whynoipv6-pg` datasource still connects as `whynoipv6`, which is a Postgres
+**superuser**. The dashboards only ever `SELECT`, so that gap buys nothing: it just
+means the blast radius of a Grafana bug or a mis-scoped public panel is the entire
+database rather than a read of the tables the dashboards already publish.
+
+`whynoipv6_ro` (migration 000007, schema detail in 05-schema.md §2.3) is the
+replacement. It can read every table in `public` and hold no other privilege:
+no `INSERT`/`UPDATE`/`DELETE`/`TRUNCATE` anywhere, no `CREATE` on the schema or the
+database, `default_transaction_read_only = on`, a 30 s `statement_timeout`, and a
+20-connection cap.
+
+**The role ships `NOLOGIN` with no password.** A credential committed to git is a
+credential that ships to production, so each environment sets its own once. Migrating
+again never resets it:
+
+```sh
+psql -c "ALTER ROLE whynoipv6_ro LOGIN PASSWORD '<from the secret store>'"
+```
+
+Then point the datasource at it (`deploy/grafana/dev/datasources.yaml`, `user:` and
+`secureJsonData.password`) and restart Grafana so provisioning re-reads the file. The
+`uid` must stay `whynoipv6-pg` — `alerts.yaml` and every dashboard reference it.
+
+Two things to know before cutting over. The alert rules in `alerts.yaml` run through the
+same datasource and are also pure `SELECT`, so they move with it. And the API and
+crawler keep their own superuser connection string: this role is for Grafana only.
+
+Verified on the current dashboard set: all 117 panel queries across the eight
+dashboards run to completion under `SET LOCAL ROLE whynoipv6_ro`, including the
+`scan_daily_adoption` continuous aggregate and the `timescaledb_information` job and
+hypertable views.
 
 ---
 
