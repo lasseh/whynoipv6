@@ -6,7 +6,6 @@ import type { LocationQuery } from 'vue-router'
 import ApiError from '@/components/ApiError.vue'
 import FilterInput from '@/components/FilterInput.vue'
 import LeagueTable from '@/components/LeagueTable.vue'
-import SampleBadge from '@/components/SampleBadge.vue'
 import SegmentedTabs from '@/components/SegmentedTabs.vue'
 import ChartPanel from '@/components/charts/ChartPanel.vue'
 import ScatterChart from '@/components/charts/ScatterChart.vue'
@@ -118,9 +117,8 @@ async function loadHosting() {
   }
 }
 
-// The reverse-DNS panel reads the same daily snapshot the overview tab does.
-// Fetched here rather than lifted into the page because the two tabs never
-// render together, so there is no duplicate request to save.
+// One request for all seven small multiples; /asns/{number}/stats would be
+// seven round trips for the same panel.
 async function loadNetworks() {
   try {
     const response = await getNetworkStats()
@@ -130,6 +128,9 @@ async function loadNetworks() {
   }
 }
 
+// The reverse-DNS panel reads the same daily snapshot the overview tab does.
+// Fetched here rather than lifted into the page because the two tabs never
+// render together, so there is no duplicate request to save.
 async function loadOverview() {
   try {
     const response = await getOverviewStats()
@@ -206,28 +207,24 @@ const hostingRows = computed<Row[]>(() =>
   })),
 )
 
-const ACTIVE: Record<Entity, { rows: () => Row[]; noun: string; sample: boolean; blurb: string }> =
-  {
-    networks: {
-      rows: () => networkRows.value,
-      noun: 'networks',
-      sample: false,
-      blurb: 'The autonomous systems the crawled domains actually resolve to.',
-    },
-    dns: {
-      rows: () => dnsRows.value,
-      noun: 'DNS providers',
-      sample: false,
-      blurb: 'Who runs the zone, and whether the domains in it resolve to an AAAA.',
-    },
-    hosting: {
-      rows: () => hostingRows.value,
-      noun: 'platforms',
-      sample: false,
-      blurb:
-        'The platform serving the site, which is usually the one that decides. A league among the platforms we can attribute, not a market survey.',
-    },
-  }
+const ACTIVE: Record<Entity, { rows: () => Row[]; noun: string; blurb: string }> = {
+  networks: {
+    rows: () => networkRows.value,
+    noun: 'networks',
+    blurb: 'The autonomous systems the crawled domains actually resolve to.',
+  },
+  dns: {
+    rows: () => dnsRows.value,
+    noun: 'DNS providers',
+    blurb: 'Who runs the zone, and whether the domains in it resolve to an AAAA.',
+  },
+  hosting: {
+    rows: () => hostingRows.value,
+    noun: 'platforms',
+    blurb:
+      'The platform serving the site, which is usually the one that decides. A league among the platforms we can attribute, not a market survey.',
+  },
+}
 
 const active = computed(() => ACTIVE[entity.value])
 
@@ -331,7 +328,6 @@ const ptrWithout = computed(() => {
       <ChartPanel
         title="Size against adoption"
         :description="`Every ${active.noun.replace(/s$/, '')} placed by how many domains it carries and how many answer over IPv6. Bottom right is the interesting corner: plenty of domains, no AAAA.`"
-        :sample="active.sample"
       >
         <ScatterChart
           :points="scatterPoints"
@@ -354,7 +350,6 @@ const ptrWithout = computed(() => {
             <p class="mt-0.5 text-sm text-gray-400">{{ active.blurb }}</p>
           </div>
           <div class="flex shrink-0 items-center gap-2">
-            <SampleBadge v-if="active.sample" />
             <FilterInput
               v-if="entity === 'networks'"
               v-model="searchQuery"

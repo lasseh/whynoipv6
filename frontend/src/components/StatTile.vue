@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import SampleBadge from '@/components/SampleBadge.vue'
 import { PALETTE } from '@/components/charts/chart'
 
 // One headline number. `tone` carries the verdict so a grid of tiles reads at
@@ -10,9 +9,8 @@ withDefaults(
     label: string
     hint?: string
     tone?: 'brand' | 'good' | 'bad' | 'muted'
-    sample?: boolean
   }>(),
-  { tone: 'brand', sample: false },
+  { tone: 'brand' },
 )
 
 // good/bad are the same verdict the charts encode, so they take the same hues:
@@ -40,7 +38,6 @@ const isHex = (tone: string): tone is keyof typeof TONE_HEX => tone in TONE_HEX
       >
         {{ value }}
       </div>
-      <SampleBadge v-if="sample" />
     </div>
     <div class="text-sm text-gray-400">{{ label }}</div>
     <div v-if="hint" class="mt-1 text-xs text-gray-500">{{ hint }}</div>
