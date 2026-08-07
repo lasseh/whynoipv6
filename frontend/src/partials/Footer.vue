@@ -2,12 +2,13 @@
 
 <template>
   <footer>
-    <div class="py-12 md:py-16">
-      <div class="max-w-6xl mx-auto px-4 sm:px-6">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6">
+      <!-- Hairline rule, flush with the content edges, then a tight row -->
+      <div class="border-t border-gray-700 mt-12 pt-4 pb-8 md:mt-16">
         <!-- Bottom area -->
         <div class="md:flex md:items-center md:justify-between">
           <!-- Social links -->
-          <ul class="flex mb-4 md:order-1 md:ml-4 md:mb-0">
+          <ul class="flex mb-4 md:mb-0">
             <li>
               <a
                 href="https://github.com/lasseh/whynoipv6"
@@ -26,7 +27,7 @@
                 </svg>
               </a>
             </li>
-            <li class="ml-4">
+            <li class="ml-3">
               <a
                 href="https://twitter.com/whynoipv6"
                 target="_blank"
@@ -44,7 +45,7 @@
                 </svg>
               </a>
             </li>
-            <li class="ml-4">
+            <li class="ml-3">
               <a
                 href="/blog/rss.xml"
                 class="flex justify-center items-center text-fuchsia-600 bg-gray-800 hover:text-gray-100 hover:bg-fuchsia-600 rounded-full transition duration-150 ease-in-out"
@@ -69,7 +70,7 @@
           </ul>
 
           <!-- Copyrights note -->
-          <div class="text-gray-400 text-sm mr-4" data-nosnippet>
+          <div class="text-gray-400 text-[13px] md:text-right" data-nosnippet>
             <div>
               Numbers with sentences on
               <router-link to="/blog" class="underline whitespace-nowrap a-gradient"
