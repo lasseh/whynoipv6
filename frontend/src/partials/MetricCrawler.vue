@@ -18,10 +18,9 @@ import {
   pluck,
 } from '@/components/charts/chart'
 
-import { getCrawlerStats, getOverviewStats } from '@/api'
-import type { CrawlerStats, GlobalStatsPoint } from '@/api'
+import { getChangeStats, getCrawlerStats, getOverviewStats } from '@/api'
+import type { ChangePoint, CrawlerStats, GlobalStatsPoint } from '@/api'
 import { ApiProblem } from '@/api/problem'
-import { adoptionDelta } from '@/fixtures/metrics'
 
 // GET /stats/overview is fetched once and used twice: the last point drives the
 // tiles, the whole series drives the two charts. The old version threw the
@@ -29,6 +28,7 @@ import { adoptionDelta } from '@/fixtures/metrics'
 // it despite already holding a fortnight of daily snapshots.
 const points = ref<GlobalStatsPoint[]>([])
 const crawler = ref<CrawlerStats | null>(null)
+const changes = ref<ChangePoint[]>([])
 const isLoading = ref(true)
 const error = ref<ApiProblem | null>(null)
 
@@ -71,9 +71,21 @@ async function loadCrawler() {
   }
 }
 
+// Churn sits on the changelog cache class rather than the daily generation,
+// so it is its own request.
+async function loadChanges() {
+  try {
+    const response = await getChangeStats({ from: windowStart() })
+    changes.value = response.points
+  } catch {
+    changes.value = []
+  }
+}
+
 onMounted(() => {
   void load()
   void loadCrawler()
+  void loadChanges()
 })
 
 const latest = computed(() => points.value.at(-1) ?? null)
@@ -123,7 +135,12 @@ const DELTA_SERIES = [
   { key: 'lost', label: 'Lost IPv6', color: DELTA_COLOR.lost },
 ] as const
 
-const deltaValues = [adoptionDelta.map((d) => d.gained), adoptionDelta.map((d) => d.lost)]
+// BarDeltaChart mirrors the second series itself, so both are passed as raw
+// positive counts in gained-then-lost order.
+const deltaValues = computed(() => [
+  changes.value.map((d) => d.gained),
+  changes.value.map((d) => d.lost),
+])
 
 // The idle loop checkpoints every five minutes even with nothing to do, so a
 // timestamp hours old means a dead process rather than a quiet one. Worth
@@ -247,11 +264,10 @@ const smtpPaperOnly = computed(() => {
 
       <ChartPanel
         title="IPv6 gained and lost per day"
-        description="Checks that flipped to supported, against the ones that flipped back."
-        sample
+        description="Apex records that flipped to supported, against the ones that flipped back. Churn, not net movement: a domain can appear in both bars on the same day."
       >
         <BarDeltaChart
-          :labels="adoptionDelta.map((d) => d.day)"
+          :labels="changes.map((d) => d.day)"
           :series="DELTA_SERIES.map((s) => ({ ...s }))"
           :values="deltaValues"
           :format-value="fmtCompact"

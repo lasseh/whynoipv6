@@ -321,6 +321,64 @@ func (s *Server) getCampaignStats(w http.ResponseWriter, r *http.Request) {
 	WriteJSON(w, http.StatusOK, PointsEnvelope{Points: sampleWeekly(points, days, weekly), Meta: meta})
 }
 
+// ChangePoint is a per-day transition tally. Event counts, not state: a
+// domain that flips on and off in one day contributes to both columns,
+// because the chart is about churn and the net is the visible difference.
+type ChangePoint struct {
+	Day    string `json:"day"`
+	Gained int64  `json:"gained"`
+	Lost   int64  `json:"lost"`
+}
+
+// getChangeStats is GET /stats/changes — apex IPv6 gained and lost per day.
+//
+// Cached on the changelog class, not the stats class: the crawler commits
+// transitions continuously, and a generation-seeded ETag would 304-freeze
+// this endpoint until the next daily stats tick (07 §6.1).
+func (s *Server) getChangeStats(w http.ResponseWriter, r *http.Request) {
+	from, to, weekly, err := statsWindow(r)
+	if err != nil {
+		InvalidParameter(w, r, err.Error())
+		return
+	}
+	// Same server-side floor the per-domain history uses: a wide `from`
+	// must not walk past the columnstore boundary of a forever-retained
+	// hypertable.
+	from = capHistoryWindow(from, to)
+	maxTS, err := s.q.ChangelogMaxTS(r.Context())
+	if err != nil {
+		InternalError(w, r, err)
+		return
+	}
+	generation, asOf, err := s.generation(r.Context())
+	if err != nil {
+		InternalError(w, r, err)
+		return
+	}
+	if CacheChangelog(w, r, maxTS.Time) {
+		return
+	}
+	rows, err := s.q.StatsChangesRange(r.Context(), db.StatsChangesRangeParams{
+		FromDay: postgres.TS(from), ToDay: postgres.TS(to),
+	})
+	if err != nil {
+		InternalError(w, r, err)
+		return
+	}
+	points := make([]ChangePoint, len(rows))
+	days := make([]time.Time, len(rows))
+	for i := range rows {
+		days[i] = rows[i].Day.Time
+		points[i] = ChangePoint{
+			Day:    rows[i].Day.Time.UTC().Format("2006-01-02"),
+			Gained: rows[i].Gained, Lost: rows[i].Lost,
+		}
+	}
+	meta := NewMeta(asOf, generation)
+	meta.Source = sourceConfirmedState
+	WriteJSON(w, http.StatusOK, PointsEnvelope{Points: sampleWeekly(points, days, weekly), Meta: meta})
+}
+
 // Network series sizing. Seven small multiples is what the panel draws; the
 // cap bounds a response that is one series per network wide.
 const (
@@ -361,7 +419,7 @@ type NetworkPoint struct {
 // needs its own box, so {points} would force the client to re-group.
 type NetworkStats struct {
 	Networks []NetworkTrend `json:"networks"`
-	Meta     Meta            `json:"meta"`
+	Meta     Meta           `json:"meta"`
 }
 
 // getNetworkStats is GET /stats/networks — the top-N networks in one request.

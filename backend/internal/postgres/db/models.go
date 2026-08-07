@@ -399,6 +399,13 @@ type Changelog struct {
 	NewValue Ipv6Status         `json:"new_value"`
 }
 
+type ChangelogDaily struct {
+	Day    interface{} `json:"day"`
+	Field  string      `json:"field"`
+	Gained int64       `json:"gained"`
+	Lost   int64       `json:"lost"`
+}
+
 type CheckJob struct {
 	ID          int64              `json:"id"`
 	Host        string             `json:"host"`

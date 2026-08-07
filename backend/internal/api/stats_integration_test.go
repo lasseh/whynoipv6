@@ -5,6 +5,7 @@ package api_test
 import (
 	"context"
 	"encoding/json"
+	"net/http"
 	"strings"
 	"testing"
 	"time"
@@ -140,6 +141,116 @@ func TestStatsEndpoints(t *testing.T) {
 	}
 	if resp := getJSON(t, srv.URL+"/asns/99999/stats", &problem); resp.StatusCode != 404 {
 		t.Errorf("unknown asn: %d", resp.StatusCode)
+	}
+}
+
+// TestChangeStats (000009): the daily gained/lost roll-up.
+//
+// The field filter is what this test exists for. changelog holds one row per
+// confirmed dimension transition, so an unfiltered count would multiply a
+// single adoption across base/www/conn and — because shadowTransition
+// suppresses the conn/resources loss mirror but not the gain — would bias
+// gained upward, drawing net-positive adoption that never happened.
+func TestChangeStats(t *testing.T) {
+	srv, pool := newAPI(t)
+	ctx := context.Background()
+
+	var domainID int64
+	if err := pool.QueryRow(ctx, `SELECT id FROM domain WHERE host = 'd1.example'`).Scan(&domainID); err != nil {
+		t.Fatal(err)
+	}
+	// Day -2: one apex gain. Day -1: the same host flips out and back in, so
+	// it counts in both columns. Both days also carry www/conn/mx noise that
+	// must not reach the totals.
+	seed := `INSERT INTO changelog (domain_id, ts, field, old_value, new_value) VALUES
+	  ($1, now() - interval '2 days', 'base', 'unsupported', 'supported'),
+	  ($1, now() - interval '2 days', 'www',  'unsupported', 'supported'),
+	  ($1, now() - interval '2 days', 'conn', 'unsupported', 'supported'),
+	  ($1, now() - interval '1 day',  'base', 'supported',   'unsupported'),
+	  ($1, now() - interval '1 day' + interval '1 hour', 'base', 'unsupported', 'supported'),
+	  ($1, now() - interval '1 day',  'mx',   'supported',   'unsupported')`
+	if _, err := pool.Exec(ctx, seed, domainID); err != nil {
+		t.Fatal(err)
+	}
+
+	var got struct {
+		Points []struct {
+			Day    string `json:"day"`
+			Gained int64  `json:"gained"`
+			Lost   int64  `json:"lost"`
+		} `json:"points"`
+		Meta struct {
+			Source string `json:"source"`
+		} `json:"meta"`
+	}
+	resp := getJSON(t, srv.URL+"/stats/changes", &got)
+	if resp.StatusCode != 200 {
+		t.Fatalf("status = %d", resp.StatusCode)
+	}
+	if got.Meta.Source != "confirmed_state" {
+		t.Errorf("meta.source = %q", got.Meta.Source)
+	}
+	if len(got.Points) != 2 {
+		t.Fatalf("points = %d, want 2 days: %+v", len(got.Points), got.Points)
+	}
+	if got.Points[0].Day >= got.Points[1].Day {
+		t.Errorf("points not ascending: %+v", got.Points)
+	}
+	// Day -2: one base gain. The www and conn gains on the same day are the
+	// regression guard — unfiltered this would read 3.
+	if got.Points[0].Gained != 1 || got.Points[0].Lost != 0 {
+		t.Errorf("day -2 = %d gained / %d lost, want 1/0 (www and conn must not count)",
+			got.Points[0].Gained, got.Points[0].Lost)
+	}
+	// Day -1: the same host out and back in — both columns. The mx loss is
+	// again noise that must not appear.
+	if got.Points[1].Gained != 1 || got.Points[1].Lost != 1 {
+		t.Errorf("day -1 = %d gained / %d lost, want 1/1 (churn counts both ways, mx excluded)",
+			got.Points[1].Gained, got.Points[1].Lost)
+	}
+
+	// Changelog cache class: the ETag follows max(changelog.ts), and a new
+	// transition must move it. A generation-seeded ETag would not.
+	etag := resp.Header.Get("ETag")
+	if etag == "" {
+		t.Fatal("no ETag")
+	}
+	req, _ := http.NewRequest(http.MethodGet, srv.URL+"/stats/changes", nil)
+	req.Header.Set("If-None-Match", etag)
+	notModified, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	notModified.Body.Close()
+	if notModified.StatusCode != http.StatusNotModified {
+		t.Errorf("unchanged window = %d, want 304", notModified.StatusCode)
+	}
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO changelog (domain_id, ts, field, old_value, new_value)
+		 VALUES ($1, now(), 'base', 'unsupported', 'supported')`, domainID); err != nil {
+		t.Fatal(err)
+	}
+	after, _ := fetch(t, srv.URL+"/stats/changes")
+	if after.Header.Get("ETag") == etag {
+		t.Error("ETag unchanged after a new transition — endpoint is not on the changelog class")
+	}
+
+	// Validation, and an empty window is an empty series rather than a 404.
+	var problem struct{ Type string }
+	if r := getJSON(t, srv.URL+"/stats/changes?from=2026-02-01&to=2026-01-01", &problem); r.StatusCode != 400 {
+		t.Errorf("from after to: %d, want 400", r.StatusCode)
+	}
+	if r := getJSON(t, srv.URL+"/stats/changes?from=nonsense", &problem); r.StatusCode != 400 {
+		t.Errorf("unparseable from: %d, want 400", r.StatusCode)
+	}
+	if r := getJSON(t, srv.URL+"/stats/changes?interval=hourly", &problem); r.StatusCode != 400 {
+		t.Errorf("bad interval: %d, want 400", r.StatusCode)
+	}
+	var empty struct {
+		Points []any `json:"points"`
+	}
+	if r := getJSON(t, srv.URL+"/stats/changes?from=2001-01-01&to=2001-02-01", &empty); r.StatusCode != 200 || len(empty.Points) != 0 {
+		t.Errorf("empty window: %d with %d points, want 200 and []", r.StatusCode, len(empty.Points))
 	}
 }
 

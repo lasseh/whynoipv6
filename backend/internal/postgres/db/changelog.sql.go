@@ -269,3 +269,51 @@ func (q *Queries) ScanLatencyDaily(ctx context.Context, arg ScanLatencyDailyPara
 	}
 	return items, nil
 }
+
+const StatsChangesRange = `-- name: StatsChangesRange :many
+SELECT day::timestamptz AS day, gained, lost
+FROM changelog_daily
+WHERE field = 'base'
+  AND day >= $1::timestamptz AND day <= $2::timestamptz
+ORDER BY day ASC
+`
+
+type StatsChangesRangeParams struct {
+	FromDay pgtype.Timestamptz `json:"from_day"`
+	ToDay   pgtype.Timestamptz `json:"to_day"`
+}
+
+type StatsChangesRangeRow struct {
+	Day    pgtype.Timestamptz `json:"day"`
+	Gained int64              `json:"gained"`
+	Lost   int64              `json:"lost"`
+}
+
+// The daily transition roll-up behind GET /stats/changes (000009).
+//
+// field = 'base' is the correctness core, not a default. changelog carries one
+// row per confirmed dimension transition (base|www|ns|mx|conn|resources), so
+// an unfiltered count multiplies a single adoption across several rows — and
+// worse, biases gained against lost, because shadowTransition suppresses the
+// conn/resources -> not_applicable rows that mirror a loss but not their gain
+// path. base is what "gained IPv6" means and what stats_global_daily
+// .base_supported counts.
+func (q *Queries) StatsChangesRange(ctx context.Context, arg StatsChangesRangeParams) ([]StatsChangesRangeRow, error) {
+	rows, err := q.db.Query(ctx, StatsChangesRange, arg.FromDay, arg.ToDay)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []StatsChangesRangeRow{}
+	for rows.Next() {
+		var i StatsChangesRangeRow
+		if err := rows.Scan(&i.Day, &i.Gained, &i.Lost); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

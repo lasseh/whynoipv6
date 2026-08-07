@@ -262,6 +262,16 @@ type Querier interface {
 	SnapshotGlobalDaily(ctx context.Context) error
 	StatsASNRange(ctx context.Context, arg StatsASNRangeParams) ([]StatsASNRangeRow, error)
 	StatsCampaignRange(ctx context.Context, arg StatsCampaignRangeParams) ([]StatsCampaignRangeRow, error)
+	// The daily transition roll-up behind GET /stats/changes (000009).
+	//
+	// field = 'base' is the correctness core, not a default. changelog carries one
+	// row per confirmed dimension transition (base|www|ns|mx|conn|resources), so
+	// an unfiltered count multiplies a single adoption across several rows — and
+	// worse, biases gained against lost, because shadowTransition suppresses the
+	// conn/resources -> not_applicable rows that mirror a loss but not their gain
+	// path. base is what "gained IPv6" means and what stats_global_daily
+	// .base_supported counts.
+	StatsChangesRange(ctx context.Context, arg StatsChangesRangeParams) ([]StatsChangesRangeRow, error)
 	StatsCountryRange(ctx context.Context, arg StatsCountryRangeParams) ([]StatsCountryRangeRow, error)
 	// The envelope meta source (07-api.md §2.4): generation = YYYYMMDD of
 	// max(stats_global_daily.day); as_of = its generated_at, falling back to

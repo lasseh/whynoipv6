@@ -48,6 +48,22 @@ SELECT EXISTS(
   SELECT 1 FROM campaign_domain WHERE campaign_id = @campaign_id AND domain_id = @domain_id
 )::bool;
 
+-- The daily transition roll-up behind GET /stats/changes (000009).
+--
+-- field = 'base' is the correctness core, not a default. changelog carries one
+-- row per confirmed dimension transition (base|www|ns|mx|conn|resources), so
+-- an unfiltered count multiplies a single adoption across several rows — and
+-- worse, biases gained against lost, because shadowTransition suppresses the
+-- conn/resources -> not_applicable rows that mirror a loss but not their gain
+-- path. base is what "gained IPv6" means and what stats_global_daily
+-- .base_supported counts.
+-- name: StatsChangesRange :many
+SELECT day::timestamptz AS day, gained, lost
+FROM changelog_daily
+WHERE field = 'base'
+  AND day >= @from_day::timestamptz AND day <= @to_day::timestamptz
+ORDER BY day ASC;
+
 -- name: ChangelogMaxTS :one
 SELECT COALESCE(max(ts), 'epoch'::timestamptz)::timestamptz FROM changelog;
 

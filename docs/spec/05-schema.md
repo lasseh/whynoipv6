@@ -492,6 +492,27 @@ CREATE TABLE stats_global_daily (
                             --   back to day at 00:00:00Z; meta.generation derives from max(day).
 );
 
+-- 000009. The daily transition roll-up behind GET /stats/changes. Grouped by
+-- field as well as day: the endpoint serves field = 'base' (what "gained
+-- IPv6" means, matching stats_global_daily.base_supported), and an unfiltered
+-- count would both multiply one adoption across base/www/conn and bias gained
+-- against lost, since shadowTransition suppresses the conn/resources loss
+-- mirror but not the gain. Keeping the dimension means a per-field series
+-- needs no new aggregate.
+--
+-- confirmed_state, NOT the measurement flavour — do not conflate with
+-- scan_daily_adoption, which aggregates raw scan rows and is never served.
+-- Real-time aggregation is ON (materialized_only = false), unlike that one:
+-- this sits on the live changelog surface whose ETag follows
+-- max(changelog.ts), so a just-committed transition must be visible rather
+-- than waiting for the hourly refresh.
+CREATE MATERIALIZED VIEW changelog_daily
+WITH (timescaledb.continuous) AS
+SELECT time_bucket('1 day', ts) AS day, field,
+       count(*) FILTER (WHERE new_value = 'supported') AS gained,
+       count(*) FILTER (WHERE old_value = 'supported') AS lost
+FROM changelog GROUP BY 1, 2 WITH NO DATA;
+
 CREATE TABLE stats_country_daily (
   day DATE, country_id INT, domains INT, sinners INT, partial INT, heroes INT,
   base_supported INT, conn_supported INT,

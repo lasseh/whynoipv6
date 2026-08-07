@@ -12,27 +12,8 @@
 //
 // What each block still needs on the backend:
 //
-//   adoptionDelta                — a GROUP BY day over `changelog`. The rows are
-//                                  already served per domain by /changelog; this
-//                                  is the missing daily roll-up.
 //   hostingLeague                — a GROUP BY domain.hosting_provider. The column
 //                                  exists; there is no /hosting resource at all.
-
-/** Checks that flipped to supported, and away from it, per day. */
-export const adoptionDelta: { day: string; gained: number; lost: number }[] = [
-  { day: '2026-07-25', gained: 130, lost: 66 },
-  { day: '2026-07-26', gained: 563, lost: 509 },
-  { day: '2026-07-27', gained: 925, lost: 699 },
-  { day: '2026-07-28', gained: 472, lost: 307 },
-  { day: '2026-07-29', gained: 1803, lost: 1019 },
-  { day: '2026-07-30', gained: 2521, lost: 1557 },
-  { day: '2026-07-31', gained: 2013, lost: 1295 },
-  { day: '2026-08-01', gained: 2114, lost: 1410 },
-  { day: '2026-08-02', gained: 1765, lost: 1152 },
-  { day: '2026-08-03', gained: 1261, lost: 981 },
-  { day: '2026-08-04', gained: 2105, lost: 1204 },
-  { day: '2026-08-05', gained: 3007, lost: 1091 },
-]
 
 /**
  * Apex IPv6 adoption grouped by the hosting provider behind the domain.

@@ -46,17 +46,41 @@ func TestMigrations(t *testing.T) {
 		Scan(&jobs); err != nil {
 		t.Fatalf("jobs: %v", err)
 	}
-	if jobs != 10 {
-		t.Errorf("policy jobs = %d, want 10 (5 columnstore + 4 retention + 1 cagg refresh)", jobs)
+	if jobs != 11 {
+		t.Errorf("policy jobs = %d, want 11 (5 columnstore + 4 retention + 2 cagg refresh)", jobs)
 	}
 
-	var cagg string
-	if err := pool.QueryRow(ctx,
-		"SELECT view_name FROM timescaledb_information.continuous_aggregates").Scan(&cagg); err != nil {
-		t.Fatalf("cagg: %v", err)
+	// Two continuous aggregates, and they are not interchangeable:
+	// scan_daily_adoption is measurement-flavored and never served (07 §4.10,
+	// OPEN-5), changelog_daily is confirmed_state and is public via
+	// /stats/changes. Real-time aggregation differs for the same reason —
+	// the changelog surface must show a transition committed a minute ago.
+	var caggs []string
+	rows, err := pool.Query(ctx,
+		"SELECT view_name FROM timescaledb_information.continuous_aggregates ORDER BY view_name")
+	if err != nil {
+		t.Fatalf("caggs: %v", err)
 	}
-	if cagg != "scan_daily_adoption" {
-		t.Errorf("cagg = %q, want scan_daily_adoption", cagg)
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			t.Fatal(err)
+		}
+		caggs = append(caggs, name)
+	}
+	rows.Close()
+	if len(caggs) != 2 || caggs[0] != "changelog_daily" || caggs[1] != "scan_daily_adoption" {
+		t.Errorf("caggs = %v, want [changelog_daily scan_daily_adoption]", caggs)
+	}
+
+	var realtime bool
+	if err := pool.QueryRow(ctx,
+		`SELECT NOT materialized_only FROM timescaledb_information.continuous_aggregates
+		 WHERE view_name = 'changelog_daily'`).Scan(&realtime); err != nil {
+		t.Fatalf("changelog_daily materialized_only: %v", err)
+	}
+	if !realtime {
+		t.Error("changelog_daily must keep real-time aggregation on: its ETag follows max(changelog.ts), so a just-committed transition has to be visible")
 	}
 
 	var countries, sentinelASN, sentinelCountry, statsRows int
@@ -100,7 +124,7 @@ func TestMigrateDownUp(t *testing.T) {
 		t.Fatalf("migrate up after down: %v", err)
 	}
 	v, dirty, err := mig.Version()
-	if err != nil || dirty || v != 8 {
-		t.Errorf("version after down/up = %d dirty=%t err=%v, want 8 clean", v, dirty, err)
+	if err != nil || dirty || v != 9 {
+		t.Errorf("version after down/up = %d dirty=%t err=%v, want 9 clean", v, dirty, err)
 	}
 }

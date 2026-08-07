@@ -721,6 +721,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/stats/changes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Apex IPv6 gained and lost per day
+         * @description Confirmed apex (`base`) transitions per UTC day. Event counts, not state: a domain that flips on and off inside one day contributes to both columns, because this measures churn and the net is the difference between them.
+         *
+         *     These will not reconcile with the day-over-day delta of `base_supported` on `/stats/overview`, by design. A domain's first confirmation writes no transition, so newly tracked domains never count as gained — that is coverage growth, not deployment. A domain going dead keeps its last confirmed status and writes no loss, and one that dies and returns re-bootstraps silently.
+         *
+         *     Cached on the changelog class rather than the stats class: transitions commit continuously, so the ETag follows `max(changelog.ts)` instead of the daily generation.
+         */
+        get: operations["getChangeStats"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/stats/networks": {
         parameters: {
             query?: never;
@@ -1236,6 +1260,24 @@ export interface components {
             smtp_supported?: number | null;
             /** @description Denominator for `smtp_supported` — MX where SMTP was gradeable at all. */
             smtp_graded?: number | null;
+        };
+        ChangePoint: {
+            /** Format: date */
+            day: string;
+            /**
+             * Format: int64
+             * @description Apex checks confirmed into `supported` on this day.
+             */
+            gained: number;
+            /**
+             * Format: int64
+             * @description Apex checks confirmed out of `supported` on this day.
+             */
+            lost: number;
+        };
+        ChangeStatsSeries: {
+            points: components["schemas"]["ChangePoint"][];
+            meta: components["schemas"]["Meta"];
         };
         NetworkTrend: {
             /**
@@ -2776,6 +2818,34 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["GlobalStatsSeries"];
+                };
+            };
+            400: components["responses"]["InvalidParameter"];
+        };
+    };
+    getChangeStats: {
+        parameters: {
+            query?: {
+                /** @description Window start (YYYY-MM-DD); default `to − 90d`. */
+                from?: components["parameters"]["statsFrom"];
+                /** @description Window end (YYYY-MM-DD); default today UTC. */
+                to?: components["parameters"]["statsTo"];
+                /** @description `weekly` keeps the latest snapshot per ISO week — a sample, never an average. */
+                interval?: components["parameters"]["interval"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description `meta.source` is `confirmed_state` — `changelog` is the confirmed-transition log, not raw measurement. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeStatsSeries"];
                 };
             };
             400: components["responses"]["InvalidParameter"];

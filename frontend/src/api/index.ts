@@ -22,6 +22,7 @@ export type CampaignDetail = Schemas['CampaignDetail']
 export type ShameItem = Schemas['ShameItem']
 export type GlobalStatsPoint = Schemas['GlobalStatsPoint']
 export type CrawlerStats = Schemas['CrawlerStats']
+export type ChangePoint = Schemas['ChangePoint']
 export type NetworkTrend = Schemas['NetworkTrend']
 export type Page = Schemas['Page']
 export type Meta = Schemas['Meta']
@@ -102,6 +103,9 @@ export const listChangelog = (query?: GetQuery<'/changelog'>, signal?: AbortSign
 
 export const getOverviewStats = (query?: GetQuery<'/stats/overview'>, signal?: AbortSignal) =>
   get('/stats/overview', { query, signal })
+
+export const getChangeStats = (query?: GetQuery<'/stats/changes'>, signal?: AbortSignal) =>
+  get('/stats/changes', { query, signal })
 
 // Throughput, not a series: a single object with a sibling meta.
 export const getCrawlerStats = (signal?: AbortSignal) => get('/stats/crawler', { signal })

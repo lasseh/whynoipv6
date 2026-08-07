@@ -687,6 +687,43 @@ paths:
               schema: { $ref: "#/components/schemas/GlobalStatsSeries" }
         "400": { $ref: "#/components/responses/InvalidParameter" }
 
+  /stats/changes:
+    get:
+      operationId: getChangeStats
+      tags: [stats]
+      summary: Apex IPv6 gained and lost per day
+      description: >-
+        Confirmed apex (`base`) transitions per UTC day. Event counts, not
+        state: a domain that flips on and off inside one day contributes to
+        both columns, because this measures churn and the net is the
+        difference between them.
+
+
+        These will not reconcile with the day-over-day delta of
+        `base_supported` on `/stats/overview`, by design. A domain's first
+        confirmation writes no transition, so newly tracked domains never
+        count as gained — that is coverage growth, not deployment. A domain
+        going dead keeps its last confirmed status and writes no loss, and one
+        that dies and returns re-bootstraps silently.
+
+
+        Cached on the changelog class rather than the stats class: transitions
+        commit continuously, so the ETag follows `max(changelog.ts)` instead
+        of the daily generation.
+      parameters:
+        - $ref: "#/components/parameters/statsFrom"
+        - $ref: "#/components/parameters/statsTo"
+        - $ref: "#/components/parameters/interval"
+      responses:
+        "200":
+          description: >-
+            `meta.source` is `confirmed_state` — `changelog` is the
+            confirmed-transition log, not raw measurement.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChangeStatsSeries" }
+        "400": { $ref: "#/components/responses/InvalidParameter" }
+
   /stats/networks:
     get:
       operationId: getNetworkStats
@@ -1598,6 +1635,27 @@ components:
           type: integer
           nullable: true
           description: Denominator for `smtp_supported` — MX where SMTP was gradeable at all.
+    ChangePoint:
+      type: object
+      required: [day, gained, lost]
+      properties:
+        day: { type: string, format: date }
+        gained:
+          type: integer
+          format: int64
+          description: Apex checks confirmed into `supported` on this day.
+        lost:
+          type: integer
+          format: int64
+          description: Apex checks confirmed out of `supported` on this day.
+    ChangeStatsSeries:
+      type: object
+      required: [points, meta]
+      properties:
+        points:
+          type: array
+          items: { $ref: "#/components/schemas/ChangePoint" }
+        meta: { $ref: "#/components/schemas/Meta" }
     NetworkTrend:
       type: object
       required: [asn, name, points]
