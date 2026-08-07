@@ -270,6 +270,21 @@ type Querier interface {
 	// The §4.10 time-series reads: bounded windows (≤366 rows/yr), ascending;
 	// weekly sampling happens API-side over the fetched window.
 	StatsGlobalRange(ctx context.Context, arg StatsGlobalRangeParams) ([]StatsGlobalRangeRow, error)
+	// The multi-network series behind GET /stats/networks: the top-N networks in
+	// one request, because the panel draws seven small multiples and doing that
+	// through /asns/{number}/stats is seven round trips.
+	//
+	// Keyed on asn_id and reported as asn.number, never grouped by asn.name.
+	// Names are not unique — five ASNs are called "Google LLC", six "Microsoft
+	// Corporation" — so a name-keyed aggregate averages unrelated networks
+	// together. That defect has been shipped twice already (fabricated Hetzner
+	// movement in a chart, and two Grafana panels fixed in 6711b2f). Two rows here
+	// may legitimately share a name; the stable key is the number.
+	//
+	// Selection is by size on the newest day *inside the requested window*, so a
+	// historical window ranks by what was large then rather than by what is large
+	// now. AS0 is the Unknown sentinel seeded in 000003 and is never a network.
+	StatsTopNetworks(ctx context.Context, arg StatsTopNetworksParams) ([]StatsTopNetworksRow, error)
 	SubdomainExactCount(ctx context.Context, parentID *int64) (int64, error)
 	// The daily lifecycle sweep S1–S5 (04-lifecycle-scheduling.md §8): one
 	// transaction, set-based; the linkage predicate is spelled identically in

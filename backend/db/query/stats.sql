@@ -193,6 +193,40 @@ FROM stats_campaign_daily
 WHERE campaign_id = @campaign_id AND day >= @from_day AND day <= @to_day
 ORDER BY day ASC;
 
+-- The multi-network series behind GET /stats/networks: the top-N networks in
+-- one request, because the panel draws seven small multiples and doing that
+-- through /asns/{number}/stats is seven round trips.
+--
+-- Keyed on asn_id and reported as asn.number, never grouped by asn.name.
+-- Names are not unique — five ASNs are called "Google LLC", six "Microsoft
+-- Corporation" — so a name-keyed aggregate averages unrelated networks
+-- together. That defect has been shipped twice already (fabricated Hetzner
+-- movement in a chart, and two Grafana panels fixed in 6711b2f). Two rows here
+-- may legitimately share a name; the stable key is the number.
+--
+-- Selection is by size on the newest day *inside the requested window*, so a
+-- historical window ranks by what was large then rather than by what is large
+-- now. AS0 is the Unknown sentinel seeded in 000003 and is never a network.
+-- name: StatsTopNetworks :many
+WITH bounds AS (
+  SELECT max(day) AS newest FROM stats_asn_daily
+  WHERE day >= @from_day::timestamptz AND day <= @to_day::timestamptz
+), top AS (
+  SELECT s.asn_id,
+         row_number() OVER (ORDER BY s.domains DESC NULLS LAST, s.asn_id ASC) AS rank
+  FROM stats_asn_daily s
+  JOIN asn a ON a.id = s.asn_id
+  WHERE s.day = (SELECT newest FROM bounds) AND a.number <> 0
+  ORDER BY s.domains DESC NULLS LAST, s.asn_id ASC
+  LIMIT @top_n
+)
+SELECT a.number AS asn, a.name, s.day, s.domains, s.v6_domains
+FROM stats_asn_daily s
+JOIN top t ON t.asn_id = s.asn_id
+JOIN asn a ON a.id = s.asn_id
+WHERE s.day >= @from_day::timestamptz AND s.day <= @to_day::timestamptz
+ORDER BY t.rank ASC, s.day ASC;
+
 -- name: StatsASNRange :many
 SELECT day, domains, v6_domains, sinners, heroes
 FROM stats_asn_daily

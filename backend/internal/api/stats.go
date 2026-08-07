@@ -321,6 +321,105 @@ func (s *Server) getCampaignStats(w http.ResponseWriter, r *http.Request) {
 	WriteJSON(w, http.StatusOK, PointsEnvelope{Points: sampleWeekly(points, days, weekly), Meta: meta})
 }
 
+// Network series sizing. Seven small multiples is what the panel draws; the
+// cap bounds a response that is one series per network wide.
+const (
+	defaultNetworks = 7
+	maxNetworks     = 10
+)
+
+// parseNetworkLimit takes the house limit semantics — 400 on a non-positive
+// or unparseable value, silently clamped above the ceiling — with this
+// route's own default rather than the collection default of 50.
+func parseNetworkLimit(r *http.Request) (int, error) {
+	if r.URL.Query().Get("limit") == "" {
+		return defaultNetworks, nil
+	}
+	return ParseLimitCap(r.URL.Query(), maxNetworks)
+}
+
+// NetworkTrend is one network's series. `asn` is the stable key; `name` is
+// for display only and is NOT unique — two entries may legitimately carry the
+// same name, and a consumer that groups on it will merge unrelated networks
+// (see StatsTopNetworks in stats.sql).
+type NetworkTrend struct {
+	ASN    int64          `json:"asn"`
+	Name   string         `json:"name"`
+	Points []NetworkPoint `json:"points"`
+}
+
+// NetworkPoint is the §4.6 count pair and nothing else. Deliberately not
+// ASNStatsPoint: this query does not select the tier counters, and emitting
+// them as null would claim they were measured and empty.
+type NetworkPoint struct {
+	Day        string `json:"day"`
+	CountTotal *int32 `json:"count_total"`
+	CountV6    *int32 `json:"count_v6"`
+}
+
+// NetworkStats is grouped series rather than flat points: each network
+// needs its own box, so {points} would force the client to re-group.
+type NetworkStats struct {
+	Networks []NetworkTrend `json:"networks"`
+	Meta     Meta            `json:"meta"`
+}
+
+// getNetworkStats is GET /stats/networks — the top-N networks in one request.
+//
+// Counts are served, never a precomputed share. Coverage was still growing
+// over the early window (AS13335 held 35k domains on the first crawl day
+// against 324k now), so a share moves when the denominator moves; exposing
+// count_total lets the client see that rather than hiding it behind a
+// percentage the panel then tells readers not to trust.
+func (s *Server) getNetworkStats(w http.ResponseWriter, r *http.Request) {
+	from, to, weekly, err := statsWindow(r)
+	if err != nil {
+		InvalidParameter(w, r, err.Error())
+		return
+	}
+	limit, err := parseNetworkLimit(r)
+	if err != nil {
+		InvalidParameter(w, r, err.Error())
+		return
+	}
+	meta, generation, err := s.statsMeta(r)
+	if err != nil {
+		InternalError(w, r, err)
+		return
+	}
+	if CacheList(w, r, generation) {
+		return
+	}
+	rows, err := s.q.StatsTopNetworks(r.Context(), db.StatsTopNetworksParams{
+		FromDay: postgres.TS(from), ToDay: postgres.TS(to), TopN: int32(limit),
+	})
+	if err != nil {
+		InternalError(w, r, err)
+		return
+	}
+	// Rows arrive ordered by network rank then day, so a network's run is
+	// contiguous and grouping is a single pass. Keyed on the AS number: two
+	// adjacent runs can share a name and must stay separate boxes.
+	networks := make([]NetworkTrend, 0, limit)
+	var days [][]time.Time
+	for _, row := range rows {
+		if len(networks) == 0 || networks[len(networks)-1].ASN != row.Asn {
+			networks = append(networks, NetworkTrend{ASN: row.Asn, Name: row.Name})
+			days = append(days, nil)
+		}
+		i := len(networks) - 1
+		networks[i].Points = append(networks[i].Points, NetworkPoint{
+			Day:        row.Day.Time.UTC().Format("2006-01-02"),
+			CountTotal: row.Domains, CountV6: row.V6Domains,
+		})
+		days[i] = append(days[i], row.Day.Time)
+	}
+	for i := range networks {
+		networks[i].Points = sampleWeekly(networks[i].Points, days[i], weekly)
+	}
+	WriteJSON(w, http.StatusOK, NetworkStats{Networks: networks, Meta: meta})
+}
+
 // ASNStatsPoint maps stats_asn_daily onto the canonical §4.6 wire names:
 // v6_domains → count_v6, domains → count_total.
 type ASNStatsPoint struct {

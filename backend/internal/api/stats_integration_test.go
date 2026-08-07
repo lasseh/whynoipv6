@@ -143,6 +143,125 @@ func TestStatsEndpoints(t *testing.T) {
 	}
 }
 
+// TestNetworkStats (07 §4.10): the top-N multi-network series.
+//
+// The shared-name case is the reason this endpoint exists as its own route
+// rather than a name-keyed aggregate. asn.name is not unique, and grouping on
+// it averages unrelated networks — a defect that has already shipped twice.
+// Two seeded ASNs share a name here and must come back as two boxes.
+func TestNetworkStats(t *testing.T) {
+	srv, pool := newAPI(t)
+	ctx := context.Background()
+
+	// Two distinct ASNs with the SAME name and different series, plus a big
+	// AS0 row that would rank first if the sentinel were not excluded.
+	seed := []string{
+		`INSERT INTO asn (number, name) VALUES (15169, 'Google LLC'), (396982, 'Google LLC')`,
+		`INSERT INTO stats_asn_daily (day, asn_id, domains, v6_domains)
+		 SELECT (current_date - g)::timestamptz, (SELECT id FROM asn WHERE number = 15169), 500, 190
+		 FROM generate_series(1, 3) g`,
+		`INSERT INTO stats_asn_daily (day, asn_id, domains, v6_domains)
+		 SELECT (current_date - g)::timestamptz, (SELECT id FROM asn WHERE number = 396982), 400, 45
+		 FROM generate_series(1, 3) g`,
+		`INSERT INTO stats_asn_daily (day, asn_id, domains, v6_domains)
+		 SELECT (current_date - g)::timestamptz, (SELECT id FROM asn WHERE number = 0), 9999, 1
+		 FROM generate_series(1, 3) g`,
+	}
+	for _, s := range seed {
+		if _, err := pool.Exec(ctx, s); err != nil {
+			t.Fatalf("seed: %v\n%s", err, s)
+		}
+	}
+
+	type series struct {
+		ASN    int64  `json:"asn"`
+		Name   string `json:"name"`
+		Points []struct {
+			Day        string `json:"day"`
+			CountTotal *int32 `json:"count_total"`
+			CountV6    *int32 `json:"count_v6"`
+		} `json:"points"`
+	}
+	var got struct {
+		Networks []series `json:"networks"`
+		Meta     struct {
+			Source string `json:"source"`
+		} `json:"meta"`
+	}
+	getJSON(t, srv.URL+"/stats/networks", &got)
+
+	if got.Meta.Source != "confirmed_state" {
+		t.Errorf("meta.source = %q", got.Meta.Source)
+	}
+	byASN := map[int64]series{}
+	for _, n := range got.Networks {
+		if _, dup := byASN[n.ASN]; dup {
+			t.Errorf("AS%d returned twice", n.ASN)
+		}
+		byASN[n.ASN] = n
+		if n.ASN == 0 {
+			t.Error("the Unknown sentinel (AS0) must never appear, even ranking first by domains")
+		}
+	}
+	// Both Google ASNs present, unmerged, with their own numbers and series.
+	a, okA := byASN[15169]
+	b, okB := byASN[396982]
+	if !okA || !okB {
+		t.Fatalf("want both AS15169 and AS396982, got %+v", got.Networks)
+	}
+	if a.Name != b.Name {
+		t.Fatalf("test seed no longer shares a name: %q vs %q", a.Name, b.Name)
+	}
+	if len(a.Points) != 3 || len(b.Points) != 3 {
+		t.Errorf("points = %d / %d, want 3 each", len(a.Points), len(b.Points))
+	}
+	if a.Points[0].CountTotal == nil || *a.Points[0].CountTotal != 500 ||
+		b.Points[0].CountTotal == nil || *b.Points[0].CountTotal != 400 {
+		t.Errorf("series merged or mis-keyed: %+v / %+v", a.Points[0], b.Points[0])
+	}
+	// Ascending within a network.
+	if a.Points[0].Day >= a.Points[2].Day {
+		t.Errorf("points not ascending: %+v", a.Points)
+	}
+
+	// Size ranking: the larger network leads.
+	if got.Networks[0].ASN != 15169 {
+		t.Errorf("networks[0] = AS%d, want the largest (AS15169)", got.Networks[0].ASN)
+	}
+
+	// limit clamps rather than 400s; a non-positive limit is a 400.
+	var clamped struct {
+		Networks []series `json:"networks"`
+	}
+	getJSON(t, srv.URL+"/stats/networks?limit=99", &clamped)
+	if len(clamped.Networks) > 10 {
+		t.Errorf("limit=99 returned %d networks, want clamped to 10", len(clamped.Networks))
+	}
+	var one struct {
+		Networks []series `json:"networks"`
+	}
+	getJSON(t, srv.URL+"/stats/networks?limit=1", &one)
+	if len(one.Networks) != 1 {
+		t.Errorf("limit=1 returned %d networks", len(one.Networks))
+	}
+	var problem struct{ Type string }
+	if resp := getJSON(t, srv.URL+"/stats/networks?limit=0", &problem); resp.StatusCode != 400 {
+		t.Errorf("limit=0: %d, want 400", resp.StatusCode)
+	}
+	if resp := getJSON(t, srv.URL+"/stats/networks?interval=hourly", &problem); resp.StatusCode != 400 {
+		t.Errorf("bad interval: %d, want 400", resp.StatusCode)
+	}
+
+	// A window with no rows is an empty collection, not a 404.
+	var empty struct {
+		Networks []series `json:"networks"`
+	}
+	resp := getJSON(t, srv.URL+"/stats/networks?from=2001-01-01&to=2001-02-01", &empty)
+	if resp.StatusCode != 200 || len(empty.Networks) != 0 {
+		t.Errorf("empty window: %d with %d networks, want 200 and []", resp.StatusCode, len(empty.Networks))
+	}
+}
+
 // TestCrawlerStats (07 §4.10): aggregate throughput and nothing else.
 //
 // The negative assertion is the reason this endpoint has its own test.

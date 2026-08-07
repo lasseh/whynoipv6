@@ -687,6 +687,41 @@ paths:
               schema: { $ref: "#/components/schemas/GlobalStatsSeries" }
         "400": { $ref: "#/components/responses/InvalidParameter" }
 
+  /stats/networks:
+    get:
+      operationId: getNetworkStats
+      tags: [stats]
+      summary: Adoption series for the largest networks, in one request
+      description: >-
+        The `limit` networks holding the most domains on the newest day inside
+        the requested window, each with its own series. Grouped rather than
+        flat because each network is drawn separately. The `Unknown` sentinel
+        (AS0) is never returned.
+
+
+        Counts are served, not a precomputed share: coverage grew across the
+        early window, so a share can move because the denominator moved.
+        Exposing `count_total` per day makes that visible instead of hiding it.
+      parameters:
+        - $ref: "#/components/parameters/statsFrom"
+        - $ref: "#/components/parameters/statsTo"
+        - $ref: "#/components/parameters/interval"
+        - name: limit
+          in: query
+          required: false
+          description: >-
+            Networks to return. Defaults to 7; values above 10 are clamped to
+            10 rather than rejected. A non-positive or unparseable value is a
+            400.
+          schema: { type: integer, minimum: 1, maximum: 10, default: 7 }
+      responses:
+        "200":
+          description: "`meta.source` is always `confirmed_state`."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NetworkStats" }
+        "400": { $ref: "#/components/responses/InvalidParameter" }
+
   /stats/crawler:
     get:
       operationId: getCrawlerStats
@@ -1563,6 +1598,42 @@ components:
           type: integer
           nullable: true
           description: Denominator for `smtp_supported` — MX where SMTP was gradeable at all.
+    NetworkTrend:
+      type: object
+      required: [asn, name, points]
+      properties:
+        asn:
+          type: integer
+          format: int64
+          description: The AS number — the stable key for this series.
+        name:
+          type: string
+          description: >-
+            Display only, and NOT unique: several distinct ASNs share a name
+            (five are "Google LLC", six "Microsoft Corporation"). Two entries
+            in one response may carry the same name. Group on `asn`; grouping
+            on `name` merges unrelated networks and fabricates movement.
+        points:
+          type: array
+          items: { $ref: "#/components/schemas/NetworkPoint" }
+    NetworkPoint:
+      type: object
+      description: >-
+        The canonical §4.6 count pair. Counts rather than a share so the client
+        picks the precision and can see the denominator move.
+      required: [day]
+      properties:
+        day: { type: string, format: date }
+        count_total: { type: integer, nullable: true }
+        count_v6: { type: integer, nullable: true }
+    NetworkStats:
+      type: object
+      required: [networks, meta]
+      properties:
+        networks:
+          type: array
+          items: { $ref: "#/components/schemas/NetworkTrend" }
+        meta: { $ref: "#/components/schemas/Meta" }
     CrawlerStats:
       type: object
       description: >-

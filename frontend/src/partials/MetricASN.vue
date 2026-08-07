@@ -13,10 +13,10 @@ import ScatterChart from '@/components/charts/ScatterChart.vue'
 import Sparkline from '@/components/charts/Sparkline.vue'
 import { TRACK_COLOR, fmtCompact, fmtFull, fmtPercent, shareColor } from '@/components/charts/chart'
 
-import { getOverviewStats, listASNs, listProviders } from '@/api'
-import type { ASN, GlobalStatsPoint, Provider } from '@/api'
+import { getNetworkStats, getOverviewStats, listASNs, listProviders } from '@/api'
+import type { ASN, GlobalStatsPoint, NetworkTrend, Provider } from '@/api'
 import { ApiProblem } from '@/api/problem'
-import { hostingLeague, networkAdoption } from '@/fixtures/metrics'
+import { hostingLeague } from '@/fixtures/metrics'
 
 // Three registries answer the same question about three different entities:
 // who carries a lot of domains, and how many of them answer over IPv6. They
@@ -40,6 +40,7 @@ const state = reactive({
   asnData: [] as ASN[],
   providers: [] as Provider[],
   overview: null as GlobalStatsPoint | null,
+  networks: [] as NetworkTrend[],
   isLoading: true,
 })
 
@@ -105,6 +106,15 @@ async function loadProviders() {
 // The reverse-DNS panel reads the same daily snapshot the overview tab does.
 // Fetched here rather than lifted into the page because the two tabs never
 // render together, so there is no duplicate request to save.
+async function loadNetworks() {
+  try {
+    const response = await getNetworkStats()
+    state.networks = response.networks
+  } catch {
+    state.networks = []
+  }
+}
+
 async function loadOverview() {
   try {
     const response = await getOverviewStats()
@@ -122,6 +132,7 @@ watch([routeQ, orderBy], ([q]) => {
 void load()
 void loadProviders()
 void loadOverview()
+void loadNetworks()
 
 function setEntity(value: string) {
   // ?q= only means anything for networks, so it does not survive the switch.
@@ -235,21 +246,27 @@ const laggards = computed(() => {
 
 // Small multiples, because these seven sit between 0.8% and 86% and a shared
 // axis flattens five of them onto the baseline.
+// The endpoint serves counts, not a share, so the denominator stays visible:
+// coverage is still growing, and a percentage alone would move when the
+// denominator moved and read as deployment. Days with no total are dropped
+// rather than plotted as zero.
 const trends = computed(() =>
-  networkAdoption.networks.map((n) => {
-    const first = n.share[0] ?? 0
-    const last = n.share.at(-1) ?? 0
+  state.networks.map((n) => {
+    const share = n.points
+      .filter((p) => p.count_total)
+      .map((p) => ((p.count_v6 ?? 0) / (p.count_total as number)) * 100)
+    const last = share.at(-1) ?? 0
     return {
       asn: n.asn,
       name: n.name,
-      share: n.share,
+      share,
       last,
-      delta: last - first,
+      days: share.length,
       // Same ramp as the league bar and the scatter dot, so one network is one
       // colour everywhere on the page.
       color: shareColor(last),
-      lo: Math.min(...n.share),
-      hi: Math.max(...n.share),
+      lo: share.length ? Math.min(...share) : 0,
+      hi: share.length ? Math.max(...share) : 0,
     }
   }),
 )
@@ -355,8 +372,7 @@ const ptrWithout = computed(() => {
            following the switcher. -->
       <ChartPanel
         title="Network adoption, day by day"
-        description="One box per network, each scaled to itself. Read the levels: two weeks in, none of them has moved by more than a point."
-        sample
+        description="One box per network, each scaled to itself. Read the levels rather than the slopes: coverage is still growing, so a line can move because we reached more of a network's domains, not because it deployed anything."
       >
         <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <div
@@ -375,7 +391,7 @@ const ptrWithout = computed(() => {
             </div>
             <Sparkline :values="t.share" :color="t.color" />
             <div class="mt-2 text-xs text-gray-500">
-              {{ fmtPercent(t.lo) }} to {{ fmtPercent(t.hi) }} over 13 days
+              {{ fmtPercent(t.lo) }} to {{ fmtPercent(t.hi) }} over {{ t.days }} days
             </div>
           </div>
         </div>

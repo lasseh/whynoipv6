@@ -561,3 +561,78 @@ func (q *Queries) StatsGlobalRange(ctx context.Context, arg StatsGlobalRangePara
 	}
 	return items, nil
 }
+
+const StatsTopNetworks = `-- name: StatsTopNetworks :many
+WITH bounds AS (
+  SELECT max(day) AS newest FROM stats_asn_daily
+  WHERE day >= $1::timestamptz AND day <= $2::timestamptz
+), top AS (
+  SELECT s.asn_id,
+         row_number() OVER (ORDER BY s.domains DESC NULLS LAST, s.asn_id ASC) AS rank
+  FROM stats_asn_daily s
+  JOIN asn a ON a.id = s.asn_id
+  WHERE s.day = (SELECT newest FROM bounds) AND a.number <> 0
+  ORDER BY s.domains DESC NULLS LAST, s.asn_id ASC
+  LIMIT $3
+)
+SELECT a.number AS asn, a.name, s.day, s.domains, s.v6_domains
+FROM stats_asn_daily s
+JOIN top t ON t.asn_id = s.asn_id
+JOIN asn a ON a.id = s.asn_id
+WHERE s.day >= $1::timestamptz AND s.day <= $2::timestamptz
+ORDER BY t.rank ASC, s.day ASC
+`
+
+type StatsTopNetworksParams struct {
+	FromDay pgtype.Timestamptz `json:"from_day"`
+	ToDay   pgtype.Timestamptz `json:"to_day"`
+	TopN    int32              `json:"top_n"`
+}
+
+type StatsTopNetworksRow struct {
+	Asn       int64              `json:"asn"`
+	Name      string             `json:"name"`
+	Day       pgtype.Timestamptz `json:"day"`
+	Domains   *int32             `json:"domains"`
+	V6Domains *int32             `json:"v6_domains"`
+}
+
+// The multi-network series behind GET /stats/networks: the top-N networks in
+// one request, because the panel draws seven small multiples and doing that
+// through /asns/{number}/stats is seven round trips.
+//
+// Keyed on asn_id and reported as asn.number, never grouped by asn.name.
+// Names are not unique — five ASNs are called "Google LLC", six "Microsoft
+// Corporation" — so a name-keyed aggregate averages unrelated networks
+// together. That defect has been shipped twice already (fabricated Hetzner
+// movement in a chart, and two Grafana panels fixed in 6711b2f). Two rows here
+// may legitimately share a name; the stable key is the number.
+//
+// Selection is by size on the newest day *inside the requested window*, so a
+// historical window ranks by what was large then rather than by what is large
+// now. AS0 is the Unknown sentinel seeded in 000003 and is never a network.
+func (q *Queries) StatsTopNetworks(ctx context.Context, arg StatsTopNetworksParams) ([]StatsTopNetworksRow, error) {
+	rows, err := q.db.Query(ctx, StatsTopNetworks, arg.FromDay, arg.ToDay, arg.TopN)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []StatsTopNetworksRow{}
+	for rows.Next() {
+		var i StatsTopNetworksRow
+		if err := rows.Scan(
+			&i.Asn,
+			&i.Name,
+			&i.Day,
+			&i.Domains,
+			&i.V6Domains,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

@@ -22,6 +22,7 @@ export type CampaignDetail = Schemas['CampaignDetail']
 export type ShameItem = Schemas['ShameItem']
 export type GlobalStatsPoint = Schemas['GlobalStatsPoint']
 export type CrawlerStats = Schemas['CrawlerStats']
+export type NetworkTrend = Schemas['NetworkTrend']
 export type Page = Schemas['Page']
 export type Meta = Schemas['Meta']
 
@@ -104,6 +105,10 @@ export const getOverviewStats = (query?: GetQuery<'/stats/overview'>, signal?: A
 
 // Throughput, not a series: a single object with a sibling meta.
 export const getCrawlerStats = (signal?: AbortSignal) => get('/stats/crawler', { signal })
+
+// Grouped series — one box per network. Keyed on `asn`; `name` is not unique.
+export const getNetworkStats = (query?: GetQuery<'/stats/networks'>, signal?: AbortSignal) =>
+  get('/stats/networks', { query, signal })
 
 export const listASNs = (query?: GetQuery<'/asns'>, signal?: AbortSignal) =>
   get('/asns', { query, signal })

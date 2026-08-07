@@ -721,6 +721,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/stats/networks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Adoption series for the largest networks, in one request
+         * @description The `limit` networks holding the most domains on the newest day inside the requested window, each with its own series. Grouped rather than flat because each network is drawn separately. The `Unknown` sentinel (AS0) is never returned.
+         *
+         *     Counts are served, not a precomputed share: coverage grew across the early window, so a share can move because the denominator moved. Exposing `count_total` per day makes that visible instead of hiding it.
+         */
+        get: operations["getNetworkStats"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/stats/crawler": {
         parameters: {
             query?: never;
@@ -1214,6 +1236,27 @@ export interface components {
             smtp_supported?: number | null;
             /** @description Denominator for `smtp_supported` — MX where SMTP was gradeable at all. */
             smtp_graded?: number | null;
+        };
+        NetworkTrend: {
+            /**
+             * Format: int64
+             * @description The AS number — the stable key for this series.
+             */
+            asn: number;
+            /** @description Display only, and NOT unique: several distinct ASNs share a name (five are "Google LLC", six "Microsoft Corporation"). Two entries in one response may carry the same name. Group on `asn`; grouping on `name` merges unrelated networks and fabricates movement. */
+            name: string;
+            points: components["schemas"]["NetworkPoint"][];
+        };
+        /** @description The canonical §4.6 count pair. Counts rather than a share so the client picks the precision and can see the denominator move. */
+        NetworkPoint: {
+            /** Format: date */
+            day: string;
+            count_total?: number | null;
+            count_v6?: number | null;
+        };
+        NetworkStats: {
+            networks: components["schemas"]["NetworkTrend"][];
+            meta: components["schemas"]["Meta"];
         };
         /** @description A single resource, so the object carries a sibling `meta` rather than a `points` or `items` envelope. */
         CrawlerStats: {
@@ -2733,6 +2776,36 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["GlobalStatsSeries"];
+                };
+            };
+            400: components["responses"]["InvalidParameter"];
+        };
+    };
+    getNetworkStats: {
+        parameters: {
+            query?: {
+                /** @description Window start (YYYY-MM-DD); default `to − 90d`. */
+                from?: components["parameters"]["statsFrom"];
+                /** @description Window end (YYYY-MM-DD); default today UTC. */
+                to?: components["parameters"]["statsTo"];
+                /** @description `weekly` keeps the latest snapshot per ISO week — a sample, never an average. */
+                interval?: components["parameters"]["interval"];
+                /** @description Networks to return. Defaults to 7; values above 10 are clamped to 10 rather than rejected. A non-positive or unparseable value is a 400. */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description `meta.source` is always `confirmed_state`. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NetworkStats"];
                 };
             };
             400: components["responses"]["InvalidParameter"];
