@@ -12,18 +12,10 @@
 //
 // What each block still needs on the backend:
 //
-//   tracked                      — count(*) over `domain` WHERE NOT disabled.
-//                                  /stats/overview reports the ranked list only,
-//                                  and unfiltered /domains answers with MaxRank
-//                                  rather than a row count, so the size of the
-//                                  whole tracked set is not currently served.
 //   crawlerToday                 — an aggregate over `crawler_metrics`; the
 //                                  table is internal telemetry, so the endpoint
 //                                  must expose throughput only, never per-worker
 //                                  or per-lease detail.
-//   reverseDns / mail            — aggregates over domain.ptr_observed and
-//                                  domain.smtp_observed. Both columns exist and
-//                                  are populated; neither is summarised anywhere.
 //   adoptionDelta                — a GROUP BY day over `changelog`. The rows are
 //                                  already served per domain by /changelog; this
 //                                  is the missing daily roll-up.
@@ -35,48 +27,15 @@
 //                                  exists; there is no /hosting resource at all.
 
 /**
- * Everything the crawler keeps score on, not just the ranked list.
- *
- * `stats_global_daily.domains` counts rows carrying a Tranco rank. The rest of
- * the live set is domains that have since fallen off the list plus the ones
- * that were never on it, and it is not a rounding error:
- *
- *   ranked            989,808
- *   unranked          102,946   (94.4k ex-Tranco, 8,261 campaign,
- *                                161 curated, 281 parent links, 3 live checks)
- *   ------------------------
- *   live domains    1,092,754   = count(*) FROM domain WHERE NOT disabled
- *
- * 1,454 of those are subdomains; the other 1,091,300 are apexes.
- */
-export const tracked = {
-  domains: 1092754,
-  ranked: 989808,
-}
-
-/**
  * Rolling 24-hour throughput and the newest observation timestamp.
  *
- * `checked` slightly exceeds `tracked.domains` because a host can be re-checked
- * inside the same 24 hours (a live check, a campaign refresh, a retry).
+ * `checked` slightly exceeds the tracked-domain count because a host can be
+ * re-checked inside the same 24 hours (a live check, a campaign refresh, a
+ * retry).
  */
 export const crawlerToday = {
   checked: 1095290,
   latest: '2026-08-06T18:49:28Z',
-}
-
-/** Reverse DNS on the hosts that actually answer over IPv6. */
-export const reverseDns = {
-  v6Hosts: 387606,
-  withPtr: 27340,
-  withoutPtr: 359737,
-}
-
-/** Mail: an AAAA on the MX is not the same as an SMTP banner over IPv6. */
-export const mail = {
-  mxOverV6: 508582,
-  answering: 317235,
-  paperOnly: 27475,
 }
 
 /** Checks that flipped to supported, and away from it, per day. */

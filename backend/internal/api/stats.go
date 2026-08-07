@@ -92,6 +92,14 @@ type GlobalStatsPoint struct {
 	ResourcesSupported *int32 `json:"resources_supported"`
 	TopHeroes          *int32 `json:"top_heroes"`
 	TopNameserver      *int32 `json:"top_nameserver"`
+	// The live-set counters (000008). Every field above counts the ranked
+	// subset; these five do not, so tracked_total >= domains. NULL on rows
+	// snapshotted before the columns existed — clients render an em dash.
+	TrackedTotal  *int32 `json:"tracked_total"`
+	PtrSupported  *int32 `json:"ptr_supported"`
+	PtrGraded     *int32 `json:"ptr_graded"`
+	SmtpSupported *int32 `json:"smtp_supported"`
+	SmtpGraded    *int32 `json:"smtp_graded"`
 }
 
 // getStatsOverview is GET /stats/overview — the headline dashboard.
@@ -129,6 +137,9 @@ func (s *Server) getStatsOverview(w http.ResponseWriter, r *http.Request) {
 			NsSupported: rows[i].NsSupported, MxSupported: rows[i].MxSupported,
 			ConnSupported: rows[i].ConnSupported, ResourcesSupported: rows[i].ResourcesSupported,
 			TopHeroes: rows[i].TopHeroes, TopNameserver: rows[i].TopNameserver,
+			TrackedTotal: rows[i].TrackedTotal,
+			PtrSupported: rows[i].PtrSupported, PtrGraded: rows[i].PtrGraded,
+			SmtpSupported: rows[i].SmtpSupported, SmtpGraded: rows[i].SmtpGraded,
 		}
 	}
 	WriteJSON(w, http.StatusOK, PointsEnvelope{Points: sampleWeekly(points, days, weekly), Meta: meta})

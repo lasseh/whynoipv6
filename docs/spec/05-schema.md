@@ -474,6 +474,19 @@ CREATE TABLE stats_global_daily (
   conn_supported INT, resources_supported INT,
   top_heroes INT,        -- Tranco top-1000 with web-facing IPv6
   top_nameserver INT,    -- Tranco top-1000 with IPv6-capable nameservers
+  -- 000008. The rollup is FROM domain WHERE rank IS NOT NULL, so every column
+  -- above counts the ranked subset only. These five scope to the whole live
+  -- set instead and are computed by a separate CTE that does not inherit the
+  -- rank predicate; tracked_total is therefore >= domains, never equal to it
+  -- unless nothing unranked exists. Nullable with no backfill: ptr_observed /
+  -- smtp_observed are current-state columns, and `scan` retains the raw
+  -- observations without the same-day base_status/mx_status needed to grade
+  -- them, so history stays NULL and renders as an em dash.
+  tracked_total INT,     -- every live row, ranked or not (cf. domains)
+  ptr_supported INT,     -- v6-answering hosts that resolve back to a name
+  ptr_graded INT,        -- v6-answering hosts where PTR was gradeable
+  smtp_supported INT,    -- v6-reachable MX that presented a banner
+  smtp_graded INT,       -- v6-reachable MX where SMTP was gradeable
   generated_at TIMESTAMPTZ  -- crawl-freshness signal set by the rollup (06); deterministic
                             --   source for the envelope meta.as_of (07). NULL -> as_of falls
                             --   back to day at 00:00:00Z; meta.generation derives from max(day).

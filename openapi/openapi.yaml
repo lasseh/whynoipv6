@@ -1513,6 +1513,29 @@ components:
         resources_supported: { type: integer, nullable: true }
         top_heroes: { type: integer, nullable: true }
         top_nameserver: { type: integer, nullable: true }
+        tracked_total:
+          type: integer
+          nullable: true
+          description: >-
+            Every live domain, ranked or not. Always >= `domains`, which counts
+            the Tranco-ranked subset only; the difference is ex-Tranco,
+            campaign, curated and parent-link rows.
+        ptr_supported:
+          type: integer
+          nullable: true
+          description: IPv6-answering hosts whose address resolves back to a name. `null` before 2026-08-07.
+        ptr_graded:
+          type: integer
+          nullable: true
+          description: Denominator for `ptr_supported` — hosts where PTR was gradeable at all.
+        smtp_supported:
+          type: integer
+          nullable: true
+          description: IPv6-reachable MX that presented a banner. `null` before 2026-08-07.
+        smtp_graded:
+          type: integer
+          nullable: true
+          description: Denominator for `smtp_supported` — MX where SMTP was gradeable at all.
     GlobalStatsSeries:
       type: object
       required: [points, meta]

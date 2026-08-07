@@ -21,7 +21,7 @@ import {
 import { getOverviewStats } from '@/api'
 import type { GlobalStatsPoint } from '@/api'
 import { ApiProblem } from '@/api/problem'
-import { adoptionDelta, crawlerToday, mail, reverseDns, tracked } from '@/fixtures/metrics'
+import { adoptionDelta, crawlerToday } from '@/fixtures/metrics'
 
 // GET /stats/overview is fetched once and used twice: the last point drives the
 // tiles, the whole series drives the two charts. The old version threw the
@@ -110,9 +110,18 @@ const DELTA_SERIES = [
 
 const deltaValues = [adoptionDelta.map((d) => d.gained), adoptionDelta.map((d) => d.lost)]
 
-const ptrShare = computed(() => pct(reverseDns.withPtr, reverseDns.withPtr + reverseDns.withoutPtr))
-const smtpGraded = mail.answering + mail.paperOnly
-const smtpShare = computed(() => pct(mail.answering, smtpGraded))
+// The advisory checks come off the same /stats/overview point as everything
+// else. They are null on snapshots taken before the columns existed, and pct()
+// propagates that to an em dash rather than a confident 0%.
+const ptrShare = computed(() => pct(latest.value?.ptr_supported, latest.value?.ptr_graded))
+const smtpShare = computed(() => pct(latest.value?.smtp_supported, latest.value?.smtp_graded))
+
+// "Looks ready" is the gap between a gradeable MX and one that answered.
+const smtpPaperOnly = computed(() => {
+  const graded = latest.value?.smtp_graded
+  const answering = latest.value?.smtp_supported
+  return graded == null || answering == null ? null : graded - answering
+})
 </script>
 
 <template>
@@ -147,11 +156,10 @@ const smtpShare = computed(() => pct(mail.answering, smtpGraded))
            The tiers below are scored against the ranked list, which is why the
            hint spells the split out rather than leaving two numbers to clash. -->
       <StatTile
-        :value="fmtCompact(tracked.domains)"
+        :value="fmtCompact(latest.tracked_total)"
         label="Domains tracked"
-        :hint="`${fmtCompact(tracked.ranked)} carry a Tranco rank. The rest are campaign entries, curated lists, and domains that fell off it.`"
+        :hint="`${fmtCompact(latest.domains)} carry a Tranco rank. The rest are campaign entries, curated lists, and domains that fell off it.`"
         tone="muted"
-        sample
       />
       <StatTile
         :value="fmtPercent(apexShare)"
@@ -238,23 +246,20 @@ const smtpShare = computed(() => pct(mail.answering, smtpGraded))
       <StatTile
         :value="fmtPercent(ptrShare)"
         label="Reverse DNS on IPv6 hosts"
-        :hint="`${fmtFull(reverseDns.withPtr)} of ${fmtFull(reverseDns.withPtr + reverseDns.withoutPtr)} graded hosts answer a PTR lookup.`"
+        :hint="`${fmtFull(latest.ptr_supported)} of ${fmtFull(latest.ptr_graded)} graded hosts answer a PTR lookup.`"
         tone="bad"
-        sample
       />
       <StatTile
         :value="fmtPercent(smtpShare)"
         label="Mail that answers over IPv6"
-        :hint="`${fmtFull(mail.answering)} of ${fmtFull(smtpGraded)} graded mail servers presented a banner.`"
+        :hint="`${fmtFull(latest.smtp_supported)} of ${fmtFull(latest.smtp_graded)} graded mail servers presented a banner.`"
         tone="good"
-        sample
       />
       <StatTile
-        :value="fmtCompact(mail.paperOnly)"
+        :value="fmtCompact(smtpPaperOnly)"
         label="Mail that only looks ready"
         hint="The MX has an AAAA record. Nothing answers on it."
         tone="bad"
-        sample
       />
     </div>
   </section>

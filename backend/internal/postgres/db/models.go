@@ -634,6 +634,11 @@ type StatsGlobalDaily struct {
 	TopHeroes          *int32             `json:"top_heroes"`
 	TopNameserver      *int32             `json:"top_nameserver"`
 	GeneratedAt        pgtype.Timestamptz `json:"generated_at"`
+	TrackedTotal       *int32             `json:"tracked_total"`
+	PtrSupported       *int32             `json:"ptr_supported"`
+	PtrGraded          *int32             `json:"ptr_graded"`
+	SmtpSupported      *int32             `json:"smtp_supported"`
+	SmtpGraded         *int32             `json:"smtp_graded"`
 }
 
 type TopShame struct {

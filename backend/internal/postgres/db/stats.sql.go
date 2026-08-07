@@ -206,10 +206,25 @@ func (q *Queries) SnapshotCountryDaily(ctx context.Context) error {
 const SnapshotGlobalDaily = `-- name: SnapshotGlobalDaily :exec
 
 
+WITH live AS (
+  SELECT
+    count(*) FILTER (WHERE NOT disabled) AS tracked_total,
+    count(*) FILTER (WHERE NOT disabled AND base_status = 'supported'
+                       AND ptr_observed IN ('supported','partial')) AS ptr_supported,
+    count(*) FILTER (WHERE NOT disabled AND base_status = 'supported'
+                       AND ptr_observed IN ('supported','partial','unsupported')) AS ptr_graded,
+    count(*) FILTER (WHERE NOT disabled AND mx_status = 'supported'
+                       AND smtp_observed = 'supported') AS smtp_supported,
+    count(*) FILTER (WHERE NOT disabled AND mx_status = 'supported'
+                       AND smtp_observed IN ('supported','unsupported')) AS smtp_graded
+  FROM domain
+)
 INSERT INTO stats_global_daily (
   day, domains, sinners, partial, heroes, saints, inactive, unknown, disabled,
   base_supported, www_supported, ns_supported, mx_supported, conn_supported,
-  resources_supported, top_heroes, top_nameserver, generated_at)
+  resources_supported, top_heroes, top_nameserver,
+  tracked_total, ptr_supported, ptr_graded, smtp_supported, smtp_graded,
+  generated_at)
 SELECT
   CURRENT_DATE,
   count(*) FILTER (WHERE NOT disabled),
@@ -231,6 +246,11 @@ SELECT
                      AND www_status IS DISTINCT FROM 'unsupported'),
   count(*) FILTER (WHERE NOT disabled AND rank <= 1000
                      AND ns_status = 'supported'),
+  (SELECT tracked_total  FROM live),
+  (SELECT ptr_supported  FROM live),
+  (SELECT ptr_graded     FROM live),
+  (SELECT smtp_supported FROM live),
+  (SELECT smtp_graded    FROM live),
   now()
 FROM domain
 WHERE rank IS NOT NULL
@@ -251,11 +271,29 @@ ON CONFLICT (day) DO UPDATE SET
   resources_supported = excluded.resources_supported,
   top_heroes          = excluded.top_heroes,
   top_nameserver      = excluded.top_nameserver,
+  tracked_total       = excluded.tracked_total,
+  ptr_supported       = excluded.ptr_supported,
+  ptr_graded          = excluded.ptr_graded,
+  smtp_supported      = excluded.smtp_supported,
+  smtp_graded         = excluded.smtp_graded,
   generated_at        = excluded.generated_at
 `
 
 // db/query/stats.sql — sqlc query source (layout: 05-schema.md §10.2).
 // Tick step 2 — the four confirmed-state snapshot upserts (06-ingest.md §10).
+// The aggregates below run FROM domain WHERE rank IS NOT NULL, so they all
+// count the ranked subset. `live` deliberately does not inherit that
+// predicate: tracked_total and the PTR/SMTP pairs describe the whole live
+// population. Folding them into the main FILTER list would silently
+// reproduce `domains`, and nothing would catch it until someone compared the
+// two columns. Referenced five times below, so PG materializes it once.
+//
+// The PTR clause admits 'partial' and the SMTP clause does not: infoSMTP
+// (internal/observe/observe.go) folds a partial EHLO to unsupported before
+// storage, because a half-working EHLO does not accept mail. The
+// base_status / mx_status guards are load-bearing — both observation columns
+// are overwritten on every commit regardless of the confirmed status, so
+// dropping the guards balloons the denominators.
 func (q *Queries) SnapshotGlobalDaily(ctx context.Context) error {
 	_, err := q.db.Exec(ctx, SnapshotGlobalDaily)
 	return err
@@ -442,7 +480,8 @@ const StatsGlobalRange = `-- name: StatsGlobalRange :many
 
 SELECT day, domains, sinners, partial, heroes, saints, inactive, unknown, disabled,
        base_supported, www_supported, ns_supported, mx_supported, conn_supported,
-       resources_supported, top_heroes, top_nameserver
+       resources_supported, top_heroes, top_nameserver,
+       tracked_total, ptr_supported, ptr_graded, smtp_supported, smtp_graded
 FROM stats_global_daily
 WHERE day >= $1 AND day <= $2
 ORDER BY day ASC
@@ -471,6 +510,11 @@ type StatsGlobalRangeRow struct {
 	ResourcesSupported *int32      `json:"resources_supported"`
 	TopHeroes          *int32      `json:"top_heroes"`
 	TopNameserver      *int32      `json:"top_nameserver"`
+	TrackedTotal       *int32      `json:"tracked_total"`
+	PtrSupported       *int32      `json:"ptr_supported"`
+	PtrGraded          *int32      `json:"ptr_graded"`
+	SmtpSupported      *int32      `json:"smtp_supported"`
+	SmtpGraded         *int32      `json:"smtp_graded"`
 }
 
 // The §4.10 time-series reads: bounded windows (≤366 rows/yr), ascending;
@@ -502,6 +546,11 @@ func (q *Queries) StatsGlobalRange(ctx context.Context, arg StatsGlobalRangePara
 			&i.ResourcesSupported,
 			&i.TopHeroes,
 			&i.TopNameserver,
+			&i.TrackedTotal,
+			&i.PtrSupported,
+			&i.PtrGraded,
+			&i.SmtpSupported,
+			&i.SmtpGraded,
 		); err != nil {
 			return nil, err
 		}

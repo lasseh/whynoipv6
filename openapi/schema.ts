@@ -1181,6 +1181,16 @@ export interface components {
             resources_supported?: number | null;
             top_heroes?: number | null;
             top_nameserver?: number | null;
+            /** @description Every live domain, ranked or not. Always >= `domains`, which counts the Tranco-ranked subset only; the difference is ex-Tranco, campaign, curated and parent-link rows. */
+            tracked_total?: number | null;
+            /** @description IPv6-answering hosts whose address resolves back to a name. `null` before 2026-08-07. */
+            ptr_supported?: number | null;
+            /** @description Denominator for `ptr_supported` — hosts where PTR was gradeable at all. */
+            ptr_graded?: number | null;
+            /** @description IPv6-reachable MX that presented a banner. `null` before 2026-08-07. */
+            smtp_supported?: number | null;
+            /** @description Denominator for `smtp_supported` — MX where SMTP was gradeable at all. */
+            smtp_graded?: number | null;
         };
         GlobalStatsSeries: {
             points: components["schemas"]["GlobalStatsPoint"][];

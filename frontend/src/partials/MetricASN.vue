@@ -13,10 +13,10 @@ import ScatterChart from '@/components/charts/ScatterChart.vue'
 import Sparkline from '@/components/charts/Sparkline.vue'
 import { TRACK_COLOR, fmtCompact, fmtFull, fmtPercent, shareColor } from '@/components/charts/chart'
 
-import { listASNs, listProviders } from '@/api'
-import type { ASN, Provider } from '@/api'
+import { getOverviewStats, listASNs, listProviders } from '@/api'
+import type { ASN, GlobalStatsPoint, Provider } from '@/api'
 import { ApiProblem } from '@/api/problem'
-import { hostingLeague, networkAdoption, reverseDns } from '@/fixtures/metrics'
+import { hostingLeague, networkAdoption } from '@/fixtures/metrics'
 
 // Three registries answer the same question about three different entities:
 // who carries a lot of domains, and how many of them answer over IPv6. They
@@ -39,6 +39,7 @@ const error = ref<ApiProblem | null>(null)
 const state = reactive({
   asnData: [] as ASN[],
   providers: [] as Provider[],
+  overview: null as GlobalStatsPoint | null,
   isLoading: true,
 })
 
@@ -101,12 +102,26 @@ async function loadProviders() {
   }
 }
 
+// The reverse-DNS panel reads the same daily snapshot the overview tab does.
+// Fetched here rather than lifted into the page because the two tabs never
+// render together, so there is no duplicate request to save.
+async function loadOverview() {
+  try {
+    const response = await getOverviewStats()
+    state.overview = response.points.at(-1) ?? null
+  } catch {
+    // One panel going quiet must not blank the leagues beside it.
+    state.overview = null
+  }
+}
+
 watch([routeQ, orderBy], ([q]) => {
   if (q !== undefined) searchQuery.value = q
   void load()
 })
 void load()
 void loadProviders()
+void loadOverview()
 
 function setEntity(value: string) {
   // ?q= only means anything for networks, so it does not survive the switch.
@@ -239,8 +254,21 @@ const trends = computed(() =>
   }),
 )
 
-const ptrGraded = reverseDns.withPtr + reverseDns.withoutPtr
-const ptrShare = ptrGraded > 0 ? (reverseDns.withPtr / ptrGraded) * 100 : 0
+// Nullable all the way through: snapshots taken before the PTR columns existed
+// carry no value, and an em dash is the honest render. Coercing to 0 would
+// claim "no host has reverse DNS", which is a measurement, not a gap.
+const ptrSupported = computed(() => state.overview?.ptr_supported ?? null)
+const ptrGraded = computed(() => state.overview?.ptr_graded ?? null)
+const ptrShare = computed(() => {
+  const supported = ptrSupported.value
+  const graded = ptrGraded.value
+  return supported == null || !graded ? null : (supported / graded) * 100
+})
+const ptrWithout = computed(() => {
+  const supported = ptrSupported.value
+  const graded = ptrGraded.value
+  return supported == null || graded == null ? null : graded - supported
+})
 </script>
 
 <template>
@@ -362,13 +390,12 @@ const ptrShare = ptrGraded > 0 ? (reverseDns.withPtr / ptrGraded) * 100 : 0
               logging tools care; almost nobody else has noticed.
             </p>
           </div>
-          <SampleBadge />
         </header>
 
         <div class="mb-3 flex items-baseline gap-3">
           <span
             class="text-3xl font-bold tracking-tighter"
-            :style="{ color: shareColor(ptrShare) }"
+            :style="{ color: shareColor(ptrShare ?? 0) }"
             >{{ fmtPercent(ptrShare) }}</span
           >
           <span class="text-sm text-gray-400">
@@ -381,12 +408,15 @@ const ptrShare = ptrGraded > 0 ? (reverseDns.withPtr / ptrGraded) * 100 : 0
         >
           <div
             class="rounded-full"
-            :style="{ width: `${ptrShare.toFixed(2)}%`, backgroundColor: shareColor(ptrShare) }"
+            :style="{
+              width: `${(ptrShare ?? 0).toFixed(2)}%`,
+              backgroundColor: shareColor(ptrShare ?? 0),
+            }"
           ></div>
         </div>
         <div class="flex items-center justify-between text-xs text-gray-500">
-          <span>{{ fmtFull(reverseDns.withPtr) }} have a PTR record</span>
-          <span>{{ fmtFull(reverseDns.withoutPtr) }} have none</span>
+          <span>{{ fmtFull(ptrSupported) }} have a PTR record</span>
+          <span>{{ fmtFull(ptrWithout) }} have none</span>
         </div>
       </section>
     </div>

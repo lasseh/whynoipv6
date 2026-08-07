@@ -6,6 +6,8 @@ import (
 	"context"
 	"testing"
 	"time"
+
+	"github.com/lasseh/whynoipv6/internal/crawler"
 )
 
 // TestStatsEndpoints (P6.2 / 07 §4.10): {points,meta} envelope, points
@@ -136,5 +138,71 @@ func TestStatsEndpoints(t *testing.T) {
 	}
 	if resp := getJSON(t, srv.URL+"/asns/99999/stats", &problem); resp.StatusCode != 404 {
 		t.Errorf("unknown asn: %d", resp.StatusCode)
+	}
+}
+
+// TestStatsLiveSetCounters (000008): the five live-set columns count the
+// whole live population, not the ranked subset every other counter in the
+// snapshot uses, and stay NULL on rows written before the columns existed.
+// The rank-scoped bug this guards is silent — tracked_total simply equals
+// domains — so the unranked seed row is the whole point of the test.
+func TestStatsLiveSetCounters(t *testing.T) {
+	srv, pool := newAPI(t) // seedLeaderboard: 10 ranked (d9 disabled) + 1 unranked
+	ctx := context.Background()
+
+	// A pre-000008 row: the five columns did not exist when it was written.
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO stats_global_daily (day, domains) VALUES (current_date - 1, 7)`); err != nil {
+		t.Fatal(err)
+	}
+	if err := crawler.RunStatsRollup(ctx, pool); err != nil {
+		t.Fatal(err)
+	}
+
+	var overview struct {
+		Points []struct {
+			Day           string `json:"day"`
+			Domains       *int32 `json:"domains"`
+			TrackedTotal  *int32 `json:"tracked_total"`
+			PtrSupported  *int32 `json:"ptr_supported"`
+			PtrGraded     *int32 `json:"ptr_graded"`
+			SmtpSupported *int32 `json:"smtp_supported"`
+			SmtpGraded    *int32 `json:"smtp_graded"`
+		} `json:"points"`
+	}
+	getJSON(t, srv.URL+"/stats/overview", &overview)
+	if len(overview.Points) < 2 {
+		t.Fatalf("points = %d, want the pre-migration row and today's rollup", len(overview.Points))
+	}
+	old, latest := overview.Points[0], overview.Points[len(overview.Points)-1]
+
+	if old.TrackedTotal != nil || old.PtrSupported != nil || old.PtrGraded != nil ||
+		old.SmtpSupported != nil || old.SmtpGraded != nil {
+		t.Errorf("pre-migration row must serialize the live-set columns as null, got %+v", old)
+	}
+
+	if latest.Domains == nil || latest.TrackedTotal == nil {
+		t.Fatalf("rollup left the live-set columns null: %+v", latest)
+	}
+	// 9 live ranked (10 ranked, d9 disabled) vs 10 live overall (+ the
+	// rank-NULL campaign apex). Equality here means the CTE inherited the
+	// rank predicate.
+	if *latest.Domains != 9 || *latest.TrackedTotal != 10 {
+		t.Errorf("domains = %d, tracked_total = %d; want 9 and 10 (ranked subset vs live set)",
+			*latest.Domains, *latest.TrackedTotal)
+	}
+
+	// d1 is base_status=supported with ptr_observed=partial: graded, and
+	// counted as supported because a partial PTR still resolves.
+	if latest.PtrSupported == nil || *latest.PtrSupported != 1 ||
+		latest.PtrGraded == nil || *latest.PtrGraded != 1 {
+		t.Errorf("ptr = %v/%v, want 1/1", latest.PtrSupported, latest.PtrGraded)
+	}
+	// d1's smtp_observed is 'partial', which production folds to unsupported
+	// before storage — so it is neither supported nor gradeable here.
+	if latest.SmtpSupported == nil || *latest.SmtpSupported != 0 ||
+		latest.SmtpGraded == nil || *latest.SmtpGraded != 0 {
+		t.Errorf("smtp = %v/%v, want 0/0 (partial is not a stored SMTP value)",
+			latest.SmtpSupported, latest.SmtpGraded)
 	}
 }

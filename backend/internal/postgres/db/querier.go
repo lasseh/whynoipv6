@@ -226,6 +226,19 @@ type Querier interface {
 	SnapshotCountryDaily(ctx context.Context) error
 	// db/query/stats.sql — sqlc query source (layout: 05-schema.md §10.2).
 	// Tick step 2 — the four confirmed-state snapshot upserts (06-ingest.md §10).
+	// The aggregates below run FROM domain WHERE rank IS NOT NULL, so they all
+	// count the ranked subset. `live` deliberately does not inherit that
+	// predicate: tracked_total and the PTR/SMTP pairs describe the whole live
+	// population. Folding them into the main FILTER list would silently
+	// reproduce `domains`, and nothing would catch it until someone compared the
+	// two columns. Referenced five times below, so PG materializes it once.
+	//
+	// The PTR clause admits 'partial' and the SMTP clause does not: infoSMTP
+	// (internal/observe/observe.go) folds a partial EHLO to unsupported before
+	// storage, because a half-working EHLO does not accept mail. The
+	// base_status / mx_status guards are load-bearing — both observation columns
+	// are overwritten on every commit regardless of the confirmed status, so
+	// dropping the guards balloons the denominators.
 	SnapshotGlobalDaily(ctx context.Context) error
 	StatsASNRange(ctx context.Context, arg StatsASNRangeParams) ([]StatsASNRangeRow, error)
 	StatsCampaignRange(ctx context.Context, arg StatsCampaignRangeParams) ([]StatsCampaignRangeRow, error)
