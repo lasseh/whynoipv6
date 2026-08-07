@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import SampleBadge from '@/components/SampleBadge.vue'
-import { TOKYO } from '@/components/charts/chart'
+import { PALETTE } from '@/components/charts/chart'
 
 // One headline number. `tone` carries the verdict so a grid of tiles reads at
 // a glance instead of six identical fuchsia numbers.
@@ -15,16 +15,17 @@ withDefaults(
   { tone: 'brand', sample: false },
 )
 
-// good/bad are the same verdict the charts encode, so they take the same Tokyo
-// Night hues: a Heroes tile in emerald above a Heroes band in Tokyo green reads
-// as two different measurements. `brand` stays the site's fuchsia — it is the
-// wordmark accent, not a verdict — and `muted` stays a plain gray token.
+// good/bad are the same verdict the charts encode, so they take the same hues:
+// a Heroes tile in one green above a Heroes band in another reads as two
+// different measurements. `brand` stays the site's fuchsia — it is the wordmark
+// accent, not a verdict, and the ramp keeps 67° of hue away from it so the two
+// never look like the same signal — and `muted` stays a plain gray token.
 const TONE = {
   brand: 'text-fuchsia-600',
   muted: 'text-gray-200',
 } as const
 
-const TONE_HEX = { good: TOKYO.green, bad: TOKYO.red } as const
+const TONE_HEX = { good: PALETTE.teal, bad: PALETTE.red } as const
 
 const isHex = (tone: string): tone is keyof typeof TONE_HEX => tone in TONE_HEX
 </script>
