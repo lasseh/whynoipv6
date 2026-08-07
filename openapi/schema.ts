@@ -429,6 +429,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/hosting": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The hosting/CDN league table (exact stored counters)
+         * @description Platforms domains are served from, by attributed share. The vocabulary is a curated set derived from the CDN-suffix and hosting-ASN tables in the attribution code, so this is a league among known platforms rather than a market survey: domains whose host could not be attributed carry no provider and are not counted anywhere here.
+         *
+         *     Counters are recomputed by the daily tick over the ranked, non-disabled population, identical to `/asns` and `/providers` so the three registries stay comparable.
+         */
+        get: operations["listHosting"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/providers/{id}": {
         parameters: {
             query?: never;
@@ -1151,6 +1173,27 @@ export interface components {
         };
         ProviderList: {
             items: components["schemas"]["Provider"][];
+            page: components["schemas"]["Page"];
+            meta: components["schemas"]["Meta"];
+        };
+        HostingProvider: {
+            /**
+             * @description The stable identifier, and what `/domains?hosting=` accepts. Group and link on this, never on `name`.
+             * @example cloudflare
+             */
+            slug: string;
+            /**
+             * @description Display string. The stored value is a join key, not a brand.
+             * @example Cloudflare
+             */
+            name: string;
+            count_total: number;
+            count_v6: number;
+            /** @description Synthesized: count_total − count_v6. */
+            count_v4: number;
+        };
+        HostingList: {
+            items: components["schemas"]["HostingProvider"][];
             page: components["schemas"]["Page"];
             meta: components["schemas"]["Meta"];
         };
@@ -2421,6 +2464,30 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProviderList"];
+                    "text/csv": string;
+                };
+            };
+            400: components["responses"]["InvalidParameter"];
+        };
+    };
+    listHosting: {
+        parameters: {
+            query?: {
+                format?: components["parameters"]["format"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The bounded curated registry, exact `meta.count`. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HostingList"];
                     "text/csv": string;
                 };
             };

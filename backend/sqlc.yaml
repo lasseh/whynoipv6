@@ -9,6 +9,7 @@ sql:
       - "db/migrations/000006_curated_subdomains.up.sql"
       - "db/migrations/000008_stats_global_observations.up.sql"
       - "db/migrations/000009_changelog_daily.up.sql"
+      - "db/migrations/000010_hosting_provider.up.sql"
     queries: "db/query"
     engine: "postgresql"
     gen:

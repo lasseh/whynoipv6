@@ -172,6 +172,17 @@ func writeProvidersCSV(w http.ResponseWriter, items []ProviderBody) {
 	writeCSV(w, "providers.csv", []string{"id", "name", "count_total", "count_v6", "count_v4"}, rows)
 }
 
+func writeHostingCSV(w http.ResponseWriter, items []HostingBody) {
+	rows := make([][]string, len(items))
+	for i := range items {
+		h := &items[i]
+		rows[i] = []string{h.Slug, h.Name,
+			strconv.FormatInt(int64(h.CountTotal), 10), strconv.FormatInt(int64(h.CountV6), 10),
+			strconv.FormatInt(int64(h.CountV4), 10)}
+	}
+	writeCSV(w, "hosting.csv", []string{"slug", "name", "count_total", "count_v6", "count_v4"}, rows)
+}
+
 func writeChangelogCSV(w http.ResponseWriter, items []ChangelogItem) {
 	rows := make([][]string, len(items))
 	for i := range items {

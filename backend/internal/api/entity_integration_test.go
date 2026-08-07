@@ -7,9 +7,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/lasseh/whynoipv6/internal/crawler"
 )
 
 const campaignUUID = "11111111-1111-1111-1111-111111111111"
@@ -184,6 +187,104 @@ func TestAsns(t *testing.T) {
 }
 
 // TestProviders (07 §4.6): exact-count league table + scoped list.
+// TestHosting (07 §4.6/§3.4): the hosting league is a bounded curated set
+// with exact meta.count, served from counters the tick recomputes rather
+// than a live GROUP BY over the largest table.
+func TestHosting(t *testing.T) {
+	srv, pool := newAPI(t)
+	ctx := context.Background()
+
+	// seedLeaderboard stamps one domain with an unmapped hosting value; give
+	// it a second so the fallback covers more than a single row, and confirm
+	// a curated slug keeps its display name.
+	if _, err := pool.Exec(ctx,
+		`UPDATE domain SET hosting_provider = 'cloudflare' WHERE host IN ('d3.example', 'd5.example')`); err != nil {
+		t.Fatal(err)
+	}
+	if err := crawler.RunStatsRollup(ctx, pool); err != nil {
+		t.Fatal(err)
+	}
+
+	var got struct {
+		Items []struct {
+			Slug       string `json:"slug"`
+			Name       string `json:"name"`
+			CountTotal int32  `json:"count_total"`
+			CountV6    int32  `json:"count_v6"`
+			CountV4    int32  `json:"count_v4"`
+		} `json:"items"`
+		Page struct {
+			HasMore    bool    `json:"has_more"`
+			NextCursor *string `json:"next_cursor"`
+		} `json:"page"`
+		Meta struct {
+			Count *int64 `json:"count"`
+		} `json:"meta"`
+	}
+	getJSON(t, srv.URL+"/hosting", &got)
+
+	if got.Meta.Count == nil || int(*got.Meta.Count) != len(got.Items) {
+		t.Errorf("meta.count = %v with %d items — bounded sets get an exact count",
+			got.Meta.Count, len(got.Items))
+	}
+	// Bounded, but the page object still ships so the type never varies.
+	if got.Page.HasMore || got.Page.NextCursor != nil {
+		t.Errorf("page = %+v, want has_more false and null cursors", got.Page)
+	}
+
+	bySlug := map[string]int{}
+	for i, item := range got.Items {
+		bySlug[item.Slug] = i
+		if item.CountTotal != item.CountV6+item.CountV4 {
+			t.Errorf("%s: %d != %d + %d", item.Slug, item.CountTotal, item.CountV6, item.CountV4)
+		}
+		if item.Slug == "" || item.Name == "" {
+			t.Errorf("slug and name are both required: %+v", item)
+		}
+	}
+
+	// A curated slug carries its display name, not the raw join key.
+	cf, ok := bySlug["cloudflare"]
+	if !ok {
+		t.Fatalf("cloudflare missing from the league: %+v", got.Items)
+	}
+	if got.Items[cf].Name != "Cloudflare" {
+		t.Errorf("cloudflare name = %q, want the display string", got.Items[cf].Name)
+	}
+	// d3 and d5 are ranked and live; d3 is a hero, d5 is a hero (odd ranks).
+	if got.Items[cf].CountTotal != 2 {
+		t.Errorf("cloudflare count_total = %d, want 2", got.Items[cf].CountTotal)
+	}
+
+	// An unmapped slug appears under its own slug rather than vanishing — a
+	// newly attributed CDN must not silently drop out of the league.
+	unmapped, ok := bySlug["Amazon CloudFront"]
+	if !ok {
+		t.Errorf("unmapped slug dropped from the league: %+v", got.Items)
+	} else if got.Items[unmapped].Name != "Amazon CloudFront" {
+		t.Errorf("unmapped name = %q, want it to fall back to the slug", got.Items[unmapped].Name)
+	}
+
+	// NULL hosting_provider contributes nothing; there is no sentinel value.
+	for _, item := range got.Items {
+		if item.Slug == "unattributed" {
+			t.Error("there is no unattributed sentinel — unattributed hosting is NULL")
+		}
+	}
+
+	// CSV parity with the other league endpoints.
+	resp, body := fetch(t, srv.URL+"/hosting?format=csv")
+	if resp.StatusCode != 200 {
+		t.Fatalf("csv: %d", resp.StatusCode)
+	}
+	if ct := resp.Header.Get("Content-Type"); !strings.HasPrefix(ct, "text/csv") {
+		t.Errorf("csv content-type = %q", ct)
+	}
+	if !strings.HasPrefix(string(body), "slug,name,count_total,count_v6,count_v4") {
+		t.Errorf("csv header = %.60q", body)
+	}
+}
+
 func TestProviders(t *testing.T) {
 	srv := newEntityAPI(t)
 	var env envelope

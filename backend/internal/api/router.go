@@ -147,6 +147,7 @@ func NewRouter(pool *pgxpool.Pool, opts Options) http.Handler { //nolint:gocriti
 	r.Get("/asns/{number}", s.getASN)
 	r.Get("/asns/{number}/domains", s.listASNDomains)
 	r.Get("/providers", s.listProviders)
+	r.Get("/hosting", s.listHosting)
 	r.Get("/providers/{id}", s.getProvider)
 	r.Get("/providers/{id}/domains", s.listProviderDomains)
 

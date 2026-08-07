@@ -182,6 +182,27 @@ CREATE TABLE country (
 -- Must precede domain (domain.dns_provider_id is a nullable FK). The crawler
 -- resolves a domain's provider by longest matching nameserver-host suffix in
 -- ns_suffixes at scan commit (06); binary inclusion + counts only, no scores.
+-- 000010. The hosting/CDN registry behind GET /hosting. §4.6 requires a stats
+-- source for this league rather than a live GROUP BY over `domain`, so the
+-- counters are recomputed by the daily tick beside the asn and dns_provider
+-- pairs, over the same population (ranked, not disabled) and the same v6
+-- predicate (classification IN ('partial','hero')) — all three render in one
+-- switcher with shared axes, so they have to mean the same thing.
+--
+-- Unlike dns_provider, slug and name are separate: slug is the join key
+-- domain.hosting_provider stores, name is display only. The UNIQUE on slug is
+-- deliberate — dns_provider omits it on name despite upserting by name.
+-- Seeded by migration from the compile-time vocabulary in
+-- internal/ingest/hosting.go; the tick upserts unknown slugs with name = slug
+-- so a newly attributed CDN joins the league instead of disappearing.
+CREATE TABLE hosting_provider (
+  id          BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  slug        TEXT NOT NULL UNIQUE,
+  name        TEXT NOT NULL,
+  count_total INT NOT NULL DEFAULT 0,
+  count_v6    INT NOT NULL DEFAULT 0
+);
+
 CREATE TABLE dns_provider (
   id          BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   name        TEXT NOT NULL,
@@ -319,6 +340,10 @@ CREATE INDEX idx_domain_tld ON domain (tld, classification, rank)
   WHERE rank IS NOT NULL AND NOT disabled;
 CREATE INDEX idx_domain_dns_provider ON domain (dns_provider_id, classification, rank)
   WHERE dns_provider_id IS NOT NULL AND rank IS NOT NULL AND NOT disabled;
+-- 000010: ?hosting= was a public filter with no index until the hosting league
+-- landed — an OPEN-2 violation this closes with the same shape as its siblings.
+CREATE INDEX idx_domain_hosting_provider ON domain (hosting_provider, classification, rank)
+  WHERE hosting_provider IS NOT NULL AND rank IS NOT NULL AND NOT disabled;
 
 -- Table storage settings: the claim/commit cycle updates every active row >=2x/day —
 -- claimed_at at claim, next_check_at + status columns at commit; the commit update

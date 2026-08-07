@@ -125,6 +125,8 @@ func RunStatsRollup(ctx context.Context, pool *pgxpool.Pool) error {
 		{"recompute_asn", q.RecomputeASNCounters},
 		{"reset_provider", q.ResetProviderCounters},
 		{"recompute_provider", q.RecomputeProviderCounters},
+		{"reset_hosting", q.ResetHostingCounters},
+		{"recompute_hosting", q.RecomputeHostingCounters},
 	}
 	for _, s := range steps {
 		if err := s.fn(ctx); err != nil {

@@ -532,6 +532,14 @@ type DomainResource struct {
 	LastSeen       pgtype.Timestamptz `json:"last_seen"`
 }
 
+type HostingProvider struct {
+	ID         int64  `json:"id"`
+	Slug       string `json:"slug"`
+	Name       string `json:"name"`
+	CountTotal int32  `json:"count_total"`
+	CountV6    int32  `json:"count_v6"`
+}
+
 type ResourceHost struct {
 	ID               int64              `json:"id"`
 	Host             string             `json:"host"`

@@ -13,10 +13,15 @@ import ScatterChart from '@/components/charts/ScatterChart.vue'
 import Sparkline from '@/components/charts/Sparkline.vue'
 import { TRACK_COLOR, fmtCompact, fmtFull, fmtPercent, shareColor } from '@/components/charts/chart'
 
-import { getNetworkStats, getOverviewStats, listASNs, listProviders } from '@/api'
-import type { ASN, GlobalStatsPoint, NetworkTrend, Provider } from '@/api'
+import {
+  getNetworkStats,
+  getOverviewStats,
+  listASNs,
+  listHostingProviders,
+  listProviders,
+} from '@/api'
+import type { ASN, GlobalStatsPoint, HostingProvider, NetworkTrend, Provider } from '@/api'
 import { ApiProblem } from '@/api/problem'
-import { hostingLeague } from '@/fixtures/metrics'
 
 // Three registries answer the same question about three different entities:
 // who carries a lot of domains, and how many of them answer over IPv6. They
@@ -41,6 +46,7 @@ const state = reactive({
   providers: [] as Provider[],
   overview: null as GlobalStatsPoint | null,
   networks: [] as NetworkTrend[],
+  hosting: [] as HostingProvider[],
   isLoading: true,
 })
 
@@ -91,8 +97,8 @@ async function load() {
   }
 }
 
-// The DNS registry is a small fixed list that no filter here touches, so it is
-// fetched once rather than alongside every ASN refetch.
+// The DNS and hosting registries are small fixed lists that no filter here
+// touches, so they are fetched once rather than alongside every ASN refetch.
 async function loadProviders() {
   try {
     const response = await listProviders()
@@ -100,6 +106,15 @@ async function loadProviders() {
   } catch {
     // A provider outage should not blank the network league next to it.
     state.providers = []
+  }
+}
+
+async function loadHosting() {
+  try {
+    const response = await listHostingProviders()
+    state.hosting = response.items
+  } catch {
+    state.hosting = []
   }
 }
 
@@ -131,6 +146,7 @@ watch([routeQ, orderBy], ([q]) => {
 })
 void load()
 void loadProviders()
+void loadHosting()
 void loadOverview()
 void loadNetworks()
 
@@ -179,12 +195,16 @@ const dnsRows = computed<Row[]>(() =>
   })),
 )
 
-const hostingRows: Row[] = hostingLeague.map((h) => ({
-  key: h.name,
-  name: h.name,
-  total: h.domains,
-  v6: h.apexV6,
-}))
+// Keyed on the slug, not the display name: the slug is what /domains?hosting=
+// takes and the only stable identifier.
+const hostingRows = computed<Row[]>(() =>
+  state.hosting.map((h) => ({
+    key: h.slug,
+    name: h.name,
+    total: h.count_total,
+    v6: h.count_v6,
+  })),
+)
 
 const ACTIVE: Record<Entity, { rows: () => Row[]; noun: string; sample: boolean; blurb: string }> =
   {
@@ -201,10 +221,11 @@ const ACTIVE: Record<Entity, { rows: () => Row[]; noun: string; sample: boolean;
       blurb: 'Who runs the zone, and whether the domains in it resolve to an AAAA.',
     },
     hosting: {
-      rows: () => hostingRows,
+      rows: () => hostingRows.value,
       noun: 'platforms',
-      sample: true,
-      blurb: 'The platform serving the site, which is usually the one that decides.',
+      sample: false,
+      blurb:
+        'The platform serving the site, which is usually the one that decides. A league among the platforms we can attribute, not a market survey.',
     },
   }
 

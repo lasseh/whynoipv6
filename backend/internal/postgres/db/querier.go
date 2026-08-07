@@ -174,6 +174,10 @@ type Querier interface {
 	// The nightly dataset export (07 §5.3): one parameterized read covers the
 	// three tiers — ranked_only for top100k/top1m, max_rank 0 = unbounded.
 	ExportRows(ctx context.Context, arg ExportRowsParams) ([]ExportRowsRow, error)
+	// The API hosting league (07 §4.6): exact stored counters, count_v4
+	// synthesized server-side. Rows that attribution has never produced stay at
+	// zero rather than being hidden — the seed set is the documented vocabulary.
+	HostingLeaderboard(ctx context.Context) ([]HostingLeaderboardRow, error)
 	InsertChangelog(ctx context.Context, arg InsertChangelogParams) error
 	// db/query/metrics.sql — sqlc query source (layout: 05-schema.md §10.2).
 	InsertCrawlerMetrics(ctx context.Context, arg InsertCrawlerMetricsParams) error
@@ -208,12 +212,28 @@ type Querier interface {
 	RankedDomainCount(ctx context.Context) (int64, error)
 	RecomputeASNCounters(ctx context.Context) error
 	RecomputeCountryCounters(ctx context.Context) error
+	// Upsert rather than UPDATE...FROM: a slug newly emitted by the attribution
+	// code has no seeded row yet, and it must join the league under its own slug
+	// as a display name rather than vanish. ON CONFLICT touches only the
+	// counters, so the curated display names survive every tick.
+	RecomputeHostingCounters(ctx context.Context) error
 	RecomputeProviderCounters(ctx context.Context) error
 	// Tick step 3 — ASN counter recompute (06-ingest.md §10.6).
 	ResetASNCounters(ctx context.Context) error
 	// Tick step 3 — country counter recompute (06-ingest.md §10.6): reset, then
 	// recompute over the publicly-ranked scope.
 	ResetCountryCounters(ctx context.Context) error
+	// db/query/hosting.sql — hosting/CDN registry (layout: 05-schema.md §10.2).
+	// Tick step 3 — hosting counter recompute, beside the ASN and DNS-provider
+	// pairs (06-ingest.md §10.6).
+	//
+	// Population and v6 predicate deliberately match RecomputeASNCounters and
+	// RecomputeProviderCounters exactly: ranked, not disabled, and v6 meaning
+	// classification IN ('partial','hero'). All three registries render in one
+	// switcher on /metrics with shared axes and a shared colour ramp, so a
+	// different population or a different v6 definition here would silently
+	// change what the chart means when the reader switches entity.
+	ResetHostingCounters(ctx context.Context) error
 	// Tick step 3 — DNS-provider counter recompute (06-ingest.md §10.6).
 	ResetProviderCounters(ctx context.Context) error
 	ResourceHostByHost(ctx context.Context, host string) (ResourceHostByHostRow, error)

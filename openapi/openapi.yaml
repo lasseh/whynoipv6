@@ -445,6 +445,33 @@ paths:
             text/csv:
               schema: { type: string }
         "400": { $ref: "#/components/responses/InvalidParameter" }
+  /hosting:
+    get:
+      operationId: listHosting
+      tags: [providers]
+      summary: The hosting/CDN league table (exact stored counters)
+      description: >-
+        Platforms domains are served from, by attributed share. The vocabulary
+        is a curated set derived from the CDN-suffix and hosting-ASN tables in
+        the attribution code, so this is a league among known platforms rather
+        than a market survey: domains whose host could not be attributed carry
+        no provider and are not counted anywhere here.
+
+
+        Counters are recomputed by the daily tick over the ranked, non-disabled
+        population, identical to `/asns` and `/providers` so the three
+        registries stay comparable.
+      parameters:
+        - $ref: "#/components/parameters/format"
+      responses:
+        "200":
+          description: The bounded curated registry, exact `meta.count`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HostingList" }
+            text/csv:
+              schema: { type: string }
+        "400": { $ref: "#/components/responses/InvalidParameter" }
   /providers/{id}:
     get:
       operationId: getProvider
@@ -1472,6 +1499,33 @@ components:
         items:
           type: array
           items: { $ref: "#/components/schemas/Provider" }
+        page: { $ref: "#/components/schemas/Page" }
+        meta: { $ref: "#/components/schemas/Meta" }
+
+    HostingProvider:
+      type: object
+      required: [slug, name, count_total, count_v6, count_v4]
+      properties:
+        slug:
+          type: string
+          description: >-
+            The stable identifier, and what `/domains?hosting=` accepts. Group
+            and link on this, never on `name`.
+          example: cloudflare
+        name:
+          type: string
+          description: Display string. The stored value is a join key, not a brand.
+          example: Cloudflare
+        count_total: { type: integer }
+        count_v6: { type: integer }
+        count_v4: { type: integer, description: "Synthesized: count_total − count_v6." }
+    HostingList:
+      type: object
+      required: [items, page, meta]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/HostingProvider" }
         page: { $ref: "#/components/schemas/Page" }
         meta: { $ref: "#/components/schemas/Meta" }
 

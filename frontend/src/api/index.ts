@@ -17,6 +17,7 @@ export type HistoryPoint = Schemas['HistoryPoint']
 export type Country = Schemas['Country']
 export type ASN = Schemas['ASN']
 export type Provider = Schemas['Provider']
+export type HostingProvider = Schemas['HostingProvider']
 export type CampaignListItem = Schemas['CampaignListItem']
 export type CampaignDetail = Schemas['CampaignDetail']
 export type ShameItem = Schemas['ShameItem']
@@ -119,6 +120,9 @@ export const listASNs = (query?: GetQuery<'/asns'>, signal?: AbortSignal) =>
 
 export const listProviders = (query?: GetQuery<'/providers'>, signal?: AbortSignal) =>
   get('/providers', { query, signal })
+
+export const listHostingProviders = (query?: GetQuery<'/hosting'>, signal?: AbortSignal) =>
+  get('/hosting', { query, signal })
 
 export const getVisitorIP = (signal?: AbortSignal) => get('/ip', { signal })
 
