@@ -89,8 +89,11 @@ _Status: Round 3.0 — API redesign folded in (docs/history/api-design-research.
 ### 2.3 Roles and grants (000007)
 
 `whynoipv6_ro` is a read-only login role, created by `000007_readonly_role`. It exists
-so Grafana stops connecting as the owning superuser (09-ops.md §12.1–12.2): the
-dashboards only ever `SELECT`, and a public dashboard makes the difference material.
+so Grafana stops connecting as the owning superuser (09-ops.md §12.2): the dashboards
+only ever `SELECT`, so the superuser connection buys nothing and costs blast radius.
+(The public dashboard that first motivated it is retired — §12.1 — but the private
+operational dashboards still connect as superuser, so the role's purpose stands. It is
+not usable by the API, which writes `check_job` on every live check.)
 
 Roles are **cluster-level state while migrations run per-database**, which drives three
 properties of that file:

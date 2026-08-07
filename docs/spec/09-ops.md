@@ -975,63 +975,40 @@ warnings, the consensus fast-lane/provider breakers, backup/WAL/export failures
 the weekly service-candidate digest, and campaign-sync reports. `ops.webhook_url` empty =
 no webhook (dev).
 
-### 12.1 The public dashboard (`wni6-public`)
+### 12.1 The public dashboard (retired)
 
-`deploy/grafana/dev/dashboards/public-adoption.json` is the one dashboard meant for
-people who are not us. Everything else in the folder is operational and stays behind
-login.
+There is no public dashboard. `wni6-public` and `snapshot-public.py` were removed once
+`/metrics` shipped: the site now publishes the same adoption numbers from its own API,
+under the same contract as the rest of the site, so a second public surface with its own
+sharing model and its own freshness story was redundant.
 
-**What may go on it.** Two rules, both load-bearing:
+Every dashboard in `deploy/grafana/` is now operational and stays behind login. Grafana
+has no anonymous read path, which is the state to preserve — do not re-enable public
+dashboards or snapshots to publish adoption numbers. That job belongs to `/metrics` and
+the `/stats/*` endpoints (07-api.md §4.10), which are cached, contract-tested, and carry
+`meta.source` so a reader can tell measurement from confirmed state.
 
-1. *It describes the state of IPv6, not the state of our infrastructure.* Country/ASN/
-   TLD/rank-band adoption, the changelog, top shame: yes. Queue depth, error ratios,
-   worker identities, resolver stats, database sizes, Tranco import provenance, the
-   service-candidate queue, flapping domains: no. Crawl **scale and freshness**
-   (domains checked, checks per second, data age) is deliberately included — it is
-   what makes the numbers credible — but crawl **health** is not.
-2. *It never touches `scan` or `scan_detail`.* Those hypertables cost ~1.6 s per query
-   and a public dashboard is unauthenticated, so an anonymous visitor decides how
-   often they run. Use `stats_global_daily`, `stats_country_daily`, `stats_asn_daily`,
-   `scan_daily_adoption`, the denormalised `asn`/`country`/`dns_provider` counters,
-   `top_shame`, `changelog`, and `domain`.
+Retirement was mechanical, and the two live artifacts are worth naming because neither
+lives in git — both are Grafana's own database state and outlast any file deletion:
 
-Also: `links` stays empty and the `whynoipv6` tag is omitted, or the dashboard dropdown
-advertises the titles of the private dashboards to anonymous visitors. Every panel needs
-an explicit `id` — file provisioning does not assign them, and the public query endpoint
-resolves panels by id, so a dashboard without ids renders with no data.
+- the public-dashboard share config (`DELETE /api/dashboards/uid/<uid>/public-dashboards/<publicUid>`), and
+- any published snapshot (`DELETE /api/snapshots/<key>`).
 
-**Enabling sharing.** The share config lives in Grafana's own database, not in the
-provisioned file, so it does not survive a Grafana volume rebuild and is not in git:
-
-```sh
-curl -u admin:admin -X POST \
-  http://localhost:3000/api/dashboards/uid/wni6-public/public-dashboards/ \
-  -H 'Content-Type: application/json' \
-  -d '{"isEnabled":true,"share":"public","annotationsEnabled":false,"timeSelectionEnabled":false}'
-```
-
-The response carries an `accessToken`; the URL is `/public-dashboards/<accessToken>`.
-`timeSelectionEnabled:false` is intentional: it keeps visitors on one time range, which
-keeps the query cache warm.
-
-Grafana runs only the panel's own stored SQL and ignores any query sent in the request
-body, so the endpoint is not an injection surface (verified: posting a
-`SELECT ... FROM check_job` against a valid panel id returns that panel's own result).
-
-**Static alternative.** `deploy/grafana/snapshot-public.py` publishes the dashboard as a
-Grafana *snapshot*: it runs each panel's query once, embeds the results, strips the SQL
-and the datasource, and refuses to publish if any survive. Viewers never reach Postgres,
-so there is no query cost and no live path to the database at all. It also drops
-`meta.executedQueryString`, which Grafana otherwise stamps into every frame and which
-would publish our table and column names. Each run rotates: new snapshot published, the
-previous one deleted. Run it on a timer; the tradeoff is freshness, not safety.
+Deleting the provisioned JSON alone leaves both serving.
 
 ### 12.2 The read-only role (`whynoipv6_ro`)
 
 The `whynoipv6-pg` datasource still connects as `whynoipv6`, which is a Postgres
 **superuser**. The dashboards only ever `SELECT`, so that gap buys nothing: it just
-means the blast radius of a Grafana bug or a mis-scoped public panel is the entire
-database rather than a read of the tables the dashboards already publish.
+means the blast radius of a Grafana bug is the entire database rather than a read of the
+tables the dashboards already publish.
+
+Retiring the public dashboard does not retire this role — it is the private dashboards'
+connection that is still over-privileged, and that is unchanged. Note what the role is
+*not* for: the API cannot use it. `POST /check` inserts a `check_job` row
+(`CheckJobInsert`, via the advisory-locked enqueue in `internal/api/checkstore.go`), and
+`whynoipv6_ro` runs `default_transaction_read_only = on` with no `INSERT` grant
+anywhere, so the live check would fail. The API needs its read-write role.
 
 `whynoipv6_ro` (migration 000007, schema detail in 05-schema.md §2.3) is the
 replacement. It can read every table in `public` and hold no other privilege:

@@ -19,8 +19,8 @@ datasources:
       # Grafana's own default ceiling is far higher, so leaving these unset
       # would let the pool open more connections than the role is allowed and
       # fail with "too many connections for role" the moment §12.2's cutover
-      # happens. A public dashboard is exactly the workload that spikes
-      # concurrency, so this is pinned before the switch, not after.
+      # happens. Pinned before the switch, not after — the cutover is still
+      # pending and this is the one prerequisite that has to land first.
       maxOpenConns: 16
       maxIdleConns: 8
       connMaxLifetime: 14400
