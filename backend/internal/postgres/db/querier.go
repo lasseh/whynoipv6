@@ -100,6 +100,26 @@ type Querier interface {
 	// The in-memory country.tld -> id map for insert-time/commit attribution
 	// (06-ingest.md §6.5); loaded once per run.
 	CountryTLDMap(ctx context.Context) ([]CountryTLDMapRow, error)
+	// The public throughput read behind GET /stats/crawler (07 §4.10).
+	//
+	// The SELECT list is the entire point of this query and must stay these two
+	// values. crawler_metrics is internal telemetry: worker, run_id, queue_depth,
+	// qps, p50_ms/p99_ms, dim_counters (which carries the lease_lost fence-abort
+	// counter) and is_final all describe how the crawler is deployed, not what it
+	// found, and none of them is public. A contract test asserts negatively that
+	// those names never appear in the response — widening this list will fail it.
+	//
+	// checked_24h sums the checkpoint deltas (processed resets at every
+	// checkpoint, so summing across workers and rows is correct) and counts check
+	// operations attempted, including retries and failures — deliberately not
+	// distinct hosts, so it can exceed the tracked-domain count. is_final rows are
+	// included: they carry the shutdown tail delta.
+	//
+	// latest is the newest observation regardless of the 24h window, so a dead
+	// crawler shows a stale timestamp rather than null. The idle loop checkpoints
+	// every 5 minutes even on a drained frontier, so staleness means a dead
+	// process, not a quiet one.
+	CrawlerThroughput(ctx context.Context) (CrawlerThroughputRow, error)
 	// db/query/curated_subdomain.sql — sqlc query source (layout: 05-schema.md §10.2).
 	// Membership of the curated subdomain lists (subdomains/<apex>.yml, 06): adds
 	// first, then one set-based removal of everything no longer listed, in the sync

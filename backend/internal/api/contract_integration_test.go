@@ -154,6 +154,7 @@ func TestContractResponses(t *testing.T) {
 		"GET /badge/{host}.json": {url: "/badge/jobonly.no.json"},
 		"GET /datasets":          {url: "/datasets"},
 		"GET /stats/overview":    {url: "/stats/overview"},
+		"GET /stats/crawler":     {url: "/stats/crawler"},
 		"GET /ip":                {url: "/ip"},
 		"POST /check":            {url: "/check", method: http.MethodPost, body: `{"host":"fresh.no"}`, status: http.StatusAccepted},
 		"GET /check/{id}":        {url: "/check/" + strconv.FormatInt(jobID, 10)},

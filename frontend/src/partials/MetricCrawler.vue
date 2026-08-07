@@ -18,16 +18,17 @@ import {
   pluck,
 } from '@/components/charts/chart'
 
-import { getOverviewStats } from '@/api'
-import type { GlobalStatsPoint } from '@/api'
+import { getCrawlerStats, getOverviewStats } from '@/api'
+import type { CrawlerStats, GlobalStatsPoint } from '@/api'
 import { ApiProblem } from '@/api/problem'
-import { adoptionDelta, crawlerToday } from '@/fixtures/metrics'
+import { adoptionDelta } from '@/fixtures/metrics'
 
 // GET /stats/overview is fetched once and used twice: the last point drives the
 // tiles, the whole series drives the two charts. The old version threw the
 // series away after reading `.at(-1)`, which is why this page had no history on
 // it despite already holding a fortnight of daily snapshots.
 const points = ref<GlobalStatsPoint[]>([])
+const crawler = ref<CrawlerStats | null>(null)
 const isLoading = ref(true)
 const error = ref<ApiProblem | null>(null)
 
@@ -59,7 +60,21 @@ async function load() {
   }
 }
 
-onMounted(() => void load())
+// Throughput is a separate, continuously-moving resource on its own cache
+// class. Its failure must not blank the adoption tiles beside it, so it is
+// fetched independently rather than folded into load().
+async function loadCrawler() {
+  try {
+    crawler.value = await getCrawlerStats()
+  } catch {
+    crawler.value = null
+  }
+}
+
+onMounted(() => {
+  void load()
+  void loadCrawler()
+})
 
 const latest = computed(() => points.value.at(-1) ?? null)
 const days = computed(() => points.value.map((p) => p.day))
@@ -109,6 +124,18 @@ const DELTA_SERIES = [
 ] as const
 
 const deltaValues = [adoptionDelta.map((d) => d.gained), adoptionDelta.map((d) => d.lost)]
+
+// The idle loop checkpoints every five minutes even with nothing to do, so a
+// timestamp hours old means a dead process rather than a quiet one. Worth
+// saying on the tile: it is the only data-age signal the page has.
+const STALE_AFTER_HOURS = 3
+const crawlerHint = computed(() => {
+  const base = 'The whole set sweeps every 24 hours, re-checks on top.'
+  const latest = crawler.value?.latest
+  if (!latest) return base
+  const hours = Math.floor((Date.now() - new Date(latest).getTime()) / 3_600_000)
+  return hours >= STALE_AFTER_HOURS ? `${base} Last checkpoint ${hours}h ago.` : base
+})
 
 // The advisory checks come off the same /stats/overview point as everything
 // else. They are null on snapshots taken before the columns existed, and pct()
@@ -184,11 +211,10 @@ const smtpPaperOnly = computed(() => {
         tone="bad"
       />
       <StatTile
-        :value="fmtCompact(crawlerToday.checked)"
+        :value="fmtCompact(crawler?.checked_24h)"
         label="Hosts checked today"
-        hint="The whole set sweeps every 24 hours, re-checks on top."
+        :hint="crawlerHint"
         tone="muted"
-        sample
       />
     </div>
 

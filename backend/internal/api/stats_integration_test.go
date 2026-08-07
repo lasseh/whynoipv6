@@ -4,6 +4,8 @@ package api_test
 
 import (
 	"context"
+	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -138,6 +140,90 @@ func TestStatsEndpoints(t *testing.T) {
 	}
 	if resp := getJSON(t, srv.URL+"/asns/99999/stats", &problem); resp.StatusCode != 404 {
 		t.Errorf("unknown asn: %d", resp.StatusCode)
+	}
+}
+
+// TestCrawlerStats (07 §4.10): aggregate throughput and nothing else.
+//
+// The negative assertion is the reason this endpoint has its own test.
+// crawler_metrics describes how the fleet is deployed — per-worker identity,
+// queue depth, lease losses — and a later "while we're here, expose qps too"
+// is the failure mode. Serializing the whole row is one careless SELECT away,
+// so the test reads the raw body and fails on the column names themselves.
+func TestCrawlerStats(t *testing.T) {
+	srv, pool := newAPI(t)
+	ctx := context.Background()
+
+	// Empty table first: a fresh install has never run the crawler.
+	var empty struct {
+		Checked24h int64   `json:"checked_24h"`
+		Latest     *string `json:"latest"`
+		Meta       struct {
+			Source string `json:"source"`
+		} `json:"meta"`
+	}
+	if resp := getJSON(t, srv.URL+"/stats/crawler", &empty); resp.StatusCode != 200 {
+		t.Fatalf("empty crawler_metrics: %d, want 200 not 404", resp.StatusCode)
+	}
+	if empty.Checked24h != 0 || empty.Latest != nil {
+		t.Errorf("empty table = %d checked / latest %v, want 0 / null", empty.Checked24h, empty.Latest)
+	}
+
+	// Two workers checkpointing inside the window, one shutdown row carrying
+	// the tail delta, and one row aged out of it. processed is a per-interval
+	// delta, so the window sums to 30 and the old row must not contribute.
+	seed := `INSERT INTO crawler_metrics (ts, run_id, worker, processed, succeeded, failed,
+	                                      qps, p50_ms, p99_ms, queue_depth, is_final)
+	 VALUES (now() - interval '2 hours',  gen_random_uuid(), 'host-a:1', 10, 9, 1, 4.5, 30, 90, 5, false),
+	        (now() - interval '1 hour',   gen_random_uuid(), 'host-b:2', 15, 15, 0, 5.5, 31, 91, 6, false),
+	        (now() - interval '30 minutes', gen_random_uuid(), 'host-b:2', 5, 5, 0, 5.0, 32, 92, 0, true),
+	        (now() - interval '30 hours', gen_random_uuid(), 'host-c:3', 999, 999, 0, 9.9, 33, 93, 7, false)`
+	if _, err := pool.Exec(ctx, seed); err != nil {
+		t.Fatal(err)
+	}
+
+	resp, body := fetch(t, srv.URL+"/stats/crawler")
+	if resp.StatusCode != 200 {
+		t.Fatalf("status = %d", resp.StatusCode)
+	}
+	var got struct {
+		Checked24h int64   `json:"checked_24h"`
+		Latest     *string `json:"latest"`
+		Meta       struct {
+			Source string `json:"source"`
+		} `json:"meta"`
+	}
+	if err := json.Unmarshal(body, &got); err != nil {
+		t.Fatal(err)
+	}
+	// 10 + 15 + 5 in-window (is_final included); the 30h-old 999 excluded.
+	if got.Checked24h != 30 {
+		t.Errorf("checked_24h = %d, want 30 (deltas summed across workers, is_final counted)", got.Checked24h)
+	}
+	if got.Latest == nil {
+		t.Error("latest = null with rows present")
+	}
+	if got.Meta.Source != "telemetry" {
+		t.Errorf("meta.source = %q, want telemetry — this is fleet work, not confirmed state", got.Meta.Source)
+	}
+
+	// The whole point: internal telemetry must not leak, by any name.
+	for _, leak := range []string{
+		"worker", "run_id", "queue_depth", "qps", "p50_ms", "p99_ms",
+		"dim_counters", "is_final", "succeeded", "failed", "geoip_build_epoch",
+	} {
+		if strings.Contains(string(body), leak) {
+			t.Errorf("response leaks internal telemetry %q: %s", leak, body)
+		}
+	}
+
+	// Not generation-scoped: a 24h counter behind the stats class would
+	// 304-freeze until the next daily tick.
+	if cc := resp.Header.Get("Cache-Control"); cc != "public, max-age=60" {
+		t.Errorf("Cache-Control = %q, want the short class", cc)
+	}
+	if etag := resp.Header.Get("ETag"); etag != "" {
+		t.Errorf("ETag = %q, want none on a continuously moving counter", etag)
 	}
 }
 

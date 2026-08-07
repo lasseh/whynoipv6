@@ -721,6 +721,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/stats/crawler": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Rolling crawler throughput
+         * @description Aggregate throughput only. `crawler_metrics` is internal telemetry and no per-worker, queue, latency or lease detail is exposed here. Not a series and not generation-scoped: the window rolls continuously, so this route carries `Cache-Control: public, max-age=60` and no ETag rather than the §6.1 stats class.
+         */
+        get: operations["getCrawlerStats"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/datasets": {
         parameters: {
             query?: never;
@@ -881,8 +901,11 @@ export interface components {
             count_estimate?: number;
             /** @example CC-BY-NC-4.0 */
             license: string;
-            /** @description `confirmed_state` on every time series. */
-            source?: string;
+            /**
+             * @description `confirmed_state` on every time series. `telemetry` on `/stats/crawler`, which reports work the fleet did rather than measured adoption and is never reconciled with the series.
+             * @enum {string}
+             */
+            source?: "confirmed_state" | "telemetry";
         };
         DetailMeta: {
             /** Format: date-time */
@@ -1191,6 +1214,20 @@ export interface components {
             smtp_supported?: number | null;
             /** @description Denominator for `smtp_supported` — MX where SMTP was gradeable at all. */
             smtp_graded?: number | null;
+        };
+        /** @description A single resource, so the object carries a sibling `meta` rather than a `points` or `items` envelope. */
+        CrawlerStats: {
+            /**
+             * Format: int64
+             * @description Check operations attempted in the last 24 hours — not distinct hosts. A host re-checked by a live check, a campaign refresh or a retry counts each time, so this can exceed the tracked-domain count, and failed attempts are included.
+             */
+            checked_24h: number;
+            /**
+             * Format: date-time
+             * @description Newest checkpoint, regardless of the 24-hour window, so a stalled crawler reads as a stale timestamp rather than null. Null only where the crawler has never run.
+             */
+            latest: string | null;
+            meta: components["schemas"]["Meta"];
         };
         GlobalStatsSeries: {
             points: components["schemas"]["GlobalStatsPoint"][];
@@ -2699,6 +2736,26 @@ export interface operations {
                 };
             };
             400: components["responses"]["InvalidParameter"];
+        };
+    };
+    getCrawlerStats: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description `meta.source` is `telemetry` — this is work the fleet did, not confirmed state, and it is never reconciled with the adoption series. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CrawlerStats"];
+                };
+            };
         };
     };
     getDatasets: {

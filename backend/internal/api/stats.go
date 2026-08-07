@@ -19,6 +19,13 @@ import (
 // measurement-flavored scan_daily_adoption cagg is never exposed (OPEN-5).
 const sourceConfirmedState = "confirmed_state"
 
+// sourceTelemetry labels GET /stats/crawler alone. Crawler throughput is
+// neither confirmed state nor the measurement cagg — it is how much work the
+// fleet did. statsMeta hardcodes confirmed_state for every series, so this
+// endpoint deliberately builds its own meta rather than reusing it; labelling
+// telemetry as confirmed_state is exactly the conflation §4.10 forbids.
+const sourceTelemetry = "telemetry"
+
 // weeklySample keeps the latest snapshot per ISO week (07 §4.10 — a sample,
 // never an average), preserving ascending order. days must be ascending;
 // the returned indexes select the surviving rows.
@@ -143,6 +150,53 @@ func (s *Server) getStatsOverview(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	WriteJSON(w, http.StatusOK, PointsEnvelope{Points: sampleWeekly(points, days, weekly), Meta: meta})
+}
+
+// CrawlerStats is GET /stats/crawler: a single resource, so it takes §2.4's
+// object-with-sibling-meta shape rather than {points} or {items}.
+//
+// Two numbers, by design — see the SELECT-list note on CrawlerThroughput in
+// metrics.sql for why nothing else in crawler_metrics is public.
+type CrawlerStats struct {
+	// Checked24h counts check operations attempted in the last 24 hours,
+	// not distinct hosts: a host re-checked by a live check, a campaign
+	// refresh or a retry counts each time, so this can exceed the tracked
+	// domain count. Failed attempts count too — it is work done, not work
+	// that succeeded.
+	Checked24h int64 `json:"checked_24h"`
+	// Latest is the newest checkpoint regardless of the window, so a dead
+	// crawler reads as a stale timestamp rather than null. Null only on a
+	// fresh install that has never run.
+	Latest *time.Time `json:"latest"`
+	Meta   Meta       `json:"meta"`
+}
+
+// getCrawlerStats is GET /stats/crawler — rolling throughput, not a series.
+// Not folded into /stats/overview because the lifecycles differ:
+// stats_global_daily is a once-a-day snapshot, this is a rolling 24-hour
+// window that moves continuously.
+func (s *Server) getCrawlerStats(w http.ResponseWriter, r *http.Request) {
+	row, err := s.q.CrawlerThroughput(r.Context())
+	if err != nil {
+		InternalError(w, r, err)
+		return
+	}
+	generation, asOf, err := s.generation(r.Context())
+	if err != nil {
+		InternalError(w, r, err)
+		return
+	}
+	// as_of answers "when was this number true", which for a rolling counter
+	// is the newest checkpoint — not when the daily stats job last ran.
+	var latest *time.Time
+	if row.Latest.Valid {
+		observed := row.Latest.Time.UTC()
+		latest, asOf = &observed, observed
+	}
+	meta := NewMeta(asOf, generation)
+	meta.Source = sourceTelemetry
+	CacheShort(w)
+	WriteJSON(w, http.StatusOK, CrawlerStats{Checked24h: row.Checked24h, Latest: latest, Meta: meta})
 }
 
 // CountryStatsPoint mirrors stats_country_daily.

@@ -199,6 +199,14 @@ func CacheChangelog(w http.ResponseWriter, r *http.Request, maxTS time.Time) boo
 	return applyETag(w, r, fmt.Sprintf(`W/"cl%d-%s"`, maxTS.UnixNano(), queryFingerprint(r)))
 }
 
+// CacheShort: rolling counters that are not generation-scoped (07 §6.1
+// deviation, GET /stats/crawler). No ETag — the value moves with every
+// checkpoint, and the generation-seeded list class would 304-freeze a
+// "last 24 hours" number until the next daily stats tick.
+func CacheShort(w http.ResponseWriter) {
+	w.Header().Set("Cache-Control", "public, max-age=60")
+}
+
 // NoStore marks the no-store class (POST /check, in-flight poll, /ip, health).
 func NoStore(w http.ResponseWriter) {
 	w.Header().Set("Cache-Control", "no-store")

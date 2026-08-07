@@ -687,6 +687,27 @@ paths:
               schema: { $ref: "#/components/schemas/GlobalStatsSeries" }
         "400": { $ref: "#/components/responses/InvalidParameter" }
 
+  /stats/crawler:
+    get:
+      operationId: getCrawlerStats
+      tags: [stats]
+      summary: Rolling crawler throughput
+      description: >-
+        Aggregate throughput only. `crawler_metrics` is internal telemetry and
+        no per-worker, queue, latency or lease detail is exposed here. Not a
+        series and not generation-scoped: the window rolls continuously, so
+        this route carries `Cache-Control: public, max-age=60` and no ETag
+        rather than the §6.1 stats class.
+      responses:
+        "200":
+          description: >-
+            `meta.source` is `telemetry` — this is work the fleet did, not
+            confirmed state, and it is never reconciled with the adoption
+            series.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CrawlerStats" }
+
   /datasets:
     get:
       operationId: getDatasets
@@ -1116,7 +1137,13 @@ components:
         count: { type: integer, format: int64, description: Exact — bounded curated sets only. }
         count_estimate: { type: integer, format: int64, description: Approximate — everything else. }
         license: { type: string, example: CC-BY-NC-4.0 }
-        source: { type: string, description: "`confirmed_state` on every time series." }
+        source:
+          type: string
+          description: >-
+            `confirmed_state` on every time series. `telemetry` on
+            `/stats/crawler`, which reports work the fleet did rather than
+            measured adoption and is never reconciled with the series.
+          enum: [confirmed_state, telemetry]
     DetailMeta:
       type: object
       required: [as_of, generation]
@@ -1536,6 +1563,30 @@ components:
           type: integer
           nullable: true
           description: Denominator for `smtp_supported` — MX where SMTP was gradeable at all.
+    CrawlerStats:
+      type: object
+      description: >-
+        A single resource, so the object carries a sibling `meta` rather than
+        a `points` or `items` envelope.
+      required: [checked_24h, latest, meta]
+      properties:
+        checked_24h:
+          type: integer
+          format: int64
+          description: >-
+            Check operations attempted in the last 24 hours — not distinct
+            hosts. A host re-checked by a live check, a campaign refresh or a
+            retry counts each time, so this can exceed the tracked-domain
+            count, and failed attempts are included.
+        latest:
+          type: string
+          format: date-time
+          nullable: true
+          description: >-
+            Newest checkpoint, regardless of the 24-hour window, so a stalled
+            crawler reads as a stale timestamp rather than null. Null only
+            where the crawler has never run.
+        meta: { $ref: "#/components/schemas/Meta" }
     GlobalStatsSeries:
       type: object
       required: [points, meta]

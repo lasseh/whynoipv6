@@ -12,10 +12,6 @@
 //
 // What each block still needs on the backend:
 //
-//   crawlerToday                 — an aggregate over `crawler_metrics`; the
-//                                  table is internal telemetry, so the endpoint
-//                                  must expose throughput only, never per-worker
-//                                  or per-lease detail.
 //   adoptionDelta                — a GROUP BY day over `changelog`. The rows are
 //                                  already served per domain by /changelog; this
 //                                  is the missing daily roll-up.
@@ -25,18 +21,6 @@
 //                                  endpoint is the cheaper fix.
 //   hostingLeague                — a GROUP BY domain.hosting_provider. The column
 //                                  exists; there is no /hosting resource at all.
-
-/**
- * Rolling 24-hour throughput and the newest observation timestamp.
- *
- * `checked` slightly exceeds the tracked-domain count because a host can be
- * re-checked inside the same 24 hours (a live check, a campaign refresh, a
- * retry).
- */
-export const crawlerToday = {
-  checked: 1095290,
-  latest: '2026-08-06T18:49:28Z',
-}
 
 /** Checks that flipped to supported, and away from it, per day. */
 export const adoptionDelta: { day: string; gained: number; lost: number }[] = [

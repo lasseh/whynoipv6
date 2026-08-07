@@ -183,6 +183,7 @@ func NewRouter(pool *pgxpool.Pool, opts Options) http.Handler { //nolint:gocriti
 
 	// Stats / adoption-over-time (§4.10) — confirmed-state snapshots only.
 	r.Get("/stats/overview", s.getStatsOverview)
+	r.Get("/stats/crawler", s.getCrawlerStats) // telemetry, not confirmed state
 	r.Get("/countries/{code}/stats", s.getCountryStats)
 	r.Get("/campaigns/{uuid}/stats", s.getCampaignStats)
 	r.Get("/asns/{number}/stats", s.getASNStats)
