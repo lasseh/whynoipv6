@@ -51,6 +51,17 @@ wrapping in this file is not meaningful. A genuine line break is written `⏎`.
 template literals in source (`` `${fmtCompact(x)} carry a Tranco rank.` ``); those are
 recorded with the placeholder in position and the surrounding text editable.
 
+Where a placeholder has a **literal fallback** — a word rendered in its place when the
+value is absent — that fallback is copy and gets its own entry: `comp.statuscard.last_checked_never`
+("never"), `livecheck.checked_at_now` ("just now"), `domain_notfound.domain_fallback`
+("unknown.invalid").
+
+**The em-dash null render is not copy.** `'—'` substitutes for any absent number
+(`latest.top_heroes ?? '—'`, `ms()`, `fmtPercent`) in at least six places. It is a
+formatting convention applied uniformly, carries no wording, and changing it is a
+display decision rather than an edit to a sentence — so it has no entries here. If it
+ever needs to change, it changes in the formatters, not in this file.
+
 ### Scope
 
 This file covers **frontend copy only**. Deliberately excluded, and not silently
@@ -103,18 +114,18 @@ FAQ
 <!-- key: chrome.header.menu_sr | src: frontend/src/partials/Header.vue:162 | a11y -->
 Menu
 
-<!-- key: chrome.header.search_placeholder_hidden | src: frontend/src/partials/Header.vue:144 | invisible spacer, never shown -->
+<!-- key: chrome.header.search_placeholder_hidden | src: frontend/src/partials/Header.vue:145 | invisible spacer, never shown -->
 Search Domain
 
 ## 1.2 Footer
 
-<!-- key: chrome.footer.blog_line | src: frontend/src/partials/Footer.vue:75-78 -->
+<!-- key: chrome.footer.blog_line | src: frontend/src/partials/Footer.vue:75-77 -->
 Numbers with sentences on [the blog](/blog)
 
 <!-- key: chrome.footer.hosting_line | src: frontend/src/partials/Footer.vue:81-88 -->
 Hosted on native IPv6 co-location at [Blix Solutions](https://blix.com/) since 2008
 
-<!-- key: chrome.footer.ipdata_line | src: frontend/src/partials/Footer.vue:91-97 -->
+<!-- key: chrome.footer.ipdata_line | src: frontend/src/partials/Footer.vue:91-96 -->
 IP data by [IPinfo](https://ipinfo.io)
 
 <!-- key: chrome.footer.aria_github | src: frontend/src/partials/Footer.vue:17 | a11y -->
@@ -131,7 +142,7 @@ Blog RSS feed
 <!-- key: head.title_default | src: frontend/index.html:52 -->
 Why No IPv6
 
-<!-- key: head.meta_description | src: frontend/index.html:27-30 -->
+<!-- key: head.meta_description | src: frontend/index.html:29 -->
 Why No IPv6 scans the top million domains daily (www, nameservers, mail) and names the giants still IPv4-only. Sinners, Heroes, Saints. Shame on them.
 
 <!-- key: head.meta_author | src: frontend/index.html:31 -->
@@ -140,13 +151,13 @@ Lasse Haugen
 <!-- key: head.og_title | src: frontend/index.html:33 -->
 Why No IPv6: the web's biggest sites, still IPv4-only
 
-<!-- key: head.og_description | src: frontend/index.html:34-37 -->
+<!-- key: head.og_description | src: frontend/index.html:36 -->
 IPv4 ran out. We crawl the web's biggest sites daily and name the ones still IPv4-only: by rank, by country, by excuse. Redemption starts with an AAAA record.
 
 <!-- key: head.twitter_title | src: frontend/index.html:42 -->
 IPv6 Shame as a Service
 
-<!-- key: head.twitter_description | src: frontend/index.html:43-46 | identical to head.og_description -->
+<!-- key: head.twitter_description | src: frontend/index.html:45 | identical to head.og_description -->
 IPv4 ran out. We crawl the web's biggest sites daily and name the ones still IPv4-only: by rank, by country, by excuse. Redemption starts with an AAAA record.
 
 <!-- key: head.rss_link_title | src: frontend/index.html:20 -->
@@ -205,25 +216,25 @@ their page section as `*.title_dynamic`.
 <!-- key: meta.home.title | src: frontend/src/router.ts:21 -->
 Why No IPv6 - IPv6 Adoption Tracker
 
-<!-- key: meta.home.description | src: frontend/src/router.ts:22-23 -->
+<!-- key: meta.home.description | src: frontend/src/router.ts:23 -->
 Why No IPv6 scans the top million domains daily (www, nameservers, mail) and names the giants still IPv4-only. Sinners, Heroes, Saints. Shame on them.
 
 <!-- key: meta.domains.title | src: frontend/src/router.ts:31 -->
 Domain Leaderboard - Why No IPv6
 
-<!-- key: meta.domains.description | src: frontend/src/router.ts:32-33 -->
+<!-- key: meta.domains.description | src: frontend/src/router.ts:33 -->
 Every domain we crawl, ranked by Tranco and checked for IPv6 (domain, www, nameservers, mail). Filter by tier: Sinners, Heroes, Saints.
 
 <!-- key: meta.domain_notfound.title | src: frontend/src/router.ts:41 -->
 Domain Not Found - Why No IPv6
 
-<!-- key: meta.domain_notfound.description | src: frontend/src/router.ts:42-43 -->
+<!-- key: meta.domain_notfound.description | src: frontend/src/router.ts:43 -->
 This domain isn't in our database: not yet crawled, outside the Tranco top million, or a typo.
 
 <!-- key: meta.domain_detail.title | src: frontend/src/router.ts:51 -->
 Domain Details - Why No IPv6
 
-<!-- key: meta.domain_detail.description | src: frontend/src/router.ts:52-53 -->
+<!-- key: meta.domain_detail.description | src: frontend/src/router.ts:53 -->
 The complete IPv6 report card for this domain: AAAA for domain and www, nameservers, MX, and whether it actually answers over IPv6.
 
 <!-- key: meta.search.title | src: frontend/src/router.ts:61 -->
@@ -235,79 +246,79 @@ Search the domains we crawl: who has IPv6 and who doesn't.
 <!-- key: meta.livecheck.title | src: frontend/src/router.ts:70 -->
 Live IPv6 Check - Why No IPv6
 
-<!-- key: meta.livecheck.description | src: frontend/src/router.ts:71-72 -->
+<!-- key: meta.livecheck.description | src: frontend/src/router.ts:72 -->
 Run a live IPv6 check on any domain: AAAA records, nameservers, MX, and a real connection attempt over IPv6. Answers come from DNS, not our cache.
 
 <!-- key: meta.metrics.title | src: frontend/src/router.ts:80 -->
 IPv6 Adoption Metrics - Why No IPv6
 
-<!-- key: meta.metrics.description | src: frontend/src/router.ts:81-82 -->
+<!-- key: meta.metrics.description | src: frontend/src/router.ts:82 -->
 IPv6 adoption metrics for the top million domains, charted over time: how many publish AAAA records, how many don't, and how fast that's changing (slowly).
 
 <!-- key: meta.countries.title | src: frontend/src/router.ts:90 -->
 IPv6 Adoption by Country - Why No IPv6
 
-<!-- key: meta.countries.description | src: frontend/src/router.ts:91-92 -->
+<!-- key: meta.countries.description | src: frontend/src/router.ts:92 -->
 IPv6 adoption ranked by country: who leads, who trails, and where the Sinners cluster. National pride, now measurable in AAAA records.
 
 <!-- key: meta.country_detail.title | src: frontend/src/router.ts:100 -->
 Country Details - Why No IPv6
 
-<!-- key: meta.country_detail.description | src: frontend/src/router.ts:101-102 -->
+<!-- key: meta.country_detail.description | src: frontend/src/router.ts:102 -->
 How this country's top domains score on IPv6: adoption rate, the local Heroes, and the Sinners dragging the national average down.
 
 <!-- key: meta.campaigns.title | src: frontend/src/router.ts:110 -->
 Shame Campaigns - Why No IPv6
 
-<!-- key: meta.campaigns.description | src: frontend/src/router.ts:111-112 -->
+<!-- key: meta.campaigns.description | src: frontend/src/router.ts:112 -->
 Reader-submitted lists of big-name domains, tracked daily until the AAAA records show up. Shame as a Service.
 
 <!-- key: meta.campaign_detail.title | src: frontend/src/router.ts:120 -->
 Campaign Details - Why No IPv6
 
-<!-- key: meta.campaign_detail.description | src: frontend/src/router.ts:121-122 -->
+<!-- key: meta.campaign_detail.description | src: frontend/src/router.ts:122 -->
 Every domain in this campaign and its IPv6 status: who fixed it, who hasn't, and how the percentage is coming along.
 
 <!-- key: meta.campaign_domain_notfound.title | src: frontend/src/router.ts:130 -->
 Campaign Domain Not Found - Why No IPv6
 
-<!-- key: meta.campaign_domain_notfound.description | src: frontend/src/router.ts:131-132 -->
+<!-- key: meta.campaign_domain_notfound.description | src: frontend/src/router.ts:132 -->
 This domain isn't tracked in this campaign. Either it was never on the list, or that's a typo.
 
 <!-- key: meta.campaign_domain.title | src: frontend/src/router.ts:140 -->
 Campaign Domain - Why No IPv6
 
-<!-- key: meta.campaign_domain.description | src: frontend/src/router.ts:141-142 -->
+<!-- key: meta.campaign_domain.description | src: frontend/src/router.ts:142 -->
 The full IPv6 checklist for this campaign domain: AAAA, nameservers, mail, and whether it's helping or hurting the campaign's numbers.
 
 <!-- key: meta.changelog.title | src: frontend/src/router.ts:150 -->
 Changelog - Why No IPv6
 
-<!-- key: meta.changelog.description | src: frontend/src/router.ts:151-152 -->
+<!-- key: meta.changelog.description | src: frontend/src/router.ts:152 -->
 Who fixed their IPv6 and who broke it, day by day. Every AAAA record that appeared or quietly disappeared, pulled from the crawler's daily runs.
 
 <!-- key: meta.blog_list.title | src: frontend/scripts/blog-shared.ts:38 -->
 Blog - Why No IPv6
 
-<!-- key: meta.blog_list.description | src: frontend/scripts/blog-shared.ts:39-40 | also the RSS channel description -->
+<!-- key: meta.blog_list.description | src: frontend/scripts/blog-shared.ts:40 | also the RSS channel description -->
 Write-ups from the crawl data: adoption numbers, notable fixes, and excuses wearing thin. Every claim links to a live page you can check.
 
 <!-- key: meta.blog_post.title | src: frontend/scripts/blog-shared.ts:46 | pre-load fallback; real post title swaps in -->
 Blog - Why No IPv6
 
-<!-- key: meta.blog_post.description | src: frontend/scripts/blog-shared.ts:47-48 | pre-load fallback -->
+<!-- key: meta.blog_post.description | src: frontend/scripts/blog-shared.ts:48 | pre-load fallback -->
 A write-up from the Why No IPv6 crawl: what the top-million data says about IPv6 adoption.
 
 <!-- key: meta.faq.title | src: frontend/src/router.ts:174 -->
 FAQ - Why No IPv6
 
-<!-- key: meta.faq.description | src: frontend/src/router.ts:175-176 -->
+<!-- key: meta.faq.description | src: frontend/src/router.ts:176 -->
 How the crawler works, what the checks mean, and how to get your domain removed from the list. Short answer to that last one: start using IPv6.
 
 <!-- key: meta.notfound.title | src: frontend/src/router.ts:210 -->
 Page Not Found - Why No IPv6
 
-<!-- key: meta.notfound.description | src: frontend/src/router.ts:211-212 -->
+<!-- key: meta.notfound.description | src: frontend/src/router.ts:212 -->
 No route to this page. Unlike a missing AAAA record, this one probably isn't deliberate.
 
 ---
@@ -378,19 +389,19 @@ No result
 
 Percent thresholds: Good ≥60, Medium ≥40, Bad below, Unknown when there is nothing to rate.
 
-<!-- key: vocab.rating.good | src: frontend/src/utils/rating.ts:23 -->
+<!-- key: vocab.rating.good | src: frontend/src/utils/rating.ts:24 -->
 Good
 
 <!-- key: vocab.rating.medium | src: frontend/src/utils/rating.ts:31 -->
 Medium
 
-<!-- key: vocab.rating.bad | src: frontend/src/utils/rating.ts:38 -->
+<!-- key: vocab.rating.bad | src: frontend/src/utils/rating.ts:37 -->
 Bad
 
 <!-- key: vocab.rating.unknown | src: frontend/src/utils/rating.ts:10 -->
 Unknown
 
-<!-- key: vocab.rating.prefix | src: frontend/src/components/RatingBadge.vue:60 | renders as "Rating: Good" -->
+<!-- key: vocab.rating.prefix | src: frontend/src/components/RatingBadge.vue:13 | renders as "Rating: Good" -->
 Rating: 
 
 ## 3.4 Tier labels
@@ -447,10 +458,10 @@ as a verb phrase continuing from a hostname.
 <!-- key: phrase.conn.supported | src: frontend/src/utils/changelog.ts:42 -->
 is now reachable over IPv6
 
-<!-- key: phrase.conn.unsupported_from_na | src: frontend/src/utils/changelog.ts:47 -->
+<!-- key: phrase.conn.unsupported_from_na | src: frontend/src/utils/changelog.ts:46 -->
 published IPv6 addresses — but connections fail
 
-<!-- key: phrase.conn.unsupported | src: frontend/src/utils/changelog.ts:48 -->
+<!-- key: phrase.conn.unsupported | src: frontend/src/utils/changelog.ts:47 -->
 is no longer reachable over IPv6
 
 <!-- key: phrase.conn.not_applicable | src: frontend/src/utils/changelog.ts:52 | defensive; suppressed at write -->
@@ -534,7 +545,7 @@ Nameservers
 <!-- key: comp.domaintable.col_ns_short | src: frontend/src/components/DomainTable.vue:65 | mobile -->
 NS
 
-<!-- key: comp.domaintable.tip_ns | src: frontend/src/components/DomainTable.vue:60-61 -->
+<!-- key: comp.domaintable.tip_ns | src: frontend/src/components/DomainTable.vue:61 -->
 Authoritative nameservers for domain.com, each checked for an AAAA record
 
 <!-- key: comp.domaintable.col_ipv6only | src: frontend/src/components/DomainTable.vue:70 -->
@@ -555,31 +566,31 @@ No domains found
 
 ## 4.2 Subdomain table
 
-<!-- key: comp.subdomaintable.heading | src: frontend/src/components/SubdomainTable.vue:172 -->
+<!-- key: comp.subdomaintable.heading | src: frontend/src/components/SubdomainTable.vue:33 -->
 Subdomains
 
-<!-- key: comp.subdomaintable.blurb | src: frontend/src/components/SubdomainTable.vue:173-175 -->
+<!-- key: comp.subdomaintable.blurb | src: frontend/src/components/SubdomainTable.vue:35 -->
 Other hosts tracked under this domain, checked the same way. They do not affect its rating.
 
-<!-- key: comp.subdomaintable.col_host | src: frontend/src/components/SubdomainTable.vue:184 -->
+<!-- key: comp.subdomaintable.col_host | src: frontend/src/components/SubdomainTable.vue:45 -->
 Host
 
-<!-- key: comp.subdomaintable.col_ipv6 | src: frontend/src/components/SubdomainTable.vue:187 -->
+<!-- key: comp.subdomaintable.col_ipv6 | src: frontend/src/components/SubdomainTable.vue:48 -->
 IPv6
 
-<!-- key: comp.subdomaintable.tip_ipv6 | src: frontend/src/components/SubdomainTable.vue:187 -->
+<!-- key: comp.subdomaintable.tip_ipv6 | src: frontend/src/components/SubdomainTable.vue:48 -->
 AAAA lookup for this host: dig AAAA host
 
-<!-- key: comp.subdomaintable.tip_ns | src: frontend/src/components/SubdomainTable.vue:191-192 -->
+<!-- key: comp.subdomaintable.tip_ns | src: frontend/src/components/SubdomainTable.vue:53 -->
 Authoritative nameservers for this subdomain, each checked for an AAAA record
 
-<!-- key: comp.subdomaintable.tip_mx | src: frontend/src/components/SubdomainTable.vue:200 -->
+<!-- key: comp.subdomaintable.tip_mx | src: frontend/src/components/SubdomainTable.vue:61 -->
 MX hosts for this subdomain, each checked for an AAAA record
 
-<!-- key: comp.subdomaintable.truncated | src: frontend/src/components/SubdomainTable.vue:254 -->
+<!-- key: comp.subdomaintable.truncated | src: frontend/src/components/SubdomainTable.vue:115 -->
 Showing the first {shown} of {total}.
 
-<!-- key: comp.subdomaintable.suggest_link | src: frontend/src/components/SubdomainTable.vue:263 -->
+<!-- key: comp.subdomaintable.suggest_link | src: frontend/src/components/SubdomainTable.vue:124 -->
 Suggest a subdomain →
 
 ## 4.3 Domain status card
@@ -587,7 +598,7 @@ Suggest a subdomain →
 <!-- key: comp.statuscard.heading | src: frontend/src/components/DomainStatusCard.vue:163 -->
 IPv6 status
 
-<!-- key: comp.statuscard.row_ns | src: frontend/src/components/DomainStatusCard.vue:114 -->
+<!-- key: comp.statuscard.row_ns | src: frontend/src/components/DomainStatusCard.vue:113 -->
 Nameservers
 
 <!-- key: comp.statuscard.row_mx | src: frontend/src/components/DomainStatusCard.vue:123 -->
@@ -642,143 +653,143 @@ How these checks work →
 
 Advisory checks that never affect a rating.
 
-<!-- key: comp.infocard.heading | src: frontend/src/components/InformationalCard.vue:106 -->
+<!-- key: comp.infocard.heading | src: frontend/src/components/InformationalCard.vue:77 -->
 Informational
 
-<!-- key: comp.infocard.caveat | src: frontend/src/components/InformationalCard.vue:107 -->
+<!-- key: comp.infocard.caveat | src: frontend/src/components/InformationalCard.vue:78 -->
 Advisory — never affects the rating
 
-<!-- key: comp.infocard.label_dnssec | src: frontend/src/components/InformationalCard.vue:50 -->
+<!-- key: comp.infocard.label_dnssec | src: frontend/src/components/InformationalCard.vue:21 -->
 DNSSEC
 
-<!-- key: comp.infocard.desc_dnssec | src: frontend/src/components/InformationalCard.vue:51 -->
+<!-- key: comp.infocard.desc_dnssec | src: frontend/src/components/InformationalCard.vue:22 -->
 The zone is signed and its chain of trust validates from the root.
 
-<!-- key: comp.infocard.label_ptr | src: frontend/src/components/InformationalCard.vue:55 -->
+<!-- key: comp.infocard.label_ptr | src: frontend/src/components/InformationalCard.vue:26 -->
 Reverse DNS
 
-<!-- key: comp.infocard.desc_ptr | src: frontend/src/components/InformationalCard.vue:56 -->
+<!-- key: comp.infocard.desc_ptr | src: frontend/src/components/InformationalCard.vue:27 -->
 The domain’s IPv6 addresses resolve back to a hostname (PTR).
 
-<!-- key: comp.infocard.label_smtp | src: frontend/src/components/InformationalCard.vue:60 -->
+<!-- key: comp.infocard.label_smtp | src: frontend/src/components/InformationalCard.vue:31 -->
 SMTP over IPv6
 
-<!-- key: comp.infocard.desc_smtp | src: frontend/src/components/InformationalCard.vue:61 -->
+<!-- key: comp.infocard.desc_smtp | src: frontend/src/components/InformationalCard.vue:32 -->
 A mail server presents its SMTP banner over an IPv6 connection.
 
-<!-- key: comp.infocard.label_parity | src: frontend/src/components/InformationalCard.vue:65 -->
+<!-- key: comp.infocard.label_parity | src: frontend/src/components/InformationalCard.vue:36 -->
 Content parity
 
-<!-- key: comp.infocard.desc_parity | src: frontend/src/components/InformationalCard.vue:66 -->
+<!-- key: comp.infocard.desc_parity | src: frontend/src/components/InformationalCard.vue:37 -->
 The page served over IPv6 matches the one served over IPv4.
 
-<!-- key: comp.infocard.latency_label | src: frontend/src/components/InformationalCard.vue:128 -->
+<!-- key: comp.infocard.latency_label | src: frontend/src/components/InformationalCard.vue:99 -->
 Response time (TTFB)
 
-<!-- key: comp.infocard.latency_values | src: frontend/src/components/InformationalCard.vue:130 -->
+<!-- key: comp.infocard.latency_values | src: frontend/src/components/InformationalCard.vue:101 -->
 IPv4 {v4} · IPv6 {v6}
 
-<!-- key: comp.infocard.verdict_par | src: frontend/src/components/InformationalCard.vue:87 -->
+<!-- key: comp.infocard.verdict_par | src: frontend/src/components/InformationalCard.vue:58 -->
 IPv6 is on par with IPv4
 
-<!-- key: comp.infocard.verdict_faster | src: frontend/src/components/InformationalCard.vue:90 -->
+<!-- key: comp.infocard.verdict_faster | src: frontend/src/components/InformationalCard.vue:61 -->
 IPv6 is {delta} ms faster
 
-<!-- key: comp.infocard.verdict_slower | src: frontend/src/components/InformationalCard.vue:91 -->
+<!-- key: comp.infocard.verdict_slower | src: frontend/src/components/InformationalCard.vue:62 -->
 IPv6 is {delta} ms slower
 
 ## 4.5 Changelog feed
 
-<!-- key: comp.changelog.default_header | src: frontend/src/components/ChangelogTable.vue:288 | prop default; /changelog passes "" to suppress it -->
+<!-- key: comp.changelog.default_header | src: frontend/src/components/ChangelogTable.vue:20 | prop default; /changelog passes "" to suppress it -->
 Changelog
 
-<!-- key: comp.changelog.today | src: frontend/src/components/ChangelogTable.vue:300 -->
+<!-- key: comp.changelog.today | src: frontend/src/components/ChangelogTable.vue:32 -->
 Today
 
-<!-- key: comp.changelog.yesterday | src: frontend/src/components/ChangelogTable.vue:300 -->
+<!-- key: comp.changelog.yesterday | src: frontend/src/components/ChangelogTable.vue:32 -->
 Yesterday
 
-<!-- key: comp.changelog.empty | src: frontend/src/components/ChangelogTable.vue:355 -->
+<!-- key: comp.changelog.empty | src: frontend/src/components/ChangelogTable.vue:87 -->
 No changes yet. Nothing fixed. To be fair, nothing broken either.
 
 ## 4.6 League table
 
-<!-- key: comp.league.row_footnote | src: frontend/src/components/LeagueTable.vue:694 -->
+<!-- key: comp.league.row_footnote | src: frontend/src/components/LeagueTable.vue:77 -->
 {v6} of {total} domains answer over IPv6
 
-<!-- key: comp.league.empty | src: frontend/src/components/LeagueTable.vue:645 -->
+<!-- key: comp.league.empty | src: frontend/src/components/LeagueTable.vue:28 -->
 No providers matched. Try a shorter name.
 
-<!-- key: comp.league.bar_aria | src: frontend/src/components/LeagueTable.vue:690 | a11y -->
+<!-- key: comp.league.bar_aria | src: frontend/src/components/LeagueTable.vue:73 | a11y -->
 {name} IPv6 share
 
 ## 4.7 Forms and controls
 
-<!-- key: comp.searchform.label_sr | src: frontend/src/components/DomainSearchForm.vue:527 | a11y -->
+<!-- key: comp.searchform.label_sr | src: frontend/src/components/DomainSearchForm.vue:12 | a11y -->
 Search domains
 
-<!-- key: comp.searchform.placeholder | src: frontend/src/components/DomainSearchForm.vue:552 -->
+<!-- key: comp.searchform.placeholder | src: frontend/src/components/DomainSearchForm.vue:37 -->
 Search domains
 
-<!-- key: comp.searchform.button | src: frontend/src/components/DomainSearchForm.vue:560 -->
+<!-- key: comp.searchform.button | src: frontend/src/components/DomainSearchForm.vue:45 -->
 Search
 
-<!-- key: comp.filterinput.label_default | src: frontend/src/components/FilterInput.vue:580 | a11y, prop default -->
+<!-- key: comp.filterinput.label_default | src: frontend/src/components/FilterInput.vue:15 | a11y, prop default -->
 Filter
 
-<!-- key: comp.filterinput.placeholder_default | src: frontend/src/components/FilterInput.vue:580 | prop default -->
+<!-- key: comp.filterinput.placeholder_default | src: frontend/src/components/FilterInput.vue:15 | prop default -->
 Filter…
 
-<!-- key: comp.filterinput.button_aria | src: frontend/src/components/FilterInput.vue:600 | a11y -->
+<!-- key: comp.filterinput.button_aria | src: frontend/src/components/FilterInput.vue:35 | a11y -->
 Apply filter
 
-<!-- key: comp.pagination.previous | src: frontend/src/components/Pagination.vue:498 -->
+<!-- key: comp.pagination.previous | src: frontend/src/components/Pagination.vue:27 -->
 Previous
 
-<!-- key: comp.pagination.next | src: frontend/src/components/Pagination.vue:507 -->
+<!-- key: comp.pagination.next | src: frontend/src/components/Pagination.vue:37 -->
 Next
 
-<!-- key: comp.pagination.nav_aria | src: frontend/src/components/Pagination.vue:490 | a11y -->
+<!-- key: comp.pagination.nav_aria | src: frontend/src/components/Pagination.vue:19 | a11y -->
 Pagination
 
 ## 4.8 Status glyphs, tracker, badges
 
-<!-- key: comp.ratingstars.muted_tip | src: frontend/src/components/RatingStars.vue:805 | only the muted star explains itself -->
+<!-- key: comp.ratingstars.muted_tip | src: frontend/src/components/RatingStars.vue:31 | only the muted star explains itself -->
 Not applicable
 
-<!-- key: comp.tracker.axis_90 | src: frontend/src/components/Tracker.vue:946 -->
+<!-- key: comp.tracker.axis_90 | src: frontend/src/components/Tracker.vue:123 -->
 90 days ago
 
-<!-- key: comp.tracker.axis_60 | src: frontend/src/components/Tracker.vue:947 -->
+<!-- key: comp.tracker.axis_60 | src: frontend/src/components/Tracker.vue:124 -->
 60 days ago
 
-<!-- key: comp.tracker.axis_30 | src: frontend/src/components/Tracker.vue:948 -->
+<!-- key: comp.tracker.axis_30 | src: frontend/src/components/Tracker.vue:125 -->
 30 days ago
 
-<!-- key: comp.tracker.axis_today | src: frontend/src/components/Tracker.vue:949 -->
+<!-- key: comp.tracker.axis_today | src: frontend/src/components/Tracker.vue:126 -->
 Today
 
-<!-- key: comp.tracker.block_aria | src: frontend/src/components/Tracker.vue:903 | a11y -->
+<!-- key: comp.tracker.block_aria | src: frontend/src/components/Tracker.vue:80 | a11y -->
 {date} — {status}
 
-<!-- key: comp.mandatebadge.label | src: frontend/src/components/MandateBadge.vue:381 -->
+<!-- key: comp.mandatebadge.label | src: frontend/src/components/MandateBadge.vue:22 -->
 Mandate
 
-<!-- key: comp.mandatebadge.tip_named | src: frontend/src/components/MandateBadge.vue:371 -->
+<!-- key: comp.mandatebadge.tip_named | src: frontend/src/components/MandateBadge.vue:12 -->
 Covered by a government IPv6 mandate: {names}
 
-<!-- key: comp.mandatebadge.tip_generic | src: frontend/src/components/MandateBadge.vue:372 -->
+<!-- key: comp.mandatebadge.tip_generic | src: frontend/src/components/MandateBadge.vue:13 -->
 Covered by a government IPv6 mandate
 
 ## 4.9 Chrome, errors, feedback
 
-<!-- key: comp.breadcrumb.home | src: frontend/src/components/Breadcrumb.vue:1012 -->
+<!-- key: comp.breadcrumb.home | src: frontend/src/components/Breadcrumb.vue:33 -->
 Home
 
-<!-- key: comp.breadcrumb.nav_aria | src: frontend/src/components/Breadcrumb.vue:994 | a11y -->
+<!-- key: comp.breadcrumb.nav_aria | src: frontend/src/components/Breadcrumb.vue:15 | a11y -->
 Breadcrumb
 
-<!-- key: comp.spinner.sr | src: frontend/src/components/LoadingSpinner.vue:975 | a11y -->
+<!-- key: comp.spinner.sr | src: frontend/src/components/LoadingSpinner.vue:22 | a11y -->
 Loading...
 
 <!-- key: comp.apierror.fallback_title | src: frontend/src/api/problem.ts:46 | network failure, no problem+json body -->
@@ -794,13 +805,13 @@ HTTP {status}
 
 Shown only when the visitor reached the site over IPv4.
 
-<!-- key: comp.notification.title | src: frontend/src/components/Notification.vue:440 -->
+<!-- key: comp.notification.title | src: frontend/src/components/Notification.vue:55 -->
 No IPv6?
 
-<!-- key: comp.notification.body | src: frontend/src/components/Notification.vue:442-443 -->
+<!-- key: comp.notification.body | src: frontend/src/components/Notification.vue:57-58 -->
 You're reading an IPv6 shame site over IPv4. Ask your ISP when they plan to catch up with 1998.
 
-<!-- key: comp.notification.close_sr | src: frontend/src/components/Notification.vue:448 | a11y -->
+<!-- key: comp.notification.close_sr | src: frontend/src/components/Notification.vue:63 | a11y -->
 Close
 
 ---
@@ -816,39 +827,39 @@ Composed of five partials in order: hero, search bar, blog strip, sinners, domai
 <!-- key: home.hero.title | src: frontend/src/partials/HomeSaaS.vue:11 -->
 IPv6 Shame as a Service!
 
-<!-- key: home.hero.body | src: frontend/src/partials/HomeSaaS.vue:17-22 -->
+<!-- key: home.hero.body | src: frontend/src/partials/HomeSaaS.vue:18-21 -->
 IPv6 has been a standard since 1998. IPv4 ran out of addresses more than a decade ago. The most-visited websites on the internet still haven't connected those two facts, so we keep score. Publicly, **until an AAAA record says otherwise.**
 
 <!-- key: home.hero.how_title | src: frontend/src/partials/HomeSaaS.vue:35 -->
 How does it work?
 
-<!-- key: home.hero.how_body | src: frontend/src/partials/HomeSaaS.vue:36-40 -->
+<!-- key: home.hero.how_body | src: frontend/src/partials/HomeSaaS.vue:37-39 -->
 A crawler checks every domain daily: AAAA records for the site and its www, IPv6 on the nameservers and mail. Do it all and you're a Hero. Skip it and you're listed, Tranco rank and all. Anyone can start a campaign; the data does the rest.
 
 <!-- key: home.hero.why_title | src: frontend/src/partials/HomeSaaS.vue:41 -->
 Why shame?
 
-<!-- key: home.hero.why_body | src: frontend/src/partials/HomeSaaS.vue:42-46 -->
+<!-- key: home.hero.why_body | src: frontend/src/partials/HomeSaaS.vue:43-45 -->
 The RFC is old enough to vote. The conference talks happened. World IPv6 Launch was in 2012. At some point the only tool left is a public list with your domain on it.
 
 ### Hero feature list
 
-<!-- key: home.features.receipts_title | src: frontend/src/partials/HomeSaaS.vue:70-72 -->
+<!-- key: home.features.receipts_title | src: frontend/src/partials/HomeSaaS.vue:71 -->
 Public receipts
 
-<!-- key: home.features.receipts_body | src: frontend/src/partials/HomeSaaS.vue:73-76 -->
+<!-- key: home.features.receipts_body | src: frontend/src/partials/HomeSaaS.vue:74-75 -->
 Every check is public and dated. A domain can ignore us, but it can't say it wasn't warned.
 
-<!-- key: home.features.numbers_title | src: frontend/src/partials/HomeSaaS.vue:97-99 -->
+<!-- key: home.features.numbers_title | src: frontend/src/partials/HomeSaaS.vue:98 -->
 Strength in numbers
 
-<!-- key: home.features.numbers_body | src: frontend/src/partials/HomeSaaS.vue:100-103 -->
+<!-- key: home.features.numbers_body | src: frontend/src/partials/HomeSaaS.vue:101-102 -->
 Compare notes with people who care about address space. Share findings, argue methodology, watch the adoption graph inch upward.
 
-<!-- key: home.features.sinner_title | src: frontend/src/partials/HomeSaaS.vue:125-127 -->
+<!-- key: home.features.sinner_title | src: frontend/src/partials/HomeSaaS.vue:126 -->
 Bring your own Sinner
 
-<!-- key: home.features.sinner_body | src: frontend/src/partials/HomeSaaS.vue:128-131 -->
+<!-- key: home.features.sinner_body | src: frontend/src/partials/HomeSaaS.vue:129-130 -->
 Found a big name still IPv4-only? Submit it as a campaign and the crawler takes it from there.
 
 ### Blog strip
@@ -861,7 +872,7 @@ From the blog
 <!-- key: home.sinners.title | src: frontend/src/partials/HomeSinners.vue:83 -->
 Top IPv6 Sinners
 
-<!-- key: home.sinners.body | src: frontend/src/partials/HomeSinners.vue:84-87 -->
+<!-- key: home.sinners.body | src: frontend/src/partials/HomeSinners.vue:85-86 -->
 The most visited websites in the world, without a single AAAA record among them. IPv6 shipped in 1998; these domains are still thinking it over.
 
 <!-- key: home.sinners.kicker | src: frontend/src/partials/HomeSinners.vue:88 -->
@@ -887,7 +898,7 @@ Hogg Networking
 <!-- key: home.testimonial.pepelnjak.statement | src: frontend/src/partials/HomeSinners.vue:26 -->
 It's a shame some people still can't deploy a protocol that could buy its own beer, even in the US.
 
-<!-- key: home.testimonial.pepelnjak.name | src: frontend/src/partials/HomeSinners.vue:28 -->
+<!-- key: home.testimonial.pepelnjak.name | src: frontend/src/partials/HomeSinners.vue:27 -->
 Ivan Pepelnjak
 
 <!-- key: home.testimonial.pepelnjak.url_title | src: frontend/src/partials/HomeSinners.vue:29 | links to https://www.ipspace.net/ -->
@@ -898,10 +909,10 @@ ipspace.net
 <!-- key: home.domains.title | src: frontend/src/partials/HomeDomains.vue:36 -->
 Wall of Shame
 
-<!-- key: home.domains.body1 | src: frontend/src/partials/HomeDomains.vue:37-40 -->
+<!-- key: home.domains.body1 | src: frontend/src/partials/HomeDomains.vue:38-39 -->
 The Tranco top million, crawled daily: every domain's IPv6 support, or lack of it, on public display.
 
-<!-- key: home.domains.body2 | src: frontend/src/partials/HomeDomains.vue:41-44 -->
+<!-- key: home.domains.body2 | src: frontend/src/partials/HomeDomains.vue:42-43 -->
 Every domain listed here is missing an AAAA record. Nameserver IPv6 support is shown alongside; some manage one without the other.
 
 <!-- key: home.domains.cta | src: frontend/src/partials/HomeDomains.vue:61 -->
@@ -915,7 +926,7 @@ Domain list
 <!-- key: domains.title | src: frontend/src/pages/DomainList.vue:34 -->
 The top million websites, judged by their AAAA records
 
-<!-- key: domains.body | src: frontend/src/pages/DomainList.vue:35-41 -->
+<!-- key: domains.body | src: frontend/src/pages/DomainList.vue:36-40 -->
 We check every domain in the Tranco top million for IPv6: apex, www, mail, nameservers. Deploy it everywhere and you're a Hero; the Saints bar adds serving your page resources over IPv6 too. No IPv6 at all makes you a Sinner: some of the internet's biggest names, still unreachable over a protocol standardized in 1998. The crawler re-checks daily. Redemption starts with an AAAA record.
 
 Tab labels come from the tier table — see [3.4](#34-tier-labels).
@@ -928,10 +939,10 @@ Does {host} support IPv6?
 <!-- key: domain_detail.crumb | src: frontend/src/pages/DomainDetail.vue:31 -->
 Domains
 
-<!-- key: domain_detail.provider | src: frontend/src/pages/DomainDetail.vue:67-68 -->
+<!-- key: domain_detail.provider | src: frontend/src/pages/DomainDetail.vue:68 -->
 Provider: {asn_name} (AS{asn_number})
 
-<!-- key: domain_detail.subdomain_of | src: frontend/src/pages/DomainDetail.vue:70-71 -->
+<!-- key: domain_detail.subdomain_of | src: frontend/src/pages/DomainDetail.vue:71 -->
 Subdomain of {parent}
 
 <!-- key: domain_detail.rank | src: frontend/src/pages/DomainDetail.vue:84 -->
@@ -945,16 +956,19 @@ components — see [Part 4](#part-4--shared-components).
 <!-- key: domain_notfound.title | src: frontend/src/pages/DomainNotFound.vue:21 -->
 Domain not found
 
-<!-- key: domain_notfound.lede | src: frontend/src/pages/DomainNotFound.vue:25-27 -->
+<!-- key: domain_notfound.lede | src: frontend/src/pages/DomainNotFound.vue:26 -->
 {domain} isn't in our database.
 
-<!-- key: domain_notfound.subhead | src: frontend/src/pages/DomainNotFound.vue:28-30 -->
+<!-- key: domain_notfound.domain_fallback | src: frontend/src/pages/DomainNotFound.vue:9 | substituted for {domain} when the route carries no param -->
+unknown.invalid
+
+<!-- key: domain_notfound.subhead | src: frontend/src/pages/DomainNotFound.vue:29 -->
 Either our crawler hasn't met it yet, or that's a typo. NXDOMAIN, basically.
 
 <!-- key: domain_notfound.card1_title | src: frontend/src/pages/DomainNotFound.vue:54 -->
 Not in the crawl
 
-<!-- key: domain_notfound.card1_body | src: frontend/src/pages/DomainNotFound.vue:55-57 -->
+<!-- key: domain_notfound.card1_body | src: frontend/src/pages/DomainNotFound.vue:56 -->
 No record of it in our data. The likely reasons:
 
 <!-- key: domain_notfound.card1_item1 | src: frontend/src/pages/DomainNotFound.vue:59 -->
@@ -969,7 +983,7 @@ No record of it in our data. The likely reasons:
 <!-- key: domain_notfound.card2_title | src: frontend/src/pages/DomainNotFound.vue:83 -->
 Put it on the list
 
-<!-- key: domain_notfound.card2_body | src: frontend/src/pages/DomainNotFound.vue:84-93 -->
+<!-- key: domain_notfound.card2_body | src: frontend/src/pages/DomainNotFound.vue:85-92 -->
 Run a [live check](/check/{domain}) on it right now, or submit it through the community campaign and we'll start keeping score. Once merged, the crawler picks it up on its next run.
 
 <!-- key: domain_notfound.card2_link | src: frontend/src/pages/DomainNotFound.vue:112 | https://github.com/lasseh/whynoipv6-campaign -->
@@ -989,13 +1003,13 @@ Go home
 <!-- key: search.prompt_title | src: frontend/src/pages/Search.vue:79 -->
 Search the domain index
 
-<!-- key: search.prompt_body | src: frontend/src/pages/Search.vue:80-85 -->
+<!-- key: search.prompt_body | src: frontend/src/pages/Search.vue:81-82 -->
 Look up any tracked domain: Saint, Sinner, or something in between. Try [google](/search?q=google).
 
 <!-- key: search.results_heading | src: frontend/src/pages/Search.vue:91 | &ldquo; &rdquo; entities in source -->
 Results for “{query}”
 
-<!-- key: search.empty | src: frontend/src/pages/Search.vue:101-105 -->
+<!-- key: search.empty | src: frontend/src/pages/Search.vue:102-104 -->
 Nothing in the index by that name. [Run a live check on {query}](/check/{query}).
 
 ## 5.6 Live check (`/check/:target?`)
@@ -1003,7 +1017,7 @@ Nothing in the index by that name. [Run a live check on {query}](/check/{query})
 <!-- key: livecheck.title | src: frontend/src/pages/LiveCheck.vue:121 -->
 Live IPv6 Check
 
-<!-- key: livecheck.body | src: frontend/src/pages/LiveCheck.vue:122-126 -->
+<!-- key: livecheck.body | src: frontend/src/pages/LiveCheck.vue:123-125 -->
 Runs a real scan from our crawler right now: DNS, mail, and an actual connection over IPv6. Results are live observations; the tracked, confirmed status updates on its own schedule, not yours.
 
 <!-- key: livecheck.title_dynamic | src: frontend/src/pages/LiveCheck.vue:111 | replaces the route title once a result lands -->
@@ -1011,7 +1025,7 @@ Runs a real scan from our crawler right now: DNS, mail, and an actual connection
 
 ### Form
 
-<!-- key: livecheck.input_label_sr | src: frontend/src/pages/LiveCheck.vue:131 | a11y -->
+<!-- key: livecheck.input_label_sr | src: frontend/src/pages/LiveCheck.vue:132 | a11y -->
 Domain
 
 <!-- key: livecheck.input_placeholder | src: frontend/src/pages/LiveCheck.vue:144 -->
@@ -1063,6 +1077,22 @@ Check failed.
 <!-- key: livecheck.failed_fallback | src: frontend/src/pages/LiveCheck.vue:203 | used when the API returns no reason -->
 The scan could not complete — try again later.
 
+**Client-synthesized errors.** These two are built in the frontend, not returned by the
+API, and render through the shared error card. They are the only problem titles and
+details that are frontend copy — every other one comes from the backend (Appendix B).
+
+<!-- key: livecheck.timeout.title | src: frontend/src/composables/useLiveCheck.ts:82 | shown when polling exceeds POLL_LIMIT -->
+Check timed out
+
+<!-- key: livecheck.timeout.detail | src: frontend/src/composables/useLiveCheck.ts:82 -->
+The scan is taking too long — try again later.
+
+<!-- key: livecheck.notfound.title | src: frontend/src/composables/useLiveCheck.ts:180 | a shared /check/{host} link whose result has expired -->
+Check not found
+
+<!-- key: livecheck.notfound.detail | src: frontend/src/composables/useLiveCheck.ts:181 -->
+This check link has expired or never existed — run a fresh check above.
+
 ### Result
 
 <!-- key: livecheck.copy_link | src: frontend/src/pages/LiveCheck.vue:217 -->
@@ -1074,7 +1104,7 @@ Copied
 <!-- key: livecheck.live_badge | src: frontend/src/pages/LiveCheck.vue:221 -->
 Live observation
 
-<!-- key: livecheck.cached_note | src: frontend/src/pages/LiveCheck.vue:226-228 -->
+<!-- key: livecheck.cached_note | src: frontend/src/pages/LiveCheck.vue:227 -->
 Showing a stored result. A fresh check runs automatically once it's older than 7 days.
 
 **Core check labels.** Render order is fixed by the array.
@@ -1126,7 +1156,7 @@ Reverse DNS
 <!-- key: livecheck.info.spf | src: frontend/src/pages/LiveCheck.vue:39 -->
 SPF
 
-<!-- key: livecheck.ttfb | src: frontend/src/pages/LiveCheck.vue:282-283 -->
+<!-- key: livecheck.ttfb | src: frontend/src/pages/LiveCheck.vue:282 -->
 TTFB: IPv4 {v4} · IPv6 {v6}
 
 <!-- key: livecheck.tracked_status | src: frontend/src/pages/LiveCheck.vue:293 -->
@@ -1154,7 +1184,7 @@ just now
 <!-- key: metrics.title | src: frontend/src/pages/Metrics.vue:35 -->
 Metrics
 
-<!-- key: metrics.body | src: frontend/src/pages/Metrics.vue:36-39 -->
+<!-- key: metrics.body | src: frontend/src/pages/Metrics.vue:37-38 -->
 IPv6 adoption across the Tranco list, straight from the crawler. The line goes up, eventually.
 
 <!-- key: metrics.tab.overview | src: frontend/src/pages/Metrics.vue:48 -->
@@ -1168,10 +1198,10 @@ Network Providers
 <!-- key: metrics.overview.heading | src: frontend/src/partials/MetricCrawler.vue:178 -->
 IPv6 adoption, live from Why No IPv6
 
-<!-- key: metrics.overview.lede | src: frontend/src/partials/MetricCrawler.vue:179-190 -->
+<!-- key: metrics.overview.lede | src: frontend/src/partials/MetricCrawler.vue:180-189 -->
 Of the {domains} most-visited websites on the internet, only {hero_share} are fully IPv6-ready. IPv6 has been a standard since 1998. In the Tranco top 1000 the picture is no prettier: {top_heroes} have IPv6 enabled, and {top_nameserver} sit behind nameservers reachable over IPv6.
 
-<!-- key: metrics.overview.context | src: frontend/src/partials/MetricCrawler.vue:191-195 -->
+<!-- key: metrics.overview.context | src: frontend/src/partials/MetricCrawler.vue:192-194 -->
 For context: IPv6 became a standard in 1998, and again in 2017, in case anyone missed it the first time. The numbers below are what nearly three decades of "we'll get to it" looks like. Every one of them moves the day someone publishes an AAAA record.
 
 **Stat tiles.** Label and hint are passed from this partial into `StatTile`.
@@ -1290,7 +1320,7 @@ Lost IPv6
 <!-- key: metrics.advisory.heading | src: frontend/src/partials/MetricCrawler.vue:280 -->
 Beyond a AAAA record
 
-<!-- key: metrics.advisory.body | src: frontend/src/partials/MetricCrawler.vue:281-284 -->
+<!-- key: metrics.advisory.body | src: frontend/src/partials/MetricCrawler.vue:282-283 -->
 An AAAA record is the entry fee, not the finish line. These three checks are advisory: they never change a rating, they just show how much of the deployment was finished.
 
 <!-- key: metrics.advisory.ptr.label | src: frontend/src/partials/MetricCrawler.vue:290 -->
@@ -1316,7 +1346,7 @@ The MX has an AAAA record. Nothing answers on it.
 <!-- key: metrics.asn.heading | src: frontend/src/partials/MetricASN.vue:312 -->
 IPv6 by provider
 
-<!-- key: metrics.asn.body | src: frontend/src/partials/MetricASN.vue:313-318 -->
+<!-- key: metrics.asn.body | src: frontend/src/partials/MetricASN.vue:314-317 -->
 Every domain we crawl lives on someone's network, resolves through someone's DNS, and is served off someone's platform. One default-on change at a big provider moves thousands of domains to dual stack overnight. These are the three registries that decide, and who in each has flipped the switch.
 
 <!-- key: metrics.asn.entity.networks | src: frontend/src/partials/MetricASN.vue:35 -->
@@ -1346,7 +1376,7 @@ Who runs the zone, and whether the domains in it resolve to an AAAA.
 <!-- key: metrics.asn.noun.hosting | src: frontend/src/partials/MetricASN.vue:223 -->
 platforms
 
-<!-- key: metrics.asn.blurb.hosting | src: frontend/src/partials/MetricASN.vue:224-225 -->
+<!-- key: metrics.asn.blurb.hosting | src: frontend/src/partials/MetricASN.vue:225 -->
 The platform serving the site, which is usually the one that decides. A league among the platforms we can attribute, not a market survey.
 
 **Scatter panel.**
@@ -1417,7 +1447,7 @@ One box per network, each scaled to itself. Read the levels rather than the slop
 <!-- key: metrics.asn.ptr.title | src: frontend/src/partials/MetricASN.vue:419 -->
 Reverse DNS
 
-<!-- key: metrics.asn.ptr.description | src: frontend/src/partials/MetricASN.vue:420-423 -->
+<!-- key: metrics.asn.ptr.description | src: frontend/src/partials/MetricASN.vue:421-422 -->
 Of the hosts that answer over IPv6, how many resolve back to a name. Mail servers and logging tools care; almost nobody else has noticed.
 
 <!-- key: metrics.asn.ptr.caption | src: frontend/src/partials/MetricASN.vue:434 -->
@@ -1434,7 +1464,7 @@ of {total} IPv6 hosts resolve back to a name
 <!-- key: countries.title | src: frontend/src/pages/CountryList.vue:36 -->
 IPv6 by Country
 
-<!-- key: countries.body | src: frontend/src/pages/CountryList.vue:48-53 -->
+<!-- key: countries.body | src: frontend/src/pages/CountryList.vue:49-52 -->
 IPv6 adoption, country by country. Each domain in the Tranco list is mapped to a country by GeoIP, then scored on who publishes an AAAA record and who doesn't. So this measures a country's most-visited websites, not its networks. Some countries are nearly done. Some haven't started. Pick yours and meet the local Sinners.
 
 <!-- key: countries.card_label | src: frontend/src/pages/CountryList.vue:87 -->
@@ -1448,7 +1478,7 @@ IPv6 Adoption in {country}
 <!-- key: country_detail.crumb | src: frontend/src/pages/CountryDetail.vue:65 -->
 Countries
 
-<!-- key: country_detail.not_found | src: frontend/src/pages/CountryDetail.vue:70-72 -->
+<!-- key: country_detail.not_found | src: frontend/src/pages/CountryDetail.vue:71 -->
 Country not found. We go by ISO 3166 codes; check yours.
 
 <!-- key: country_detail.tracked | src: frontend/src/pages/CountryDetail.vue:93 -->
@@ -1471,10 +1501,10 @@ Heroes
 <!-- key: campaigns.title | src: frontend/src/pages/CampaignList.vue:33 -->
 Campaigns
 
-<!-- key: campaigns.body1 | src: frontend/src/pages/CampaignList.vue:61-66 -->
+<!-- key: campaigns.body1 | src: frontend/src/pages/CampaignList.vue:62-65 -->
 Campaigns are reader-submitted lists of domains with something in common: a country's banks, its ISPs, its government. Each list is crawled and scored as a group, with the same checks as everywhere else (AAAA, nameservers, mail). The percentage on each card is how many have actually deployed it.
 
-<!-- key: campaigns.body2 | src: frontend/src/pages/CampaignList.vue:67-76 -->
+<!-- key: campaigns.body2 | src: frontend/src/pages/CampaignList.vue:68-75 -->
 Have a list of domains that should know better? Open an issue in the [campaign repo](https://github.com/lasseh/whynoipv6-campaign) and we'll put them on the scoreboard. Shame scales.
 
 <!-- key: campaigns.create_title | src: frontend/src/pages/CampaignList.vue:46 | button title attribute -->
@@ -1494,7 +1524,7 @@ IPv6 ready
 <!-- key: campaign_detail.crumb | src: frontend/src/pages/CampaignDetail.vue:83 -->
 Campaigns
 
-<!-- key: campaign_detail.not_found | src: frontend/src/pages/CampaignDetail.vue:88-90 -->
+<!-- key: campaign_detail.not_found | src: frontend/src/pages/CampaignDetail.vue:89 -->
 Campaign not found. Wrong UUID or a stale link; nothing to shame here.
 
 <!-- key: campaign_detail.count | src: frontend/src/pages/CampaignDetail.vue:117 -->
@@ -1513,10 +1543,10 @@ Does {host} support IPv6?
 <!-- key: campaign_domain.crumb | src: frontend/src/pages/CampaignDomain.vue:61 -->
 Campaigns
 
-<!-- key: campaign_domain.provider | src: frontend/src/pages/CampaignDomain.vue:79-80 -->
+<!-- key: campaign_domain.provider | src: frontend/src/pages/CampaignDomain.vue:80 -->
 Provider: {asn_name} (AS{asn_number})
 
-<!-- key: campaign_domain.subdomain_of | src: frontend/src/pages/CampaignDomain.vue:82-83 -->
+<!-- key: campaign_domain.subdomain_of | src: frontend/src/pages/CampaignDomain.vue:83 -->
 Subdomain of {parent}
 
 ## 5.13 Changelog (`/changelog`)
@@ -1524,7 +1554,7 @@ Subdomain of {parent}
 <!-- key: changelog.title | src: frontend/src/pages/Changelog.vue:60 -->
 Changelog
 
-<!-- key: changelog.body | src: frontend/src/pages/Changelog.vue:61-63 -->
+<!-- key: changelog.body | src: frontend/src/pages/Changelog.vue:62 -->
 Who fixed their IPv6 and who broke it, confirmed by the crawler
 
 <!-- key: changelog.tab.tranco | src: frontend/src/pages/Changelog.vue:70 -->
@@ -1540,7 +1570,7 @@ Row phrasing comes from [3.6](#36-changelog-phrases).
 <!-- key: blog_list.title | src: frontend/src/pages/BlogList.vue:15 -->
 Blog
 
-<!-- key: blog_list.body | src: frontend/src/pages/BlogList.vue:16-18 -->
+<!-- key: blog_list.body | src: frontend/src/pages/BlogList.vue:17 -->
 Write-ups from the crawl data. The numbers do the talking; we hold the flashlight.
 
 <!-- key: blog_list.rss | src: frontend/src/pages/BlogList.vue:39 -->
@@ -1554,7 +1584,7 @@ RSS feed
 <!-- key: blog_post.missing_title | src: frontend/src/pages/BlogPost.vue:66 -->
 No post here
 
-<!-- key: blog_post.missing_body | src: frontend/src/pages/BlogPost.vue:67-69 -->
+<!-- key: blog_post.missing_body | src: frontend/src/pages/BlogPost.vue:68 -->
 Nothing is published at this URL. Everything we have written lives on the blog index.
 
 <!-- key: blog_post.missing_cta | src: frontend/src/pages/BlogPost.vue:73 -->
@@ -1601,46 +1631,46 @@ Frequently Asked Questions
 <!-- key: faq.p1.what.q | src: frontend/src/pages/FAQ.vue:45 -->
 What is Why No IPv6?
 
-<!-- key: faq.p1.what.a | src: frontend/src/pages/FAQ.vue:46-51 -->
+<!-- key: faq.p1.what.a | src: frontend/src/pages/FAQ.vue:47-50 -->
 Why No IPv6 crawls the Tranco top million every day, plus user-submitted campaigns, and checks each one for IPv6: the domain, www, nameservers, and mail. Then we sort the results into Sinners, Heroes, and Saints and publish the receipts.
 
 <!-- key: faq.p1.why.q | src: frontend/src/pages/FAQ.vue:54 -->
 Why does IPv6 matter?
 
-<!-- key: faq.p1.why.a1 | src: frontend/src/pages/FAQ.vue:55-59 -->
+<!-- key: faq.p1.why.a1 | src: frontend/src/pages/FAQ.vue:56-58 -->
 IPv4 ran out. Not 'is running out': ran out. The registries held the funeral years ago. IPv6 is the address space the internet actually grew into. For a top-ranked site today, skipping it isn't an oversight. It's a choice.
 
-<!-- key: faq.p1.why.a2 | src: frontend/src/pages/FAQ.vue:60-63 -->
+<!-- key: faq.p1.why.a2 | src: frontend/src/pages/FAQ.vue:61-62 -->
 Our part is simple: we watch the top million and publish who has IPv6 and who doesn't. Being on the second list is meant to be uncomfortable.
 
 <!-- key: faq.p1.how.q | src: frontend/src/pages/FAQ.vue:66 -->
 How does the site work?
 
-<!-- key: faq.p1.how.a | src: frontend/src/pages/FAQ.vue:67-73 -->
+<!-- key: faq.p1.how.a | src: frontend/src/pages/FAQ.vue:68-72 -->
 Once a day the crawler walks the entire Tranco list and runs the same checks on every domain: AAAA records on the domain and www, IPv6 on the nameservers and mail servers, and a real HTTP connection over IPv6 to confirm the records aren't decorative. The results feed everything here: the tiers, the country stats, and the changelog.
 
 <!-- key: faq.p1.tranco.q | src: frontend/src/pages/FAQ.vue:76 -->
 Tranco?
 
-<!-- key: faq.p1.tranco.a1 | src: frontend/src/pages/FAQ.vue:77-85 -->
+<!-- key: faq.p1.tranco.a1 | src: frontend/src/pages/FAQ.vue:78-84 -->
 The [Tranco List](https://tranco-list.eu/) ranks the top million domains by aggregating several traffic lists, which smooths out the noise and manipulation that made single-source rankings like Alexa easy to game. It's the ranking researchers actually use.
 
-<!-- key: faq.p1.tranco.a2 | src: frontend/src/pages/FAQ.vue:86-89 -->
+<!-- key: faq.p1.tranco.a2 | src: frontend/src/pages/FAQ.vue:87-88 -->
 We use it because the rank is half the shame: 'top 100 site, zero AAAA records' only lands if the ranking is credible.
 
 <!-- key: faq.p1.accuracy.q | src: frontend/src/pages/FAQ.vue:92 -->
 How accurate is the data?
 
-<!-- key: faq.p1.accuracy.a | src: frontend/src/pages/FAQ.vue:93-97 -->
+<!-- key: faq.p1.accuracy.a | src: frontend/src/pages/FAQ.vue:94-96 -->
 Treat the data as indicative, not absolute. DNS propagation and CDNs that answer differently per anycast location can shift a result from one scan to the next. That's why a status only changes after three consecutive scans agree.
 
-<!-- key: faq.p1.falsenegative.q | src: frontend/src/pages/FAQ.vue:100-102 -->
+<!-- key: faq.p1.falsenegative.q | src: frontend/src/pages/FAQ.vue:101 -->
 Why does a domain show as not supporting IPv6 when it does?
 
-<!-- key: faq.p1.falsenegative.a1 | src: frontend/src/pages/FAQ.vue:103-108 -->
+<!-- key: faq.p1.falsenegative.a1 | src: frontend/src/pages/FAQ.vue:104-107 -->
 Usually DNS propagation lag, a CDN answering differently from our vantage point, or a server that didn't respond during that scan. A real fix sticks after three consecutive daily scans, so give it a few days. If it still looks wrong, contact us.
 
-<!-- key: faq.p1.falsenegative.a2 | src: frontend/src/pages/FAQ.vue:109-112 -->
+<!-- key: faq.p1.falsenegative.a2 | src: frontend/src/pages/FAQ.vue:110-111 -->
 Also note the crawler verifies reachability: an AAAA record that doesn't answer over IPv6 still counts as unsupported.
 
 ### Page 2 — Rules, Frequency, and API Access
@@ -1654,55 +1684,55 @@ Crawler
 <!-- key: faq.p2.rules.q | src: frontend/src/pages/FAQ.vue:127 -->
 Crawler Rules
 
-<!-- key: faq.p2.rules.a1 | src: frontend/src/pages/FAQ.vue:128-132 -->
+<!-- key: faq.p2.rules.a1 | src: frontend/src/pages/FAQ.vue:129-131 -->
 The crawler checks AAAA records on domain.com, www.domain.com, and the domain's NS and MX records. It also opens a real HTTP connection over IPv6 — publishing an AAAA record that doesn't answer won't fool anyone.
 
-<!-- key: faq.p2.rules.a2 | src: frontend/src/pages/FAQ.vue:133-136 -->
+<!-- key: faq.p2.rules.a2 | src: frontend/src/pages/FAQ.vue:134-135 -->
 The domain and www lookups go through three independent public resolvers, and two out of three must agree.
 
 <!-- key: faq.p2.frequency.q | src: frontend/src/pages/FAQ.vue:139 -->
 Crawler Frequency
 
-<!-- key: faq.p2.frequency.a | src: frontend/src/pages/FAQ.vue:140-143 -->
+<!-- key: faq.p2.frequency.a | src: frontend/src/pages/FAQ.vue:141-142 -->
 Every domain is scanned once per day. A status only changes after 3 consecutive scans agree, so one flaky DNS answer won't flip your verdict.
 
 <!-- key: faq.p2.na.q | src: frontend/src/pages/FAQ.vue:146 | curly quotes in source -->
 What does “Not applicable” mean?
 
-<!-- key: faq.p2.na.a1 | src: frontend/src/pages/FAQ.vue:147-149 -->
+<!-- key: faq.p2.na.a1 | src: frontend/src/pages/FAQ.vue:148 -->
 There was nothing to grade — it never counts against a domain.
 
-<!-- key: faq.p2.na.a2 | src: frontend/src/pages/FAQ.vue:150-153 -->
+<!-- key: faq.p2.na.a2 | src: frontend/src/pages/FAQ.vue:151-152 -->
 For Mail (MX) it means the domain publishes no MX records: no mail service, nothing to check. A domain without mail can still become a Hero.
 
-<!-- key: faq.p2.na.a3 | src: frontend/src/pages/FAQ.vue:154-159 -->
+<!-- key: faq.p2.na.a3 | src: frontend/src/pages/FAQ.vue:155-158 -->
 For Page resources it means one of two things: the page loads over IPv6 and pulls no resources from external hosts, or the site isn't reachable over IPv6 at all — then its resources can't be evaluated. The domain status card and the live check both spell out which one applies.
 
 <!-- key: faq.p2.subdomains.q | src: frontend/src/pages/FAQ.vue:162 -->
 Why does a domain list subdomains?
 
-<!-- key: faq.p2.subdomains.a1 | src: frontend/src/pages/FAQ.vue:163-167 -->
+<!-- key: faq.p2.subdomains.a1 | src: frontend/src/pages/FAQ.vue:164-166 -->
 An apex can score green while the part people actually use, the login portal or the API, is still IPv4 only. Anyone can list those hosts for a domain, and the crawler then checks them exactly like any other domain.
 
-<!-- key: faq.p2.subdomains.a2 | src: frontend/src/pages/FAQ.vue:168-178 -->
+<!-- key: faq.p2.subdomains.a2 | src: frontend/src/pages/FAQ.vue:169-177 -->
 Subdomain results are informational: they never change the parent domain's rating or any of the country and campaign numbers. What gets listed depends on who took the time to list it, and a domain should not score worse for having attentive users. Add one by opening a PR on the [campaign repo](https://github.com/lasseh/whynoipv6-campaign).
 
 <!-- key: faq.p2.errors.q | src: frontend/src/pages/FAQ.vue:182 -->
 Crawler Errors
 
-<!-- key: faq.p2.errors.a | src: frontend/src/pages/FAQ.vue:183-185 -->
+<!-- key: faq.p2.errors.a | src: frontend/src/pages/FAQ.vue:184 -->
 Found a bug in the crawler? PRs are welcome.
 
 <!-- key: faq.p2.heroes.q | src: frontend/src/pages/FAQ.vue:188 -->
 Heroes
 
-<!-- key: faq.p2.heroes.a | src: frontend/src/pages/FAQ.vue:189-193 -->
+<!-- key: faq.p2.heroes.a | src: frontend/src/pages/FAQ.vue:190-192 -->
 Hero status takes IPv6 on domain.com, www.domain.com, and the nameservers. MX hosts need IPv6 too (or no MX at all), and the site has to actually answer over IPv6.
 
 <!-- key: faq.p2.saints.q | src: frontend/src/pages/FAQ.vue:196 -->
 Saints
 
-<!-- key: faq.p2.saints.a | src: frontend/src/pages/FAQ.vue:197-200 -->
+<!-- key: faq.p2.saints.a | src: frontend/src/pages/FAQ.vue:198-199 -->
 Saints are Heroes that also load all their page resources (scripts, fonts, images) over IPv6. The full package: the site works on an IPv6-only connection.
 
 <!-- key: faq.p2.section_campaign | src: frontend/src/pages/FAQ.vue:203 -->
@@ -1711,10 +1741,10 @@ Campaign Crawler
 <!-- key: faq.p2.createcampaign.q | src: frontend/src/pages/FAQ.vue:206 -->
 How do I create my own campaign?
 
-<!-- key: faq.p2.createcampaign.a | src: frontend/src/pages/FAQ.vue:207-215 -->
+<!-- key: faq.p2.createcampaign.a | src: frontend/src/pages/FAQ.vue:208-213 -->
 Open an issue on the [GitHub repo](https://github.com/lasseh/whynoipv6-campaign).
 
-<!-- key: faq.p2.removal.q | src: frontend/src/pages/FAQ.vue:218-220 -->
+<!-- key: faq.p2.removal.q | src: frontend/src/pages/FAQ.vue:219 -->
 How can I get my domain removed from the list?
 
 <!-- key: faq.p2.removal.a | src: frontend/src/pages/FAQ.vue:221 -->
@@ -1726,34 +1756,34 @@ API
 <!-- key: faq.p2.api.q | src: frontend/src/pages/FAQ.vue:227 -->
 Can I get access to the API?
 
-<!-- key: faq.p2.api.a1 | src: frontend/src/pages/FAQ.vue:228-232 | the API origin renders as accent text, not a link -->
+<!-- key: faq.p2.api.a1 | src: frontend/src/pages/FAQ.vue:229-231 | the API origin renders as accent text, not a link -->
 Yes, the API is open — no key, no signup. Everything on this site is served from it, at **https://api.whynoipv6.com** (no version prefix).
 
-<!-- key: faq.p2.api.a2 | src: frontend/src/pages/FAQ.vue:233-247 -->
+<!-- key: faq.p2.api.a2 | src: frontend/src/pages/FAQ.vue:234-244 -->
 Start with the [interactive docs](https://api.whynoipv6.com/docs), the raw [OpenAPI spec](https://api.whynoipv6.com/openapi.json), or — if you're pointing an LLM agent at the data — [llms.txt](https://api.whynoipv6.com/llms.txt).
 
 <!-- key: faq.p2.dataset.q | src: frontend/src/pages/FAQ.vue:250 -->
 Can I download the whole dataset?
 
-<!-- key: faq.p2.dataset.a1 | src: frontend/src/pages/FAQ.vue:251-256 -->
+<!-- key: faq.p2.dataset.a1 | src: frontend/src/pages/FAQ.vue:252-255 -->
 Yes — daily snapshots (CSV and Parquet) are published at [api.whynoipv6.com/datasets](https://api.whynoipv6.com/datasets). Please don't paginate the whole API when a bulk file exists.
 
-<!-- key: faq.p2.dataset.a2 | src: frontend/src/pages/FAQ.vue:257-260 -->
+<!-- key: faq.p2.dataset.a2 | src: frontend/src/pages/FAQ.vue:258-259 -->
 The data is licensed CC-BY-NC-4.0. Attribution: Data: whynoipv6.com (CC-BY-NC-4.0). Ranks: Tranco.
 
 <!-- key: faq.p2.badge.q | src: frontend/src/pages/FAQ.vue:263 -->
 Is there a badge for my README?
 
-<!-- key: faq.p2.badge.a | src: frontend/src/pages/FAQ.vue:264-266 -->
+<!-- key: faq.p2.badge.a | src: frontend/src/pages/FAQ.vue:265 -->
 Every domain has an SVG status badge. Embed it in markdown:
 
-<!-- key: faq.p2.badge.snippet | src: frontend/src/pages/FAQ.vue:267-269 | rendered in mono, not a link -->
+<!-- key: faq.p2.badge.snippet | src: frontend/src/pages/FAQ.vue:268 | rendered in mono, not a link -->
 ![IPv6](https://api.whynoipv6.com/badge/yourdomain.com.svg)
 
 <!-- key: faq.p2.feed.q | src: frontend/src/pages/FAQ.vue:272 -->
 Can I follow changes as a feed?
 
-<!-- key: faq.p2.feed.a | src: frontend/src/pages/FAQ.vue:273-288 -->
+<!-- key: faq.p2.feed.a | src: frontend/src/pages/FAQ.vue:274-287 -->
 The changelog is available as [Atom](https://api.whynoipv6.com/changelog.atom) and [JSON Feed](https://api.whynoipv6.com/changelog.feed.json), with per-domain, per-country, and per-campaign variants — see the docs.
 
 ### Page 3 — Resources
@@ -1767,19 +1797,19 @@ Resources
 <!-- key: faq.p3.ipv6.title | src: frontend/src/pages/FAQ.vue:300 -->
 IPv6
 
-<!-- key: faq.p3.ipv6.link1 | src: frontend/src/pages/FAQ.vue:302-307 | https://www.internetsociety.org/deploy360/ipv6/ -->
+<!-- key: faq.p3.ipv6.link1 | src: frontend/src/pages/FAQ.vue:306 | https://www.internetsociety.org/deploy360/ipv6/ -->
 Internet Society IPv6
 
-<!-- key: faq.p3.ipv6.link2 | src: frontend/src/pages/FAQ.vue:310-312 | https://ready.chair6.net/ -->
+<!-- key: faq.p3.ipv6.link2 | src: frontend/src/pages/FAQ.vue:311 | https://ready.chair6.net/ -->
 IPv6 Ready test
 
 <!-- key: faq.p3.bestpractice.title | src: frontend/src/pages/FAQ.vue:316 -->
 IPv6 Networking Best Practices
 
-<!-- key: faq.p3.bestpractice.link1 | src: frontend/src/pages/FAQ.vue:318-322 | apnic.net blog; no target="_blank" -->
+<!-- key: faq.p3.bestpractice.link1 | src: frontend/src/pages/FAQ.vue:321 | apnic.net blog; no target="_blank" -->
 IPv6 Subnetting - Best Practices
 
-<!-- key: faq.p3.bestpractice.link2 | src: frontend/src/pages/FAQ.vue:325-329 | internetsociety.org; no target="_blank" -->
+<!-- key: faq.p3.bestpractice.link2 | src: frontend/src/pages/FAQ.vue:328 | internetsociety.org; no target="_blank" -->
 IPv6 Security Considerations
 
 <!-- key: faq.p3.community.title | src: frontend/src/pages/FAQ.vue:333 -->
@@ -1791,52 +1821,52 @@ r/ipv6
 <!-- key: faq.p3.community.link2 | src: frontend/src/pages/FAQ.vue:338 | https://www.ipv6forum.com/; no target="_blank" -->
 IPv6 Forum
 
-<!-- key: faq.p3.community.link3 | src: frontend/src/pages/FAQ.vue:341-342 | packetpushers.net; no target="_blank" -->
+<!-- key: faq.p3.community.link3 | src: frontend/src/pages/FAQ.vue:342 | packetpushers.net; no target="_blank" -->
 IPv6 Buzz Podcast
 
 <!-- key: faq.p3.courses.title | src: frontend/src/pages/FAQ.vue:347 -->
 Courses and Certifications
 
-<!-- key: faq.p3.courses.link1 | src: frontend/src/pages/FAQ.vue:349-351 | https://ipv6.he.net/certification/ -->
+<!-- key: faq.p3.courses.link1 | src: frontend/src/pages/FAQ.vue:350 | https://ipv6.he.net/certification/ -->
 Hurricane Electric IPv6 Certification Project
 
-<!-- key: faq.p3.courses.link2 | src: frontend/src/pages/FAQ.vue:354-359 | https://www.coursera.org/projects/ip-address-v6 -->
+<!-- key: faq.p3.courses.link2 | src: frontend/src/pages/FAQ.vue:358 | https://www.coursera.org/projects/ip-address-v6 -->
 Getting Started with IPv6 (Coursera)
 
 <!-- key: faq.p3.reports.title | src: frontend/src/pages/FAQ.vue:363 -->
 Reports and IPv6 Status
 
-<!-- key: faq.p3.reports.link1 | src: frontend/src/pages/FAQ.vue:365-370 | https://bgp.he.net/ipv6-progress-report.cgi -->
+<!-- key: faq.p3.reports.link1 | src: frontend/src/pages/FAQ.vue:369 | https://bgp.he.net/ipv6-progress-report.cgi -->
 Global IPv6 Deployment Progress Report
 
-<!-- key: faq.p3.reports.link2 | src: frontend/src/pages/FAQ.vue:373-375 | https://www.worldipv6launch.org/ -->
+<!-- key: faq.p3.reports.link2 | src: frontend/src/pages/FAQ.vue:374 | https://www.worldipv6launch.org/ -->
 World IPv6 Launch
 
-<!-- key: faq.p3.reports.link3 | src: frontend/src/pages/FAQ.vue:378-383 | https://www.google.com/intl/en/ipv6/statistics.html -->
+<!-- key: faq.p3.reports.link3 | src: frontend/src/pages/FAQ.vue:382 | https://www.google.com/intl/en/ipv6/statistics.html -->
 Google IPv6 Statistics
 
-<!-- key: faq.p3.reports.link4 | src: frontend/src/pages/FAQ.vue:386-388 | https://www.vyncke.org/ipv6status/ -->
+<!-- key: faq.p3.reports.link4 | src: frontend/src/pages/FAQ.vue:387 | https://www.vyncke.org/ipv6status/ -->
 IPv6 Deployment Aggregated Status
 
-<!-- key: faq.p3.reports.link5 | src: frontend/src/pages/FAQ.vue:391-393 | https://awsipv6.neveragain.de/ -->
+<!-- key: faq.p3.reports.link5 | src: frontend/src/pages/FAQ.vue:392 | https://awsipv6.neveragain.de/ -->
 AWS service endpoints by region and IPv6 support
 
 <!-- key: faq.p3.stickers.title | src: frontend/src/pages/FAQ.vue:397 -->
 Stickers
 
-<!-- key: faq.p3.stickers.body1 | src: frontend/src/pages/FAQ.vue:398-401 -->
+<!-- key: faq.p3.stickers.body1 | src: frontend/src/pages/FAQ.vue:399-400 -->
 Fly the colors. Nothing says 'ask me about AAAA records' like a protocol sticker.
 
-<!-- key: faq.p3.stickers.body2 | src: frontend/src/pages/FAQ.vue:402-405 -->
+<!-- key: faq.p3.stickers.body2 | src: frontend/src/pages/FAQ.vue:403-404 -->
 Put one on your laptop, your rack, or a Sinner's front door. Get permission for that last one.
 
 <!-- key: faq.p3.stickers.order | src: frontend/src/pages/FAQ.vue:407 -->
 Order yours:
 
-<!-- key: faq.p3.stickers.small | src: frontend/src/pages/FAQ.vue:409-413 | stickermule item 14732767; no target="_blank" -->
+<!-- key: faq.p3.stickers.small | src: frontend/src/pages/FAQ.vue:412 | stickermule item 14732767; no target="_blank" -->
 Small (2.4" x 3")
 
-<!-- key: faq.p3.stickers.medium | src: frontend/src/pages/FAQ.vue:415-419 | stickermule item 14732768; no target="_blank" -->
+<!-- key: faq.p3.stickers.medium | src: frontend/src/pages/FAQ.vue:418 | stickermule item 14732768; no target="_blank" -->
 Medium (3.2" x 4")
 
 <!-- key: faq.p3.stickers.alt | src: frontend/src/pages/FAQ.vue:429 | a11y -->
@@ -1850,34 +1880,34 @@ About
 <!-- key: faq.p4.whoami.q | src: frontend/src/pages/FAQ.vue:444 -->
 # whoami
 
-<!-- key: faq.p4.whoami.a1 | src: frontend/src/pages/FAQ.vue:445-449 -->
+<!-- key: faq.p4.whoami.a1 | src: frontend/src/pages/FAQ.vue:446-448 -->
 I'm Lasse, a network engineer from Norway. By day I build and run networks; by night I run a crawler that shames billion-dollar companies who still won't publish an AAAA record.
 
-<!-- key: faq.p4.whoami.a2 | src: frontend/src/pages/FAQ.vue:450-454 -->
+<!-- key: faq.p4.whoami.a2 | src: frontend/src/pages/FAQ.vue:451-453 -->
 None of it is personal. Any domain can walk off the Sinners list with one DNS change and a server that answers over IPv6; the crawler forgives after three clean scans.
 
-<!-- key: faq.p4.whoami.a3 | src: frontend/src/pages/FAQ.vue:455-458 -->
+<!-- key: faq.p4.whoami.a3 | src: frontend/src/pages/FAQ.vue:456-457 -->
 The endgame is an empty Sinners list. IPv6 turns 30 in 2028. I'd like to be done before it turns 40.
 
 <!-- key: faq.p4.contact.q | src: frontend/src/pages/FAQ.vue:461 -->
 Contact
 
-<!-- key: faq.p4.contact.twitter | src: frontend/src/pages/FAQ.vue:462-467 -->
+<!-- key: faq.p4.contact.twitter | src: frontend/src/pages/FAQ.vue:463-465 -->
 Twitter / X: [@whynoipv6](https://twitter.com/WhyNoIPv6)
 
-<!-- key: faq.p4.contact.email | src: frontend/src/pages/FAQ.vue:468-471 | accent text, deliberately not a mailto link -->
+<!-- key: faq.p4.contact.email | src: frontend/src/pages/FAQ.vue:469-470 | accent text, deliberately not a mailto link -->
 Email: **whynoipv6@protonmail.com**
 
 <!-- key: faq.p4.status.q | src: frontend/src/pages/FAQ.vue:474 -->
 Status page
 
-<!-- key: faq.p4.status.a | src: frontend/src/pages/FAQ.vue:475-479 -->
+<!-- key: faq.p4.status.a | src: frontend/src/pages/FAQ.vue:476-477 -->
 Uptime and incident history: [status.whynoipv6.com](https://status.whynoipv6.com/)
 
 <!-- key: faq.p4.supporters.q | src: frontend/src/pages/FAQ.vue:483 -->
 Our Supporters
 
-<!-- key: faq.p4.supporters.a | src: frontend/src/pages/FAQ.vue:484-487 -->
+<!-- key: faq.p4.supporters.a | src: frontend/src/pages/FAQ.vue:485-486 -->
 These organizations supported the site early on, back when it was one crawler and a grudge.
 
 <!-- key: faq.p4.supporters.alt | src: frontend/src/pages/FAQ.vue:499 | a11y; links to https://blix.com/ -->
@@ -1885,16 +1915,16 @@ Blix
 
 ## 5.17 Page not found (catch-all)
 
-<!-- key: notfound.eyebrow_code | src: frontend/src/pages/PageNotFound.vue:29-31 -->
+<!-- key: notfound.eyebrow_code | src: frontend/src/pages/PageNotFound.vue:30 -->
 404
 
-<!-- key: notfound.eyebrow_label | src: frontend/src/pages/PageNotFound.vue:33-35 -->
+<!-- key: notfound.eyebrow_label | src: frontend/src/pages/PageNotFound.vue:34 -->
 NXDOMAIN
 
 <!-- key: notfound.title | src: frontend/src/pages/PageNotFound.vue:38 -->
 Shame on us. This page doesn't resolve.
 
-<!-- key: notfound.body | src: frontend/src/pages/PageNotFound.vue:40-43 -->
+<!-- key: notfound.body | src: frontend/src/pages/PageNotFound.vue:41-42 -->
 We checked every record: A, AAAA, even MX. Unlike our Sinners, this URL has a valid excuse for being unreachable: it doesn't exist.
 
 <!-- key: notfound.cta_home | src: frontend/src/pages/PageNotFound.vue:47 -->
@@ -1932,6 +1962,8 @@ row phrases, where the dash is house style. Everything below is outside that exc
 | `comp.statuscard.desc_mx` | "reachable over IPv6 — or no mail is configured" |
 | `comp.infocard.caveat` | "Advisory — never affects the rating" |
 | `livecheck.failed_fallback` | "could not complete — try again later" |
+| `livecheck.timeout.detail` | "taking too long — try again later" |
+| `livecheck.notfound.detail` | "never existed — run a fresh check above" |
 | `livecheck.stage.0s` | "Resolving DNS records — AAAA, nameservers, mail…" |
 | `livecheck.stage.45s` | "Still working — slow targets…" |
 | `metrics.asn.scatter.floor` | "({dropped} here) — at that size…" |
@@ -1998,7 +2030,7 @@ is explicit rather than an oversight.
 
 | Surface | Where it lives |
 |---|---|
-| RFC 9457 problem titles and details (rendered by `ApiError.vue`) | Backend, `backend/internal/api/` |
+| RFC 9457 problem titles and details (rendered by `ApiError.vue`) | Backend, `backend/internal/api/` — except the two synthesized client-side, which **are** covered: `livecheck.timeout.*` and `livecheck.notfound.*` |
 | Domain status badge SVG text | Backend, `backend/internal/api/badge.go` + goldens in `testdata/badge/` |
 | Atom / JSON Feed channel titles and entry text | Backend, `backend/internal/api/feed.go` — note its changelog phrases mirror [3.6](#36-changelog-phrases) |
 | `llms.txt`, `/docs`, `/openapi.json` | Backend, generated from `openapi/openapi.yaml` |
