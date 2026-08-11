@@ -61,8 +61,8 @@ const {
               <p class="mb-4">
                 Campaigns are reader-submitted lists of domains with something in common: a
                 country's banks, its ISPs, its government. Each list is crawled and scored as a
-                group, with the same checks as everywhere else (AAAA, nameservers, mail). The
-                percentage on each card is how many have actually deployed it.
+                group. An entry is ready when its tracked hostname and at least one nameserver host
+                publish AAAA records, and www is either supported or not applicable.
               </p>
               <p class="mb-8">
                 Have a list of domains that should know better? Open an issue in the
@@ -72,7 +72,7 @@ const {
                   target="_blank"
                   >campaign repo</a
                 >
-                and we'll put them on the scoreboard. Shame scales.
+                and we'll put it on the scoreboard.
               </p>
             </div>
 
@@ -109,7 +109,7 @@ const {
                   </div>
                   <footer class="mt-5">
                     <div class="flex justify-between mb-1">
-                      <span class="text-sm font-medium text-gray-400">IPv6 ready</span>
+                      <span class="text-sm font-medium text-gray-400">Campaign ready</span>
                       <span class="text-sm font-medium text-gray-400"
                         >{{ campaign.adoption?.v6_ready_percent ?? '—' }}%</span
                       >

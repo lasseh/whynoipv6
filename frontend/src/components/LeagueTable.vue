@@ -74,7 +74,7 @@ const view = computed(() =>
         ></div>
       </div>
       <div class="mt-1 text-xs text-gray-500">
-        {{ fmtCompact(row.v6) }} of {{ fmtCompact(row.total) }} domains answer over IPv6
+        {{ fmtCompact(row.v6) }} of {{ fmtCompact(row.total) }} domains publish an apex AAAA record
       </div>
     </div>
 

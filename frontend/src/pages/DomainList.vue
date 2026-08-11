@@ -31,13 +31,13 @@ const tierTabs = TIERS.filter((t) => !t.hidden).map((t) => ({ value: t.slug, lab
         <div class="pt-24 pb-12 md:pt-32 md:pb-20">
           <header ref="anchorTop" class="mb-8">
             <div class="text-center md:text-left">
-              <h1 class="h2 mb-4">The top million websites, judged by their AAAA records</h1>
+              <h1 class="h2 mb-4">The Tranco top million, judged by their AAAA records</h1>
               <p class="text-lg text-gray-400">
-                We check every domain in the Tranco top million for IPv6: apex, www, mail,
-                nameservers. Deploy it everywhere and you're a Hero; the Saints bar adds serving
-                your page resources over IPv6 too. No IPv6 at all makes you a Sinner: some of the
-                internet's biggest names, still unreachable over a protocol standardized in 1998.
-                The crawler re-checks daily. Redemption starts with an AAAA record.
+                We check the apex, www, nameserver and mail hosts, and whether the site actually
+                answers over IPv6. Passing every required check makes a Hero. Saints pass the
+                page-resource grade too. A Sinner still has an apex A record but no globally
+                routable AAAA record. Active domains normally run daily, with other schedules for
+                retries and backoff.
               </p>
             </div>
           </header>

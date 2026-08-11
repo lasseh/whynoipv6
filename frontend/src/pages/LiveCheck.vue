@@ -50,11 +50,11 @@ const failed = computed(() => envelope.value?.status === 'failed')
 
 // "Not applicable" on resources is ambiguous (mirrors DomainStatusCard):
 // discovery only runs when the site loads over IPv6, so the same value means
-// either "no external dependencies" or "couldn't evaluate".
+// either "no live external host remained" or "couldn't evaluate".
 const resourcesNote = computed(() => {
   if (checks.value.resources?.status !== 'not_applicable') return null
   return checks.value.conn?.status === 'supported'
-    ? 'The page pulls no resources from external hosts.'
+    ? 'No live external resource host remained to grade.'
     : 'The site isn’t reachable over IPv6, so page resources can’t be evaluated.'
 })
 
@@ -120,9 +120,9 @@ watch([envelope, () => route.params.target], ([env]) => {
           <div class="text-center mb-8">
             <h1 class="h2 mb-4">Live IPv6 Check</h1>
             <p class="text-lg text-gray-400">
-              Runs a real scan from our crawler right now: DNS, mail, and an actual connection over
-              IPv6. Results are live observations; the tracked, confirmed status updates on its own
-              schedule, not yours.
+              The live check scans DNS and mail, then attempts a real IPv6 connection. This is a
+              live observation; tracked, confirmed status updates on the crawler's schedule, not
+              yours.
             </p>
           </div>
 

@@ -165,7 +165,7 @@ const tip = computed(() => {
           {{ fmtCompact(t) }}
         </text>
         <text :x="PAD.l + innerW / 2" :y="height - 1" text-anchor="middle" class="fill-gray-600">
-          domains hosted (log scale)
+          domains attributed (log scale)
         </text>
       </g>
 

@@ -97,7 +97,7 @@ describe('rewriteHead', () => {
     expect(html).toContain('<meta property="article:published_time" content="2026-08-02" />')
     expect(html).toContain('"@type":"BlogPosting"')
     // The static homepage values are gone, not duplicated.
-    expect(html).not.toContain('content="Why No IPv6 scans the top million')
+    expect(html).not.toContain('content="Why No IPv6 checks the Tranco top million')
     expect(html.match(/property="og:title"/g)).toHaveLength(1)
     // No-image post keeps the site-wide sticker + summary card.
     expect(html).toContain('content="https://whynoipv6.com/images/WhyNoSticker.webp"')

@@ -20,7 +20,7 @@ const routes: RouteRecordRaw[] = [
     meta: {
       title: 'Why No IPv6 - IPv6 Adoption Tracker',
       description:
-        'Why No IPv6 scans the top million domains daily (www, nameservers, mail) and names the giants still IPv4-only. Sinners, Heroes, Saints. Shame on them.',
+        'Why No IPv6 checks the Tranco top million every day for IPv6 across DNS, web, and mail. Sinners, Heroes, Saints. Shame on them.',
     },
   },
   {
@@ -30,7 +30,7 @@ const routes: RouteRecordRaw[] = [
     meta: {
       title: 'Domain Leaderboard - Why No IPv6',
       description:
-        'Every domain we crawl, ranked by Tranco and checked for IPv6 (domain, www, nameservers, mail). Filter by tier: Sinners, Heroes, Saints.',
+        'Every ranked domain we crawl, checked for IPv6 across its apex, www, nameserver hosts, mail hosts, and web connection.',
     },
   },
   {
@@ -50,7 +50,7 @@ const routes: RouteRecordRaw[] = [
     meta: {
       title: 'Domain Details - Why No IPv6',
       description:
-        'The complete IPv6 report card for this domain: AAAA for domain and www, nameservers, MX, and whether it actually answers over IPv6.',
+        'The IPv6 report for one domain: AAAA records on the apex, www, nameserver hosts, and mail hosts, plus a real connection over IPv6.',
     },
   },
   {
@@ -59,7 +59,7 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/pages/Search.vue'),
     meta: {
       title: 'Search Results - Why No IPv6',
-      description: "Search the domains we crawl: who has IPv6 and who doesn't.",
+      description: 'Search the domains we crawl and see their IPv6 status.',
     },
   },
   {
@@ -69,7 +69,7 @@ const routes: RouteRecordRaw[] = [
     meta: {
       title: 'Live IPv6 Check - Why No IPv6',
       description:
-        'Run a live IPv6 check on any domain: AAAA records, nameservers, MX, and a real connection attempt over IPv6. Answers come from DNS, not our cache.',
+        'Run a live IPv6 check on any domain: AAAA records, nameserver hosts, mail hosts, and a real connection attempt over IPv6.',
     },
   },
   {
@@ -79,7 +79,7 @@ const routes: RouteRecordRaw[] = [
     meta: {
       title: 'IPv6 Adoption Metrics - Why No IPv6',
       description:
-        "IPv6 adoption metrics for the top million domains, charted over time: how many publish AAAA records, how many don't, and how fast that's changing (slowly).",
+        'IPv6 adoption across the Tranco top million over time: apex, www, nameserver hosts, mail hosts, reachability, and page resources.',
     },
   },
   {
@@ -89,7 +89,7 @@ const routes: RouteRecordRaw[] = [
     meta: {
       title: 'IPv6 Adoption by Country - Why No IPv6',
       description:
-        'IPv6 adoption ranked by country: who leads, who trails, and where the Sinners cluster. National pride, now measurable in AAAA records.',
+        'Ranked domains attributed by country, measured by confirmed apex IPv6 adoption.',
     },
   },
   {
@@ -99,7 +99,7 @@ const routes: RouteRecordRaw[] = [
     meta: {
       title: 'Country Details - Why No IPv6',
       description:
-        "How this country's top domains score on IPv6: adoption rate, the local Heroes, and the Sinners dragging the national average down.",
+        'Confirmed apex IPv6 adoption for the ranked domains attributed to this country, with its Heroes and Sinners.',
     },
   },
   {
@@ -109,7 +109,7 @@ const routes: RouteRecordRaw[] = [
     meta: {
       title: 'Shame Campaigns - Why No IPv6',
       description:
-        'Reader-submitted lists of big-name domains, tracked daily until the AAAA records show up. Shame as a Service.',
+        'Reader-submitted domain lists, checked by the crawler and scored with the campaign IPv6-readiness rules.',
     },
   },
   {
@@ -119,7 +119,7 @@ const routes: RouteRecordRaw[] = [
     meta: {
       title: 'Campaign Details - Why No IPv6',
       description:
-        "Every domain in this campaign and its IPv6 status: who fixed it, who hasn't, and how the percentage is coming along.",
+        'Every domain in this campaign and whether it passes the campaign IPv6-readiness checks.',
     },
   },
   {
@@ -139,7 +139,7 @@ const routes: RouteRecordRaw[] = [
     meta: {
       title: 'Campaign Domain - Why No IPv6',
       description:
-        "The full IPv6 checklist for this campaign domain: AAAA, nameservers, mail, and whether it's helping or hurting the campaign's numbers.",
+        'The IPv6 report for one campaign domain: AAAA records, nameserver hosts, mail hosts, and web reachability.',
     },
   },
   {
@@ -149,7 +149,7 @@ const routes: RouteRecordRaw[] = [
     meta: {
       title: 'Changelog - Why No IPv6',
       description:
-        "Who fixed their IPv6 and who broke it, day by day. Every AAAA record that appeared or quietly disappeared, pulled from the crawler's daily runs.",
+        'Confirmed IPv6 changes from the crawler: who fixed something, who broke it, and when.',
     },
   },
   {
@@ -173,7 +173,7 @@ const routes: RouteRecordRaw[] = [
     meta: {
       title: 'FAQ - Why No IPv6',
       description:
-        'How the crawler works, what the checks mean, and how to get your domain removed from the list. Short answer to that last one: start using IPv6.',
+        'How the crawler works, what the checks mean, and how to get your domain removed from the list. Short answer: start using IPv6.',
     },
   },
 

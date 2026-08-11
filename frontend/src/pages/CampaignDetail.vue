@@ -117,7 +117,7 @@ watch(campaign, (c) => {
                   {{ meta?.count ?? '—' }} domains
                 </div>
                 <div class="text-sm font-medium text-zinc-500 mb-2">
-                  {{ campaign?.adoption?.v6_ready_percent ?? 0 }}% IPv6 ready
+                  campaign readiness {{ campaign?.adoption?.v6_ready_percent ?? 0 }}%
                 </div>
               </div>
             </div>

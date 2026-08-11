@@ -49,16 +49,13 @@ const hoverIndex = ref<number | null>(null)
           </th>
           <th class="px-2 py-3 whitespace-nowrap">
             <div class="font-semibold text-center md:block hidden">
-              <Tooltip text="MX hosts for domain.com, each checked for an AAAA record"
-                >Mail (MX)</Tooltip
-              >
+              <Tooltip text="AAAA records on MX hosts for domain.com">Mail (MX)</Tooltip>
             </div>
             <div class="font-semibold text-center md:hidden">MX</div>
           </th>
           <th class="px-2 py-3 whitespace-nowrap">
             <div class="font-semibold text-center md:block hidden">
-              <Tooltip
-                text="Authoritative nameservers for domain.com, each checked for an AAAA record"
+              <Tooltip text="AAAA records on authoritative nameserver hosts for domain.com"
                 >Nameservers</Tooltip
               >
             </div>
@@ -66,7 +63,7 @@ const hoverIndex = ref<number | null>(null)
           </th>
           <th class="px-5 py-3 whitespace-nowrap">
             <div class="font-semibold text-center md:block hidden">
-              <Tooltip text="Loads fully over an IPv6-only connection (site + page resources)"
+              <Tooltip text="The site answers over IPv6 and passes the page-resource grade"
                 >IPv6 Only</Tooltip
               >
             </div>

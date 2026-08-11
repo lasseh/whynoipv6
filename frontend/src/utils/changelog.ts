@@ -57,9 +57,9 @@ export function changelogParts(
   if (item.field === 'resources') {
     switch (item.new_value) {
       case 'supported':
-        return { phrase: 'now loads all page resources over IPv6', dotClass: dotOf(item) }
+        return { phrase: 'now passes the page-resource IPv6 grade', dotClass: dotOf(item) }
       case 'unsupported':
-        return { phrase: 'loads some page resources without IPv6', dotClass: dotOf(item) }
+        return { phrase: 'uses some page-resource hosts without IPv6', dotClass: dotOf(item) }
       default: // not_applicable — suppressed at write (03 §11); defensive only
         return {
           phrase: 'no longer has its page resources checked',

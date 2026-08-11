@@ -216,13 +216,14 @@ const ACTIVE: Record<Entity, { rows: () => Row[]; noun: string; blurb: string }>
   dns: {
     rows: () => dnsRows.value,
     noun: 'DNS providers',
-    blurb: 'Who runs the zone, and whether the domains in it resolve to an AAAA.',
+    blurb:
+      'Who runs each zone, and whether domains using that provider publish an apex AAAA record.',
   },
   hosting: {
     rows: () => hostingRows.value,
     noun: 'platforms',
     blurb:
-      'The platform serving the site, which is usually the one that decides. A league among the platforms we can attribute, not a market survey.',
+      'The platform serving the site. A league among the platforms we can attribute, not a market survey.',
   },
 }
 
@@ -311,10 +312,9 @@ const ptrWithout = computed(() => {
     <header class="mb-6">
       <h2 class="mb-2 text-2xl font-bold text-zinc-100">IPv6 by provider</h2>
       <p class="text-lg text-gray-400">
-        Every domain we crawl lives on someone's network, resolves through someone's DNS, and is
-        served off someone's platform. One default-on change at a big provider moves thousands of
-        domains to dual stack overnight. These are the three registries that decide, and who in each
-        has flipped the switch.
+        The tabs group active ranked domains by attributed network, DNS provider, and hosting or CDN
+        platform. Some attribution is unknown, and currently empty entries can appear. A default-on
+        IPv6 change at a large provider can affect thousands of domains at once.
       </p>
     </header>
 
@@ -327,11 +327,11 @@ const ptrWithout = computed(() => {
     <div v-else class="grid gap-4">
       <ChartPanel
         title="Size against adoption"
-        :description="`Every ${active.noun.replace(/s$/, '')} placed by how many domains it carries and how many answer over IPv6. Bottom right is the interesting corner: plenty of domains, no AAAA.`"
+        :description="`Each ${active.noun.replace(/s$/, '')} is placed by attributed domain count and apex IPv6 share. The bottom-right corner is the interesting one: plenty of domains, little IPv6.`"
       >
         <ScatterChart
           :points="scatterPoints"
-          :label="`IPv6 adoption against domains hosted, per ${active.noun.replace(/s$/, '')}`"
+          :label="`IPv6 adoption against domains attributed, per ${active.noun.replace(/s$/, '')}`"
         />
         <p class="mt-3 text-xs text-gray-500">
           <template v-if="laggards">

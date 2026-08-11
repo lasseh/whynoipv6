@@ -22,8 +22,8 @@ func TestFeedItemTitleGoldens(t *testing.T) {
 		{"conn unreachable", "conn", "supported", "unsupported", "example.com is no longer reachable over IPv6"},
 		{"conn addresses published but failing", "conn", "not_applicable", "unsupported", "example.com published IPv6 addresses — but connections fail"},
 		{"conn addresses withdrawn", "conn", "unsupported", "not_applicable", "example.com has no IPv6 addresses left to test"},
-		{"resources all over IPv6", "resources", "unsupported", "supported", "example.com now loads all page resources over IPv6"},
-		{"resources partially v4-only", "resources", "supported", "unsupported", "example.com loads some page resources without IPv6"},
+		{"resources all over IPv6", "resources", "unsupported", "supported", "example.com now passes the page-resource IPv6 grade"},
+		{"resources partially v4-only", "resources", "supported", "unsupported", "example.com uses some page-resource hosts without IPv6"},
 		{"resources no longer checked", "resources", "supported", "not_applicable", "example.com no longer has its page resources checked"},
 	}
 	for _, g := range goldens {

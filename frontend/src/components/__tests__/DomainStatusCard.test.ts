@@ -100,12 +100,12 @@ describe('DomainStatusCard mx row for subdomains', () => {
 
 // "Not applicable" on resources is ambiguous without the connection check:
 // discovery only runs when the site loads over IPv6, so the same value means
-// either "no external dependencies" or "couldn't evaluate".
+// either "no live external host remained" or "couldn't evaluate".
 describe('DomainStatusCard resources description', () => {
-  it('explains not_applicable as no external deps when the site loads over IPv6', async () => {
+  it('explains not_applicable as no live external host when the site loads over IPv6', async () => {
     const wrapper = mountCard('supported', 'not_applicable')
     await expandIPv6Only(wrapper)
-    expect(wrapper.text()).toContain('no resources from external hosts')
+    expect(wrapper.text()).toContain('no live external resource host remained to grade')
   })
 
   it('explains not_applicable as not evaluated when the site has no IPv6', async () => {
@@ -117,6 +117,8 @@ describe('DomainStatusCard resources description', () => {
   it('keeps the standard description otherwise', async () => {
     const wrapper = mountCard('supported', 'supported')
     await expandIPv6Only(wrapper)
-    expect(wrapper.text()).toContain('Scripts, fonts, and images load from IPv6-capable hosts.')
+    expect(wrapper.text()).toContain(
+      'The resource grade comes from AAAA checks on up to 50 external hosts found in the page.',
+    )
   })
 })

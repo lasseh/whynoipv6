@@ -36,8 +36,7 @@ export function comparePostMeta(a: PostMeta, b: PostMeta): number {
 // /blog and the RSS channel description.
 export const BLOG_LIST_META = {
   title: 'Blog - Why No IPv6',
-  description:
-    'Write-ups from the crawl data: adoption numbers, notable fixes, and excuses wearing thin. Every claim links to a live page you can check.',
+  description: 'Write-ups from the crawl data: adoption numbers, notable changes, and methodology.',
 }
 
 // Pre-load fallback for /blog/:slug — the page swaps in the real title once
@@ -45,5 +44,5 @@ export const BLOG_LIST_META = {
 export const BLOG_POST_META = {
   title: 'Blog - Why No IPv6',
   description:
-    'A write-up from the Why No IPv6 crawl: what the top-million data says about IPv6 adoption.',
+    'A write-up from the Why No IPv6 crawl and what the top-million data says about adoption.',
 }

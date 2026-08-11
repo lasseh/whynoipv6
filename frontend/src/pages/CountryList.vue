@@ -46,10 +46,10 @@ const {
             <!-- content -->
             <div class="text-lg text-gray-400">
               <p class="mb-4 md:mr-32">
-                IPv6 adoption, country by country. Each domain in the Tranco list is mapped to a
-                country by GeoIP, then scored on who publishes an AAAA record and who doesn't. So
-                this measures a country's most-visited websites, not its networks. Some countries
-                are nearly done. Some haven't started. Pick yours and meet the local Sinners.
+                IPv6 adoption, country by country. A ccTLD decides where a domain belongs; otherwise
+                we use GeoIP. The percentage is the share of ranked domains with confirmed apex
+                IPv6, not a measure of the country's networks. Sinners and Heroes get tabs; Partial,
+                Inactive, and Unknown still count. Pick yours and meet the local Sinners.
               </p>
             </div>
 
@@ -84,7 +84,7 @@ const {
                   </div>
                   <footer class="mt-3">
                     <div class="flex justify-between mb-1">
-                      <span class="text-sm font-medium text-gray-400">IPv6 ready</span>
+                      <span class="text-sm font-medium text-gray-400">Apex IPv6</span>
                       <span class="text-sm font-medium text-gray-400">{{ country.percent }}%</span>
                     </div>
                     <ProgressBar :percent="country.percent" :total="country.sites" />

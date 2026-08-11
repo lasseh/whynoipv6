@@ -34,7 +34,7 @@ const DIMENSIONS: { key: 'dnssec' | 'ptr' | 'smtp' | 'parity'; label: string; de
   {
     key: 'parity',
     label: 'Content parity',
-    desc: 'The page served over IPv6 matches the one served over IPv4.',
+    desc: 'The IPv4 and IPv6 responses return the same status and content type; non-redirect bodies are similar in length.',
   },
 ]
 

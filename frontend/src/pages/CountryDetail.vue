@@ -93,13 +93,13 @@ watch(country, (c) => {
                   {{ country?.sites ?? '—' }} domains tracked
                 </div>
                 <div class="text-sm font-medium text-zinc-500 mb-2">
-                  {{ country?.v6_sites ?? '—' }} IPv6-ready domains
+                  {{ country?.v6_sites ?? '—' }} domains with apex IPv6
                 </div>
               </div>
             </div>
             <div class="mt-3 mb-4">
               <div class="flex justify-between mb-1">
-                <span class="text-sm font-medium text-white">IPv6 ready</span>
+                <span class="text-sm font-medium text-white">Apex IPv6</span>
                 <span class="text-sm font-medium text-white">{{ country?.percent ?? 0 }}%</span>
               </div>
               <ProgressBar

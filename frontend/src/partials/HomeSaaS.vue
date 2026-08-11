@@ -18,7 +18,9 @@
               IPv6 has been a standard since 1998. IPv4 ran out of addresses more than a decade ago.
               The most-visited websites on the internet still haven't connected those two facts, so
               we keep score. Publicly,
-              <span class="font-semibold a-gradient">until an AAAA record says otherwise.</span>
+              <span class="font-semibold a-gradient"
+                >until a globally routable AAAA record says otherwise.</span
+              >
             </p>
           </div>
         </article>
@@ -34,15 +36,15 @@
               >
                 <h3 class="h4 mb-3">How does it work?</h3>
                 <p class="text-base text-gray-400 mb-0">
-                  A crawler checks every domain daily: AAAA records for the site and its www, IPv6
-                  on the nameservers and mail. Do it all and you're a Hero. Skip it and you're
-                  listed, Tranco rank and all. Anyone can start a campaign; the data does the rest.
+                  The crawler checks active domains on a daily schedule: AAAA records for the
+                  domain, www, nameserver hosts, and mail hosts, plus a real connection over IPv6.
+                  Failures can back off. The results determine each domain's tier and stay public.
+                  Anyone can submit a campaign list for the crawler too.
                 </p>
                 <h3 class="h4 mb-3 mt-6">Why shame?</h3>
                 <p class="text-base text-gray-400 mb-0">
-                  The RFC is old enough to vote. The conference talks happened. World IPv6 Launch
-                  was in 2012. At some point the only tool left is a public list with your domain on
-                  it.
+                  World IPv6 Launch was in 2012. The missing part isn't another conference talk, so
+                  here is the public list.
                 </p>
               </div>
               <!-- Buttons -->
@@ -71,8 +73,8 @@
                           Public receipts
                         </div>
                         <div class="text-zinc-400 text-base">
-                          Every check is public and dated. A domain can ignore us, but it can't say
-                          it wasn't warned.
+                          Every check is public and dated. If you think one is wrong, the history
+                          and method are right there.
                         </div>
                       </div>
                     </div>
@@ -95,11 +97,11 @@
                       </svg>
                       <div>
                         <div class="text-base font-semibold text-zinc-200 mb-1 a-gradient">
-                          Strength in numbers
+                          Open methodology
                         </div>
                         <div class="text-zinc-400 text-base">
-                          Compare notes with people who care about address space. Share findings,
-                          argue methodology, watch the adoption graph inch upward.
+                          Challenge the method. The API and daily dataset are there to check our
+                          work.
                         </div>
                       </div>
                     </div>
@@ -126,8 +128,8 @@
                           Bring your own Sinner
                         </div>
                         <div class="text-zinc-400 text-base">
-                          Found a big name still IPv4-only? Submit it as a campaign and the crawler
-                          takes it from there.
+                          Found a big name still publishing an apex A record but no globally
+                          routable AAAA? Submit a campaign and put it on the crawler's schedule.
                         </div>
                       </div>
                     </div>

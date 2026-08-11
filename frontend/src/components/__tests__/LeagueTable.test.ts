@@ -12,7 +12,7 @@ describe('LeagueTable', () => {
       },
     })
     expect(wrapper.text()).toContain('75.0%')
-    expect(wrapper.text()).toContain('300 of 400 domains answer over IPv6')
+    expect(wrapper.text()).toContain('300 of 400 domains publish an apex AAAA record')
 
     const bar = wrapper.find('[role="progressbar"]')
     // jsdom normalises the trailing zeros off the inline width.

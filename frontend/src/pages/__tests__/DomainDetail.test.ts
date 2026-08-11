@@ -39,7 +39,7 @@ describe('DomainDetail page', () => {
     await flushPromises()
 
     expect(wrapper.text()).toContain('example.com')
-    expect(wrapper.text()).toContain('Provider: Telenor Norge AS (AS2119)')
+    expect(wrapper.text()).toContain('Network: Telenor Norge AS (AS2119)')
     expect(wrapper.text()).toContain('Rank: 1337')
     expect(wrapper.text()).toContain('Last checked: 10 July 2026')
     expect(wrapper.text()).not.toContain('Request failed')

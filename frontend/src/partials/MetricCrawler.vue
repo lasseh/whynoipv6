@@ -147,7 +147,7 @@ const deltaValues = computed(() => [
 // saying on the tile: it is the only data-age signal the page has.
 const STALE_AFTER_HOURS = 3
 const crawlerHint = computed(() => {
-  const base = 'The whole set sweeps every 24 hours, re-checks on top.'
+  const base = 'Includes retries and failures, so one host can count more than once.'
   const latest = crawler.value?.latest
   if (!latest) return base
   const hours = Math.floor((Date.now() - new Date(latest).getTime()) / 3_600_000)
@@ -179,19 +179,17 @@ const smtpPaperOnly = computed(() => {
       <p class="mb-2 text-lg text-gray-400">
         Of the
         <span class="text-fuchsia-600">{{ fmtFull(latest.domains) }}</span>
-        most-visited websites on the internet, only
+        ranked domains, only
         <span class="text-fuchsia-600">{{ fmtPercent(heroShare) }}</span>
-        are fully IPv6-ready. IPv6 has been a standard since 1998. In the Tranco top 1000 the
-        picture is no prettier:
+        are Heroes. In the Tranco top 1000,
         <span class="text-fuchsia-600">{{ latest.top_heroes ?? '—' }}</span>
-        have IPv6 enabled, and
+        have apex IPv6 and no confirmed www failure;
         <span class="text-fuchsia-600">{{ latest.top_nameserver ?? '—' }}</span>
-        sit behind nameservers reachable over IPv6.
+        use nameserver hosts with AAAA records.
       </p>
       <p class="text-lg text-gray-400">
-        For context: IPv6 became a standard in 1998, and again in 2017, in case anyone missed it the
-        first time. The numbers below are what nearly three decades of "we'll get to it" looks like.
-        Every one of them moves the day someone publishes an AAAA record.
+        IPv6 became a standard in 1998, and again in 2017 in case anyone missed it the first time.
+        The numbers below show how "we'll get to it" is going.
       </p>
     </header>
 
@@ -202,7 +200,7 @@ const smtpPaperOnly = computed(() => {
       <StatTile
         :value="fmtCompact(latest.tracked_total)"
         label="Domains tracked"
-        :hint="`${fmtCompact(latest.domains)} carry a Tranco rank. The rest are campaign entries, curated lists, and domains that fell off it.`"
+        :hint="`${fmtCompact(latest.domains)} are in the current Tranco ranking. The rest are campaign entries, curated lists, and domains that fell off it.`"
         tone="muted"
       />
       <StatTile
@@ -213,23 +211,23 @@ const smtpPaperOnly = computed(() => {
       <StatTile
         :value="fmtPercent((latest.top_heroes ?? 0) / 10)"
         label="Top 1000 with IPv6"
-        :hint="`${latest.top_nameserver ?? '—'} of them have IPv6 nameservers.`"
+        :hint="`${latest.top_nameserver ?? '—'} use at least one nameserver host with an AAAA record.`"
       />
       <StatTile
         :value="fmtCompact(latest.heroes)"
         label="Heroes"
-        :hint="`${fmtCompact(latest.saints)} are Saints: page resources over IPv6 too.`"
+        :hint="`${fmtCompact(latest.saints)} are Saints: they pass the page-resource grade too.`"
         tone="good"
       />
       <StatTile
         :value="fmtCompact(latest.sinners)"
         label="Sinners"
-        hint="No AAAA anywhere. One DNS change from the exit."
+        hint="An apex A record, but no globally routable AAAA. That's the whole classification."
         tone="bad"
       />
       <StatTile
         :value="fmtCompact(crawler?.checked_24h)"
-        label="Hosts checked today"
+        label="Checks attempted in 24 hours"
         :hint="crawlerHint"
         tone="muted"
       />
@@ -237,8 +235,8 @@ const smtpPaperOnly = computed(() => {
 
     <div class="mb-8 grid gap-4">
       <ChartPanel
-        title="Where domains sit, day by day"
-        description="Every tracked domain lands in exactly one class, so the bands add up to the list."
+        title="Where ranked domains sit, day by day"
+        description="Every active ranked domain lands in exactly one class, so the bands add up to the list."
       >
         <AreaStackChart
           :labels="days"
@@ -271,7 +269,7 @@ const smtpPaperOnly = computed(() => {
           :series="DELTA_SERIES.map((s) => ({ ...s }))"
           :values="deltaValues"
           :format-value="fmtCompact"
-          label="Daily count of checks gaining and losing IPv6 support"
+          label="Daily count of domains gaining and losing apex IPv6 support"
         />
       </ChartPanel>
     </div>
@@ -279,8 +277,8 @@ const smtpPaperOnly = computed(() => {
     <header class="mb-4">
       <h3 class="h4 mb-1">Beyond a AAAA record</h3>
       <p class="text-lg text-gray-400">
-        An AAAA record is the entry fee, not the finish line. These three checks are advisory: they
-        never change a rating, they just show how much of the deployment was finished.
+        AAAA is only the DNS part. These advisory checks show what works beyond it; they never
+        change a rating.
       </p>
     </header>
 
@@ -300,7 +298,7 @@ const smtpPaperOnly = computed(() => {
       <StatTile
         :value="fmtCompact(smtpPaperOnly)"
         label="Mail that only looks ready"
-        hint="The MX has an AAAA record. Nothing answers on it."
+        hint="The MX has an AAAA record, but the SMTP check failed."
         tone="bad"
       />
     </div>

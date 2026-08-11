@@ -43,16 +43,16 @@ interface Row {
   dims: { dim: Dimension; label?: string; desc: string }[]
 }
 
-// "Not applicable" on resources means two different things: a vacuous pass
-// (page loads over IPv6, no external dependencies) or "couldn't evaluate"
+// "Not applicable" on resources means two different things: no live external
+// resource host remained to grade, or "couldn't evaluate"
 // (site unreachable over IPv6, so discovery never ran) — disambiguate by
 // the connection check, since discovery only runs when the site loads.
 function resourcesDesc(status: DomainDetail['status']): string {
   if (status.resources.value !== 'not_applicable') {
-    return 'Scripts, fonts, and images load from IPv6-capable hosts.'
+    return 'The resource grade comes from AAAA checks on up to 50 external hosts found in the page.'
   }
   return status.conn.value === 'supported'
-    ? 'Not applicable: the page pulls no resources from external hosts.'
+    ? 'Not applicable: no live external resource host remained to grade.'
     : 'Not applicable: the site isn’t reachable over IPv6, so page resources can’t be evaluated.'
 }
 
@@ -113,7 +113,10 @@ const rows = computed<Row[]>(() => {
       label: 'Nameservers',
       value: status.ns.value,
       dims: [
-        { dim: 'ns', desc: 'The domain’s DNS is served by at least one IPv6-capable nameserver.' },
+        {
+          dim: 'ns',
+          desc: "At least one of the domain's nameserver hosts publishes an AAAA record.",
+        },
       ],
     },
     ...(showMx.value
@@ -125,7 +128,7 @@ const rows = computed<Row[]>(() => {
             dims: [
               {
                 dim: 'mx' as const,
-                desc: 'Mail servers (MX) are reachable over IPv6 — or no mail is configured.',
+                desc: 'At least one mail host publishes an AAAA record, or there is no mail host to grade.',
               },
             ],
           },

@@ -65,7 +65,7 @@ watch(domain, (d) => {
                   />
                 </div>
                 <p class="text-base text-gray-400 pl-1">
-                  Provider: {{ domain.asn.name }} (AS{{ domain.asn.number }})
+                  Network: {{ domain.asn.name }} (AS{{ domain.asn.number }})
                 </p>
                 <p v-if="domain.parent" class="text-base text-gray-400 pl-1">
                   Subdomain of

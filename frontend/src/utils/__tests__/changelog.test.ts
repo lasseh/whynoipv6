@@ -80,14 +80,14 @@ describe('changelogParts', () => {
       field: 'resources',
       old_value: 'unsupported',
       new_value: 'supported',
-      message: 'example.com now loads all page resources over IPv6',
+      message: 'example.com now passes the page-resource IPv6 grade',
       colorClass: 'text-emerald-600',
     },
     {
       field: 'resources',
       old_value: 'supported',
       new_value: 'unsupported',
-      message: 'example.com loads some page resources without IPv6',
+      message: 'example.com uses some page-resource hosts without IPv6',
       colorClass: 'text-pink-600',
     },
   ] as const

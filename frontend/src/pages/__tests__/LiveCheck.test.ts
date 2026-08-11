@@ -98,8 +98,8 @@ describe('LiveCheck page', () => {
     expect(wrapper.text()).not.toContain('Resolvers disagreed')
     expect(wrapper.text()).toContain('IPv6 29 ms')
     expect(wrapper.text()).not.toContain('stored result')
-    // resources not_applicable + conn supported → the vacuous-pass wording
-    expect(wrapper.text()).toContain('no resources from external hosts')
+    // resources not_applicable + conn supported → no live host remained to grade
+    expect(wrapper.text()).toContain('No live external resource host remained to grade.')
   })
 
   it('explains resources not_applicable as not evaluated when the site has no IPv6', async () => {

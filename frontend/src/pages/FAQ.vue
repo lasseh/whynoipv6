@@ -44,8 +44,9 @@ watch(
                 <li class="py-4">
                   <h4 class="text-xl font-medium mb-2">What is Why No IPv6?</h4>
                   <p class="text-base text-gray-400">
-                    Why No IPv6 crawls the Tranco top million every day, plus user-submitted
-                    campaigns, and checks each one for IPv6: the domain, www, nameservers, and mail.
+                    Why No IPv6 crawls the active Tranco list on its normal daily schedule, plus
+                    user-submitted campaigns, and checks each entry for IPv6: the domain, www,
+                    nameserver hosts, mail hosts, and real web reachability. Failures can back off.
                     Then we sort the results into Sinners, Heroes, and Saints and publish the
                     receipts.
                   </p>
@@ -53,23 +54,21 @@ watch(
                 <li class="py-4">
                   <h4 class="text-xl font-medium mb-2">Why does IPv6 matter?</h4>
                   <p class="text-base text-gray-400 mb-2">
-                    IPv4 ran out. Not 'is running out': ran out. The registries held the funeral
-                    years ago. IPv6 is the address space the internet actually grew into. For a
-                    top-ranked site today, skipping it isn't an oversight. It's a choice.
+                    IPv4 ran out. Not 'is running out': ran out. The regional registries held the
+                    funeral years ago. Networks still need addresses. IPv6 has them. For a
+                    top-ranked site today, skipping it isn't an oversight.
                   </p>
                   <p class="text-base text-gray-400">
-                    Our part is simple: we watch the top million and publish who has IPv6 and who
-                    doesn't. Being on the second list is meant to be uncomfortable.
+                    We check the top million and publish which domains have IPv6 and which don't.
+                    The second list is meant to be uncomfortable.
                   </p>
                 </li>
                 <li class="py-4">
                   <h4 class="text-xl font-medium mb-2">How does the site work?</h4>
                   <p class="text-base text-gray-400">
-                    Once a day the crawler walks the entire Tranco list and runs the same checks on
-                    every domain: AAAA records on the domain and www, IPv6 on the nameservers and
-                    mail servers, and a real HTTP connection over IPv6 to confirm the records aren't
-                    decorative. The results feed everything here: the tiers, the country stats, and
-                    the changelog.
+                    The crawler works through the active Tranco list, checking AAAA records for the
+                    domain, www, nameserver hosts, and mail hosts, plus a real HTTP connection over
+                    IPv6. The results feed everything here: the tiers, country stats, and changelog.
                   </p>
                 </li>
                 <li class="py-4">
@@ -81,7 +80,7 @@ watch(
                     >
                     ranks the top million domains by aggregating several traffic lists, which
                     smooths out the noise and manipulation that made single-source rankings like
-                    Alexa easy to game. It's the ranking researchers actually use.
+                    Alexa easy to game. It's a ranking researchers actually use.
                   </p>
                   <p class="text-base text-gray-400">
                     We use it because the rank is half the shame: 'top 100 site, zero AAAA records'
@@ -93,7 +92,8 @@ watch(
                   <p class="text-base text-gray-400">
                     Treat the data as indicative, not absolute. DNS propagation and CDNs that answer
                     differently per anycast location can shift a result from one scan to the next.
-                    That's why a status only changes after three consecutive scans agree.
+                    First definitive observations publish immediately; later changes need two
+                    agreeing scans for DNS and mail, or three for reachability and page resources.
                   </p>
                 </li>
                 <li class="py-4">
@@ -102,13 +102,13 @@ watch(
                   </h4>
                   <p class="text-base text-gray-400 mb-2">
                     Usually DNS propagation lag, a CDN answering differently from our vantage point,
-                    or a server that didn't respond during that scan. A real fix sticks after three
-                    consecutive daily scans, so give it a few days. If it still looks wrong, contact
+                    or a server that didn't respond during that scan. A real change has to survive
+                    the confirmation window, so give it a few days. If it still looks wrong, contact
                     us.
                   </p>
                   <p class="text-base text-gray-400">
-                    Also note the crawler verifies reachability: an AAAA record that doesn't answer
-                    over IPv6 still counts as unsupported.
+                    The crawler reports DNS and reachability separately. An AAAA record can be
+                    supported while the site still fails its IPv6 connection check.
                   </p>
                 </li>
               </ul>
@@ -126,9 +126,9 @@ watch(
                 <li class="py-4">
                   <h4 class="text-xl font-medium mb-2">Crawler Rules</h4>
                   <p class="text-base text-gray-400 mb-2">
-                    The crawler checks AAAA records on domain.com, www.domain.com, and the domain's
-                    NS and MX records. It also opens a real HTTP connection over IPv6 — publishing
-                    an AAAA record that doesn't answer won't fool anyone.
+                    The crawler checks AAAA records for domain.com, www.domain.com, and the hosts
+                    named by the domain's NS and MX records. It also opens a real HTTP connection
+                    over IPv6; an AAAA record that doesn't answer won't pass the reachability check.
                   </p>
                   <p class="text-base text-gray-400">
                     The domain and www lookups go through three independent public resolvers, and
@@ -138,8 +138,11 @@ watch(
                 <li class="py-4">
                   <h4 class="text-xl font-medium mb-2">Crawler Frequency</h4>
                   <p class="text-base text-gray-400">
-                    Every domain is scanned once per day. A status only changes after 3 consecutive
-                    scans agree, so one flaky DNS answer won't flip your verdict.
+                    Active domains normally run once per day. Base or www errors and disagreements
+                    can trigger faster retries or longer backoff. First definitive observations
+                    publish immediately. Later changes need two agreeing scans for DNS and mail, or
+                    three for reachability and page resources, so one flaky answer won't flip the
+                    verdict.
                   </p>
                 </li>
                 <li class="py-4">
@@ -148,14 +151,15 @@ watch(
                     There was nothing to grade — it never counts against a domain.
                   </p>
                   <p class="text-base text-gray-400 mb-2">
-                    For Mail (MX) it means the domain publishes no MX records: no mail service,
-                    nothing to check. A domain without mail can still become a Hero.
+                    For Mail (MX), it means there is no mail host to grade: a null MX, a subdomain
+                    without explicit MX records, or no usable implicit MX fallback. The domain can
+                    still become a Hero.
                   </p>
                   <p class="text-base text-gray-400">
-                    For Page resources it means one of two things: the page loads over IPv6 and
-                    pulls no resources from external hosts, or the site isn't reachable over IPv6 at
-                    all — then its resources can't be evaluated. The domain status card and the live
-                    check both spell out which one applies.
+                    For Page resources it means one of two things: no live external resource host
+                    remained to grade, or the site isn't reachable over IPv6 at all — then its
+                    resources can't be evaluated. The domain status card and the live check both
+                    spell out which one applies.
                   </p>
                 </li>
                 <li class="py-4">
@@ -187,16 +191,17 @@ watch(
                 <li class="py-4">
                   <h4 class="text-xl font-medium mb-2">Heroes</h4>
                   <p class="text-base text-gray-400">
-                    Hero status takes IPv6 on domain.com, www.domain.com, and the nameservers. MX
-                    hosts need IPv6 too (or no MX at all), and the site has to actually answer over
-                    IPv6.
+                    Hero status requires an AAAA record on the tracked hostname, IPv6 on at least
+                    one nameserver host, and a site that answers over IPv6. The www and mail-host
+                    checks must pass too when they apply.
                   </p>
                 </li>
                 <li class="py-4">
                   <h4 class="text-xl font-medium mb-2">Saints</h4>
                   <p class="text-base text-gray-400">
-                    Saints are Heroes that also load all their page resources (scripts, fonts,
-                    images) over IPv6. The full package: the site works on an IPv6-only connection.
+                    Saints are Heroes whose page-resource grade is Supported or Not applicable. The
+                    crawler grades up to 50 external hosts found in the page; it does not fetch
+                    every resource over IPv6.
                   </p>
                 </li>
                 <li class="pt-4">
@@ -443,14 +448,13 @@ watch(
                 <li class="py-4">
                   <h4 class="text-xl font-medium mb-2"># whoami</h4>
                   <p class="text-base text-gray-400 mb-2">
-                    I'm Lasse, a network engineer from Norway. By day I build and run networks; by
-                    night I run a crawler that shames billion-dollar companies who still won't
-                    publish an AAAA record.
+                    I'm Lasse, a network engineer from Norway. I build and run networks. I also run
+                    a crawler that keeps finding billion-dollar companies without an AAAA record.
                   </p>
                   <p class="text-base text-gray-400 mb-2">
-                    None of it is personal. Any domain can walk off the Sinners list with one DNS
-                    change and a server that answers over IPv6; the crawler forgives after three
-                    clean scans.
+                    None of it is personal. A domain leaves the Sinners list once a globally
+                    routable apex AAAA record is confirmed. Becoming a Hero takes working IPv6
+                    across the rest of the required checks too.
                   </p>
                   <p class="text-base text-gray-400">
                     The endgame is an empty Sinners list. IPv6 turns 30 in 2028. I'd like to be done

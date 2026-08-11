@@ -98,9 +98,9 @@ func feedItemTitle(it *ChangelogItem) string {
 	case "resources":
 		switch it.NewValue {
 		case "supported":
-			return it.Host + " now loads all page resources over IPv6"
+			return it.Host + " now passes the page-resource IPv6 grade"
 		case "unsupported":
-			return it.Host + " loads some page resources without IPv6"
+			return it.Host + " uses some page-resource hosts without IPv6"
 		default: // not_applicable — suppressed at write (03 §11); defensive only
 			return it.Host + " no longer has its page resources checked"
 		}

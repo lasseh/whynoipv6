@@ -52,11 +52,8 @@ onUnmounted(() => {
               />
             </svg>
             <div>
-              <div class="font-medium text-slate-200 mb-1">No IPv6?</div>
-              <div>
-                You're reading an IPv6 shame site over IPv4. Ask your ISP when they plan to catch up
-                with 1998.
-              </div>
+              <div class="font-medium text-slate-200 mb-1">No IPv6?!</div>
+              <div>You're reading an IPv6 shame site over IPv4. Ask your ISP why.</div>
             </div>
           </div>
           <button class="opacity-70 hover:opacity-80 ml-3 mt-[3px]" @click="hideNotification">

@@ -35,12 +35,13 @@ onMounted(() => {
           <div class="text-left">
             <h2 class="h3 mb-4">Wall of Shame</h2>
             <p class="text-base text-gray-400">
-              The Tranco top million, crawled daily: every domain's IPv6 support, or lack of it, on
-              public display.
+              The Tranco top million, kept on the crawler's schedule: every domain's IPv6 support,
+              or lack of it, on public display.
             </p>
             <p class="text-base text-gray-400">
-              Every domain listed here is missing an AAAA record. Nameserver IPv6 support is shown
-              alongside; some manage one without the other.
+              Every domain listed here still publishes an apex A record but no globally routable
+              AAAA record. Nameserver IPv6 support is shown alongside; some manage one without the
+              other.
             </p>
           </div>
         </header>

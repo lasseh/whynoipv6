@@ -14,7 +14,7 @@ import { formatDate } from '@/utils/date'
             <div class="text-center sm:text-left">
               <h1 class="h3">Blog</h1>
               <p class="text-base text-gray-400 mt-1">
-                Write-ups from the crawl data. The numbers do the talking; we hold the flashlight.
+                Write-ups from the crawl data. Some findings don't fit in a table cell.
               </p>
             </div>
             <a

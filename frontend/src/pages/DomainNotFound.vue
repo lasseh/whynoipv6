@@ -26,7 +26,8 @@ const domainName = computed(() => (route.params.domain as string) || 'unknown.in
                 <span class="font-mono text-pink-600">{{ domainName }}</span> isn't in our database.
               </p>
               <p class="text-lg text-gray-400 mb-6">
-                Either our crawler hasn't met it yet, or that's a typo. NXDOMAIN, basically.
+                Either the crawler hasn't met it yet, or that's a typo. Not NXDOMAIN. Just absent
+                here.
               </p>
             </div>
 
@@ -52,9 +53,7 @@ const domainName = computed(() => (route.params.domain as string) || 'unknown.in
                     </svg>
                   </div>
                   <h3 class="text-lg font-semibold text-white mb-2">Not in the crawl</h3>
-                  <p class="text-gray-400 text-sm">
-                    No record of it in our data. The likely reasons:
-                  </p>
+                  <p class="text-gray-400 text-sm">The likely reasons:</p>
                   <ul class="text-gray-400 text-sm mt-2 text-left">
                     <li>• Not yet picked up by the crawler</li>
                     <li>• A typo in the domain name</li>
@@ -88,8 +87,8 @@ const domainName = computed(() => (route.params.domain as string) || 'unknown.in
                       class="text-purple-400 hover:text-purple-300 transition-colors"
                       >live check</router-link
                     >
-                    on it right now, or submit it through the community campaign and we'll start
-                    keeping score. Once merged, the crawler picks it up on its next run.
+                    on it right now, or submit it through the campaign repo and we'll start keeping
+                    score. Once merged, the crawler picks it up on its next run.
                   </p>
                   <a
                     href="https://github.com/lasseh/whynoipv6-campaign"
