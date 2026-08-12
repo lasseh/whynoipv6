@@ -1,24 +1,25 @@
 ---
-title: IPv6 DNS is about to become the law. Well, a best practice.
-description: The IETF is replacing its 2004 DNS transport guidance. Every zone MUST run two IPv6-reachable nameservers. One in five of the top million runs zero.
-date: 2026-08-03
+title: IPv6 DNS is now the law. Well, a best practice.
+description: The IETF has replaced its 2004 DNS transport guidance. Every zone MUST run two IPv6-reachable nameservers. One in five of the top million runs zero.
+date: 2026-08-12
 ---
 
-The rule for DNS over IPv6 is still [RFC 3901](https://www.rfc-editor.org/info/rfc3901), from 2004. It was written to keep early IPv6 enthusiasm from breaking IPv4 resolution. Its replacement worries about the opposite. The new requirement:
+The rule for DNS over IPv6 was [RFC 3901](https://www.rfc-editor.org/info/rfc3901), from 2004. It was written to keep early IPv6 enthusiasm from breaking IPv4 resolution. Its replacement worries about the opposite. The new requirement:
 
-> Every DNS zone MUST be served by at least two authoritative DNS servers
-> providing services via IPv4, and at least two providing services via IPv6,
-> serving identical DNS data.
+> To prevent DNS name space partitioning, at least two IPv4-reachable and
+> two IPv6-reachable name servers MUST be configured for a zone. A single
+> name server that is reachable over both IPv4 and IPv6 counts once per
+> address family.
 
 Not the website. Not the mail. The zone itself. Two servers, each address family, same answers.
 
-The MUST comes from [draft-ietf-dnsop-3901bis](https://datatracker.ietf.org/doc/draft-ietf-dnsop-3901bis/), by Momoka Yamamoto and Tobias Fiebig. The IESG has approved it as a Best Current Practice. It now sits in the RFC Editor's final review. No number is assigned yet. The one being passed around is RFC 10001. A suitably round monument. Whatever the number, RFC 3901 is obsolete the day it publishes.
+The MUST is [RFC 10001](https://www.rfc-editor.org/rfc/rfc10001.html), by Momoka Yamamoto and Tobias Fiebig. A suitably round monument. It is a Best Current Practice, and it takes over BCP 91, the label RFC 3901 has carried since 2004. Same shelf, new text. RFC 3901 is obsolete.
 
 We happen to measure exactly this, every day, for the Tranco top million. So here is the compliance report the internet did not ask for.
 
 ## The scoreboard
 
-Numbers frozen on the publish date, as usual. We track 991,440 zones. **206,345 of them have zero IPv6-capable nameservers.** That is 20.8%. Not one server short of the requirement. Zero.
+Numbers frozen 2026-08-03, as usual. We track 991,440 zones. **206,345 of them have zero IPv6-capable nameservers.** That is 20.8%. Not one server short of the requirement. Zero.
 
 The actual bar is two servers. Our crawler graded 968,091 zones against it in the last day:
 
@@ -54,15 +55,21 @@ Compliance here is rarely something a domain owner does. It is a property of who
 
 Five operators sit at a flat 100.0%. If your zone is on any of them, you were made compliant without being consulted. Akamai's customer DNS product is at 99.0%. Akamai's own akamai.net is at zero.
 
-Then there is Network Solutions. It operated the .com registry through the nineties. Today it runs DNS for five and a half thousand top-million domains. 0.1% of them have an IPv6 nameserver. The remaining 99.9% are about to be out of compliance with a Best Current Practice. As a fleet. In one decision.
+Then there is Network Solutions. It operated the .com registry through the nineties. Today it runs DNS for five and a half thousand top-million domains. 0.1% of them have an IPv6 nameserver. The remaining 99.9% are out of compliance with a Best Current Practice. As a fleet. In one decision.
 
 ## The trajectory
 
 Over the last ten days, our [changelog](/changelog) recorded 1,552 zones gaining their first IPv6 nameserver. It recorded 961 losing their last one. Net: +59 zones per day. At that rate, the 206,345-zone backlog clears in roughly nine and a half years. The BCP should still be current.
 
+## The advice is eight years old
+
+Scott Hogg wrote [the operator version of this](https://hoggnet.com/blogs/news/why-you-should-dual-stack-your-dns-nameservers) in 2018. Start IPv6 at the internet edge, because that is where the public nameservers already sit. Dual-stack them. Then, if the parent zone holds IPv4 glue for your NS records, publish IPv6 glue beside it. His closing verdict was that running both protocols on your nameservers "is strongly recommended and is a task that is on the critical path to IPv6 deployment."
+
+Strongly recommended is now MUST. The RFC asks for nothing that was not already on the list.
+
 ## Method, briefly
 
-We count AAAA records on a zone's NS hosts, up to four nameservers per zone. That measures publication, not service. The RFC demands servers that answer over IPv6. We only check that they have an address to answer on. Real non-compliance can only be higher than our numbers. In the other direction, zones with more than four nameservers can hide their IPv6 ones past our cap. The typical zone runs two or three, so that error is small. Full methodology is on the [FAQ](/faq).
+We count AAAA records on a zone's NS hosts, up to four nameservers per zone. That is the RFC's other line, the one saying it is RECOMMENDED that every name used in an NS record have both an A and a AAAA. The MUST is stricter. It wants servers that answer over IPv6, and we only check that they have an address to answer on, so real non-compliance can only be higher than our numbers. In the other direction, zones with more than four nameservers can hide their IPv6 ones past our cap. The typical zone runs two or three, so that error is small. Full methodology is on the [FAQ](/faq).
 
 Credit where due: [Ching Chiao's post](https://www.linkedin.com/pulse/rfc-10001-just-made-ipv6-dns-requirement-most-zones-arent-ching-chiao-bblcc/) flagged the compliance angle. Its passive-DNS measurements put the whole namespace near 40% unresolvable over IPv6. Worse than our number, because we only count the top million. Those are the zones somebody is paid to maintain.
 
