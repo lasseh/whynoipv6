@@ -131,7 +131,7 @@ services:
       DATABASE_URL: postgres://whynoipv6:whynoipv6@db:5432/whynoipv6?sslmode=disable
       RESOLVER_BULK_UPSTREAMS: "unbound1:53,unbound2:53"
       # Laptop default 4: full 64-slot fan-out overruns OrbStack's 16k UDP
-      # conntrack limit. the dev host sets CRAWLER_WORKER_SLOTS=64 in .env
+      # conntrack limit. The dev host sets CRAWLER_WORKER_SLOTS=64 in .env
       # (native netfilter, no such limit).
       WORKER_SLOTS: "${CRAWLER_WORKER_SLOTS:-4}"
       GEOIP_PATH: /var/lib/GeoIP

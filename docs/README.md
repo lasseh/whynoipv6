@@ -33,21 +33,6 @@ checklist — build gate green, **production cutover still pending**),
 - **[`feature-research.md`](feature-research.md)** — evidence-backed post-launch feature
   roadmap (State-of-IPv6 report, provider league tables, notification toolkit, …).
 
-## History ([`history/`](history/))
-
-Frozen artifacts of how we got here — no longer referenced by the build, kept for the
-record.
-
-- `backend-research-brief.md` — the original product/requirements brief (the input to the whole design).
-- `backend-design.md` — the Round 2.0 design rationale (its API sections are obsolete; superseded by `spec/07-api.md`).
-- `api-design-research.md` — the modern-API redesign research and the 15 resolved OPEN decisions (2026-07-09); cited by every spec file's Round 3.0 header.
-- `design-refresh-prompt.md` — the frontend redesign brief (redesign shipped).
-- `spec-readiness-review.md` — the two-pass audit (35 findings) folded into Round 2.0.
-- `fable5-research-kickoff.md` — the kickoff prompt for the first research round.
-- `sqlc-timescale-research.md` — the sqlc × TimescaleDB data-access research behind the pgx/sqlc layer.
-- `prod-sizing-validation-2026-07.md` — empirical validation of the §5 capacity model on dev hardware; picked the prod crawl config.
-- `gates/` — recorded build-phase gate evidence (P0–P2 + P1 spikes).
-
 ## Agent scaffolding ([`agents/`](agents/))
 
 Local agent conventions (issue tracker under `.scratch/`, triage labels, domain docs) —

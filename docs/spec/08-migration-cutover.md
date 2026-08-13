@@ -1,6 +1,6 @@
 # 08 — Cutover (DNS Flip)
 
-_Status: Round 3.0 — API redesign folded in (docs/history/api-design-research.md, decisions 2026-07-09): clean root API, keyset pagination, RFC 9457, no legacy compat, no history import._
+_Status: Round 3.0 — API redesign folded in (decisions 2026-07-09): clean root API, keyset pagination, RFC 9457, no legacy compat, no history import._
 
 **Purpose:** Specifies the one-time operational runbook that switches public traffic from
 the old backend to the new one. The cutover is a **pure DNS/upstream flip with no

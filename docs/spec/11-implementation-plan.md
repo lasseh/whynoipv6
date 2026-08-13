@@ -1,6 +1,6 @@
 # 11 — Implementation Plan (the build task graph)
 
-_Status: Round 3.0 — API redesign folded in (docs/history/api-design-research.md, decisions 2026-07-09): clean root API, keyset pagination, RFC 9457, no legacy compat, no history import._
+_Status: Round 3.0 — API redesign folded in (decisions 2026-07-09): clean root API, keyset pagination, RFC 9457, no legacy compat, no history import._
 
 **Purpose:** This file is the executable task graph that drives the autonomous build of the
 WhyNoIPv6 backend from spec files 01–10. It decomposes design §8's seven phases into

@@ -1,6 +1,6 @@
 # 06 — Ingest & Contribution Pipeline
 
-_Status: Round 3.0 — API redesign folded in (docs/history/api-design-research.md, decisions 2026-07-09): clean root API, keyset pagination, RFC 9457, no legacy compat, no history import._
+_Status: Round 3.0 — API redesign folded in (decisions 2026-07-09): clean root API, keyset pagination, RFC 9457, no legacy compat, no history import._
 
 **Purpose:** This file specifies every path by which hostnames and their metadata enter the system: the single host-canonicalization rule, the daily Tranco top-1M import cycle, the campaign-repo sync pipeline (PR validation, UUID trust, idempotent import, bot write-back), the resource-host registry (discovery, sweep, link maintenance), and GeoIP/ASN attribution. It additionally owns the query bodies for the daily tick's product-stats snapshot and the country/ASN counter recompute (§10) — the aggregation logic behind every `/stats` endpoint. It is the authority for all ingest-side SQL (SELECT/INSERT/UPDATE/DELETE only — DDL lives in 05-schema.md) and for the v6ctl verbs `tranco import|status`, `campaign sync|validate`, `resource add|remove`, `shame add|remove|list`, `provider add|remove|list` (the `dns_provider` mapping seed), and `stats recalc`.
 

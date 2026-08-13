@@ -1,6 +1,6 @@
 # 00 — Overview, Layout, Sizing & Conventions
 
-_Status: Round 3.0 — API redesign folded in (docs/history/api-design-research.md, decisions 2026-07-09): clean root API, keyset pagination, RFC 9457, no legacy compat, no history import._
+_Status: Round 3.0 — API redesign folded in (decisions 2026-07-09): clean root API, keyset pagination, RFC 9457, no legacy compat, no history import._
 
 **Purpose:** The entry point to the WhyNoIPv6 backend implementation spec. It states what the system is, restates the hard constraints verbatim, fixes the final monorepo layout, and is the **single source** for two things every other file cites by name: the canonical sizing-constants table and the project glossary. It also carries the spec-file index, the reading order, and the spec conventions (single-source rules, `**Decision:**` markers, cross-reference form) that all ten content files obey.
 
@@ -95,7 +95,6 @@ whynoipv6/                     # monorepo root ("whynoipv6-new" is the seed)
     grafana/                   # alerts.yaml provisioned alert rules [09]
 
   docs/
-    history/backend-design.md  # authoritative design (Round 2.0) — input to this spec set
     spec/                      # THIS spec set (00–11)
 ```
 

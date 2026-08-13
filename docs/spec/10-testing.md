@@ -1,6 +1,6 @@
 # 10 — Test Plan
 
-_Status: Round 3.0 — API redesign folded in (docs/history/api-design-research.md, decisions 2026-07-09): clean root API, keyset pagination, RFC 9457, no legacy compat, no history import._
+_Status: Round 3.0 — API redesign folded in (decisions 2026-07-09): clean root API, keyset pagination, RFC 9457, no legacy compat, no history import._
 
 **Purpose:** This file is the single source for every test vector, golden fixture, and
 integration scenario the implementation must satisfy. Where other spec files state

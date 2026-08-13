@@ -1,6 +1,6 @@
 # 04 — Lifecycle & Scheduling
 
-_Status: Round 3.0 — API redesign folded in (docs/history/api-design-research.md, decisions 2026-07-09): clean root API, keyset pagination, RFC 9457, no legacy compat, no history import._
+_Status: Round 3.0 — API redesign folded in (decisions 2026-07-09): clean root API, keyset pagination, RFC 9457, no legacy compat, no history import._
 
 **Purpose:** Defines the crawl frontier (the `domain` table itself), the atomic claim query, the cadence and recheck/backoff scheduling rules applied after every scan commit, the dead/delisted lifecycles with their re-entry semantics, the daily lifecycle sweep and daily-tick step order, singleton coordination via Postgres advisory locks, and the crawler process model (worker pool, preflight, graceful shutdown, operational metrics). Everything in this file is normative; the scan-commit algorithm that *consumes* the scheduling decision is in 03-state-machine.md.
 
