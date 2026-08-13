@@ -25,6 +25,8 @@ spec froze lands here, not in `spec/`.
 
 Operational procedures: [`cutover.md`](runbooks/cutover.md) (the production DNS-flip
 checklist — build gate green, **production cutover still pending**),
+[`cloudflare-origin-cert.md`](runbooks/cloudflare-origin-cert.md) (the dashboard +
+vault steps for the origin certificate),
 [`frontier-surgery.md`](runbooks/frontier-surgery.md),
 [`timescale-jobs.md`](runbooks/timescale-jobs.md), [`unbound.md`](runbooks/unbound.md).
 

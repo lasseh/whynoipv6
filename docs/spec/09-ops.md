@@ -621,8 +621,10 @@ is ever taken out from behind Cloudflare must move back to certbot first. A self
 or private-CA cert is **not** a substitute: Full (strict) rejects both.
 
 **Operational note.** The private key is vaulted and installed by the Ansible role, which
-verifies the key matches the certificate *before* nginx reloads — a mismatch under Full
-(strict) is a site-wide 526. Because the cert outlives every other moving part by years,
+verifies the key matches the certificate, has not expired, and covers every configured
+hostname *before* nginx reloads — any of those wrong under Full (strict) is a site-wide
+526. The dashboard and vault steps are in
+[`docs/runbooks/cloudflare-origin-cert.md`](../runbooks/cloudflare-origin-cert.md). Because the cert outlives every other moving part by years,
 expiry monitoring is not optional; it is the one failure this design defers rather than
 removes. The frontend (`whynoipv6.com`) is a separate vhost owned by
 the frontend deploy, out of scope here.
