@@ -484,8 +484,8 @@ writes confirmed state (§10).
 ## 7. nginx vhost (`deploy/nginx/api.whynoipv6.com.conf`)
 
 One server block serves both the API (reverse-proxied to `[::1]:8080`) and the static
-datasets tree (`/datasets/`, served from disk). TLS is Let's Encrypt (certbot, paths
-Ansible-managed). The proxy-header block and the datasets locations are normative in
+datasets tree (`/datasets/`, served from disk). TLS is a **Cloudflare Origin CA**
+certificate (§7.1; paths Ansible-managed). The proxy-header block and the datasets locations are normative in
 07-api.md (the proxy-header block in §1.2, the datasets layout/nginx split in §7.2/§7.6)
 and copied here because this vhost file is a deploy artifact this spec owns.
 
@@ -507,8 +507,8 @@ server {
     http2 on;
     server_name api.whynoipv6.com;
 
-    ssl_certificate     /etc/letsencrypt/live/api.whynoipv6.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/api.whynoipv6.com/privkey.pem;
+    ssl_certificate     /etc/ssl/cloudflare/whynoipv6.com.pem;
+    ssl_certificate_key /etc/ssl/cloudflare/whynoipv6.com.key;
 
     # --- edge compression (§7.4): gzip at the origin, Brotli at the CDN.
     #     Covers JSON, RFC 9457 problem+json, the Atom/JSON feeds, CSV, and text SVG.
@@ -592,7 +592,39 @@ peer outside the list cannot spoof `CF-Connecting-IP`.
 HSTS carries `includeSubDomains; preload` in both vhosts because `whynoipv6.com` is on the
 HSTS preload list, which requires both directives plus `max-age` ≥ 31536000. The origin
 emits the qualifying header itself so preload eligibility never depends on the CDN's own
-HSTS toggle staying on. The frontend (`whynoipv6.com`) is a separate vhost owned by
+HSTS toggle staying on.
+
+### 7.1 Origin certificate — Cloudflare Origin CA
+
+Both vhosts serve **one Cloudflare Origin CA certificate** covering `whynoipv6.com` and
+`*.whynoipv6.com` (the zone apex and first-level wildcard are included automatically), at
+`/etc/ssl/cloudflare/whynoipv6.com.{pem,key}` — deliberately outside certbot's
+`/etc/letsencrypt` tree so the two never contend for the same paths.
+
+**Why not Let's Encrypt.** The zone runs Cloudflare's *Automatic SSL/TLS*, currently
+resolved to **Full (strict)**, and Cloudflare does not downgrade: "Automatic SSL/TLS will
+not change your setting to a less secure encryption mode. For example, if your origin
+certificate expires, the encryption mode will not change from Full (strict) to Full."
+A failed renewal is therefore not a silent security regression but a **total outage** —
+the edge keeps demanding a valid origin cert and returns 526 to every visitor. Full
+(strict) accepts a cert "issued by a publicly trusted certificate authority **or
+Cloudflare's Origin CA**", and an Origin CA cert is valid for up to 15 years, so choosing
+it removes the 90-day renewal as an availability dependency rather than hardening it.
+It also unblocks locking the origin to Cloudflare's IP ranges plus Authenticated Origin
+Pulls, which would otherwise break HTTP-01.
+
+**Constraints this accepts.** An Origin CA cert is *not* browser-trusted, so anything
+reaching the origin directly fails validation: pausing Cloudflare, grey-clouding a
+record, direct-IP testing, or an uptime monitor aimed at the origin instead of the edge.
+All three hostnames here are proxied, so this costs nothing today — but any hostname that
+is ever taken out from behind Cloudflare must move back to certbot first. A self-signed
+or private-CA cert is **not** a substitute: Full (strict) rejects both.
+
+**Operational note.** The private key is vaulted and installed by the Ansible role, which
+verifies the key matches the certificate *before* nginx reloads — a mismatch under Full
+(strict) is a site-wide 526. Because the cert outlives every other moving part by years,
+expiry monitoring is not optional; it is the one failure this design defers rather than
+removes. The frontend (`whynoipv6.com`) is a separate vhost owned by
 the frontend deploy, out of scope here.
 
 ---
