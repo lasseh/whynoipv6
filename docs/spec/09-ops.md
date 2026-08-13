@@ -17,7 +17,6 @@ Makefile/`.golangci.yml`/CI gate.
 - `cmd/{api,crawler,v6ctl}/main.go` — the `slog` handler installation and startup config summary (§13).
 - `deploy/systemd/*.{service,timer}` — all unit files (§4, §5).
 - `deploy/nginx/api.whynoipv6.com.conf` — the API + datasets vhost (§7).
-- `deploy/nginx/cloudflare-realip.conf` — Cloudflare edge → real client IP, included by both vhosts (§7).
 - `deploy/unbound/` — `unbound@.service`, `unbound-base.conf`, per-instance drop-ins (§8).
 - `deploy/pgbackrest/` — `pgbackrest.conf`, `whynoipv6-export.sh` logical export (§10).
 - `v6ctl geoip update` systemd service + daily timer, `IPINFO_TOKEN` from vault (§11).
@@ -511,10 +510,6 @@ server {
     ssl_certificate     /etc/letsencrypt/live/api.whynoipv6.com/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/api.whynoipv6.com/privkey.pem;
 
-    # Cloudflare fronts this vhost: recover the visitor's address before
-    # limit_req keys on it and before X-Real-IP is set below (07-api.md §1.2).
-    include /etc/nginx/cloudflare-realip.conf;
-
     # --- edge compression (§7.4): gzip at the origin, Brotli at the CDN.
     #     Covers JSON, RFC 9457 problem+json, the Atom/JSON feeds, CSV, and text SVG.
     #     The pre-compressed dataset payloads opt out (gzip off) below. ---
@@ -580,16 +575,19 @@ source of truth for `GET /ip` and the `POST /check` per-IP + per-/64 rate limite
 safe only because the API bind (`API_LISTEN=[::1]:8080`) is unreachable except through
 this proxy (07-api.md — Real client IP, §1.2).
 
-`deploy/nginx/cloudflare-realip.conf` (deployed to `/etc/nginx/cloudflare-realip.conf`,
-**not** `conf.d/` — the vhosts include it per-server so the trust list never leaks to
-another site on the box) carries `set_real_ip_from` over Cloudflare's published ranges
-(`https://www.cloudflare.com/ips-v4`, `/ips-v6`) plus `real_ip_header CF-Connecting-IP`.
-Both the API vhost and the frontend vhost include it: this zone is Cloudflare-proxied, so
-without it `$remote_addr` is the edge PoP and every consumer of it is wrong — `X-Real-IP`
-(above), the `api_perip`/`api_csv` `limit_req` zones, and the frontend vhost's
-`X-Umami-Client-IP`. The ranges change on a multi-year cadence; re-fetch when Cloudflare
-announces a change. A stale list fails safe (an unlisted edge simply leaves `$remote_addr`
-as the PoP), and a peer outside the list cannot spoof `CF-Connecting-IP`.
+**Client-IP recovery is a host-level dependency, not a vhost one.** This zone is
+Cloudflare-proxied, so nginx's socket peer is an edge PoP and every consumer of
+`$remote_addr` is wrong without it — `X-Real-IP` (above), the `api_perip`/`api_csv`
+`limit_req` zones, the frontend vhost's `X-Umami-Client-IP`, and the access log. The
+recovery lives in `conf.d/cloudflare.conf` in the shared `lasseh/nginx-conf` repo, which
+Ansible's `nginx` role clones to `/etc/nginx` on every host: `set_real_ip_from` over
+Cloudflare's published ranges (`https://www.cloudflare.com/ips-v4`, `/ips-v6`) plus
+`real_ip_header CF-Connecting-IP`, loaded once at `http{}` scope. Neither vhost here
+includes it, and neither should — but **both depend on it**, so a host that serves these
+vhosts without that shared config silently attributes all traffic to the PoP. §15.7
+asserts both directions at deploy time. The ranges change on a multi-year cadence; a
+stale list fails safe (an unlisted edge simply leaves `$remote_addr` as the PoP), and a
+peer outside the list cannot spoof `CF-Connecting-IP`.
 
 HSTS carries `includeSubDomains; preload` in both vhosts because `whynoipv6.com` is on the
 HSTS preload list, which requires both directives plus `max-age` ≥ 31536000. The origin

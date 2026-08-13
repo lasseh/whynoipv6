@@ -38,9 +38,9 @@ proxy_set_header Host             $host;
 `$remote_addr` is the edge PoP, not the visitor — the block above would then feed the
 PoP address to both consumers named above, making the `GET /ip` visitor banner report
 Cloudflare's address to everyone and collapsing the per-IP + per-/64 buckets onto a
-handful of PoPs. The vhost therefore recovers the visitor address *before* these
-headers are set, via `deploy/nginx/cloudflare-realip.conf` (09-ops.md §7):
-`set_real_ip_from` over Cloudflare's published ranges plus
+handful of PoPs. The visitor address is therefore recovered *before* these headers are set, by the
+host's `conf.d/cloudflare.conf` (the shared `lasseh/nginx-conf` deployed to `/etc/nginx`;
+09-ops.md §7): `set_real_ip_from` over Cloudflare's published ranges plus
 `real_ip_header CF-Connecting-IP`. This rewrites `$remote_addr` in the POST_READ phase,
 so the block above stays exactly as written and the `limit_req` zones key correctly too.
 The trust boundary is the range list: a peer outside it keeps its socket address and
