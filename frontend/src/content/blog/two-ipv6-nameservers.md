@@ -1,76 +1,78 @@
 ---
 title: IPv6 DNS is now the law. Well, a best practice.
-description: The IETF has replaced its 2004 DNS transport guidance. Every zone MUST run two IPv6-reachable nameservers. One in five of the top million runs zero.
+description: The IETF has replaced its DNS transport guidance from 2004. Every zone MUST use two IPv6-reachable nameservers. One in five of the top million uses none.
 date: 2026-08-12
 ---
 
-The rule for DNS over IPv6 was [RFC 3901](https://www.rfc-editor.org/info/rfc3901), from 2004. It was written to keep early IPv6 enthusiasm from breaking IPv4 resolution. Its replacement worries about the opposite. The new requirement:
+Since 2004, the guidance for DNS over IPv6 has been [RFC 3901](https://www.rfc-editor.org/info/rfc3901). It was written to make sure early IPv6 deployments did not break DNS for IPv4 users. Its replacement addresses the opposite problem: DNS that still cannot be reached over IPv6. The new requirement says:
 
 > To prevent DNS name space partitioning, at least two IPv4-reachable and
 > two IPv6-reachable name servers MUST be configured for a zone. A single
 > name server that is reachable over both IPv4 and IPv6 counts once per
 > address family.
 
-Not the website. Not the mail. The zone itself. Two servers, each address family, same answers.
+This is not about the website or its mail server. It is about the zone's authoritative DNS. Each zone needs at least two nameservers reachable over IPv4 and two reachable over IPv6. Dual-stack servers count toward both requirements.
 
-The MUST is [RFC 10001](https://www.rfc-editor.org/rfc/rfc10001.html), by Momoka Yamamoto and Tobias Fiebig. A suitably round monument. It is a Best Current Practice, and it takes over BCP 91, the label RFC 3901 has carried since 2004. Same shelf, new text. RFC 3901 is obsolete.
+The MUST comes from [RFC 10001](https://www.rfc-editor.org/rfc/rfc10001.html), by Momoka Yamamoto and Tobias Fiebig. A suitably round number for the occasion. The RFC is a Best Current Practice and replaces RFC 3901 as BCP 91. Same category, new guidance. RFC 3901 is now obsolete.
 
-We happen to measure exactly this, every day, for the Tranco top million. So here is the compliance report the internet did not ask for.
+We measure this every day for the Tranco top million. Here is the compliance report the internet did not ask for.
 
 ## The scoreboard
 
-Numbers frozen on the publish date, as usual. We track 988,163 zones. **204,942 of them have zero IPv6-capable nameservers.** That is 20.7%. Not one server short of the requirement. Zero.
+These numbers are a snapshot from the publication date. We track 988,163 zones. **Of those, 204,942 have no IPv6-capable nameservers.** That is 20.7%. They are not one server short of the requirement. They have none.
 
-The actual bar is two servers. Our crawler graded 969,109 zones against it in the last day:
+The requirement is two servers. During the previous 24 hours, our crawler graded 969,109 zones against that requirement:
 
-- **78.1%** already meet it (two or more nameservers with AAAA records)
-- **20.9%** have none at all
-- **1.0%** sit at exactly one
+- **78.1%** meet it, with AAAA records on two or more nameservers
+- **20.9%** have no IPv6 nameservers
+- **1.0%** have exactly one
 
-That last line is the interesting one. Almost nobody half-deploys IPv6 DNS. Either your DNS operator dual-stacked every server years ago, or nobody has touched the zone since delegation. The top 1,000 does better. Still, 14.3% of it fails the bar.
+The last number is the interesting one. Almost nobody deploys IPv6 DNS halfway. DNS operators tend to enable IPv6 across their nameservers or not at all. The top 1,000 domains do better, but 14.3% still fail to meet the requirement.
 
-## Names, since that is what we do here
+## Naming names, since that is what we do here
 
-The zero-server club has names. [akamai.net](/domains/akamai.net) is in it, at rank 14. Akamai sells content delivery. [twitter.com](/domains/twitter.com) and [x.com](/domains/x.com) are in it too. So is [t.co](/domains/t.co), the URL shortener for the site with no IPv6 either way. [samsung.com](/domains/samsung.com) and [playstation.net](/domains/playstation.net) fill out the roster.
+The zero-server club includes some familiar names. [akamai.net](/domains/akamai.net) is in it at rank 14. Akamai sells content delivery services. [twitter.com](/domains/twitter.com), [x.com](/domains/x.com), and their URL shortener [t.co](/domains/t.co) are also in it. So are [samsung.com](/domains/samsung.com) and [playstation.net](/domains/playstation.net).
 
-Better still: 21,117 zones serve their website over IPv6 while their DNS remains IPv4-only. [europa.eu](/domains/europa.eu) leads that list at rank 115. The European Union has an official IPv6 strategy. Its zone has no IPv6 nameservers. [un.org](/domains/un.org) is a few hundred ranks behind, in case anyone hoped this was a regional problem. [hp.com](/domains/hp.com), [intel.com](/domains/intel.com), and [cornell.edu](/domains/cornell.edu) are in there too. These sites pass every check a visitor can see. They fail the one the resolver sees first.
+Another 21,117 zones serve their websites over IPv6 while keeping their DNS on IPv4 only. [europa.eu](/domains/europa.eu) leads that list at rank 115. The European Union has an official IPv6 strategy, but its own zone has no IPv6 nameservers. [un.org](/domains/un.org) appears a few hundred ranks later, so this is not just a regional problem. [hp.com](/domains/hp.com), [intel.com](/domains/intel.com), and [cornell.edu](/domains/cornell.edu) are on the list too. These sites pass the IPv6 check a visitor can see, but fail the DNS check their resolver performs first.
 
-## Whose checkbox is it
+## Who controls this?
 
-Compliance here is rarely something a domain owner does. It is a property of whoever runs the nameservers. The league table for operators serving at least 5,000 of the top million:
+The domain owner rarely configures this directly. IPv6 support usually depends on the company that operates the nameservers. Here is the table for DNS operators serving at least 5,000 domains in the top million:
 
-| DNS operator        | zones   | with IPv6 nameservers |
-| ------------------- | ------- | --------------------- |
-| Cloudflare          | 364,065 | 100.0%                |
-| Amazon Route 53     | 87,573  | 100.0%                |
-| GoDaddy             | 41,676  | 97.3%                 |
-| Alibaba Cloud DNS   | 16,207  | 99.9%                 |
-| Akamai Edge DNS     | 13,364  | 99.0%                 |
-| Google Cloud DNS    | 12,306  | 100.0%                |
-| Microsoft Azure DNS | 10,778  | 100.0%                |
-| Namecheap           | 10,413  | 99.8%                 |
-| Tencent DNSPod      | 6,458   | 86.7%                 |
-| OVHcloud            | 6,456   | 98.9%                 |
-| Network Solutions   | 5,343   | 0.0%                  |
+| DNS operator        | zones   | with at least one IPv6 nameserver |
+| ------------------- | ------- | --------------------------------- |
+| Cloudflare          | 364,065 | 100.0%                            |
+| Amazon Route 53     | 87,573  | 100.0%                            |
+| GoDaddy             | 41,676  | 97.3%                             |
+| Alibaba Cloud DNS   | 16,207  | 99.9%                             |
+| Akamai Edge DNS     | 13,364  | 99.0%                             |
+| Google Cloud DNS    | 12,306  | 100.0%                            |
+| Microsoft Azure DNS | 10,778  | 100.0%                            |
+| Namecheap           | 10,413  | 99.8%                             |
+| Tencent DNSPod      | 6,458   | 86.7%                             |
+| OVHcloud            | 6,456   | 98.9%                             |
+| Network Solutions   | 5,343   | 0.0%                              |
 
-Four operators round to 100.0%. That is rounding, not perfection: between them, 92 zones out of nearly half a million still have no IPv6 nameserver. If your zone is on any of them, you were made compliant without being consulted. Akamai's customer DNS product is at 99.0%. Akamai's own akamai.net is at zero.
+Four operators round to 100.0%. That is rounding, not perfection: between them, 92 zones out of nearly half a million still have no IPv6 nameserver. If your zone uses one of these operators, IPv6 was probably enabled without you having to ask. Akamai's DNS service for customers reaches 99.0%. Akamai's own akamai.net remains at zero.
 
-Then there is Network Solutions. It operated the .com registry through the nineties. Today it runs DNS for 5,343 top-million domains. Not one of them has an IPv6 nameserver. The whole fleet is out of compliance with a Best Current Practice. In one decision.
+Then there is Network Solutions. It operated the .com registry during the 1990s. Today it provides DNS for 5,343 domains in the top million, and not one has an IPv6 nameserver. One operator-level decision leaves the entire group outside the Best Current Practice.
 
 ## The trajectory
 
-Over the last ten days, our [changelog](/changelog) recorded 1,223 zones gaining their first IPv6 nameserver. It recorded 923 losing their last one. Net: +30 zones per day. The ten days before those ran at +48, so treat the trend as weather rather than climate. At the slower rate the 204,942-zone backlog clears in about nineteen years. At the faster one, twelve. The BCP should still be current.
+During the last ten days, our [changelog](/changelog) recorded 1,223 zones gaining their first IPv6 nameserver and 923 losing their last. That is a net gain of 30 zones per day. The previous ten days averaged 48, so treat this as weather rather than climate. At the slower rate, clearing the backlog of 204,942 zones would take about 19 years. At the faster rate, it would take 12. The BCP should still be current by then.
 
 ## The advice is eight years old
 
-Scott Hogg wrote [the operator version of this](https://hoggnet.com/blogs/news/why-you-should-dual-stack-your-dns-nameservers) in 2018. Start IPv6 at the internet edge, because that is where the public nameservers already sit. Dual-stack them. Then, if the parent zone holds IPv4 glue for your NS records, publish IPv6 glue beside it. His closing verdict was that running both protocols on your nameservers "is strongly recommended and is a task that is on the critical path to IPv6 deployment."
+Scott Hogg gave operators [the same advice](https://hoggnet.com/blogs/news/why-you-should-dual-stack-your-dns-nameservers) in 2018. Start IPv6 at the internet edge, where public nameservers already sit. Make those servers dual-stack. If the parent zone publishes IPv4 glue for your NS records, publish IPv6 glue alongside it. He concluded that running both protocols on nameservers "is strongly recommended and is a task that is on the critical path to IPv6 deployment."
 
-Strongly recommended is now MUST. The RFC asks for nothing that was not already on the list.
+What was strongly recommended is now a MUST. The work itself is not new.
 
 ## Method, briefly
 
-We count AAAA records on a zone's NS hosts, up to four nameservers per zone. That is the RFC's other line, the one saying it is RECOMMENDED that every name used in an NS record have both an A and a AAAA. The MUST is stricter. It wants servers that answer over IPv6, and we only check that they have an address to answer on, so real non-compliance can only be higher than our numbers. In the other direction, zones with more than four nameservers can hide their IPv6 ones past our cap. The typical zone runs two or three, so that error is small. Full methodology is on the [FAQ](/faq).
+We check up to four nameservers per zone and count the NS hosts with AAAA records. The RFC also RECOMMENDS that every hostname in an NS record have both an A and a AAAA record.
 
-Credit where due: [Ching Chiao's post](https://www.linkedin.com/pulse/rfc-10001-just-made-ipv6-dns-requirement-most-zones-arent-ching-chiao-bblcc/) flagged the compliance angle. Its passive-DNS measurements put the whole namespace near 40% unresolvable over IPv6. Worse than our number, because we only count the top million. Those are the zones somebody is paid to maintain.
+The MUST is stricter: the nameservers must actually answer over IPv6. We check whether a server has an IPv6 address, not whether it responds, so the true rate of non-compliance may be higher than our figures. We can also undercount IPv6 support when a zone has more than four nameservers and its IPv6-capable servers fall beyond our limit. Most zones use two or three nameservers, so this error should be small. The full methodology is on the [FAQ](/faq).
 
-Your own zone takes ten seconds to grade on the [live check](/check). Or `dig AAAA` your NS records and count the answers yourself. Two is the bar.
+Credit where it is due: [Ching Chiao's post](https://www.linkedin.com/pulse/rfc-10001-just-made-ipv6-dns-requirement-most-zones-arent-ching-chiao-bblcc/) highlighted the compliance issue. Its passive DNS measurements found that nearly 40% of the entire namespace could not be resolved over IPv6. That is worse than our result because we only measure the top million domains, where someone is more likely to be paid to maintain the zone.
+
+You can grade your own zone in ten seconds with the [live check](/check). Or use `dig AAAA` on your NS hostnames and count the answers yourself. You need at least two.
