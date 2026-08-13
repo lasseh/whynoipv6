@@ -34,6 +34,19 @@ proxy_set_header X-Forwarded-For  $proxy_add_x_forwarded_for;
 proxy_set_header Host             $host;
 ```
 
+**CDN caveat (normative).** `api.whynoipv6.com` is Cloudflare-proxied, so nginx's
+`$remote_addr` is the edge PoP, not the visitor — the block above would then feed the
+PoP address to both consumers named above, making the `GET /ip` visitor banner report
+Cloudflare's address to everyone and collapsing the per-IP + per-/64 buckets onto a
+handful of PoPs. The vhost therefore recovers the visitor address *before* these
+headers are set, via `deploy/nginx/cloudflare-realip.conf` (09-ops.md §7):
+`set_real_ip_from` over Cloudflare's published ranges plus
+`real_ip_header CF-Connecting-IP`. This rewrites `$remote_addr` in the POST_READ phase,
+so the block above stays exactly as written and the `limit_req` zones key correctly too.
+The trust boundary is the range list: a peer outside it keeps its socket address and
+**cannot** spoof `CF-Connecting-IP`. Whenever the API is fronted by a CDN, this
+recovery step is required; without it the header contract above is silently wrong.
+
 ### 1.3 CORS
 
 The frontend is cross-origin (whynoipv6.com → api.whynoipv6.com). rs/cors (or a chi-compatible equivalent) with all-origin settings plus `POST` (needed by `POST /check`):
