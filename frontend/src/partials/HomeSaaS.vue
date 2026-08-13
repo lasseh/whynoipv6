@@ -70,11 +70,11 @@
                       </svg>
                       <div>
                         <div class="text-base font-semibold text-zinc-200 mb-1 a-gradient">
-                          Public receipts
+                          Public Accountability
                         </div>
                         <div class="text-zinc-400 text-base">
-                          Every check is public and dated. If you think one is wrong, the history
-                          and method are right there.
+                          Our public reports make missing IPv6 support visible and harder for
+                          companies to ignore.
                         </div>
                       </div>
                     </div>
@@ -97,11 +97,11 @@
                       </svg>
                       <div>
                         <div class="text-base font-semibold text-zinc-200 mb-1 a-gradient">
-                          Open methodology
+                          Community Action
                         </div>
                         <div class="text-zinc-400 text-base">
-                          Challenge the method. The API and daily dataset are there to check our
-                          work.
+                          Share what you find, start conversations, and use the data to push for
+                          wider IPv6 adoption.
                         </div>
                       </div>
                     </div>
@@ -125,11 +125,11 @@
                       </svg>
                       <div>
                         <div class="text-base font-semibold text-zinc-200 mb-1 a-gradient">
-                          Bring your own Sinner
+                          User-Led Shaming
                         </div>
                         <div class="text-zinc-400 text-base">
-                          Found a big name still publishing an apex A record but no globally
-                          routable AAAA? Submit a campaign and put it on the crawler's schedule.
+                          Found a well-known site without IPv6? Submit it, and we'll add it to our
+                          daily checks.
                         </div>
                       </div>
                     </div>
