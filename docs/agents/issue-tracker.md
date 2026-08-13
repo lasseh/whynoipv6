@@ -1,6 +1,8 @@
 # Issue tracker: Local Markdown
 
-Issues and PRDs for this repo live as markdown files in `.scratch/`.
+Agent issues and PRDs for this repo live as markdown files in `.scratch/`. The public
+GitHub issues on `lasseh/whynoipv6` are a separate surface — user-reported bugs and
+feature requests — and are not managed from here.
 
 ## Conventions
 

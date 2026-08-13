@@ -4,7 +4,10 @@
 
 ### Issue tracker
 
-Issues live as local markdown under `.scratch/<feature-slug>/` (no GitHub remote yet; PRs are not a triage surface). See `docs/agents/issue-tracker.md`.
+Agent issues live as local markdown under `.scratch/<feature-slug>/`, not on GitHub. The
+repo publishes to `lasseh/whynoipv6`, whose issues are the public bug/feature surface;
+agent working tickets stay local and PRs are not a triage surface. See
+`docs/agents/issue-tracker.md`.
 
 ### Triage labels
 
