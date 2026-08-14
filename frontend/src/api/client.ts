@@ -33,10 +33,18 @@ type GetOptions<O> = { signal?: AbortSignal | undefined } & (PathParamsOf<O> ext
 const BASE = import.meta.env.VITE_API_URL ?? ''
 const TIMEOUT_MS = 15_000
 
-function buildURL(path: string, pathParams?: object, query?: object): string {
-  const filled = path.replace(/\{(\w+)\}/g, (_, key: string) =>
-    encodeURIComponent(String((pathParams as Record<string, string | number>)[key])),
-  )
+function buildURL(
+  path: string,
+  pathParams: Record<string, string | number> = {},
+  query?: object,
+): string {
+  const filled = path.replace(/\{(\w+)\}/g, (_, key: string) => {
+    const value = pathParams[key]
+    // Loud failure beats emitting the string "undefined" into a request URL —
+    // reachable only if a path template key drifts from the generated types.
+    if (value === undefined) throw new Error(`api: missing path param "${key}" for ${path}`)
+    return encodeURIComponent(String(value))
+  })
   const params = new URLSearchParams()
   for (const [k, v] of Object.entries(query ?? {})) {
     if (v !== undefined && v !== null && v !== '') params.set(k, String(v))
@@ -59,10 +67,16 @@ export async function get<P extends GetPath>(
   path: P,
   opts: GetOptions<GetOp<P>>,
 ): Promise<SuccessJson<GetOp<P>>> {
-  const res = await fetch(buildURL(path, opts.path, opts.query), {
-    headers: { Accept: 'application/json' },
-    signal: withTimeout(opts.signal),
-  })
+  // The generated per-path param objects satisfy this shape structurally, but
+  // an unresolved generic never picks up an implicit index signature — the one
+  // cast the client needs, backed by buildURL's missing-param throw.
+  const res = await fetch(
+    buildURL(path, opts.path as Record<string, string | number> | undefined, opts.query),
+    {
+      headers: { Accept: 'application/json' },
+      signal: withTimeout(opts.signal),
+    },
+  )
   return handle(res)
 }
 
