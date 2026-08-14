@@ -39,10 +39,13 @@ const { items, page, meta, loading, error, next, prev, reload } = useCursorList(
         params.cursor !== undefined ? { cursor: params.cursor } : undefined,
         signal,
       )
-      campaign.value = res
+      // Guard the side-writes like useCursorList guards its own: a superseded
+      // response must not install a stale header or title.
+      if (!signal.aborted) campaign.value = res
       return { items: res.domains.items, page: res.domains.page, meta: res.meta }
     } catch (e) {
-      if (e instanceof ApiProblem && e.code === 'not-found') notFound.value = true
+      if (!signal.aborted && e instanceof ApiProblem && e.code === 'not-found')
+        notFound.value = true
       throw e
     }
   },
