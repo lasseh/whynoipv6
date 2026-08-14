@@ -176,6 +176,18 @@ const routes: RouteRecordRaw[] = [
         'How the crawler works, what the checks mean, and how to get your domain removed from the list. Short answer: start using IPv6.',
     },
   },
+  {
+    // Published in the crawler's User-Agent string
+    // (WhyNoIPv6Bot/1.0 (+https://whynoipv6.com/bot)) — keep this path stable.
+    path: '/bot',
+    name: 'Bot',
+    component: () => import('@/pages/Bot.vue'),
+    meta: {
+      title: 'WhyNoIPv6Bot - Why No IPv6',
+      description:
+        'What the WhyNoIPv6 crawler does to your site, where it comes from, how to verify it, and how to reach us.',
+    },
+  },
 
   // Router-level backstop for the nginx 301 map (§5) — old singular URLs that
   // slip past nginx (e.g. client-side navigation, dev server) land here.

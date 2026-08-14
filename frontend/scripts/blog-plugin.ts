@@ -32,7 +32,8 @@ import {
 const CONTENT_DIR = 'src/content/blog'
 
 // The §5 route set for the sitemap: same paths and priorities as the retired
-// hand-maintained public/sitemap.xml, plus /check (missing there) and /blog.
+// hand-maintained public/sitemap.xml, plus /check (missing there), /blog, and
+// /bot (the crawler-identification page the bot's User-Agent URL points at).
 const STATIC_ROUTES: [string, string][] = [
   ['/', '0.8'],
   ['/domains', '1.0'],
@@ -44,6 +45,7 @@ const STATIC_ROUTES: [string, string][] = [
   ['/changelog', '1.0'],
   ['/faq', '1.0'],
   ['/blog', '0.8'],
+  ['/bot', '0.5'],
 ]
 
 function readPosts(root: string): Post[] {
