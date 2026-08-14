@@ -4,7 +4,9 @@
 // files instead of data URIs baked into the JS bundle. Module scope, not
 // setup: the eager glob expands to a literal object that would otherwise be
 // rebuilt on every one of the ~250 instances a /countries visit mounts.
-const flags = import.meta.glob<string>('/node_modules/circle-flags/flags/*.svg', {
+// [a-z][a-z] keeps only the ISO alpha-2 flags the API can name (plus the
+// xx fallback); the package's regional/alt flags are unreachable here.
+const flags = import.meta.glob<string>('/node_modules/circle-flags/flags/[a-z][a-z].svg', {
   query: '?url&no-inline',
   import: 'default',
   eager: true,
