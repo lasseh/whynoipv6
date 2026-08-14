@@ -103,12 +103,16 @@ export function useLiveCheck() {
     }
   }
 
-  function beginRequest() {
+  // Returns the controller it installs so callers thread the signal locally
+  // instead of asserting the module-level `controller!` is still theirs.
+  function beginRequest(): AbortController {
     stopPolling()
-    controller = new AbortController()
+    const c = new AbortController()
+    controller = c
     envelope.value = null
     problem.value = null
     running.value = true
+    return c
   }
 
   /** H3: a typo'd domain shouldn't lock the form for the whole scan. */
@@ -121,9 +125,9 @@ export function useLiveCheck() {
   async function submit(target = extractHost(host.value)) {
     if (!target || running.value || retryLeft.value > 0) return
     host.value = target // show the cleaned host in the input
-    beginRequest()
+    const c = beginRequest()
     try {
-      const res = await createCheck(target, controller!.signal)
+      const res = await createCheck(target, c.signal)
       reflectHost(res.host)
       if (isCheckEnvelope(res)) {
         // Dedupe hit: a cached done envelope, no job to poll.
@@ -141,9 +145,9 @@ export function useLiveCheck() {
   async function loadByHost(h: string) {
     activeTarget = h
     host.value = h
-    beginRequest()
+    const c = beginRequest()
     try {
-      const env = await getLatestCheck(h, controller!.signal)
+      const env = await getLatestCheck(h, c.signal)
       envelope.value = env
       host.value = env.host
       reflectHost(env.host) // canonicalized form may differ from the URL
@@ -160,9 +164,9 @@ export function useLiveCheck() {
 
   // A legacy /check/{id} link: load the job, then upgrade to the domain URL.
   async function loadByID(id: number) {
-    beginRequest()
+    const c = beginRequest()
     try {
-      const env = await getCheck(id, controller!.signal)
+      const env = await getCheck(id, c.signal)
       envelope.value = env
       host.value = env.host
       reflectHost(env.host)
