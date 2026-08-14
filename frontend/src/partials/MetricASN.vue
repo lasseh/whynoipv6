@@ -73,6 +73,11 @@ const { asnData, isLoading } = toRefs(state)
 let controller: AbortController | null = null
 onScopeDispose(() => controller?.abort())
 
+// The four one-shot loaders below share a scope-lifetime controller; the
+// per-load `controller` above belongs to the abort-and-supersede ASN refetch.
+const scopeController = new AbortController()
+onScopeDispose(() => scopeController.abort())
+
 async function load() {
   controller?.abort()
   const c = new AbortController()
@@ -100,20 +105,20 @@ async function load() {
 // touches, so they are fetched once rather than alongside every ASN refetch.
 async function loadProviders() {
   try {
-    const response = await listProviders()
+    const response = await listProviders(undefined, scopeController.signal)
     state.providers = response.items
   } catch {
     // A provider outage should not blank the network league next to it.
-    state.providers = []
+    if (!scopeController.signal.aborted) state.providers = []
   }
 }
 
 async function loadHosting() {
   try {
-    const response = await listHostingProviders()
+    const response = await listHostingProviders(undefined, scopeController.signal)
     state.hosting = response.items
   } catch {
-    state.hosting = []
+    if (!scopeController.signal.aborted) state.hosting = []
   }
 }
 
@@ -121,10 +126,10 @@ async function loadHosting() {
 // seven round trips for the same panel.
 async function loadNetworks() {
   try {
-    const response = await getNetworkStats()
+    const response = await getNetworkStats(undefined, scopeController.signal)
     state.networks = response.networks
   } catch {
-    state.networks = []
+    if (!scopeController.signal.aborted) state.networks = []
   }
 }
 
@@ -133,11 +138,11 @@ async function loadNetworks() {
 // render together, so there is no duplicate request to save.
 async function loadOverview() {
   try {
-    const response = await getOverviewStats()
+    const response = await getOverviewStats(undefined, scopeController.signal)
     state.overview = response.points.at(-1) ?? null
   } catch {
     // One panel going quiet must not blank the leagues beside it.
-    state.overview = null
+    if (!scopeController.signal.aborted) state.overview = null
   }
 }
 

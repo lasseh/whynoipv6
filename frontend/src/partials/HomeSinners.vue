@@ -1,8 +1,12 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted, onScopeDispose, ref } from 'vue'
 import CrossIcon from '@/components/icons/Cross.vue'
 import { listShame } from '@/api'
 import type { ShameItem } from '@/api'
+
+// Abort the one-shot fetch when the visitor leaves before it lands.
+const controller = new AbortController()
+onScopeDispose(() => controller.abort())
 
 const splitDomainShamers = ref<ShameItem[][]>([])
 const randomTestimonial = ref<{
@@ -39,12 +43,12 @@ function getRandomTestimonial() {
 
 async function getDomainShamers() {
   try {
-    const response = await listShame()
+    const response = await listShame(controller.signal)
     const items = response.items
     const midpoint = Math.ceil(items.length / 2)
     splitDomainShamers.value = [items.slice(0, midpoint), items.slice(midpoint)]
   } catch {
-    splitDomainShamers.value = []
+    if (!controller.signal.aborted) splitDomainShamers.value = []
   }
 }
 

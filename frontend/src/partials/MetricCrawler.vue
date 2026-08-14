@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onScopeDispose, ref } from 'vue'
 
 import ApiError from '@/components/ApiError.vue'
 import LoadingSpinner from '@/components/LoadingSpinner.vue'
@@ -32,6 +32,11 @@ const changes = ref<ChangePoint[]>([])
 const isLoading = ref(true)
 const error = ref<ApiProblem | null>(null)
 
+// One scope-lifetime controller for the three one-shot fetches: leaving the
+// tab aborts them instead of letting them resolve into a dead component.
+const controller = new AbortController()
+onScopeDispose(() => controller.abort())
+
 // The endpoint defaults to `to − 90d`, but a chart's x-axis should be stated
 // by whoever draws it, not inherited from a server default that can move.
 const WINDOW_DAYS = 90
@@ -45,7 +50,7 @@ function windowStart(): string {
 async function load() {
   error.value = null
   try {
-    const response = await getOverviewStats({ from: windowStart() })
+    const response = await getOverviewStats({ from: windowStart() }, controller.signal)
     // A snapshot with no domains in it is the stats job having run before the
     // crawler's first pass finished, not a day on which the list was empty.
     // Charting it draws a cliff out of nothing.
@@ -53,6 +58,7 @@ async function load() {
       .filter((p) => (p.domains ?? 0) > 0)
       .sort((a, b) => (a.day < b.day ? -1 : 1))
   } catch (e) {
+    if (controller.signal.aborted) return
     points.value = []
     error.value = ApiProblem.from(e)
   } finally {
@@ -65,9 +71,9 @@ async function load() {
 // fetched independently rather than folded into load().
 async function loadCrawler() {
   try {
-    crawler.value = await getCrawlerStats()
+    crawler.value = await getCrawlerStats(controller.signal)
   } catch {
-    crawler.value = null
+    if (!controller.signal.aborted) crawler.value = null
   }
 }
 
@@ -75,10 +81,10 @@ async function loadCrawler() {
 // so it is its own request.
 async function loadChanges() {
   try {
-    const response = await getChangeStats({ from: windowStart() })
+    const response = await getChangeStats({ from: windowStart() }, controller.signal)
     changes.value = response.points
   } catch {
-    changes.value = []
+    if (!controller.signal.aborted) changes.value = []
   }
 }
 

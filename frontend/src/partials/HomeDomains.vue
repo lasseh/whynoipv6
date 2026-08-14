@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted, onScopeDispose, ref } from 'vue'
 
 // Partials
 import DomainTable from '@/components/DomainTable.vue'
@@ -10,12 +10,16 @@ import type { DomainSummary } from '@/api'
 const domainList = ref<DomainSummary[]>([])
 const loading = ref(true)
 
+// Abort the one-shot fetch when the visitor leaves before it lands.
+const controller = new AbortController()
+onScopeDispose(() => controller.abort())
+
 async function getDomainList() {
   try {
-    const response = await listSinners()
+    const response = await listSinners(undefined, controller.signal)
     domainList.value = response.items
   } catch {
-    domainList.value = []
+    if (!controller.signal.aborted) domainList.value = []
   } finally {
     loading.value = false
   }
