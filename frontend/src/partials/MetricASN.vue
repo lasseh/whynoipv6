@@ -144,11 +144,15 @@ async function loadOverview() {
   }
 }
 
-watch([routeQ, orderBy], ([q]) => {
+// The sort toggle and ?q only drive the server-fetched network league; the
+// DNS/hosting tabs sort their fixed lists client-side, so /asns refetches
+// only while the networks tab shows it. Watching `entity` covers the return
+// path: coming back to networks always refetches with the current ?sort.
+watch([routeQ, orderBy, entity], ([q, , e]) => {
   if (q !== undefined) searchQuery.value = q
-  void load()
+  if (e === 'networks') void load()
 })
-void load()
+if (entity.value === 'networks') void load()
 void loadProviders()
 void loadHosting()
 void loadOverview()
