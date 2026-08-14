@@ -255,7 +255,7 @@ const formattedTsCheck = computed(() =>
   <div class="mt-4 flex items-center justify-between text-xs font-normal text-gray-400">
     <span>Last checked: {{ formattedTsCheck }}</span>
     <RouterLink
-      to="/faq?page=2"
+      to="/faq?page=rules"
       class="text-gray-400 hover:text-fuchsia-500 underline underline-offset-2"
     >
       How these checks work →

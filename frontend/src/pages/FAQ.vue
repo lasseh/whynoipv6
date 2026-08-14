@@ -12,16 +12,28 @@ const route = useRoute()
 const router = useRouter()
 
 // One entry per content partial; drives the sidebar nav and page validation.
+// The ids are the shareable ?page= slugs.
 const SECTIONS = [
-  { id: '1', label: 'Frequently Asked Questions' },
-  { id: '2', label: 'Rules and API' },
-  { id: '3', label: 'Resources' },
-  { id: '4', label: 'About' },
+  { id: 'general', label: 'Frequently Asked Questions' },
+  { id: 'rules', label: 'Rules and API' },
+  { id: 'resources', label: 'Resources' },
+  { id: 'about', label: 'About' },
 ]
 const validPages = SECTIONS.map((s) => s.id)
 
+// The pre-slug URLs used ?page=1..4; inbound links keep working and the
+// address bar rewrites to the named form.
+const LEGACY_PAGES: Record<string, string> = {
+  '1': 'general',
+  '2': 'rules',
+  '3': 'resources',
+  '4': 'about',
+}
+
 function pageFromQuery(value: unknown): string {
-  return typeof value === 'string' && validPages.includes(value) ? value : '1'
+  if (typeof value !== 'string') return 'general'
+  const v = LEGACY_PAGES[value] ?? value
+  return validPages.includes(v) ? v : 'general'
 }
 
 const page = ref<string>(pageFromQuery(route.query.page))
@@ -31,12 +43,17 @@ const applyFilterAndUpdateRoute = (filterType: string) => {
   void router.push({ query: { page: filterType } })
 }
 
-// Watch for changes in route query
+// Watch for changes in route query; immediate so a legacy numeric deep link
+// is canonicalized on first load too.
 watch(
   () => route.query.page,
   (newPage) => {
     page.value = pageFromQuery(newPage)
+    if (typeof newPage === 'string' && LEGACY_PAGES[newPage]) {
+      void router.replace({ query: { ...route.query, page: LEGACY_PAGES[newPage] } })
+    }
   },
+  { immediate: true },
 )
 </script>
 
@@ -49,16 +66,13 @@ watch(
           <!-- PageShell already renders the page's one <main>; nesting
                another is invalid HTML and a duplicate landmark. -->
           <div class="md:flex-auto md:pl-10 order-1">
-            <FaqGeneral v-show="page === '1'" />
+            <FaqGeneral v-show="page === 'general'" />
 
-            <!-- Rules and API -->
-            <FaqRulesApi v-show="page === '2'" />
+            <FaqRulesApi v-show="page === 'rules'" />
 
-            <!-- Resources -->
-            <FaqResources v-show="page === '3'" />
+            <FaqResources v-show="page === 'resources'" />
 
-            <!-- About -->
-            <FaqAbout v-show="page === '4'" />
+            <FaqAbout v-show="page === 'about'" />
           </div>
 
           <!-- Nav sidebar -->
