@@ -6,6 +6,17 @@ const route = useRoute()
 const mobileNav = ref<HTMLElement | null>(null)
 const mobileNavOpen = ref(false)
 
+// One list drives both the desktop and mobile menus.
+const NAV_LINKS = [
+  { to: '/domains', label: 'Domains' },
+  { to: '/campaigns', label: 'Campaigns' },
+  { to: '/countries', label: 'Countries' },
+  { to: '/check', label: 'Live Check' },
+  { to: '/metrics', label: 'Metrics' },
+  { to: '/changelog', label: 'Changelog' },
+  { to: '/faq', label: 'FAQ' },
+]
+
 // Computed style based on mobileNavOpen and mobileNav refs
 const mobileNavStyle = computed(() => ({
   maxHeight: mobileNavOpen.value ? `${mobileNav.value?.scrollHeight}px` : '0',
@@ -65,74 +76,14 @@ onBeforeUnmount(() => {
         <nav class="hidden md:flex md:grow">
           <!-- Desktop menu links -->
           <ul class="flex grow justify-center flex-wrap items-center">
-            <li>
+            <li v-for="link in NAV_LINKS" :key="link.to">
               <router-link
-                to="/domains"
+                :to="link.to"
                 :class="[
-                  isActiveRoute('/domains') ? 'underline' : '',
+                  isActiveRoute(link.to) ? 'underline' : '',
                   'text-gray-300 hover:text-gray-200 px-4 py-2 flex items-center transition duration-150 ease-in-out font-bold',
                 ]"
-                >Domains</router-link
-              >
-            </li>
-            <li>
-              <router-link
-                to="/campaigns"
-                :class="[
-                  isActiveRoute('/campaigns') ? 'underline' : '',
-                  'text-gray-300 hover:text-gray-200 px-4 py-2 flex items-center transition duration-150 ease-in-out font-bold',
-                ]"
-                >Campaigns</router-link
-              >
-            </li>
-            <li>
-              <router-link
-                to="/countries"
-                :class="[
-                  isActiveRoute('/countries') ? 'underline' : '',
-                  'text-gray-300 hover:text-gray-200 px-4 py-2 flex items-center transition duration-150 ease-in-out font-bold',
-                ]"
-                >Countries</router-link
-              >
-            </li>
-            <li>
-              <router-link
-                to="/check"
-                :class="[
-                  isActiveRoute('/check') ? 'underline' : '',
-                  'text-gray-300 hover:text-gray-200 px-4 py-2 flex items-center transition duration-150 ease-in-out font-bold',
-                ]"
-                >Live Check</router-link
-              >
-            </li>
-            <li>
-              <router-link
-                to="/metrics"
-                :class="[
-                  isActiveRoute('/metrics') ? 'underline' : '',
-                  'text-gray-300 hover:text-gray-200 px-4 py-2 flex items-center transition duration-150 ease-in-out font-bold',
-                ]"
-                >Metrics</router-link
-              >
-            </li>
-            <li>
-              <router-link
-                to="/changelog"
-                :class="[
-                  isActiveRoute('/changelog') ? 'underline' : '',
-                  'text-gray-300 hover:text-gray-200 px-4 py-2 flex items-center transition duration-150 ease-in-out font-bold',
-                ]"
-                >Changelog</router-link
-              >
-            </li>
-            <li>
-              <router-link
-                to="/faq"
-                :class="[
-                  isActiveRoute('/faq') ? 'underline' : '',
-                  'text-gray-300 hover:text-gray-200 px-4 py-2 flex items-center transition duration-150 ease-in-out font-bold',
-                ]"
-                >FAQ</router-link
+                >{{ link.label }}</router-link
               >
             </li>
           </ul>
@@ -182,53 +133,11 @@ onBeforeUnmount(() => {
             :style="mobileNavStyle"
           >
             <ul class="bg-gray-800 px-4 py-2 border border-gray-700">
-              <li>
+              <li v-for="link in NAV_LINKS" :key="link.to">
                 <router-link
-                  to="/domains"
+                  :to="link.to"
                   class="flex font-medium text-gray-200 hover:text-gray-200 py-2"
-                  >Domains</router-link
-                >
-              </li>
-              <li>
-                <router-link
-                  to="/campaigns"
-                  class="flex font-medium text-gray-200 hover:text-gray-200 py-2"
-                  >Campaigns</router-link
-                >
-              </li>
-              <li>
-                <router-link
-                  to="/countries"
-                  class="flex font-medium text-gray-200 hover:text-gray-200 py-2"
-                  >Countries</router-link
-                >
-              </li>
-              <li>
-                <router-link
-                  to="/check"
-                  class="flex font-medium text-gray-200 hover:text-gray-200 py-2"
-                  >Live Check</router-link
-                >
-              </li>
-              <li>
-                <router-link
-                  to="/metrics"
-                  class="flex font-medium text-gray-200 hover:text-gray-200 py-2"
-                  >Metrics</router-link
-                >
-              </li>
-              <li>
-                <router-link
-                  to="/changelog"
-                  class="flex font-medium text-gray-200 hover:text-gray-200 py-2"
-                  >Changelog</router-link
-                >
-              </li>
-              <li>
-                <router-link
-                  to="/faq"
-                  class="flex font-medium text-gray-200 hover:text-gray-200 py-2"
-                  >FAQ</router-link
+                  >{{ link.label }}</router-link
                 >
               </li>
             </ul>
