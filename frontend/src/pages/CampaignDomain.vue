@@ -7,8 +7,8 @@ import ApiError from '@/components/ApiError.vue'
 import Breadcrumb from '@/components/Breadcrumb.vue'
 
 import ChangelogTable from '@/components/ChangelogTable.vue'
+import DomainReportHeader from '@/components/DomainReportHeader.vue'
 import DomainStatusCard from '@/components/DomainStatusCard.vue'
-import MandateBadge from '@/components/MandateBadge.vue'
 import SubdomainTable from '@/components/SubdomainTable.vue'
 
 import { getCampaign, getCampaignDomainChangelog } from '@/api'
@@ -67,29 +67,7 @@ watch(domain, (d) => {
           <ApiError v-if="error" :problem="error" />
 
           <template v-else-if="domain">
-            <div class="flex justify-between items-center mb-8">
-              <div class="text-left">
-                <div class="flex items-center gap-3">
-                  <h1 class="h2">{{ domain.host }}</h1>
-                  <MandateBadge
-                    v-if="domain.mandates.length > 0"
-                    :names="domain.mandates.map((m) => m.name)"
-                  />
-                </div>
-                <p class="text-base text-gray-400 pl-1">
-                  Network: {{ domain.asn.name }} (AS{{ domain.asn.number }})
-                </p>
-                <p v-if="domain.parent" class="text-base text-gray-400 pl-1">
-                  Subdomain of
-                  <router-link
-                    :to="{ name: 'DomainDetail', params: { domain: domain.parent } }"
-                    class="text-fuchsia-500 hover:text-fuchsia-400 underline underline-offset-2"
-                  >
-                    {{ domain.parent }}
-                  </router-link>
-                </p>
-              </div>
-            </div>
+            <DomainReportHeader :domain="domain" />
 
             <DomainStatusCard :domain="domain" :history="history" align="start" />
 
