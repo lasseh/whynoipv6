@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { DomainSummary } from '@/api'
-import StatusIcon from '@/components/StatusIcon.vue'
-import Tooltip from '@/components/Tooltip.vue'
+import StatusTd from '@/components/table/StatusTd.vue'
+import StatusTh from '@/components/table/StatusTh.vue'
 
 // The children tracked under one apex (06 §3.7): curated lists, campaign
 // entries and live-checked hosts alike. Informational by design, so the card
@@ -44,31 +44,30 @@ const showMx = computed(() =>
             <th class="md:px-2 px-5 py-3 whitespace-nowrap text-left">
               <div class="font-semibold text-left">Host</div>
             </th>
-            <th class="px-2 py-3 whitespace-nowrap">
-              <Tooltip text="AAAA lookup for this host: dig AAAA host">IPv6</Tooltip>
-            </th>
-            <th class="px-2 py-3 whitespace-nowrap">
-              <div class="font-semibold text-center md:block hidden">
-                <Tooltip text="AAAA records on authoritative nameserver hosts for this subdomain"
-                  >Nameservers</Tooltip
-                >
-              </div>
-              <div class="font-semibold text-center md:hidden">NS</div>
-            </th>
-            <th v-if="showMx" class="px-2 py-3 whitespace-nowrap">
-              <div class="font-semibold text-center md:block hidden">
-                <Tooltip text="AAAA records on MX hosts for this subdomain">Mail (MX)</Tooltip>
-              </div>
-              <div class="font-semibold text-center md:hidden">MX</div>
-            </th>
-            <th class="px-5 py-3 whitespace-nowrap">
-              <div class="font-semibold text-center md:block hidden">
-                <Tooltip text="The site answers over IPv6 and passes the page-resource grade"
-                  >IPv6 Only</Tooltip
-                >
-              </div>
-              <div class="font-semibold text-center md:hidden">V6</div>
-            </th>
+            <StatusTh
+              class="px-2"
+              tooltip="AAAA lookup for this host: dig AAAA host"
+              label="IPv6"
+            />
+            <StatusTh
+              class="px-2"
+              tooltip="AAAA records on authoritative nameserver hosts for this subdomain"
+              label="Nameservers"
+              short-label="NS"
+            />
+            <StatusTh
+              v-if="showMx"
+              class="px-2"
+              tooltip="AAAA records on MX hosts for this subdomain"
+              label="Mail (MX)"
+              short-label="MX"
+            />
+            <StatusTh
+              class="px-5"
+              tooltip="The site answers over IPv6 and passes the page-resource grade"
+              label="IPv6 Only"
+              short-label="V6"
+            />
           </tr>
         </thead>
         <tbody class="text-sm divide-y divide-slate-700 border-b border-slate-700">
@@ -81,26 +80,10 @@ const showMx = computed(() =>
                 {{ sub.host }}
               </router-link>
             </td>
-            <td class="px-2 py-3 whitespace-nowrap w-px md:w-[12%] text-center">
-              <div class="inline-flex px-2.5 py-1">
-                <StatusIcon :value="sub.status.base.value" />
-              </div>
-            </td>
-            <td class="px-2 py-3 whitespace-nowrap w-px md:w-[12%] text-center">
-              <div class="inline-flex px-2.5 py-1">
-                <StatusIcon :value="sub.status.ns.value" />
-              </div>
-            </td>
-            <td v-if="showMx" class="px-2 py-3 whitespace-nowrap w-px md:w-[12%] text-center">
-              <div class="inline-flex px-2.5 py-1">
-                <StatusIcon :value="sub.status.mx.value" />
-              </div>
-            </td>
-            <td class="px-2 py-3 whitespace-nowrap w-px md:w-[12%] text-center">
-              <div class="inline-flex px-2.5 py-1">
-                <StatusIcon :value="sub.ipv6_only" />
-              </div>
-            </td>
+            <StatusTd class="md:w-[12%]" :value="sub.status.base.value" />
+            <StatusTd class="md:w-[12%]" :value="sub.status.ns.value" />
+            <StatusTd v-if="showMx" class="md:w-[12%]" :value="sub.status.mx.value" />
+            <StatusTd class="md:w-[12%]" :value="sub.ipv6_only" />
           </tr>
         </tbody>
       </table>

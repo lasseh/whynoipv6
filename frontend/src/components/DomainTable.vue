@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { DomainSummary } from '@/api'
-import StatusIcon from '@/components/StatusIcon.vue'
-import Tooltip from '@/components/Tooltip.vue'
+import StatusTd from '@/components/table/StatusTd.vue'
+import StatusTh from '@/components/table/StatusTh.vue'
 
 // The one domain-table module (§4.2 list row): columns Apex/WWW/Mail (MX)/
 // Nameservers/IPv6 Only map to status.base/www/mx/ns.value and ipv6_only
@@ -38,34 +38,34 @@ withDefaults(
           <th class="md:px-2 px-5 py-3 whitespace-nowrap text-left">
             <div class="font-semibold text-left">Domain</div>
           </th>
-          <th class="px-2 py-3 whitespace-nowrap">
-            <Tooltip text="AAAA lookup at the zone apex: dig AAAA domain.com">Apex</Tooltip>
-          </th>
-          <th class="px-2 py-3 whitespace-nowrap">
-            <Tooltip text="AAAA lookup for the www host: dig AAAA www.domain.com">WWW</Tooltip>
-          </th>
-          <th class="px-2 py-3 whitespace-nowrap">
-            <div class="font-semibold text-center md:block hidden">
-              <Tooltip text="AAAA records on MX hosts for domain.com">Mail (MX)</Tooltip>
-            </div>
-            <div class="font-semibold text-center md:hidden">MX</div>
-          </th>
-          <th class="px-2 py-3 whitespace-nowrap">
-            <div class="font-semibold text-center md:block hidden">
-              <Tooltip text="AAAA records on authoritative nameserver hosts for domain.com"
-                >Nameservers</Tooltip
-              >
-            </div>
-            <div class="font-semibold text-center md:hidden">NS</div>
-          </th>
-          <th class="px-5 py-3 whitespace-nowrap">
-            <div class="font-semibold text-center md:block hidden">
-              <Tooltip text="The site answers over IPv6 and passes the page-resource grade"
-                >IPv6 Only</Tooltip
-              >
-            </div>
-            <div class="font-semibold text-center md:hidden">V6</div>
-          </th>
+          <StatusTh
+            class="px-2"
+            tooltip="AAAA lookup at the zone apex: dig AAAA domain.com"
+            label="Apex"
+          />
+          <StatusTh
+            class="px-2"
+            tooltip="AAAA lookup for the www host: dig AAAA www.domain.com"
+            label="WWW"
+          />
+          <StatusTh
+            class="px-2"
+            tooltip="AAAA records on MX hosts for domain.com"
+            label="Mail (MX)"
+            short-label="MX"
+          />
+          <StatusTh
+            class="px-2"
+            tooltip="AAAA records on authoritative nameserver hosts for domain.com"
+            label="Nameservers"
+            short-label="NS"
+          />
+          <StatusTh
+            class="px-5"
+            tooltip="The site answers over IPv6 and passes the page-resource grade"
+            label="IPv6 Only"
+            short-label="V6"
+          />
         </tr>
       </thead>
       <!-- Table body -->
@@ -108,31 +108,11 @@ withDefaults(
               </router-link>
             </div>
           </td>
-          <td class="px-2 py-3 whitespace-nowrap w-px md:w-[10%] text-center">
-            <div class="inline-flex px-2.5 py-1">
-              <StatusIcon :value="domain.status.base.value" />
-            </div>
-          </td>
-          <td class="px-2 py-3 whitespace-nowrap w-px md:w-[10%] text-center">
-            <div class="inline-flex px-2.5 py-1">
-              <StatusIcon :value="domain.status.www.value" />
-            </div>
-          </td>
-          <td class="px-2 py-3 whitespace-nowrap w-px md:w-[10%] text-center">
-            <div class="inline-flex px-2.5 py-1">
-              <StatusIcon :value="domain.status.mx.value" />
-            </div>
-          </td>
-          <td class="px-2 py-3 whitespace-nowrap w-px md:w-[10%] text-center">
-            <div class="inline-flex px-2.5 py-1">
-              <StatusIcon :value="domain.status.ns.value" />
-            </div>
-          </td>
-          <td class="px-2 py-3 whitespace-nowrap w-px md:w-[10%] text-center">
-            <div class="inline-flex px-2.5 py-1">
-              <StatusIcon :value="domain.ipv6_only" />
-            </div>
-          </td>
+          <StatusTd class="md:w-[10%]" :value="domain.status.base.value" />
+          <StatusTd class="md:w-[10%]" :value="domain.status.www.value" />
+          <StatusTd class="md:w-[10%]" :value="domain.status.mx.value" />
+          <StatusTd class="md:w-[10%]" :value="domain.status.ns.value" />
+          <StatusTd class="md:w-[10%]" :value="domain.ipv6_only" />
         </tr>
       </tbody>
     </table>
