@@ -20,5 +20,12 @@ export default defineConfig({
     // Global env stays 'node' (fast for pure-logic tests). DOM-dependent tests
     // opt in per-file with `// @vitest-environment jsdom`.
     environment: 'node',
+    // Reporting only, no thresholds: `npm run test:coverage` shows the gaps
+    // without changing the pass/fail behavior of the plain test gate.
+    coverage: {
+      provider: 'v8',
+      include: ['src/**', 'scripts/**'],
+      reporter: ['text', 'html', 'lcov'],
+    },
   },
 })
