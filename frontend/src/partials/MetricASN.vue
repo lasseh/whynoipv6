@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onScopeDispose, reactive, ref, toRefs, watch } from 'vue'
+import { computed, onScopeDispose, ref, shallowRef, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import type { LocationQuery } from 'vue-router'
 
@@ -40,14 +40,14 @@ const ENTITIES: { value: Entity; label: string }[] = [
 const router = useRouter()
 const route = useRoute()
 const error = ref<ApiProblem | null>(null)
-const state = reactive({
-  asnData: [] as ASN[],
-  providers: [] as Provider[],
-  overview: null as GlobalStatsPoint | null,
-  networks: [] as NetworkTrend[],
-  hosting: [] as HostingProvider[],
-  isLoading: true,
-})
+// Immutable API snapshots replaced wholesale — shallowRef, like the shared
+// composables, so the payloads never get deep proxies.
+const asnData = shallowRef<ASN[]>([])
+const providers = shallowRef<Provider[]>([])
+const overview = shallowRef<GlobalStatsPoint | null>(null)
+const networks = shallowRef<NetworkTrend[]>([])
+const hosting = shallowRef<HostingProvider[]>([])
+const isLoading = ref(true)
 
 // The URL is the source of truth (§9.1, like useCursorList), so the entity
 // carries its own param and deep links survive.
@@ -68,8 +68,6 @@ const routeQ = computed(() => {
 })
 const searchQuery = ref(routeQ.value ?? props.query)
 
-const { asnData, isLoading } = toRefs(state)
-
 let controller: AbortController | null = null
 onScopeDispose(() => controller?.abort())
 
@@ -83,7 +81,7 @@ async function load() {
   const c = new AbortController()
   controller = c
   error.value = null
-  state.isLoading = true
+  isLoading.value = true
   try {
     const response = await listASNs(
       routeQ.value !== undefined
@@ -92,12 +90,12 @@ async function load() {
       c.signal,
     )
     if (c.signal.aborted) return
-    state.asnData = response.items
+    asnData.value = response.items
   } catch (e) {
     if (c.signal.aborted) return
     error.value = ApiProblem.from(e)
   } finally {
-    if (controller === c) state.isLoading = false
+    if (controller === c) isLoading.value = false
   }
 }
 
@@ -106,19 +104,19 @@ async function load() {
 async function loadProviders() {
   try {
     const response = await listProviders(undefined, scopeController.signal)
-    state.providers = response.items
+    providers.value = response.items
   } catch {
     // A provider outage should not blank the network league next to it.
-    if (!scopeController.signal.aborted) state.providers = []
+    if (!scopeController.signal.aborted) providers.value = []
   }
 }
 
 async function loadHosting() {
   try {
     const response = await listHostingProviders(undefined, scopeController.signal)
-    state.hosting = response.items
+    hosting.value = response.items
   } catch {
-    if (!scopeController.signal.aborted) state.hosting = []
+    if (!scopeController.signal.aborted) hosting.value = []
   }
 }
 
@@ -127,9 +125,9 @@ async function loadHosting() {
 async function loadNetworks() {
   try {
     const response = await getNetworkStats(undefined, scopeController.signal)
-    state.networks = response.networks
+    networks.value = response.networks
   } catch {
-    if (!scopeController.signal.aborted) state.networks = []
+    if (!scopeController.signal.aborted) networks.value = []
   }
 }
 
@@ -139,10 +137,10 @@ async function loadNetworks() {
 async function loadOverview() {
   try {
     const response = await getOverviewStats(undefined, scopeController.signal)
-    state.overview = response.points.at(-1) ?? null
+    overview.value = response.points.at(-1) ?? null
   } catch {
     // One panel going quiet must not blank the leagues beside it.
-    if (!scopeController.signal.aborted) state.overview = null
+    if (!scopeController.signal.aborted) overview.value = null
   }
 }
 
@@ -193,7 +191,7 @@ const networkRows = computed<Row[]>(() =>
 )
 
 const dnsRows = computed<Row[]>(() =>
-  state.providers.map((p) => ({
+  providers.value.map((p) => ({
     key: p.id,
     name: p.name,
     total: p.count_total,
@@ -204,7 +202,7 @@ const dnsRows = computed<Row[]>(() =>
 // Keyed on the slug, not the display name: the slug is what /domains?hosting=
 // takes and the only stable identifier.
 const hostingRows = computed<Row[]>(() =>
-  state.hosting.map((h) => ({
+  hosting.value.map((h) => ({
     key: h.slug,
     name: h.name,
     total: h.count_total,
@@ -275,7 +273,7 @@ const laggards = computed(() => {
 // denominator moved and read as deployment. Days with no total are dropped
 // rather than plotted as zero.
 const trends = computed(() =>
-  state.networks.map((n) => {
+  networks.value.map((n) => {
     const share = n.points
       .filter((p) => p.count_total)
       .map((p) => ((p.count_v6 ?? 0) / (p.count_total as number)) * 100)
@@ -298,8 +296,8 @@ const trends = computed(() =>
 // Nullable all the way through: snapshots taken before the PTR columns existed
 // carry no value, and an em dash is the honest render. Coercing to 0 would
 // claim "no host has reverse DNS", which is a measurement, not a gap.
-const ptrSupported = computed(() => state.overview?.ptr_supported ?? null)
-const ptrGraded = computed(() => state.overview?.ptr_graded ?? null)
+const ptrSupported = computed(() => overview.value?.ptr_supported ?? null)
+const ptrGraded = computed(() => overview.value?.ptr_graded ?? null)
 const ptrShare = computed(() => {
   const supported = ptrSupported.value
   const graded = ptrGraded.value
