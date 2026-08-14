@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onUnmounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
 import PageShell from '@/components/PageShell.vue'
@@ -82,6 +82,12 @@ watch(running, (r) => {
     clearInterval(elapsedTimer)
     elapsedTimer = null
   }
+})
+
+// Navigating away mid-scan disposes the watcher before `running` flips false,
+// so the interval needs its own teardown.
+onUnmounted(() => {
+  if (elapsedTimer !== null) clearInterval(elapsedTimer)
 })
 
 const waitMessage = computed(() => {
