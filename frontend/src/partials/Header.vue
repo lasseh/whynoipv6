@@ -172,9 +172,12 @@ onBeforeUnmount(() => {
           </button>
 
           <!-- Mobile navigation -->
+          <!-- inert removes the clipped menu from the tab order and the
+               accessibility tree; max-height only hides it visually. -->
           <nav
             id="mobile-nav"
             ref="mobileNav"
+            :inert="!mobileNavOpen"
             class="absolute top-full z-20 left-0 w-full px-4 sm:px-6 overflow-hidden transition-all duration-300 ease-in-out"
             :style="mobileNavStyle"
           >
