@@ -9,6 +9,7 @@ import CrossIcon from '@/components/icons/Cross.vue'
 import MinusIcon from '@/components/icons/Minus.vue'
 
 import { useLiveCheck } from '@/composables/useLiveCheck'
+import type { CheckEnvelope } from '@/api'
 import { setPageTitle } from '@/composables/usePageMeta'
 import { liveStatus } from '@/utils/status'
 import { formatDateTime } from '@/utils/date'
@@ -39,12 +40,17 @@ const INFO_CHECKS: [string, string][] = [
   ['spf', 'SPF'],
 ]
 
-const checks = computed<Record<string, { status?: string }>>(
-  () => (envelope.value?.result?.checks ?? {}) as Record<string, { status?: string }>,
+// Shapes come from the generated schema — no hand-written re-declarations.
+type CheckResult = NonNullable<CheckEnvelope['result']>
+
+const checks = computed<NonNullable<CheckResult['checks']>>(
+  () => envelope.value?.result?.checks ?? {},
 )
-const latency = computed(
-  () => (envelope.value?.result?.latency ?? null) as { v4_ms?: number; v6_ms?: number } | null,
-)
+const latency = computed(() => envelope.value?.result?.latency ?? null)
+const durationSeconds = computed(() => {
+  const ms = envelope.value?.result?.duration_ms
+  return ms ? (ms / 1000).toFixed(1) : null
+})
 const done = computed(() => envelope.value?.status === 'done')
 const failed = computed(() => envelope.value?.status === 'failed')
 
@@ -317,9 +323,7 @@ watch([envelope, () => route.params.target], ([env]) => {
                   ? formatDateTime(envelope.result.checked_at)
                   : 'just now'
               }}
-              <template v-if="envelope.result?.duration_ms">
-                · scan took {{ ((envelope.result.duration_ms as number) / 1000).toFixed(1) }}s
-              </template>
+              <template v-if="durationSeconds"> · scan took {{ durationSeconds }}s </template>
             </div>
           </div>
         </div>
