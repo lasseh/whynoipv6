@@ -70,8 +70,10 @@ jobs:
         run: npm ci
         working-directory: frontend
 
+      # Full tree, dev deps included: build tooling runs on this runner and
+      # generates every shipped byte, so its advisories gate too.
       - name: Audit dependencies
-        run: npm audit --omit=dev --audit-level=high
+        run: npm audit --audit-level=high
         working-directory: frontend
 
       - name: Lint (type-check + eslint + prettier)
