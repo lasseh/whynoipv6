@@ -15,7 +15,7 @@ import Footer from '@/partials/Footer.vue'
     >
     <Header />
 
-    <main id="main-content" tabindex="-1" class="grow">
+    <main id="main-content" tabindex="-1" class="grow outline-none">
       <div class="relative max-w-6xl mx-auto h-0 pointer-events-none" aria-hidden="true">
         <PageIllustration />
       </div>

@@ -1,4 +1,5 @@
-import { createWebHistory, createRouter } from 'vue-router'
+import { nextTick } from 'vue'
+import { createWebHistory, createRouter, START_LOCATION } from 'vue-router'
 import type { RouteRecordRaw } from 'vue-router'
 import { installPageMeta } from '@/composables/usePageMeta'
 import { TIERS } from '@/tiers'
@@ -230,13 +231,18 @@ const router = createRouter({
   history: createWebHistory(),
   routes,
   scrollBehavior(to, _from, savedPosition) {
+    // scrollTo with an explicit behavior option never consults the CSS
+    // media query, so reduced-motion has to be checked here.
+    const behavior = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      ? 'auto'
+      : ('smooth' as const)
     if (savedPosition) {
-      return savedPosition
+      return { ...savedPosition, behavior }
     }
     if (to.hash) {
-      return { el: to.hash, behavior: 'smooth' }
+      return { el: to.hash, behavior }
     }
-    return { top: 0, behavior: 'smooth' }
+    return { top: 0, behavior }
   },
 })
 
@@ -247,6 +253,19 @@ router.beforeEach((to) => {
     return { path: to.path.replace(/\/+$/, ''), query: to.query, hash: to.hash, replace: true }
   }
   return true
+})
+
+// SPA route changes swap the view under a focus point that stays in the old
+// header; move focus to the main landmark so keyboard users continue from the
+// new content and screen readers announce the change (WCAG 2.4.3/4.1.3).
+// Skipped on the initial navigation (the browser's document focus is right)
+// and on same-path query/hash changes (filters, pagination).
+router.afterEach((to, from) => {
+  if (from !== START_LOCATION && to.path !== from.path) {
+    void nextTick(() => {
+      document.getElementById('main-content')?.focus({ preventScroll: true })
+    })
+  }
 })
 
 installPageMeta(router)
