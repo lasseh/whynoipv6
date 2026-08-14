@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { ref } from 'vue'
 import type { DomainSummary } from '@/api'
 import StatusIcon from '@/components/StatusIcon.vue'
 import Tooltip from '@/components/Tooltip.vue'
@@ -19,8 +18,6 @@ withDefaults(
     loading: false,
   },
 )
-
-const hoverIndex = ref<number | null>(null)
 </script>
 
 <template>
@@ -74,11 +71,12 @@ const hoverIndex = ref<number | null>(null)
       <!-- Table body -->
       <tbody class="text-sm divide-y divide-slate-700 border-b border-slate-700">
         <tr
-          v-for="(domain, index) in domains"
+          v-for="domain in domains"
           :key="domain.host"
-          :class="[{ 'bg-emerald-900/50': campaignUuid && domain.v6_ready }, 'hover:bg-gray-800']"
-          @mouseover="hoverIndex = index"
-          @mouseout="hoverIndex = null"
+          :class="[
+            { 'bg-emerald-900/50': campaignUuid && domain.v6_ready },
+            'group hover:bg-gray-800',
+          ]"
         >
           <td
             v-if="!campaignUuid"
@@ -87,8 +85,7 @@ const hoverIndex = ref<number | null>(null)
             <div class="flex items-center">
               <div
                 v-if="domain.rank !== null"
-                :class="hoverIndex === index ? 'bg-fuchsia-900' : 'bg-zinc-700/50'"
-                class="inline-flex text-center font-mono text-xs text-slate-300 py-1 px-3 rounded-sm hover:bg-fuchsia-900 transition duration-150 ease-in-out"
+                class="inline-flex text-center font-mono text-xs text-slate-300 py-1 px-3 rounded-sm bg-zinc-700/50 group-hover:bg-fuchsia-900 transition duration-150 ease-in-out"
               >
                 {{ domain.rank }}
               </div>
