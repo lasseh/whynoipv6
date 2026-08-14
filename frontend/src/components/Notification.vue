@@ -12,6 +12,9 @@ let autoHideTimeout: ReturnType<typeof setTimeout> | undefined
 
 watch(warn, (isWarn) => {
   if (!isWarn) return
+  // A pre-warn scroll may have armed the 1 s hide timer; clear it so the
+  // banner gets its full 15 s.
+  clearTimeout(autoHideTimeout)
   showNotification.value = true
   autoHideTimeout = setTimeout(() => {
     showNotification.value = false
