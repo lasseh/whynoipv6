@@ -1,15 +1,7 @@
-# Our security address
+# RFC 9116. Served at /.well-known/security.txt (canonical) and /security.txt
+# (legacy alias) — the well-known path is mapped in both nginx configs.
 Contact: mailto:whynoipv6@protonmail.com
-
-# Our PGP key
-Encryption: https://whynoipv6.com/.well-known/pgp-key.txt
-
-# Our security policy
-Policy: https://whynoipv6.com/security-policy
-
-# Our security acknowledgements page
-Acknowledgments: https://whynoipv6.com/security-acknowledgments
-
-# Our security update page
+Expires: 2027-08-01T00:00:00.000Z
 Preferred-Languages: en
 Canonical: https://whynoipv6.com/.well-known/security.txt
+Policy: https://github.com/lasseh/whynoipv6/blob/master/SECURITY.md
