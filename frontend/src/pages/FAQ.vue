@@ -35,7 +35,9 @@ watch(
       <div class="pt-24 pb-12 md:pt-32 md:pb-20">
         <div class="flex flex-col md:flex-row">
           <!-- Main content -->
-          <main class="md:flex-auto md:pl-10 order-1">
+          <!-- PageShell already renders the page's one <main>; nesting
+               another is invalid HTML and a duplicate landmark. -->
+          <div class="md:flex-auto md:pl-10 order-1">
             <div v-show="page === '1'">
               <div class="mb-8">
                 <h1 class="h2 mb-4">Frequently Asked Questions</h1>
@@ -507,11 +509,11 @@ watch(
                 </li>
               </ul>
             </div>
-          </main>
+          </div>
 
           <!-- Nav sidebar -->
           <aside class="md:w-64 mb-16 md:mb-0 md:mr-10 md:shrink-0">
-            <nav>
+            <nav aria-label="FAQ sections">
               <ul>
                 <li class="py-2 border-b border-gray-800">
                   <a
