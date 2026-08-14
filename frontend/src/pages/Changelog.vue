@@ -77,12 +77,21 @@ onBeforeUnmount(() => {
         </div>
       </div>
 
-      <div v-if="error" class="max-w-6xl mx-auto px-4 sm:px-6">
+      <!-- The error panel replaces the view only when there is nothing to
+           show: a failed 30 s background refresh keeps the stale table up
+           with a muted hint instead of destroying what the user is reading.
+           Same for the spinner, which otherwise flashes on every tick. -->
+      <div v-if="error && items.length === 0" class="max-w-6xl mx-auto px-4 sm:px-6">
         <ApiError :problem="error" />
       </div>
       <template v-else>
+        <div v-if="error" class="max-w-6xl mx-auto px-4 sm:px-6 mb-2">
+          <p class="text-sm text-gray-500" role="status">
+            Refresh failed. Showing the last loaded entries, retrying shortly.
+          </p>
+        </div>
         <ChangelogTable v-if="!loading || items.length > 0" :changelogs="items" header="" />
-        <LoadingSpinner v-if="loading" />
+        <LoadingSpinner v-if="loading && items.length === 0" />
 
         <!-- Pagination -->
         <div class="mt-4">
