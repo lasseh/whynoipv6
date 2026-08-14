@@ -9,17 +9,12 @@ import LeagueTable from '@/components/LeagueTable.vue'
 import SegmentedTabs from '@/components/SegmentedTabs.vue'
 import ChartPanel from '@/components/charts/ChartPanel.vue'
 import ScatterChart from '@/components/charts/ScatterChart.vue'
-import Sparkline from '@/components/charts/Sparkline.vue'
-import { TRACK_COLOR, fmtCompact, fmtFull, fmtPercent, shareColor } from '@/components/charts/chart'
+import { fmtFull } from '@/components/charts/chart'
+import NetworkTrendsPanel from '@/partials/metrics/NetworkTrendsPanel.vue'
+import ReverseDnsPanel from '@/partials/metrics/ReverseDnsPanel.vue'
 
-import {
-  getNetworkStats,
-  getOverviewStats,
-  listASNs,
-  listHostingProviders,
-  listProviders,
-} from '@/api'
-import type { ASN, GlobalStatsPoint, HostingProvider, NetworkTrend, Provider } from '@/api'
+import { listASNs, listHostingProviders, listProviders } from '@/api'
+import type { ASN, HostingProvider, Provider } from '@/api'
 import { ApiProblem } from '@/api/problem'
 
 // Three registries answer the same question about three different entities:
@@ -44,8 +39,6 @@ const error = ref<ApiProblem | null>(null)
 // composables, so the payloads never get deep proxies.
 const asnData = shallowRef<ASN[]>([])
 const providers = shallowRef<Provider[]>([])
-const overview = shallowRef<GlobalStatsPoint | null>(null)
-const networks = shallowRef<NetworkTrend[]>([])
 const hosting = shallowRef<HostingProvider[]>([])
 const isLoading = ref(true)
 
@@ -71,7 +64,7 @@ const searchQuery = ref(routeQ.value ?? props.query)
 let controller: AbortController | null = null
 onScopeDispose(() => controller?.abort())
 
-// The four one-shot loaders below share a scope-lifetime controller; the
+// The two one-shot loaders below share a scope-lifetime controller; the
 // per-load `controller` above belongs to the abort-and-supersede ASN refetch.
 const scopeController = new AbortController()
 onScopeDispose(() => scopeController.abort())
@@ -120,30 +113,6 @@ async function loadHosting() {
   }
 }
 
-// One request for all seven small multiples; /asns/{number}/stats would be
-// seven round trips for the same panel.
-async function loadNetworks() {
-  try {
-    const response = await getNetworkStats(undefined, scopeController.signal)
-    networks.value = response.networks
-  } catch {
-    if (!scopeController.signal.aborted) networks.value = []
-  }
-}
-
-// The reverse-DNS panel reads the same daily snapshot the overview tab does.
-// Fetched here rather than lifted into the page because the two tabs never
-// render together, so there is no duplicate request to save.
-async function loadOverview() {
-  try {
-    const response = await getOverviewStats(undefined, scopeController.signal)
-    overview.value = response.points.at(-1) ?? null
-  } catch {
-    // One panel going quiet must not blank the leagues beside it.
-    if (!scopeController.signal.aborted) overview.value = null
-  }
-}
-
 // The sort toggle and ?q only drive the server-fetched network league; the
 // DNS/hosting tabs sort their fixed lists client-side, so /asns refetches
 // only while the networks tab shows it. Watching `entity` covers the return
@@ -155,8 +124,6 @@ watch([routeQ, orderBy, entity], ([q, , e]) => {
 if (entity.value === 'networks') void load()
 void loadProviders()
 void loadHosting()
-void loadOverview()
-void loadNetworks()
 
 function setEntity(value: string) {
   // ?q= only means anything for networks, so it does not survive the switch.
@@ -269,49 +236,6 @@ const laggards = computed(() => {
   if (pts.length === 0) return null
   return { under: pts.filter((p) => p.y < 5).length, total: pts.length }
 })
-
-// Small multiples, because these seven sit between 0.8% and 86% and a shared
-// axis flattens five of them onto the baseline.
-// The endpoint serves counts, not a share, so the denominator stays visible:
-// coverage is still growing, and a percentage alone would move when the
-// denominator moved and read as deployment. Days with no total are dropped
-// rather than plotted as zero.
-const trends = computed(() =>
-  networks.value.map((n) => {
-    const share = n.points
-      .filter((p) => p.count_total)
-      .map((p) => ((p.count_v6 ?? 0) / (p.count_total as number)) * 100)
-    const last = share.at(-1) ?? 0
-    return {
-      asn: n.asn,
-      name: n.name,
-      share,
-      last,
-      days: share.length,
-      // Same ramp as the league bar and the scatter dot, so one network is one
-      // colour everywhere on the page.
-      color: shareColor(last),
-      lo: share.length ? Math.min(...share) : 0,
-      hi: share.length ? Math.max(...share) : 0,
-    }
-  }),
-)
-
-// Nullable all the way through: snapshots taken before the PTR columns existed
-// carry no value, and an em dash is the honest render. Coercing to 0 would
-// claim "no host has reverse DNS", which is a measurement, not a gap.
-const ptrSupported = computed(() => overview.value?.ptr_supported ?? null)
-const ptrGraded = computed(() => overview.value?.ptr_graded ?? null)
-const ptrShare = computed(() => {
-  const supported = ptrSupported.value
-  const graded = ptrGraded.value
-  return supported == null || !graded ? null : (supported / graded) * 100
-})
-const ptrWithout = computed(() => {
-  const supported = ptrSupported.value
-  const graded = ptrGraded.value
-  return supported == null || graded == null ? null : graded - supported
-})
 </script>
 
 <template>
@@ -390,74 +314,9 @@ const ptrWithout = computed(() => {
         </p>
       </section>
 
-      <!-- Only networks have a daily series; DNS and hosting have no history
-           stored at all, so the panel belongs to this entity rather than
-           following the switcher. -->
-      <ChartPanel
-        title="Network adoption, day by day"
-        description="One box per network, each scaled to itself. Read the levels rather than the slopes: coverage is still growing, so a line can move because we reached more of a network's domains, not because it deployed anything."
-      >
-        <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          <div
-            v-for="t in trends"
-            :key="t.asn"
-            class="rounded border border-gray-700/60 bg-gray-900/40 p-3"
-          >
-            <div class="mb-2 flex items-baseline justify-between gap-2">
-              <span class="truncate text-sm text-gray-300">
-                {{ t.name }}
-                <span class="pl-1 text-xs text-gray-500">AS{{ t.asn }}</span>
-              </span>
-              <span class="shrink-0 font-mono text-sm" :style="{ color: t.color }">
-                {{ fmtPercent(t.last) }}
-              </span>
-            </div>
-            <Sparkline :values="t.share" :color="t.color" />
-            <div class="mt-2 text-xs text-gray-500">
-              {{ fmtPercent(t.lo) }} to {{ fmtPercent(t.hi) }} over {{ t.days }} days
-            </div>
-          </div>
-        </div>
-      </ChartPanel>
+      <NetworkTrendsPanel />
 
-      <section class="rounded border border-gray-700 bg-gray-800/60 p-5">
-        <header class="mb-4 flex items-start justify-between gap-3">
-          <div>
-            <h3 class="text-base font-medium text-zinc-100">Reverse DNS</h3>
-            <p class="mt-0.5 text-sm text-gray-400">
-              Of the hosts that answer over IPv6, how many resolve back to a name. Mail servers and
-              logging tools care; almost nobody else has noticed.
-            </p>
-          </div>
-        </header>
-
-        <div class="mb-3 flex items-baseline gap-3">
-          <span
-            class="text-3xl font-bold tracking-tighter"
-            :style="{ color: shareColor(ptrShare ?? 0) }"
-            >{{ fmtPercent(ptrShare) }}</span
-          >
-          <span class="text-sm text-gray-400">
-            of {{ fmtCompact(ptrGraded) }} IPv6 hosts resolve back to a name
-          </span>
-        </div>
-        <div
-          class="mb-1.5 flex h-1.5 overflow-hidden rounded-full"
-          :style="{ backgroundColor: TRACK_COLOR }"
-        >
-          <div
-            class="rounded-full"
-            :style="{
-              width: `${(ptrShare ?? 0).toFixed(2)}%`,
-              backgroundColor: shareColor(ptrShare ?? 0),
-            }"
-          ></div>
-        </div>
-        <div class="flex items-center justify-between text-xs text-gray-500">
-          <span>{{ fmtFull(ptrSupported) }} have a PTR record</span>
-          <span>{{ fmtFull(ptrWithout) }} have none</span>
-        </div>
-      </section>
+      <ReverseDnsPanel />
     </div>
   </section>
 </template>
