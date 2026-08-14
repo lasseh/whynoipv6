@@ -44,7 +44,7 @@ watch(
               </div>
               <ul class="-my-4">
                 <li class="py-4">
-                  <h4 class="text-xl font-medium mb-2">What is Why No IPv6?</h4>
+                  <h2 class="text-xl font-medium mb-2">What is Why No IPv6?</h2>
                   <p class="text-base text-gray-400">
                     Why No IPv6 crawls the active Tranco list on its normal daily schedule, plus
                     user-submitted campaigns, and checks each entry for IPv6: the domain, www,
@@ -54,7 +54,7 @@ watch(
                   </p>
                 </li>
                 <li class="py-4">
-                  <h4 class="text-xl font-medium mb-2">Why does IPv6 matter?</h4>
+                  <h2 class="text-xl font-medium mb-2">Why does IPv6 matter?</h2>
                   <p class="text-base text-gray-400 mb-2">
                     IPv4 ran out. Not 'is running out': ran out. The regional registries held the
                     funeral years ago. Networks still need addresses. IPv6 has them. For a
@@ -66,7 +66,7 @@ watch(
                   </p>
                 </li>
                 <li class="py-4">
-                  <h4 class="text-xl font-medium mb-2">How does the site work?</h4>
+                  <h2 class="text-xl font-medium mb-2">How does the site work?</h2>
                   <p class="text-base text-gray-400">
                     The crawler works through the active Tranco list, checking AAAA records for the
                     domain, www, nameserver hosts, and mail hosts, plus a real HTTP connection over
@@ -74,7 +74,7 @@ watch(
                   </p>
                 </li>
                 <li class="py-4">
-                  <h4 class="text-xl font-medium mb-2">Tranco?</h4>
+                  <h2 class="text-xl font-medium mb-2">Tranco?</h2>
                   <p class="text-base text-gray-400 mb-2">
                     The
                     <a href="https://tranco-list.eu/" target="_blank" class="a-gradient"
@@ -90,7 +90,7 @@ watch(
                   </p>
                 </li>
                 <li class="py-4">
-                  <h4 class="text-xl font-medium mb-2">How accurate is the data?</h4>
+                  <h2 class="text-xl font-medium mb-2">How accurate is the data?</h2>
                   <p class="text-base text-gray-400">
                     Treat the data as indicative, not absolute. DNS propagation and CDNs that answer
                     differently per anycast location can shift a result from one scan to the next.
@@ -99,9 +99,9 @@ watch(
                   </p>
                 </li>
                 <li class="py-4">
-                  <h4 class="text-xl font-medium mb-2">
+                  <h2 class="text-xl font-medium mb-2">
                     Why does a domain show as not supporting IPv6 when it does?
-                  </h4>
+                  </h2>
                   <p class="text-base text-gray-400 mb-2">
                     Usually DNS propagation lag, a CDN answering differently from our vantage point,
                     or a server that didn't respond during that scan. A real change has to survive
@@ -123,10 +123,10 @@ watch(
               </div>
               <ul class="-my-4">
                 <li class="pt-4">
-                  <h3 class="text-xl font-medium underline">Crawler</h3>
+                  <h2 class="text-xl font-medium underline">Crawler</h2>
                 </li>
                 <li class="py-4">
-                  <h4 class="text-xl font-medium mb-2">Crawler Rules</h4>
+                  <h3 class="text-xl font-medium mb-2">Crawler Rules</h3>
                   <p class="text-base text-gray-400 mb-2">
                     The crawler checks AAAA records for domain.com, www.domain.com, and the hosts
                     named by the domain's NS and MX records. It also opens a real HTTP connection
@@ -138,7 +138,7 @@ watch(
                   </p>
                 </li>
                 <li class="py-4">
-                  <h4 class="text-xl font-medium mb-2">Crawler Frequency</h4>
+                  <h3 class="text-xl font-medium mb-2">Crawler Frequency</h3>
                   <p class="text-base text-gray-400">
                     Active domains normally run once per day. Base or www errors and disagreements
                     can trigger faster retries or longer backoff. First definitive observations
@@ -148,7 +148,7 @@ watch(
                   </p>
                 </li>
                 <li class="py-4">
-                  <h4 class="text-xl font-medium mb-2">What does “Not applicable” mean?</h4>
+                  <h3 class="text-xl font-medium mb-2">What does “Not applicable” mean?</h3>
                   <p class="text-base text-gray-400 mb-2">
                     There was nothing to grade — it never counts against a domain.
                   </p>
@@ -165,7 +165,7 @@ watch(
                   </p>
                 </li>
                 <li class="py-4">
-                  <h4 class="text-xl font-medium mb-2">Why does a domain list subdomains?</h4>
+                  <h3 class="text-xl font-medium mb-2">Why does a domain list subdomains?</h3>
                   <p class="text-base text-gray-400 mb-2">
                     An apex can score green while the part people actually use, the login portal or
                     the API, is still IPv4 only. Anyone can list those hosts for a domain, and the
@@ -185,13 +185,13 @@ watch(
                   </p>
                 </li>
                 <li class="py-4">
-                  <h4 class="text-xl font-medium mb-2">Crawler Errors</h4>
+                  <h3 class="text-xl font-medium mb-2">Crawler Errors</h3>
                   <p class="text-base text-gray-400">
                     Found a bug in the crawler? PRs are welcome.
                   </p>
                 </li>
                 <li class="py-4">
-                  <h4 class="text-xl font-medium mb-2">Heroes</h4>
+                  <h3 class="text-xl font-medium mb-2">Heroes</h3>
                   <p class="text-base text-gray-400">
                     Hero status requires an AAAA record on the tracked hostname, IPv6 on at least
                     one nameserver host, and a site that answers over IPv6. The www and mail-host
@@ -199,7 +199,7 @@ watch(
                   </p>
                 </li>
                 <li class="py-4">
-                  <h4 class="text-xl font-medium mb-2">Saints</h4>
+                  <h3 class="text-xl font-medium mb-2">Saints</h3>
                   <p class="text-base text-gray-400">
                     Saints are Heroes whose page-resource grade is Supported or Not applicable. The
                     crawler grades up to 50 external hosts found in the page; it does not fetch
@@ -207,10 +207,10 @@ watch(
                   </p>
                 </li>
                 <li class="pt-4">
-                  <h3 class="text-xl font-medium underline">Campaign Crawler</h3>
+                  <h2 class="text-xl font-medium underline">Campaign Crawler</h2>
                 </li>
                 <li class="py-4">
-                  <h4 class="text-xl font-medium mb-2">How do I create my own campaign?</h4>
+                  <h3 class="text-xl font-medium mb-2">How do I create my own campaign?</h3>
                   <p class="text-base text-gray-400">
                     Open an issue on the
                     <a
@@ -222,16 +222,16 @@ watch(
                   </p>
                 </li>
                 <li class="py-4">
-                  <h4 class="text-xl font-medium mb-2">
+                  <h3 class="text-xl font-medium mb-2">
                     How can I get my domain removed from the list?
-                  </h4>
+                  </h3>
                   <p class="text-base text-gray-400">Yes, you can start using IPv6!</p>
                 </li>
                 <li class="pt-3">
-                  <h3 class="text-xl font-medium underline">API</h3>
+                  <h2 class="text-xl font-medium underline">API</h2>
                 </li>
                 <li class="py-4">
-                  <h4 class="text-xl font-medium mb-2">Can I get access to the API?</h4>
+                  <h3 class="text-xl font-medium mb-2">Can I get access to the API?</h3>
                   <p class="text-base text-gray-400 mb-2">
                     Yes, the API is open — no key, no signup. Everything on this site is served from
                     it, at
@@ -254,7 +254,7 @@ watch(
                   </p>
                 </li>
                 <li class="py-4">
-                  <h4 class="text-xl font-medium mb-2">Can I download the whole dataset?</h4>
+                  <h3 class="text-xl font-medium mb-2">Can I download the whole dataset?</h3>
                   <p class="text-base text-gray-400 mb-2">
                     Yes — daily snapshots (CSV and Parquet) are published at
                     <a href="https://api.whynoipv6.com/datasets" target="_blank" class="a-gradient"
@@ -267,7 +267,7 @@ watch(
                   </p>
                 </li>
                 <li class="py-4">
-                  <h4 class="text-xl font-medium mb-2">Is there a badge for my README?</h4>
+                  <h3 class="text-xl font-medium mb-2">Is there a badge for my README?</h3>
                   <p class="text-base text-gray-400 mb-2">
                     Every domain has an SVG status badge. Embed it in markdown:
                   </p>
@@ -276,7 +276,7 @@ watch(
                   </p>
                 </li>
                 <li class="py-4">
-                  <h4 class="text-xl font-medium mb-2">Can I follow changes as a feed?</h4>
+                  <h3 class="text-xl font-medium mb-2">Can I follow changes as a feed?</h3>
                   <p class="text-base text-gray-400">
                     The changelog is available as
                     <a
@@ -304,7 +304,7 @@ watch(
               </div>
               <ul class="-my-4">
                 <li class="py-4">
-                  <h4 class="text-xl font-medium mb-2">IPv6</h4>
+                  <h2 class="text-xl font-medium mb-2">IPv6</h2>
                   <p class="text-base text-gray-400">
                     <a
                       href="https://www.internetsociety.org/deploy360/ipv6/"
@@ -320,7 +320,7 @@ watch(
                   </p>
                 </li>
                 <li class="py-4">
-                  <h4 class="text-xl font-medium mb-2">IPv6 Networking Best Practices</h4>
+                  <h2 class="text-xl font-medium mb-2">IPv6 Networking Best Practices</h2>
                   <p class="text-base text-gray-400">
                     <a
                       href="https://blog.apnic.net/2023/04/04/ipv6-architecture-and-subnetting-guide-for-network-engineers-and-operators/"
@@ -337,7 +337,7 @@ watch(
                   </p>
                 </li>
                 <li class="py-4">
-                  <h4 class="text-xl font-medium mb-2">Community and Forums</h4>
+                  <h2 class="text-xl font-medium mb-2">Community and Forums</h2>
                   <p class="text-base text-gray-400">
                     <a href="https://www.reddit.com/r/ipv6/" class="a-gradient">r/ipv6</a>
                   </p>
@@ -351,7 +351,7 @@ watch(
                   </p>
                 </li>
                 <li class="py-4">
-                  <h4 class="text-xl font-medium mb-2">Courses and Certifications</h4>
+                  <h2 class="text-xl font-medium mb-2">Courses and Certifications</h2>
                   <p class="text-base text-gray-400">
                     <a href="https://ipv6.he.net/certification/" target="_blank" class="a-gradient"
                       >Hurricane Electric IPv6 Certification Project</a
@@ -367,7 +367,7 @@ watch(
                   </p>
                 </li>
                 <li class="py-4">
-                  <h4 class="text-xl font-medium mb-2">Reports and IPv6 Status</h4>
+                  <h2 class="text-xl font-medium mb-2">Reports and IPv6 Status</h2>
                   <p class="text-base text-gray-400">
                     <a
                       href="https://bgp.he.net/ipv6-progress-report.cgi"
@@ -401,7 +401,7 @@ watch(
                   </p>
                 </li>
                 <li class="py-4">
-                  <h4 class="text-xl font-medium mb-2">Stickers</h4>
+                  <h2 class="text-xl font-medium mb-2">Stickers</h2>
                   <p class="text-base text-gray-400">
                     Fly the colors. Nothing says 'ask me about AAAA records' like a protocol
                     sticker.
@@ -448,7 +448,7 @@ watch(
               </div>
               <ul class="-my-4">
                 <li class="py-4">
-                  <h4 class="text-xl font-medium mb-2"># whoami</h4>
+                  <h2 class="text-xl font-medium mb-2"># whoami</h2>
                   <p class="text-base text-gray-400 mb-2">
                     I'm Lasse, a network engineer from Norway. I build and run networks. I also run
                     a crawler that keeps finding billion-dollar companies without an AAAA record.
@@ -464,7 +464,7 @@ watch(
                   </p>
                 </li>
                 <li class="py-4">
-                  <h4 class="text-xl font-medium mb-2">Contact</h4>
+                  <h2 class="text-xl font-medium mb-2">Contact</h2>
                   <p class="text-base text-gray-400">
                     Twitter / X:
                     <a href="https://twitter.com/WhyNoIPv6" target="_blank" class="a-gradient"
@@ -477,7 +477,7 @@ watch(
                   </p>
                 </li>
                 <li class="py-4">
-                  <h4 class="text-xl font-medium mb-2">Status page</h4>
+                  <h2 class="text-xl font-medium mb-2">Status page</h2>
                   <p class="text-base text-gray-400 mb-2">
                     Uptime and incident history:
                     <a href="https://status.whynoipv6.com/" target="_blank" class="a-gradient"
@@ -486,7 +486,7 @@ watch(
                   </p>
                 </li>
                 <li class="py-4">
-                  <h4 class="text-xl font-medium mb-2">Our Supporters</h4>
+                  <h2 class="text-xl font-medium mb-2">Our Supporters</h2>
                   <p class="text-base text-gray-400 mb-4">
                     These organizations supported the site early on, back when it was one crawler
                     and a grudge.
