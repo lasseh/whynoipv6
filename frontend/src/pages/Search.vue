@@ -100,7 +100,10 @@ function submitSearch() {
             <!-- Zero results: offer the live check as the escape hatch -->
             <p v-if="!loading && items.length === 0" class="mt-4 text-center text-gray-400">
               Nothing in the index by that name.
-              <router-link :to="`/check/${activeQuery}`" class="text-fuchsia-500 hover:underline"
+              <!-- Named-route form so the raw query gets percent-encoded. -->
+              <router-link
+                :to="{ name: 'LiveCheck', params: { target: activeQuery } }"
+                class="text-fuchsia-500 hover:underline"
                 >Run a live check on {{ activeQuery }}</router-link
               >.
             </p>

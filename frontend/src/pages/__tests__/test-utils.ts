@@ -35,6 +35,7 @@ export async function makeRouter(
       { path: '/countries/:id', name: 'CountryDetail', component: stub },
       { path: '/campaigns/:uuid', name: 'CampaignDetail', component: stub },
       { path: '/campaigns/:uuid/:domain([^/]+)', name: 'CampaignDomain', component: stub },
+      { path: '/check/:target?', name: 'LiveCheck', component: stub },
       { path: '/:catchAll(.*)', component: stub },
     ],
   })

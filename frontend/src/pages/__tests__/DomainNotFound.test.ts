@@ -16,7 +16,7 @@ describe('DomainNotFound page', () => {
         { path: '/', component: { template: '<div />' } },
         { path: '/domains', component: { template: '<div />' } },
         { path: '/search', component: { template: '<div />' } },
-        { path: '/check/:target?', component: { template: '<div />' } },
+        { path: '/check/:target?', name: 'LiveCheck', component: { template: '<div />' } },
         {
           path: '/domains/:domain([^/]+)/not-found',
           name: 'DomainNotFound',

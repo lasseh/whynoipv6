@@ -82,8 +82,9 @@ const domainName = computed(() => (route.params.domain as string) || 'unknown.in
                   <h3 class="text-lg font-semibold text-white mb-2">Put it on the list</h3>
                   <p class="text-gray-400 text-sm mb-3">
                     Run a
+                    <!-- Named-route form so the route param gets percent-encoded. -->
                     <router-link
-                      :to="`/check/${domainName}`"
+                      :to="{ name: 'LiveCheck', params: { target: domainName } }"
                       class="text-purple-400 hover:text-purple-300 transition-colors"
                       >live check</router-link
                     >
