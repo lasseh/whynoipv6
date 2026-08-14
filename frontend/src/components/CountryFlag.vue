@@ -22,5 +22,5 @@ const flagUrl = computed(
 </script>
 
 <template>
-  <img :src="flagUrl" alt="" width="48" height="48" />
+  <img :src="flagUrl" alt="" width="48" height="48" loading="lazy" decoding="async" />
 </template>
