@@ -116,6 +116,13 @@ function onMove(e: PointerEvent) {
   hover.value = best?.key ?? null
 }
 
+// Keyboard path (WCAG 2.1.1): every dot is a focus stop; focus drives the
+// same hover state the pointer does, so the tooltip follows.
+function pointAria(p: ScatterPoint): string {
+  const who = p.sub ? `${p.label}, ${p.sub}` : p.label
+  return `${who}: ${fmtCompact(p.x)} domains, ${fmtPercent(p.y)} IPv6`
+}
+
 const tip = computed(() => {
   const p = hovered.value
   if (!p) return null
@@ -131,7 +138,12 @@ const tip = computed(() => {
 </script>
 
 <template>
-  <div class="relative" @pointermove="onMove" @pointerleave="hover = null">
+  <div
+    class="relative"
+    @pointermove="onMove"
+    @pointerleave="hover = null"
+    @keydown.esc="hover = null"
+  >
     <svg
       :viewBox="`0 0 ${W} ${height}`"
       class="h-auto w-full overflow-visible"
@@ -203,6 +215,11 @@ const tip = computed(() => {
           :fill-opacity="hover === null || hover === p.key ? 0.9 : 0.35"
           class="stroke-gray-900 transition-[r]"
           stroke-width="1.5"
+          tabindex="0"
+          role="img"
+          :aria-label="pointAria(p)"
+          @focus="hover = p.key"
+          @blur="hover = null"
         />
       </g>
 

@@ -62,6 +62,19 @@ function tapBlock(index: number, day: string | null): void {
   openIndex.value = openIndex.value === index ? null : index
 }
 
+// Keyboard path (WCAG 2.1.1): the timeline is one focus stop; arrows step
+// the same openIndex the pointer drives. Index 0 renders rightmost (newest),
+// so ArrowLeft walks older and ArrowRight newer; padded no-data blocks sit
+// past the last real day and are skipped by the clamp.
+const realCount = computed(() => blocks.value.filter((b) => b.day !== null).length)
+
+function stepDay(older: boolean): void {
+  if (realCount.value === 0) return
+  const delta = older ? 1 : -1
+  const next = openIndex.value === null ? 0 : openIndex.value + delta
+  openIndex.value = Math.min(realCount.value - 1, Math.max(0, next))
+}
+
 // The bubble anchors over the hovered block (blocks are equal-width, so the
 // center is pure arithmetic — index 0 renders rightmost), clamped so ~230px
 // of tooltip never escapes the tracker at the outer blocks.
@@ -84,7 +97,20 @@ function blockAria(block: Block): string | undefined {
 <template>
   <div class="relative">
     <!-- Tracker Data -->
-    <div class="group flex h-8 w-full items-center flex-row-reverse">
+    <div
+      class="group flex h-8 w-full items-center flex-row-reverse"
+      :tabindex="hoverEffect ? 0 : undefined"
+      :role="hoverEffect ? 'application' : undefined"
+      :aria-label="
+        hoverEffect
+          ? 'Daily status timeline. Use the left and right arrow keys to read each day.'
+          : undefined
+      "
+      @keydown.left.prevent="hoverEffect && stepDay(true)"
+      @keydown.right.prevent="hoverEffect && stepDay(false)"
+      @keydown.esc="openIndex = null"
+      @blur="openIndex = null"
+    >
       <div
         v-for="(block, index) in blocks"
         :key="index"
@@ -109,6 +135,7 @@ function blockAria(block: Block): string | undefined {
     <!-- Day tooltip: anchored over the hovered block, clamped to the card -->
     <div
       v-if="openBlock?.day"
+      aria-live="polite"
       class="absolute z-10 w-auto whitespace-nowrap rounded-md px-2 py-1 text-sm bg-gray-900 border border-gray-700 shadow-lg normal-case"
       :style="tooltipStyle"
     >

@@ -89,6 +89,14 @@ function onMove(e: PointerEvent) {
   hoverIndex.value = Math.min(count.value - 1, Math.max(0, raw))
 }
 
+// Keyboard path (WCAG 2.1.1): the chart is one focus stop; arrows step the
+// same hoverIndex the pointer drives, starting from the newest day.
+function step(delta: number) {
+  if (count.value === 0) return
+  const next = hoverIndex.value === null ? count.value - 1 : hoverIndex.value + delta
+  hoverIndex.value = Math.min(count.value - 1, Math.max(0, next))
+}
+
 const tooltip = computed(() => {
   const i = hoverIndex.value
   if (i === null) return null
@@ -104,7 +112,18 @@ const tooltip = computed(() => {
 </script>
 
 <template>
-  <div class="relative" @pointermove="onMove" @pointerleave="hoverIndex = null">
+  <div
+    class="relative"
+    tabindex="0"
+    role="application"
+    :aria-label="`${label}. Use the left and right arrow keys to read each day.`"
+    @pointermove="onMove"
+    @pointerleave="hoverIndex = null"
+    @keydown.left.prevent="step(-1)"
+    @keydown.right.prevent="step(1)"
+    @keydown.esc="hoverIndex = null"
+    @blur="hoverIndex = null"
+  >
     <svg
       :viewBox="`0 0 ${W} ${height}`"
       class="w-full h-auto overflow-visible"
@@ -163,6 +182,7 @@ const tooltip = computed(() => {
          works without measuring glyphs by hand. -->
     <div
       v-if="tooltip"
+      aria-live="polite"
       class="pointer-events-none absolute top-0 z-10 max-w-[70vw] min-w-40 rounded border border-gray-700 bg-gray-900/95 px-3 py-2 text-xs shadow-lg"
       :style="{ left: tooltip.left, transform: tooltip.transform }"
     >
