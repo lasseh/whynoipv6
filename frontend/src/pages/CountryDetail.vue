@@ -45,8 +45,11 @@ const { items, page, loading, error, next, prev, setFilter, filters, reload } = 
 
 // vue-router reuses the instance on param-only navigation
 // (/countries/NO → /countries/SE): the entity refetches itself; the list
-// fetch closes over code, so it needs the explicit nudge.
-watch(code, () => reload())
+// fetch closes over code, so it needs the explicit nudge. The guard skips
+// the fire on route leave, when code flips to '' before unmount.
+watch(code, (c) => {
+  if (c) reload()
+})
 
 // Data-driven title once the country loads.
 watch(country, (c) => {
