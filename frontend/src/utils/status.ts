@@ -7,7 +7,7 @@
 // supported is always emerald, unsupported pink, no_record amber, the
 // muted states zinc (status.test.ts pins this invariant). Tailwind needs
 // literal class strings, so shades are spelled out rather than composed.
-import type { StatusValue } from '@/api'
+import type { CheckEnvelope, StatusValue } from '@/api'
 
 type StatusKey = 'supported' | 'unsupported' | 'no_record' | 'not_applicable' | 'unconfirmed'
 
@@ -140,7 +140,13 @@ export interface LiveStatusView {
   label: string
 }
 
-const LIVE_STATUS: Record<string, LiveStatusView> = {
+// Keys derive from the spec's live-observation enum, so a backend vocabulary
+// change is a compile error here instead of a silent 'Not checked' fallback.
+type LiveStatusKey = NonNullable<
+  NonNullable<NonNullable<CheckEnvelope['result']>['checks']>[string]['status']
+>
+
+const LIVE_STATUS = {
   supported: { icon: 'check', class: 'text-emerald-500', label: 'Supported' },
   partial: { icon: 'check', class: 'text-amber-500', label: 'Partial' },
   unsupported: { icon: 'cross', class: 'text-pink-500', label: 'Missing' },
@@ -148,12 +154,18 @@ const LIVE_STATUS: Record<string, LiveStatusView> = {
   not_applicable: { icon: 'minus', class: 'text-zinc-600', label: 'Not applicable' },
   error: { icon: 'minus', class: 'text-zinc-600', label: 'Check error' },
   inconsistent: { icon: 'minus', class: 'text-amber-500', label: 'Resolvers disagreed' },
+} satisfies Record<LiveStatusKey, LiveStatusView>
+
+function isLiveStatusKey(value: string): value is LiveStatusKey {
+  return value in LIVE_STATUS
 }
 
 export function liveStatus(value: string | undefined): LiveStatusView {
-  return (
-    (value && LIVE_STATUS[value]) || { icon: 'minus', class: 'text-zinc-600', label: 'Not checked' }
-  )
+  // The runtime fallback stays: older cached envelopes may carry values the
+  // current spec no longer names.
+  return value !== undefined && isLiveStatusKey(value)
+    ? LIVE_STATUS[value]
+    : { icon: 'minus', class: 'text-zinc-600', label: 'Not checked' }
 }
 
 // The §4.3 informational values on a tracked domain: the same vocabulary as

@@ -1484,7 +1484,8 @@ export interface components {
                 duration_ms?: number;
                 checks?: {
                     [key: string]: {
-                        status?: string;
+                        /** @enum {string} */
+                        status?: "supported" | "partial" | "unsupported" | "no_record" | "not_applicable" | "error" | "inconsistent";
                     };
                 };
                 latency?: {

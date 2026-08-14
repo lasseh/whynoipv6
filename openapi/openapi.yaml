@@ -1944,7 +1944,12 @@ components:
               additionalProperties:
                 type: object
                 properties:
-                  status: { type: string }
+                  # The observation-layer vocabulary (backend Observation enum);
+                  # raw observations, explicitly NOT confirmed state.
+                  status:
+                    type: string
+                    enum:
+                      [supported, partial, unsupported, no_record, not_applicable, error, inconsistent]
             latency:
               type: object
               properties:
