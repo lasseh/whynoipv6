@@ -52,14 +52,14 @@ const applyFilterAndUpdateRoute = (filterType: string) => {
               @update:model-value="applyFilterAndUpdateRoute"
             />
           </div>
-          <!-- Tab Content -->
+          <!-- Tab Content. KeepAlive holds the inactive tab's instance, so a
+               flip back neither remounts nor refires its 3-5 data requests;
+               the daily-snapshot data staying session-stale is deliberate. -->
           <div>
-            <div v-if="queryFilter === 'overview'">
-              <MetricCrawler />
-            </div>
-            <div v-if="queryFilter === 'asn'">
-              <MetricASN />
-            </div>
+            <KeepAlive>
+              <MetricCrawler v-if="queryFilter === 'overview'" />
+              <MetricASN v-else-if="queryFilter === 'asn'" />
+            </KeepAlive>
           </div>
         </div>
       </div>
