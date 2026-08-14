@@ -9,8 +9,7 @@ const router = useRouter()
 const validPages = ['1', '2', '3', '4']
 
 function pageFromQuery(value: unknown): string {
-  const v = String(value ?? '')
-  return validPages.includes(v) ? v : '1'
+  return typeof value === 'string' && validPages.includes(value) ? value : '1'
 }
 
 const page = ref<string>(pageFromQuery(route.query.page))

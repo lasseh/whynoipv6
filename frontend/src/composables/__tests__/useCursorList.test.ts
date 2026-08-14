@@ -121,9 +121,9 @@ describe('useCursorList', () => {
       { type: 'https://whynoipv6.com/problems/invalid-parameter', title: 'Invalid', status: 400 },
       400,
     )
-    const fetch = vi.fn(async (params: { cursor?: string }) => {
-      if (params.cursor) throw stale
-      return collection(['fresh'])
+    const fetch = vi.fn((params: { cursor?: string }) => {
+      if (params.cursor) return Promise.reject(stale)
+      return Promise.resolve(collection(['fresh']))
     })
     const { router, list } = await setup(fetch)
 

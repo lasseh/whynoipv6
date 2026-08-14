@@ -30,7 +30,7 @@ function envelope(over: Partial<CheckEnvelope> = {}): CheckEnvelope {
     result: null,
     confirmed: null,
     ...over,
-  } as CheckEnvelope
+  }
 }
 
 async function setup(path = '/check'): Promise<{ router: Router; m: Machine }> {

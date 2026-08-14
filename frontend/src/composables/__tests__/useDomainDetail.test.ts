@@ -96,7 +96,7 @@ describe('useDomainDetail', () => {
     vi.mocked(getDomain).mockResolvedValue({
       ...domainFixture,
       subdomain_count: 2,
-    } as unknown as DomainDetail)
+    })
     vi.mocked(getDomainHistory).mockResolvedValue({
       host: 'bad.example',
       points: [],
