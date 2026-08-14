@@ -12,7 +12,7 @@ help:
 	@awk 'BEGIN {FS = ":.*##"} /^[a-zA-Z_-]+:.*?##/ { printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) }' $(MAKEFILE_LIST)
 
 ##@ Frontend
-.PHONY: frontend-dev frontend-build frontend-test frontend-lint frontend-check
+.PHONY: frontend-dev frontend-build frontend-test frontend-lint
 
 frontend-dev: ## Run the frontend dev server
 	cd frontend && npm run dev
@@ -23,8 +23,5 @@ frontend-build: ## Type-check and build the frontend bundle
 frontend-test: ## Run the frontend vitest suite
 	cd frontend && npm run test
 
-frontend-lint: ## Blocking gate: type-check + eslint errors + prettier check
-	cd frontend && npm run type-check && npm run lint:quiet && npm run format:check
-
-frontend-check: ## Advisory full-warning ESLint run
-	cd frontend && npm run lint
+frontend-lint: ## Blocking gate: type-check + eslint (zero warnings) + prettier check
+	cd frontend && npm run type-check && npm run lint:ci && npm run format:check
