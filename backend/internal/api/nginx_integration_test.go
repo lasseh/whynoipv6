@@ -31,8 +31,11 @@ func TestNginxDatasetsSplit(t *testing.T) {
 	}
 
 	dir := t.TempDir()
-	// Self-signed cert at the letsencrypt path the vhost expects.
-	certDir := filepath.Join(dir, "letsencrypt", "live", "api.whynoipv6.com")
+	// Self-signed stand-in at the Cloudflare Origin CA path the vhost expects
+	// (09-ops.md §7.1). Production serves one apex + wildcard cert from here for
+	// both vhosts, so this is a single pair rather than a per-hostname
+	// letsencrypt tree.
+	certDir := filepath.Join(dir, "cloudflare")
 	if err := os.MkdirAll(certDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -59,7 +62,7 @@ func TestNginxDatasetsSplit(t *testing.T) {
 	run := exec.Command("docker", "run", "-d", "--rm", "--name", name,
 		"-p", "127.0.0.1:0:443",
 		"-v", conf+":/etc/nginx/conf.d/api.conf:ro",
-		"-v", filepath.Join(dir, "letsencrypt")+":/etc/letsencrypt:ro",
+		"-v", certDir+":/etc/ssl/cloudflare:ro",
 		"-v", filepath.Join(dir, "whynoipv6")+":/var/lib/whynoipv6:ro",
 		"nginx:alpine")
 	if out, err := run.CombinedOutput(); err != nil {
@@ -124,7 +127,9 @@ func TestNginxDatasetsSplit(t *testing.T) {
 	}
 }
 
-// writeSelfSigned mints a throwaway cert/key pair for the vhost.
+// writeSelfSigned mints a throwaway cert/key pair for the vhost, named and
+// scoped like the Cloudflare Origin CA pair production serves: apex plus a
+// first-level wildcard, one pair shared by both vhosts.
 func writeSelfSigned(t *testing.T, dir string) {
 	t.Helper()
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
@@ -133,8 +138,8 @@ func writeSelfSigned(t *testing.T, dir string) {
 	}
 	tmpl := x509.Certificate{
 		SerialNumber: big.NewInt(1),
-		Subject:      pkix.Name{CommonName: "api.whynoipv6.com"},
-		DNSNames:     []string{"api.whynoipv6.com"},
+		Subject:      pkix.Name{CommonName: "whynoipv6.com"},
+		DNSNames:     []string{"whynoipv6.com", "*.whynoipv6.com"},
 		IPAddresses:  []net.IP{net.ParseIP("127.0.0.1")},
 		NotBefore:    time.Now().Add(-time.Hour),
 		NotAfter:     time.Now().Add(24 * time.Hour),
@@ -147,10 +152,10 @@ func writeSelfSigned(t *testing.T, dir string) {
 	}
 	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})
 	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(key)})
-	if err := os.WriteFile(filepath.Join(dir, "fullchain.pem"), certPEM, 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "whynoipv6.com.pem"), certPEM, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "privkey.pem"), keyPEM, 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "whynoipv6.com.key"), keyPEM, 0o644); err != nil {
 		t.Fatal(err)
 	}
 }
