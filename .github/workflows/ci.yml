@@ -3,7 +3,8 @@ name: ci
 on:
   pull_request:
   push:
-    branches: [main]
+    # Both names until the remote standardizes; drop the loser then.
+    branches: [main, master]
 
 permissions:
   contents: read
@@ -16,16 +17,23 @@ jobs:
   ci:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: actions/setup-go@v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: stable
           cache-dependency-path: backend/go.sum
 
+      # Pinned action instead of curl|sh from HEAD: cached, and the linter
+      # binary is no longer the weakest supply-chain link in CI.
+      - name: Lint
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          version: latest
+          working-directory: backend
+
       - name: Install tools
         run: |
-          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/HEAD/install.sh | sh -s -- -b "$(go env GOPATH)/bin"
           go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest
           go install golang.org/x/vuln/cmd/govulncheck@latest
           go install gotest.tools/gotestsum@latest
@@ -33,9 +41,6 @@ jobs:
 
       - name: Tidy
         run: make tidy
-
-      - name: Lint
-        run: make lint
 
       - name: Generate (staleness gate)
         run: make generate
@@ -58,9 +63,9 @@ jobs:
   frontend:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: lts/*
           cache: npm
