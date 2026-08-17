@@ -36,7 +36,7 @@ func run() error {
 		return err
 	}
 	defer flushLogs()
-	cfg.LogSummary(log)
+	cfg.LogSummary(log, slog.LevelInfo)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

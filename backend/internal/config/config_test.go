@@ -129,7 +129,7 @@ func TestConfigRedaction(t *testing.T) {
 
 	var buf bytes.Buffer
 	log := slog.New(slog.NewJSONHandler(&buf, nil))
-	cfg.LogSummary(log)
+	cfg.LogSummary(log, slog.LevelInfo)
 	out := buf.String()
 
 	for _, leak := range []string{"s3cretpw", "supersecrettoken", "hooks.example.com"} {

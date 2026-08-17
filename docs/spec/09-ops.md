@@ -1149,7 +1149,11 @@ a malformed `taillight.url` is a fatal startup error like any other misconfigura
 - `info` — lifecycle events only: startup (config summary, secrets redacted per §1),
   graceful shutdown, run start/end (`run_id`, totals), Tranco import summary,
   migration/phase actions, and the API access log (below). Optionally one line per
-  `crawler_metrics` checkpoint (~1k/day — acceptable).
+  `crawler_metrics` checkpoint (~1k/day — acceptable). **Exception (decision
+  2026-08-17):** `v6ctl ops` subcommands log the config summary at `debug`, not
+  `info` — `ops unbound-stats` fires every minute, and "startup" for a
+  per-minute oneshot is 1,440 full config dumps a day into the log shipper.
+  Long-running binaries and all other v6ctl commands keep the `info` summary.
 - `warn` — actionable, non-fatal anomalies: preflight failure (alongside the webhook),
   quorum-inconsistency rate above threshold, claim starvation, lease-fence aborts (mirrors
   the `lease_lost` counter), Tranco import aborted by the sanity guard,

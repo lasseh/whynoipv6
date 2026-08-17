@@ -195,9 +195,11 @@ func (c *Config) InstallLogger() (*slog.Logger, func(), error) {
 	return log, flush, nil
 }
 
-// LogSummary emits the info-level startup config summary: every registry key
-// with its resolved value, secrets redacted (09-ops.md §1, §15.3).
-func (c *Config) LogSummary(log *slog.Logger) {
+// LogSummary emits the startup config summary: every registry key with its
+// resolved value, secrets redacted (09-ops.md §1, §15.3). Long-running
+// binaries pass info; the per-minute v6ctl ops scrapes pass debug so the
+// summary does not recur every timer firing (09-ops.md §13).
+func (c *Config) LogSummary(log *slog.Logger, level slog.Level) {
 	attrs := make([]any, 0, 2*len(c.registry)+2)
 	attrs = append(attrs, "DATABASE_URL", redactDSN(c.DatabaseURL))
 	for _, key := range c.Keys() {
@@ -210,7 +212,7 @@ func (c *Config) LogSummary(log *slog.Logger) {
 		}
 		attrs = append(attrs, key, val)
 	}
-	log.Info("configuration", attrs...)
+	log.Log(context.Background(), level, "configuration", attrs...)
 }
 
 // redactDSN reduces a pgx DSN to user@host/db — no password, no params.

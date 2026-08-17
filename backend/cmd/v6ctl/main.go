@@ -4,6 +4,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
@@ -30,6 +31,19 @@ func newPool(cmd *cobra.Command) (*pgxpool.Pool, error) {
 	return pool, nil
 }
 
+// underOps reports whether cmd sits in the `ops` command subtree. Those are
+// timer-driven scrapes (unbound-stats fires every minute), so their config
+// summary logs at debug — at info it would ship a full config dump to the
+// log sink every firing (09-ops.md §13).
+func underOps(cmd *cobra.Command) bool {
+	for c := cmd; c != nil; c = c.Parent() {
+		if c.Name() == "ops" {
+			return true
+		}
+	}
+	return false
+}
+
 func main() {
 	flushLogs := func() {}
 	root := &cobra.Command{
@@ -47,7 +61,11 @@ func main() {
 				return err
 			}
 			flushLogs = flush
-			cfg.LogSummary(log)
+			level := slog.LevelInfo
+			if underOps(cmd) {
+				level = slog.LevelDebug
+			}
+			cfg.LogSummary(log, level)
 			cmd.SetContext(context.WithValue(cmd.Context(), ctxKey{}, cfg))
 			return nil
 		},

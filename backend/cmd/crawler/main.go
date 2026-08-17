@@ -50,7 +50,7 @@ func run() error {
 		return err
 	}
 	defer flushLogs()
-	cfg.LogSummary(log)
+	cfg.LogSummary(log, slog.LevelInfo)
 
 	rootCtx, rootCancel := context.WithCancel(context.Background())
 	defer rootCancel()
