@@ -74,6 +74,15 @@ func TestDatasetExport(t *testing.T) {
 	today := time.Now().UTC().Format("2006-01-02")
 	snap := filepath.Join(dir, today)
 
+	// The dated dir is served by nginx as a foreign user: MkdirTemp stages it
+	// 0700 and rename(2) preserves the mode, so a missing chmod turns every
+	// published file into a 403.
+	if fi, err := os.Stat(snap); err != nil {
+		t.Fatal(err)
+	} else if perm := fi.Mode().Perm(); perm != 0o755 {
+		t.Errorf("published snapshot dir mode = %o, want 755", perm)
+	}
+
 	// Tier row counts: top100k/top1m exclude rank>100k, disabled, and
 	// rank-NULL; full excludes only disabled.
 	// e1–e3 ranked ≤100k; e5 at 200k; e4 disabled; camp rank-NULL.

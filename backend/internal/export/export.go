@@ -140,6 +140,12 @@ func (e *Exporter) Run(ctx context.Context, generation int32) error {
 		return fmt.Errorf("export tmp: %w", err)
 	}
 	defer func() { _ = os.RemoveAll(tmp) }()
+	// MkdirTemp creates 0700 and rename(2) carries the mode to the published
+	// dated dir — which nginx serves as a foreign user, so it must be
+	// world-traversable or every file inside 403s.
+	if err := os.Chmod(tmp, 0o755); err != nil {
+		return fmt.Errorf("export tmp mode: %w", err)
+	}
 
 	var resources []datapackageResource
 	var sums []string
