@@ -176,6 +176,15 @@ func ManifestUnavailable(w http.ResponseWriter, r *http.Request) {
 // level for exactly these) and emits the generic problem — the detail never
 // leaks the error text.
 func InternalError(w http.ResponseWriter, r *http.Request, err error) {
+	// A dead request context means the client hung up (or the server is
+	// draining) and whatever query was in flight surfaced the cancellation
+	// as its own error. That is not a server fault: an aborted browser
+	// fetch would otherwise log ERROR + 500 on every navigation race.
+	// Nobody is left to read a problem body, so none is written.
+	if r.Context().Err() != nil {
+		slog.Debug("request canceled mid-flight", "path", r.URL.Path)
+		return
+	}
 	if err != nil {
 		slog.Error("internal error", "path", r.URL.Path, "err", err.Error())
 	}
