@@ -170,10 +170,8 @@ export function rewriteHead(template: string, page: PageHead): string {
     ['og:title', 'property', `<meta property="og:title" content="${title}" />`],
     ['og:description', 'property', `<meta property="og:description" content="${desc}" />`],
     ['og:type', 'property', `<meta property="og:type" content="${page.ogType}" />`],
-    ['og:url', 'property', `<meta property="og:url" content="${url}" />`],
     ['twitter:title', 'name', `<meta name="twitter:title" content="${title}" />`],
     ['twitter:description', 'name', `<meta name="twitter:description" content="${desc}" />`],
-    ['twitter:url', 'name', `<meta name="twitter:url" content="${url}" />`],
   ]
   if (page.image) {
     const image = `${ORIGIN}${page.image}`
@@ -186,8 +184,13 @@ export function rewriteHead(template: string, page: PageHead): string {
   for (const [key, attr, replacement] of pairs) {
     html = replaceTag(html, key, metaTag(attr, key), replacement)
   }
+  // og:url/twitter:url are appended rather than replaced: the static head
+  // deliberately carries none (an SPA-wide og:url made every route share as
+  // the homepage), so prerendered pages add their own per-page URLs here.
   const extra = [
     `<link rel="canonical" href="${url}" />`,
+    `<meta property="og:url" content="${url}" />`,
+    `<meta name="twitter:url" content="${url}" />`,
     ...(page.ogType === 'article' && page.published
       ? [`<meta property="article:published_time" content="${page.published}" />`]
       : []),
@@ -213,7 +216,7 @@ export function postJsonLd(post: Post): object {
     datePublished: post.meta.date,
     url,
     mainEntityOfPage: url,
-    image: `${ORIGIN}${post.meta.image ?? '/images/WhyNoSticker.webp'}`,
+    image: `${ORIGIN}${post.meta.image ?? '/images/share-card.png'}`,
     author: { '@type': 'Person', name: 'Lasse Haugen', url: ORIGIN },
     publisher: { '@id': `${ORIGIN}/#org` },
     isPartOf: { '@type': 'Blog', '@id': BLOG_ID },

@@ -99,9 +99,9 @@ describe('rewriteHead', () => {
     // The static homepage values are gone, not duplicated.
     expect(html).not.toContain('content="Why No IPv6 checks the Tranco top million')
     expect(html.match(/property="og:title"/g)).toHaveLength(1)
-    // No-image post keeps the site-wide sticker + summary card.
-    expect(html).toContain('content="https://whynoipv6.com/images/WhyNoSticker.webp"')
-    expect(html).toContain('<meta name="twitter:card" content="summary" />')
+    // No-image post keeps the site-wide share card + large-image card type.
+    expect(html).toContain('content="https://whynoipv6.com/images/share-card.png"')
+    expect(html).toContain('<meta name="twitter:card" content="summary_large_image" />')
   })
 
   it('upgrades the card when the post has an image', () => {

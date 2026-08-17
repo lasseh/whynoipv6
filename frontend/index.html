@@ -30,7 +30,14 @@
       content="Why No IPv6 checks the Tranco top million every day for IPv6 across DNS, web, and mail. Sinners, Heroes, Saints. Shame on them."
     />
     <meta name="author" content="Lasse Haugen" />
-    <meta property="og:image" content="https://whynoipv6.com/images/WhyNoSticker.webp" />
+    <!-- No static og:url/twitter:url: scrapers fall back to the URL actually
+         shared, so SPA routes don't all canonicalize to the homepage. The
+         prerendered blog pages append their own per-page URLs (posts.ts). -->
+    <meta property="og:site_name" content="Why No IPv6" />
+    <meta property="og:image" content="https://whynoipv6.com/images/share-card.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="A nun ringing a shame bell — the Why No IPv6 sticker" />
     <meta
       property="og:title"
       content="Why No IPv6: checking the web&#39;s biggest sites for IPv6"
@@ -40,15 +47,13 @@
       content="IPv4 ran out. We crawl the Tranco top million every day and publish their IPv6 results, with country and campaign standings."
     />
     <meta property="og:type" content="website" />
-    <meta property="og:url" content="https://whynoipv6.com/" />
-    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="IPv6 Shame as a Service" />
     <meta
       name="twitter:description"
       content="IPv4 ran out. We crawl the Tranco top million every day and publish their IPv6 results, with country and campaign standings."
     />
-    <meta name="twitter:image" content="https://whynoipv6.com/images/WhyNoSticker.webp" />
-    <meta name="twitter:url" content="https://whynoipv6.com/" />
+    <meta name="twitter:image" content="https://whynoipv6.com/images/share-card.png" />
     <meta http-equiv="Content-Language" content="en" />
     <meta name="google" content="notranslate" />
     <title>Why No IPv6</title>

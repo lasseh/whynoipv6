@@ -123,7 +123,7 @@
               class=""
               src="/images/WhyNoSticker.webp"
               :width="380"
-              :height="472"
+              :height="438"
               alt="Why No IPv6 sticker"
             />
           </div>
