@@ -37,9 +37,12 @@ func opsCmd() *cobra.Command {
 
 			// One row per instance; the resetting `stats` variant yields
 			// per-interval deltas (control ports 8953/8954 — 09-ops §8).
+			// Port selection is `-s ip@port` — unbound-control has no -p
+			// flag, so the old `-p <port>` form exited 1 on every real
+			// host and only ever worked through the dev-compose shim.
 			for _, port := range []string{"8953", "8954"} {
 				out, err := exec.CommandContext(cmd.Context(),
-					control, "-p", port, "stats").Output() //nolint:gosec // operator-config command path
+					control, "-s", "127.0.0.1@"+port, "stats").Output() //nolint:gosec // operator-config command path
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "instance %s: %v\n", port, err)
 					continue

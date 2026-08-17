@@ -720,7 +720,10 @@ hypertable (defined in 05-schema.md — columns `ts, host, num_queries, cache_hi
 cache_miss, rcode_servfail, rcode_nxdomain, recursion_time_avg_ms, requestlist_avg,
 raw`; `recursion_time_avg_ms = total.recursion.time.avg × 1000`; `raw` is the full stats
 dump as JSONB). Invoked once per instance by `whynoipv6-unbound-stats.timer` (every 60s,
-§5). No `unbound_exporter`, no Prometheus. **This spec does not restate the DDL** —
+§5), as `<control> -s 127.0.0.1@<port> stats` — port selection is `-s ip@port`;
+`unbound-control` has no `-p` flag (corrected 2026-08-17; the shipped `-p <port>`
+form exited 1 on every real host and only worked through the dev-compose shim).
+No `unbound_exporter`, no Prometheus. **This spec does not restate the DDL** —
 `unbound_stats` is `CREATE TABLE`'d (with its full column list — `num_queries`,
 `cache_hits`, `cache_miss`, `rcode_servfail`, `rcode_nxdomain`, `recursion_time_avg_ms`,
 `requestlist_avg`, `raw`) in 05-schema.md migration `000001` and converted to a hypertable
