@@ -25,10 +25,6 @@
       <li class="py-4">
         <h2 class="text-xl font-medium mb-2">Contact</h2>
         <p class="text-base text-gray-400">
-          Twitter / X:
-          <a href="https://twitter.com/WhyNoIPv6" target="_blank" class="a-gradient">@whynoipv6</a>
-        </p>
-        <p class="text-base text-gray-400">
           Email:
           <span class="a-gradient">whynoipv6@protonmail.com</span>
         </p>

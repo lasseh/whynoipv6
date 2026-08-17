@@ -53,8 +53,13 @@ const tierTabs = TIERS.filter((t) => !t.hidden).map((t) => ({ value: t.slug, lab
           <!-- Error state -->
           <ApiError v-if="error" :problem="error" />
 
-          <!-- Domains -->
-          <div v-else>
+          <!-- Domains. min-h-screen reserves the space the rows will fill:
+               the table renders nothing until the first page arrives, and
+               without the placeholder the footer sits inside the viewport
+               and gets shoved off it when ~50 rows land (CLS 0.19 on the
+               Lighthouse mobile run). A full page of rows is always taller
+               than a viewport, so the reservation costs nothing once loaded. -->
+          <div v-else class="min-h-screen">
             <DomainTable :domains="items" :loading="loading" />
             <LoadingSpinner v-if="loading" />
           </div>
