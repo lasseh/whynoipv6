@@ -75,7 +75,7 @@ onMounted(() => {
                   class="hidden md:block md:max-w-none"
                   src="/images/WhyNoLogo.webp"
                   width="540"
-                  height="520"
+                  height="518"
                   loading="lazy"
                   alt="Why No IPv6 logo"
                 />
