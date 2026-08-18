@@ -84,7 +84,7 @@ onMounted(() => {
             <!-- Content -->
             <div class="max-w-xl md:max-w-none md:w-full mx-auto md:col-span-7 lg:col-span-6">
               <div class="md:pr-4 lg:pr-12 xl:pr-16">
-                <h3 class="h3 mb-3">Top IPv6 Sinners</h3>
+                <h2 class="h3 mb-3">Top IPv6 Sinners</h2>
                 <p class="text-base text-gray-400 mb-0">
                   Every domain below still publishes an apex A record but no globally routable AAAA
                   record. They are among the most-visited domains in the world and still thinking it

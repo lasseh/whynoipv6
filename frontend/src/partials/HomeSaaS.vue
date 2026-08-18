@@ -34,14 +34,14 @@
               <div
                 class="max-w-xl md:max-w-none md:w-full mx-auto md:col-span-5 lg:col-span-6 mb-8 md:mb-0 md:order-1"
               >
-                <h3 class="h4 mb-3">How does it work?</h3>
+                <h2 class="h4 mb-3">How does it work?</h2>
                 <p class="text-base text-gray-400 mb-0">
                   The crawler checks active domains on a daily schedule: AAAA records for the
                   domain, www, nameserver hosts, and mail hosts, plus a real connection over IPv6.
                   Failures can back off. The results determine each domain's tier and stay public.
                   Anyone can submit a campaign list for the crawler too.
                 </p>
-                <h3 class="h4 mb-3 mt-6">Why shame?</h3>
+                <h2 class="h4 mb-3 mt-6">Why shame?</h2>
                 <p class="text-base text-gray-400 mb-0">
                   World IPv6 Launch was in 2012. The missing part isn't another conference talk, so
                   here is the public list.
