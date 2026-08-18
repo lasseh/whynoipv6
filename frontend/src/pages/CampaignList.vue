@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 
 import PageShell from '@/components/PageShell.vue'
 import ApiError from '@/components/ApiError.vue'
@@ -22,9 +23,22 @@ const {
   (c) => c.name,
 )
 
-// Mandate tab. The campaign set is bounded and already in memory, so the
-// tag filter composes over the name filter rather than refetching ?tag=.
-const tab = ref('all')
+// Mandate tab. ?tag= is the source of truth so the mandate view is
+// linkable; unknown tags fall back to the full list. The campaign set is
+// bounded and already in memory, so the filter composes over the name
+// filter rather than refetching with ?tag=.
+const route = useRoute()
+const router = useRouter()
+
+const tab = computed(() => (route.query.tag === 'mandate' ? 'mandate' : 'all'))
+
+function setTab(value: string): void {
+  const query = { ...route.query }
+  if (value === 'mandate') query.tag = 'mandate'
+  else delete query.tag
+  void router.push({ query })
+}
+
 const campaigns = computed(() =>
   tab.value === 'mandate'
     ? filteredCampaignList.value.filter((c) => c.tags.includes('mandate'))
@@ -100,11 +114,12 @@ const campaigns = computed(() =>
 
             <div class="mb-4 max-w-sm">
               <SegmentedTabs
-                v-model="tab"
+                :model-value="tab"
                 :options="[
                   { value: 'all', label: 'All campaigns' },
                   { value: 'mandate', label: 'Mandate' },
                 ]"
+                @update:model-value="setTab"
               />
             </div>
 

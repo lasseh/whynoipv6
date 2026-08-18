@@ -3,11 +3,36 @@ import { describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import CampaignList from '@/pages/CampaignList.vue'
 import { listCampaigns } from '@/api'
-import { layoutStubs, emptyCollection, makeRouter, meta } from './test-utils'
+import { layoutStubs, emptyCollection, emptyPage, makeRouter, meta } from './test-utils'
 
 vi.mock('@/api', () => ({
   listCampaigns: vi.fn(),
 }))
+
+const mixedCampaigns = {
+  items: [
+    {
+      uuid: '5f0f6f0a-0000-0000-0000-000000000001',
+      name: 'Banks',
+      description: 'Banks without IPv6',
+      source_file: null,
+      tags: [],
+      domain_count: 12,
+      adoption: null,
+    },
+    {
+      uuid: '5f0f6f0a-0000-0000-0000-000000000003',
+      name: 'Dutch Central Government',
+      description: 'Covered by a mandate',
+      source_file: null,
+      tags: ['mandate'],
+      domain_count: 5,
+      adoption: null,
+    },
+  ],
+  page: emptyPage,
+  meta,
+}
 
 describe('CampaignList (smoke)', () => {
   it('mounts with an empty list', async () => {
@@ -56,31 +81,8 @@ describe('CampaignList (smoke)', () => {
     expect(wrapper.text()).toContain('—%')
   })
 
-  it('narrows the grid to mandate campaigns when the tab is picked', async () => {
-    vi.mocked(listCampaigns).mockResolvedValue({
-      items: [
-        {
-          uuid: '5f0f6f0a-0000-0000-0000-000000000001',
-          name: 'Banks',
-          description: 'Banks without IPv6',
-          source_file: null,
-          tags: [],
-          domain_count: 12,
-          adoption: null,
-        },
-        {
-          uuid: '5f0f6f0a-0000-0000-0000-000000000003',
-          name: 'Dutch Central Government',
-          description: 'Covered by a mandate',
-          source_file: null,
-          tags: ['mandate'],
-          domain_count: 5,
-          adoption: null,
-        },
-      ],
-      page: emptyCollection.page,
-      meta,
-    })
+  it('narrows the grid to mandate campaigns and puts ?tag= in the URL', async () => {
+    vi.mocked(listCampaigns).mockResolvedValue(mixedCampaigns)
     const router = await makeRouter('/campaigns', CampaignList)
     const wrapper = mount(CampaignList, {
       global: { plugins: [router], stubs: layoutStubs },
@@ -92,7 +94,32 @@ describe('CampaignList (smoke)', () => {
       .findAll('button')
       .find((b) => b.text() === 'Mandate')!
       .trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.query.tag).toBe('mandate')
     expect(wrapper.text()).toContain('Dutch Central Government')
     expect(wrapper.text()).not.toContain('Banks')
+
+    await wrapper
+      .findAll('button')
+      .find((b) => b.text() === 'All campaigns')!
+      .trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.query.tag).toBeUndefined()
+    expect(wrapper.text()).toContain('Banks')
+  })
+
+  it('honours ?tag=mandate on a deep link and ignores unknown tags', async () => {
+    vi.mocked(listCampaigns).mockResolvedValue(mixedCampaigns)
+    const router = await makeRouter('/campaigns', CampaignList, '/campaigns?tag=mandate')
+    const wrapper = mount(CampaignList, {
+      global: { plugins: [router], stubs: layoutStubs },
+    })
+    await flushPromises()
+    expect(wrapper.text()).toContain('Dutch Central Government')
+    expect(wrapper.text()).not.toContain('Banks')
+
+    await router.push('/campaigns?tag=nonsense')
+    await flushPromises()
+    expect(wrapper.text()).toContain('Banks')
   })
 })
