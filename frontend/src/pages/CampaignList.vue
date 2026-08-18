@@ -1,9 +1,12 @@
 <script setup lang="ts">
+import { computed, ref } from 'vue'
+
 import PageShell from '@/components/PageShell.vue'
 import ApiError from '@/components/ApiError.vue'
 import FilterInput from '@/components/FilterInput.vue'
 import LoadingSpinner from '@/components/LoadingSpinner.vue'
 import MandateBadge from '@/components/MandateBadge.vue'
+import SegmentedTabs from '@/components/SegmentedTabs.vue'
 
 import { listCampaigns } from '@/api'
 import { useFilteredCollection } from '@/composables/useFilteredCollection'
@@ -17,6 +20,15 @@ const {
 } = useFilteredCollection(
   (signal) => listCampaigns(undefined, signal),
   (c) => c.name,
+)
+
+// Mandate tab. The campaign set is bounded and already in memory, so the
+// tag filter composes over the name filter rather than refetching ?tag=.
+const tab = ref('all')
+const campaigns = computed(() =>
+  tab.value === 'mandate'
+    ? filteredCampaignList.value.filter((c) => c.tags.includes('mandate'))
+    : filteredCampaignList.value,
 )
 </script>
 
@@ -86,6 +98,16 @@ const {
               />
             </div>
 
+            <div class="mb-4 max-w-sm">
+              <SegmentedTabs
+                v-model="tab"
+                :options="[
+                  { value: 'all', label: 'All campaigns' },
+                  { value: 'mandate', label: 'Mandate' },
+                ]"
+              />
+            </div>
+
             <!-- Error state (§6.3) -->
             <ApiError v-if="error" :problem="error" />
             <LoadingSpinner v-else-if="loading" />
@@ -94,7 +116,7 @@ const {
             <div v-else class="grid grid-cols-2 xl:grid-cols-8 gap-4">
               <!-- Card -->
               <router-link
-                v-for="campaign in filteredCampaignList"
+                v-for="campaign in campaigns"
                 :key="campaign.uuid"
                 :to="{ name: 'CampaignDetail', params: { uuid: campaign.uuid } }"
                 class="col-span-full sm:col-span-6 xl:col-span-4 bg-zinc-800 shadow-lg rounded-sm border border-zinc-700"

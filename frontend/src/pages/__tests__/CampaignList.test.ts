@@ -55,4 +55,44 @@ describe('CampaignList (smoke)', () => {
     expect(wrapper.text()).toContain('41.7%')
     expect(wrapper.text()).toContain('—%')
   })
+
+  it('narrows the grid to mandate campaigns when the tab is picked', async () => {
+    vi.mocked(listCampaigns).mockResolvedValue({
+      items: [
+        {
+          uuid: '5f0f6f0a-0000-0000-0000-000000000001',
+          name: 'Banks',
+          description: 'Banks without IPv6',
+          source_file: null,
+          tags: [],
+          domain_count: 12,
+          adoption: null,
+        },
+        {
+          uuid: '5f0f6f0a-0000-0000-0000-000000000003',
+          name: 'Dutch Central Government',
+          description: 'Covered by a mandate',
+          source_file: null,
+          tags: ['mandate'],
+          domain_count: 5,
+          adoption: null,
+        },
+      ],
+      page: emptyCollection.page,
+      meta,
+    })
+    const router = await makeRouter('/campaigns', CampaignList)
+    const wrapper = mount(CampaignList, {
+      global: { plugins: [router], stubs: layoutStubs },
+    })
+    await flushPromises()
+    expect(wrapper.text()).toContain('Banks')
+
+    await wrapper
+      .findAll('button')
+      .find((b) => b.text() === 'Mandate')!
+      .trigger('click')
+    expect(wrapper.text()).toContain('Dutch Central Government')
+    expect(wrapper.text()).not.toContain('Banks')
+  })
 })
