@@ -165,7 +165,7 @@ Deleted relative to the old repos (never ported): the axios `services/` layer, `
 | `/metrics` | Metrics | `t=overview\|asn`, `sort` | `/stats/overview`, `/asns` |
 | `/countries` | CountryList | — | `/countries` |
 | `/countries/:id` | CountryDetail | `filter`, `cursor` | `/countries/{code}`, `/countries/{code}/domains?class=` |
-| `/campaigns` | CampaignList | — | `/campaigns` |
+| `/campaigns` | CampaignList | `tag=mandate` | `/campaigns` |
 | `/campaigns/:uuid` | CampaignDetail | `cursor` | `/campaigns/{uuid}` (composite), `/campaigns/{uuid}/changelog` |
 | `/campaigns/:uuid/:domain([^/]+)` | CampaignDomain | — | `/domains/{host}` + campaign changelog scope |
 | `/campaigns/:uuid/:domain([^/]+)/not-found` | DomainNotFound | — | — |
@@ -383,7 +383,7 @@ Same visual language (§2), each independently shippable; none block the DNS fli
 4. **Badge promo** — an "Embed this badge" snippet on DomainDetail (`![IPv6](https://api.whynoipv6.com/badge/{host}.svg)` + shields endpoint variant).
 5. **Adoption graphs** — `/stats/overview` + country/campaign/asn `/stats` time series as CSS/SVG line-or-bar blocks on Metrics/detail pages (still no chart library unless a real need appears).
 6. **Providers league table** — `/providers` page mirroring the ASN view; `?provider=` filter links.
-7. **Resource dependents** ("this v4-only host breaks N sites", once resources ship), **mandates view** (`/campaigns?tag=mandate`), **feeds/datasets/CSV links** in footer/FAQ (`.atom`, `.feed.json`, `?format=csv`, `/datasets`).
+7. **Resource dependents** ("this v4-only host breaks N sites", once resources ship), **feeds/datasets/CSV links** in footer/FAQ (`.atom`, `.feed.json`, `?format=csv`, `/datasets`).
 
 ---
 
