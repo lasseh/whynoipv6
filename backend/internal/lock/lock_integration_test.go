@@ -136,8 +136,11 @@ func TestLock(t *testing.T) {
 		})
 	}()
 	<-lockHeld
+	// pg_locks is cluster-wide and the whole suite now shares one server, so
+	// scope the kill to this test's own database.
 	if _, err := pool2.Exec(ctx, `SELECT pg_terminate_backend(pid) FROM pg_locks
-		WHERE locktype = 'advisory' AND classid = 60660 AND objid = 1 AND granted`); err != nil {
+		WHERE locktype = 'advisory' AND classid = 60660 AND objid = 1 AND granted
+		  AND database = (SELECT oid FROM pg_database WHERE datname = current_database())`); err != nil {
 		t.Fatal(err)
 	}
 	deadline := time.Now().Add(10 * time.Second)

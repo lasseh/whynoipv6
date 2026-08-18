@@ -2,6 +2,14 @@ GO      ?= go
 GOFLAGS ?=
 BINARIES := api crawler v6ctl
 
+# Integration tests run against one container for the whole `go test ./...`
+# run: eight per-binary servers overwhelmed the CI runner and killed Postgres
+# mid-suite. pgtest boots its own only when PGTEST_DSN is unset.
+PGTEST_IMAGE     ?= timescale/timescaledb:latest-pg18
+PGTEST_CONTAINER ?= whynoipv6-testdb
+PGTEST_PORT      ?= 15433
+PGTEST_DSN       ?= postgres://postgres:integration@127.0.0.1:$(PGTEST_PORT)/postgres?sslmode=disable
+
 GOTESTSUM := $(shell command -v gotestsum 2>/dev/null)
 ifdef GOTESTSUM
   TEST_CMD := gotestsum --format testdox --
@@ -9,7 +17,7 @@ else
   TEST_CMD := $(GO) test
 endif
 
-.PHONY: build build-linux test test-integration lint tidy vulncheck generate spec-lint coverage compose-up compose-down clean help
+.PHONY: build build-linux test test-integration testdb-up testdb-down lint tidy vulncheck generate spec-lint coverage compose-up compose-down clean help
 
 ##@ General
 help: ## Show this help
@@ -30,8 +38,34 @@ test: ## Run tests (race detector always on)
 lint: ## Run golangci-lint (vet, fmt, imports included)
 	golangci-lint run ./...
 
-test-integration: ## Integration tests (dockerized PG18+Timescale; //go:build integration files)
-	$(TEST_CMD) -race -tags=integration ./...
+test-integration: ## Integration tests (one dockerized PG18+Timescale for the whole run; //go:build integration files)
+	@$(MAKE) testdb-up
+	@PGTEST_DSN="$(PGTEST_DSN)" $(TEST_CMD) -race -tags=integration ./...; status=$$?; \
+	  if [ $$status -ne 0 ]; then \
+	    echo "==> test database state (exit code, then the last 200 log lines)"; \
+	    docker ps -a --filter name=$(PGTEST_CONTAINER) --format '{{.Names}} {{.Status}}'; \
+	    docker logs --tail 200 $(PGTEST_CONTAINER) 2>&1 || true; \
+	  fi; \
+	  $(MAKE) testdb-down; exit $$status
+
+testdb-up: ## Start the integration-test Postgres
+	@docker rm -f $(PGTEST_CONTAINER) >/dev/null 2>&1 || true
+	@docker run -d --name $(PGTEST_CONTAINER) \
+	  -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=integration -e POSTGRES_DB=postgres \
+	  -p 127.0.0.1:$(PGTEST_PORT):5432 --shm-size=256m $(PGTEST_IMAGE) \
+	  -c timescaledb.max_background_workers=0 -c max_connections=200 \
+	  -c fsync=off -c synchronous_commit=off -c full_page_writes=off >/dev/null
+	@printf 'waiting for %s' $(PGTEST_CONTAINER); \
+	 for _ in $$(seq 1 90); do \
+	   if docker exec $(PGTEST_CONTAINER) pg_isready -h 127.0.0.1 -U postgres -q 2>/dev/null; then \
+	     echo ' ready'; exit 0; \
+	   fi; \
+	   printf '.'; sleep 1; \
+	 done; \
+	 echo ' timed out'; docker logs $(PGTEST_CONTAINER); exit 1
+
+testdb-down: ## Remove the integration-test Postgres
+	@docker rm -f $(PGTEST_CONTAINER) >/dev/null 2>&1 || true
 
 coverage: ## Tests with coverage report
 	$(TEST_CMD) -race -coverprofile=coverage.out ./...

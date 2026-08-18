@@ -13,6 +13,7 @@ require (
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/lasseh/taillight/pkg/logshipper v0.0.0-20260629210330-fd60a6e3db9a
 	github.com/miekg/dns v1.1.72
+	github.com/moby/moby/api v1.54.2
 	github.com/oapi-codegen/runtime v1.4.2
 	github.com/oschwald/maxminddb-golang/v2 v2.3.0
 	github.com/parquet-go/parquet-go v0.30.1
@@ -69,7 +70,6 @@ require (
 	github.com/mailru/easyjson v0.9.1 // indirect
 	github.com/moby/docker-image-spec v1.3.1 // indirect
 	github.com/moby/go-archive v0.2.0 // indirect
-	github.com/moby/moby/api v1.54.2 // indirect
 	github.com/moby/moby/client v0.4.0 // indirect
 	github.com/moby/patternmatcher v0.6.1 // indirect
 	github.com/moby/sys/sequential v0.6.0 // indirect

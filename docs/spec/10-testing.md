@@ -970,13 +970,26 @@ wiring for this target is 09-ops.md's concern (this file does not own it).
 ### 9.1 Container and schema lifecycle
 
 - Image: `timescale/timescaledb:latest-pg18` (rolling tag, never pinned — global rule; matches
-  05-schema.md — §2). One container per test binary via `testcontainers-go`, started in
-  `TestMain`, torn down after.
-- Schema per test: `TestMain` applies migrations `000001→000003` once to a **template**
-  database (05-schema.md — §3–§5); each test `t` clones it with `CREATE DATABASE t_<name>
-  TEMPLATE <template>` and connects a fresh pool, so tests never share mutable state and run in
-  parallel. (This `CREATE DATABASE` is a test-harness clone of an existing template, not schema
-  DDL — the schema DDL lives only in 05-schema.md.)
+  05-schema.md — §2). **One container for the whole test run**, started and torn down by the
+  `test-integration` target in `backend/Makefile`, which passes its DSN to the test binaries in
+  `PGTEST_DSN`. `pgtest.Main` boots a throwaway container via `testcontainers-go` only when that
+  variable is unset — convenient for a single package, but `go test ./...` would then run eight
+  Postgres servers at once, which is what made CI flaky (a full run creates 77 clone databases
+  and peaks near 1.9 GB on disk; eight clusters multiplied that).
+- Server settings live in one place, `testdb-up`: `timescaledb.max_background_workers=0`,
+  `max_connections=200`, `fsync=off`, `synchronous_commit=off`, `full_page_writes=off`, and
+  `--shm-size=256m` (compose.yaml — docker's 64m default breaks parallel queries).
+- Schema per test: the first binary to arrive applies migrations `000001→000003` to a **template**
+  database (05-schema.md — §3–§5) behind `pg_advisory_lock`, migrating into a scratch name and
+  renaming it into place so the template only ever exists fully migrated. Each test `t` clones it
+  with `CREATE DATABASE t_<pid>_<n> TEMPLATE <template>` and connects a fresh pool, so tests never
+  share mutable state and run in parallel. (This `CREATE DATABASE` is a test-harness clone of an
+  existing template, not schema DDL — the schema DDL lives only in 05-schema.md.)
+- Nothing ever connects to the template: `CREATE DATABASE ... TEMPLATE` fails while a session is
+  attached to the source, so all harness admin work runs against the `postgres` maintenance
+  database.
+- One server means cluster-wide catalogs are shared: any test touching `pg_locks`,
+  `pg_stat_activity` or `pg_database` must scope itself to `current_database()`.
 - Every DDL assertion cites 05-schema.md; this file quotes only SELECT/UPDATE/INSERT.
 
 ### 9.2 Migration up/down (05-schema.md — §13 acceptance #1, #2)
