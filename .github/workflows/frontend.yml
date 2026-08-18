@@ -1,0 +1,59 @@
+name: frontend
+
+# Path-filtered: backend-only commits do not touch the bundle. openapi/ is in
+# both gates — schema.ts is generated from openapi.yaml and sits in the
+# frontend's tsconfig include, so a contract change must type-check here too.
+on:
+  pull_request:
+    paths:
+      - 'frontend/**'
+      - 'openapi/**'
+      - 'Makefile'
+      - '.github/workflows/frontend.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'frontend/**'
+      - 'openapi/**'
+      - 'Makefile'
+      - '.github/workflows/frontend.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: frontend-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: lts/*
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # --ignore-scripts closes the postinstall supply-chain vector; nothing
+      # in the tree needs lifecycle scripts (only darwin-only fsevents has one).
+      - name: Install deps
+        run: npm ci --ignore-scripts
+        working-directory: frontend
+
+      # Full tree, dev deps included: build tooling runs on this runner and
+      # generates every shipped byte, so its advisories gate too.
+      - name: Audit dependencies
+        run: npm audit --audit-level=high
+        working-directory: frontend
+
+      - name: Lint (type-check + eslint + prettier)
+        run: make frontend-lint
+
+      - name: Unit tests
+        run: make frontend-test
+
+      - name: Build
+        run: make frontend-build

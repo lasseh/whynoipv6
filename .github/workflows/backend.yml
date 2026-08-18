@@ -1,19 +1,33 @@
-name: ci
+name: backend
 
+# Path-filtered: a frontend-only commit cannot break the Go build, the schema
+# or the OpenAPI contract, and running the Timescale integration suite for it
+# only buys flake exposure. openapi/ is in both gates — it drives the Go
+# codegen drift check here and the frontend's schema.ts types over there.
 on:
   pull_request:
+    paths:
+      - 'backend/**'
+      - 'openapi/**'
+      - 'Makefile'
+      - '.github/workflows/backend.yml'
   push:
     branches: [main]
+    paths:
+      - 'backend/**'
+      - 'openapi/**'
+      - 'Makefile'
+      - '.github/workflows/backend.yml'
 
 permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: backend-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  ci:
+  backend:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -50,6 +64,8 @@ jobs:
       - name: Unit tests
         run: make test
 
+      # Boots one TimescaleDB container for the whole run and dumps its status
+      # and logs if anything fails — see backend/Makefile testdb-up.
       - name: Integration tests
         run: make test-integration
 
@@ -58,35 +74,3 @@ jobs:
 
       - name: Release build
         run: make build-linux
-
-  frontend:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: lts/*
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-
-      # --ignore-scripts closes the postinstall supply-chain vector; nothing
-      # in the tree needs lifecycle scripts (only darwin-only fsevents has one).
-      - name: Install deps
-        run: npm ci --ignore-scripts
-        working-directory: frontend
-
-      # Full tree, dev deps included: build tooling runs on this runner and
-      # generates every shipped byte, so its advisories gate too.
-      - name: Audit dependencies
-        run: npm audit --audit-level=high
-        working-directory: frontend
-
-      - name: Lint (type-check + eslint + prettier)
-        run: make frontend-lint
-
-      - name: Unit tests
-        run: make frontend-test
-
-      - name: Build
-        run: make frontend-build
