@@ -96,10 +96,18 @@
             "url": "https://whynoipv6.com/",
             "license": "https://creativecommons.org/licenses/by-nc/4.0/",
             "creator": { "@id": "https://whynoipv6.com/#org" },
-            "distribution": {
-              "@type": "DataDownload",
-              "contentUrl": "https://api.whynoipv6.com/datasets"
-            }
+            "distribution": [
+              {
+                "@type": "DataDownload",
+                "contentUrl": "https://api.whynoipv6.com/datasets/latest/whynoipv6-full.csv.gz",
+                "encodingFormat": ["text/csv", "application/gzip"]
+              },
+              {
+                "@type": "DataDownload",
+                "contentUrl": "https://api.whynoipv6.com/datasets/latest/whynoipv6-full.parquet",
+                "encodingFormat": "application/vnd.apache.parquet"
+              }
+            ]
           }
         ]
       }

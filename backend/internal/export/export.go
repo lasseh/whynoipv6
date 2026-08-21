@@ -584,6 +584,14 @@ exported nightly. License: CC-BY-NC-4.0. https://whynoipv6.com
 - ` + "`full`" + ` — every non-disabled scannable entity (campaign-only
   domains and subdomains carry an empty rank)
 
+## Formats
+
+Each tier ships as gzipped CSV and Parquet. Most tools read both without
+extracting: pandas, DuckDB, R (readr), and ClickHouse all load ` + "`.csv.gz`" + `
+directly. If you do want the raw CSV, note that macOS's Archive Utility
+cannot expand bare .gz files (error 79) — use ` + "`gunzip <file>`" + ` in
+Terminal instead.
+
 ## Columns
 
 | column | type | notes |

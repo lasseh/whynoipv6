@@ -129,6 +129,11 @@
             >api.whynoipv6.com/datasets</a
           >. Please don't paginate the whole API when a bulk file exists.
         </p>
+        <p class="text-base text-gray-400 mb-2">
+          The .csv.gz files load directly in pandas, DuckDB, and friends — no extraction needed.
+          (macOS tip: Archive Utility can't expand bare .gz files; use <code>gunzip</code> in
+          Terminal if you want the raw CSV.)
+        </p>
         <p class="text-base text-gray-400">
           The data is licensed CC-BY-NC-4.0. Attribution: Data: whynoipv6.com (CC-BY-NC-4.0). Ranks:
           Tranco.
