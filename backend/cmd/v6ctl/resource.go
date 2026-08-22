@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/lasseh/whynoipv6/internal/domain"
+	"github.com/lasseh/whynoipv6/internal/postgres"
 	db "github.com/lasseh/whynoipv6/internal/postgres/db"
 )
 
@@ -53,15 +54,19 @@ func resourceCmd() *cobra.Command {
 
 			// Ensure the registry row (statement-A pattern), then the
 			// manual upsert + conditional dependent_count bump (06 §5.5).
-			if err := q.EnsureResourceHost(cmd.Context(), rHost); err != nil {
-				return err
-			}
-			rhID, err := q.ResourceHostIDByHost(cmd.Context(), rHost)
-			if err != nil {
-				return err
-			}
-			if err := q.ResourceManualUpsert(cmd.Context(), db.ResourceManualUpsertParams{
-				DomainID: d.ID, ResourceHostID: rhID, Required: !advisory,
+			// All three in one transaction: a failure partway used to
+			// leave an orphan resource_host with no link pointing at it.
+			if err := postgres.InTx(cmd.Context(), pool, func(q *db.Queries) error {
+				if err := q.EnsureResourceHost(cmd.Context(), rHost); err != nil {
+					return err
+				}
+				rhID, err := q.ResourceHostIDByHost(cmd.Context(), rHost)
+				if err != nil {
+					return err
+				}
+				return q.ResourceManualUpsert(cmd.Context(), db.ResourceManualUpsertParams{
+					DomainID: d.ID, ResourceHostID: rhID, Required: !advisory,
+				})
 			}); err != nil {
 				return err
 			}

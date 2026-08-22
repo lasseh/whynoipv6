@@ -10,6 +10,7 @@ import (
 
 	"github.com/lasseh/whynoipv6/internal/crawler"
 	"github.com/lasseh/whynoipv6/internal/domain"
+	"github.com/lasseh/whynoipv6/internal/postgres"
 	db "github.com/lasseh/whynoipv6/internal/postgres/db"
 )
 
@@ -58,17 +59,22 @@ func serviceCandidatesCmd() *cobra.Command {
 				return err
 			}
 			defer pool.Close()
-			q := db.New(pool)
-			reason := db.DisabledReasonService
-			n, err := q.DomainDisable(cmd.Context(), db.DomainDisableParams{Host: host, Reason: &reason})
-			if err != nil {
+			// Both writes or neither: a failure between them used to
+			// leave the domain disabled with its candidate still open,
+			// and the recovery was prose for the operator to act on.
+			if err := postgres.InTx(cmd.Context(), pool, func(q *db.Queries) error {
+				reason := db.DisabledReasonService
+				n, err := q.DomainDisable(cmd.Context(), db.DomainDisableParams{Host: host, Reason: &reason})
+				if err != nil {
+					return err
+				}
+				if n == 0 {
+					return fmt.Errorf("%s not found or already disabled", host)
+				}
+				_, err = q.ServiceCandidateResolve(cmd.Context(), host)
 				return err
-			}
-			if n == 0 {
-				return fmt.Errorf("%s not found or already disabled", host)
-			}
-			if _, err := q.ServiceCandidateResolve(cmd.Context(), host); err != nil {
-				return fmt.Errorf("%s disabled (service), but closing the candidate failed — re-run `v6ctl service-candidates dismiss %s`: %w", host, host, err)
+			}); err != nil {
+				return err
 			}
 			fmt.Printf("%s disabled (service); it leaves the frontier\n", host)
 			return nil
