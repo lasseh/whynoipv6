@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"net/http"
 	"time"
 )
 
@@ -23,6 +22,11 @@ type HTTPSIPv6 struct {
 // NewHTTPSIPv6 creates a new https_ipv6 checker.
 func NewHTTPSIPv6(dialer *SafeDialer) *HTTPSIPv6 {
 	return &HTTPSIPv6{dialer: dialer, port: "443"}
+}
+
+// probe is the pinned fetch; port and rootCAs are this check's test seams.
+func (c *HTTPSIPv6) probe() probe {
+	return probe{dialer: c.dialer, port: c.port, rootCAs: c.rootCAs}
 }
 
 func (c *HTTPSIPv6) Name() string { return NameHTTPS }
@@ -71,35 +75,8 @@ func isTLSError(err error) bool {
 
 func (c *HTTPSIPv6) tryHTTPS(ctx context.Context, domain string, ip net.IP) (Result, error) {
 	reqStart := time.Now()
-	addr := net.JoinHostPort(ip.String(), c.port)
 
-	transport := &http.Transport{
-		DialContext: func(dialCtx context.Context, _, _ string) (net.Conn, error) {
-			return c.dialer.dialer.DialContext(dialCtx, "tcp6", addr)
-		},
-		TLSClientConfig: &tls.Config{
-			ServerName: domain,
-			MinVersion: tls.VersionTLS12,
-			RootCAs:    c.rootCAs,
-		},
-		DisableKeepAlives: true,
-	}
-
-	client := &http.Client{
-		Transport: transport,
-		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
-			return http.ErrUseLastResponse
-		},
-	}
-
-	url := fmt.Sprintf("https://%s/", domain)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, http.NoBody)
-	if err != nil {
-		return Result{}, err
-	}
-	req.Header.Set("User-Agent", userAgent)
-
-	resp, err := client.Do(req)
+	resp, err := c.probe().get(ctx, ip, domain, "https", probeOptions{TLS: true})
 	if err != nil {
 		return Result{}, err
 	}

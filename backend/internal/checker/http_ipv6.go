@@ -3,9 +3,7 @@ package checker
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net"
-	"net/http"
 	"syscall"
 	"time"
 )
@@ -25,6 +23,9 @@ func NewHTTPIPv6(dialer *SafeDialer) *HTTPIPv6 {
 	return &HTTPIPv6{dialer: dialer, port: "80"}
 }
 
+// probe is the pinned fetch; port is this check's test seam.
+func (c *HTTPIPv6) probe() probe { return probe{dialer: c.dialer, port: c.port} }
+
 func (c *HTTPIPv6) Name() string { return NameHTTP }
 func (c *HTTPIPv6) Check(ctx context.Context, domain string, kind Kind) (Result, error) {
 	start := time.Now()
@@ -39,30 +40,8 @@ func (c *HTTPIPv6) Check(ctx context.Context, domain string, kind Kind) (Result,
 
 func (c *HTTPIPv6) tryHTTP(ctx context.Context, domain string, ip net.IP) (Result, error) {
 	reqStart := time.Now()
-	addr := net.JoinHostPort(ip.String(), c.port)
 
-	transport := &http.Transport{
-		DialContext: func(dialCtx context.Context, _, _ string) (net.Conn, error) {
-			return c.dialer.dialer.DialContext(dialCtx, "tcp6", addr)
-		},
-		DisableKeepAlives: true,
-	}
-
-	client := &http.Client{
-		Transport: transport,
-		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
-			return http.ErrUseLastResponse
-		},
-	}
-
-	url := fmt.Sprintf("http://%s/", domain)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, http.NoBody)
-	if err != nil {
-		return Result{}, err
-	}
-	req.Header.Set("User-Agent", userAgent)
-
-	resp, err := client.Do(req)
+	resp, err := c.probe().get(ctx, ip, domain, "http", probeOptions{})
 	if err != nil {
 		return Result{}, err
 	}

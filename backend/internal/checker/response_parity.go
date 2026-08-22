@@ -2,12 +2,11 @@ package checker
 
 import (
 	"context"
-	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"io"
 	"math"
 	"net"
-	"net/http"
 	"strings"
 	"time"
 )
@@ -21,12 +20,19 @@ const (
 // ResponseParity compares HTTP responses over IPv4 and IPv6
 // (01-engine.md §11.8).
 type ResponseParity struct {
-	dialer *SafeDialer
+	dialer  *SafeDialer
+	port    string
+	rootCAs *x509.CertPool
 }
 
 // NewResponseParity creates a new http_response_parity checker.
 func NewResponseParity(dialer *SafeDialer) *ResponseParity {
-	return &ResponseParity{dialer: dialer}
+	return &ResponseParity{dialer: dialer, port: "443"}
+}
+
+// probe is the pinned fetch; port and rootCAs are this check's test seams.
+func (c *ResponseParity) probe() probe {
+	return probe{dialer: c.dialer, port: c.port, rootCAs: c.rootCAs}
 }
 
 func (c *ResponseParity) Name() string { return NameParity }
@@ -134,43 +140,12 @@ func (c *ResponseParity) Check(ctx context.Context, domain string, kind Kind) (R
 
 func (c *ResponseParity) fetch(ctx context.Context, domain string, ip net.IP, network string) (ParityFetch, error) {
 	reqStart := time.Now()
-	addr := net.JoinHostPort(ip.String(), "443")
 
-	redirectCount := 0
-	transport := &http.Transport{
-		DialContext: func(dialCtx context.Context, _, _ string) (net.Conn, error) {
-			return c.dialer.dialer.DialContext(dialCtx, network, addr)
-		},
-		TLSClientConfig: &tls.Config{
-			ServerName: domain,
-			MinVersion: tls.VersionTLS12,
-		},
-		DisableKeepAlives: true,
-	}
-
-	client := &http.Client{
-		Transport: transport,
-		CheckRedirect: func(req *http.Request, _ []*http.Request) error {
-			redirectCount++
-			if redirectCount > maxRedirects {
-				return http.ErrUseLastResponse
-			}
-			// Only follow redirects to the same domain.
-			if req.URL.Hostname() != domain {
-				return http.ErrUseLastResponse
-			}
-			return nil
-		},
-	}
-
-	url := fmt.Sprintf("https://%s/", domain)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, http.NoBody)
-	if err != nil {
-		return ParityFetch{}, err
-	}
-	req.Header.Set("User-Agent", userAgent)
-
-	resp, err := client.Do(req)
+	resp, err := c.probe().get(ctx, ip, domain, "https", probeOptions{
+		TLS:      true,
+		Network:  network,
+		Redirect: sameHostRedirect(domain, maxRedirects),
+	})
 	if err != nil {
 		return ParityFetch{}, err
 	}

@@ -2,11 +2,10 @@ package checker
 
 import (
 	"context"
-	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"io"
 	"net"
-	"net/http"
 	"net/url"
 	"strings"
 	"time"
@@ -16,7 +15,10 @@ import (
 
 const (
 	resourceMaxBodySize = 2 << 20 // 2MB
-	resourceMaxHosts    = 50
+	// discoveryMaxRedirects preserves the previous `len(via) >= 3` policy:
+	// at most two same-host hops.
+	discoveryMaxRedirects = 2
+	resourceMaxHosts      = 50
 )
 
 // ResourceDiscovery finds which external hosts the page references.
@@ -24,12 +26,19 @@ const (
 // resource_host registry; the `resources` observation comes from the
 // registry roll-up, never from this check's status.
 type ResourceDiscovery struct {
-	dialer *SafeDialer
+	dialer  *SafeDialer
+	port    string
+	rootCAs *x509.CertPool
 }
 
 // NewResourceDiscovery creates a new resource_discovery checker.
 func NewResourceDiscovery(dialer *SafeDialer) *ResourceDiscovery {
-	return &ResourceDiscovery{dialer: dialer}
+	return &ResourceDiscovery{dialer: dialer, port: "443"}
+}
+
+// probe is the pinned fetch; port and rootCAs are this check's test seams.
+func (c *ResourceDiscovery) probe() probe {
+	return probe{dialer: c.dialer, port: c.port, rootCAs: c.rootCAs}
 }
 
 func (c *ResourceDiscovery) Name() string { return NameResourceDiscovery }
@@ -90,43 +99,10 @@ func (c *ResourceDiscovery) Check(ctx context.Context, domain string, _ Kind) (R
 
 // fetchHTML fetches the page body over IPv6 and returns the raw bytes.
 func (c *ResourceDiscovery) fetchHTML(ctx context.Context, domain string, ip net.IP) ([]byte, error) {
-	addr := net.JoinHostPort(ip.String(), "443")
-
-	transport := &http.Transport{
-		DialContext: func(dialCtx context.Context, _, _ string) (net.Conn, error) {
-			return c.dialer.dialer.DialContext(dialCtx, "tcp6", addr)
-		},
-		TLSClientConfig: &tls.Config{
-			ServerName: domain,
-			MinVersion: tls.VersionTLS12,
-		},
-		DisableKeepAlives: true,
-	}
-
-	client := &http.Client{
-		Transport: transport,
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			if len(via) >= 3 {
-				return http.ErrUseLastResponse
-			}
-			// Only follow redirects to the same domain: the transport dials
-			// the pinned original IP with the original SNI, so a cross-host
-			// redirect would fetch the wrong vhost's content.
-			if req.URL.Hostname() != domain {
-				return http.ErrUseLastResponse
-			}
-			return nil
-		},
-	}
-
-	reqURL := fmt.Sprintf("https://%s/", domain)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, http.NoBody)
-	if err != nil {
-		return nil, fmt.Errorf("creating request: %w", err)
-	}
-	req.Header.Set("User-Agent", userAgent)
-
-	resp, err := client.Do(req)
+	resp, err := c.probe().get(ctx, ip, domain, "https", probeOptions{
+		TLS:      true,
+		Redirect: sameHostRedirect(domain, discoveryMaxRedirects),
+	})
 	if err != nil {
 		return nil, fmt.Errorf("http request: %w", err)
 	}

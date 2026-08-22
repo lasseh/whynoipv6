@@ -2,10 +2,8 @@ package checker
 
 import (
 	"context"
-	"crypto/tls"
-	"fmt"
+	"crypto/x509"
 	"net"
-	"net/http"
 	"slices"
 	"time"
 )
@@ -17,12 +15,14 @@ const (
 
 // LatencyIPv4 measures HTTP response time over IPv4 (01-engine.md §11.14).
 type LatencyIPv4 struct {
-	dialer *SafeDialer
+	dialer  *SafeDialer
+	port    string
+	rootCAs *x509.CertPool
 }
 
 // NewLatencyIPv4 creates a new latency_ipv4 checker.
 func NewLatencyIPv4(dialer *SafeDialer) *LatencyIPv4 {
-	return &LatencyIPv4{dialer: dialer}
+	return &LatencyIPv4{dialer: dialer, port: "443"}
 }
 
 func (c *LatencyIPv4) Name() string { return NameLatencyV4 }
@@ -49,17 +49,19 @@ func (c *LatencyIPv4) Check(ctx context.Context, domain string, kind Kind) (Resu
 		}, nil
 	}
 
-	return measureLatency(ctx, c.dialer, domain, ip, "tcp4", start)
+	return measureLatency(ctx, probe{dialer: c.dialer, port: c.port, rootCAs: c.rootCAs}, domain, ip, "tcp4", start)
 }
 
 // LatencyIPv6 measures HTTP response time over IPv6 (01-engine.md §11.14).
 type LatencyIPv6 struct {
-	dialer *SafeDialer
+	dialer  *SafeDialer
+	port    string
+	rootCAs *x509.CertPool
 }
 
 // NewLatencyIPv6 creates a new latency_ipv6 checker.
 func NewLatencyIPv6(dialer *SafeDialer) *LatencyIPv6 {
-	return &LatencyIPv6{dialer: dialer}
+	return &LatencyIPv6{dialer: dialer, port: "443"}
 }
 
 func (c *LatencyIPv6) Name() string { return NameLatencyV6 }
@@ -86,12 +88,11 @@ func (c *LatencyIPv6) Check(ctx context.Context, domain string, kind Kind) (Resu
 		}, nil
 	}
 
-	return measureLatency(ctx, c.dialer, domain, ip, "tcp6", start)
+	return measureLatency(ctx, probe{dialer: c.dialer, port: c.port, rootCAs: c.rootCAs}, domain, ip, "tcp6", start)
 }
 
 // measureLatency performs latency measurements (3 requests, discard highest, average remaining 2).
-func measureLatency(ctx context.Context, d *SafeDialer, domain string, ip net.IP, network string, start time.Time) (Result, error) { //nolint:unparam // error is always nil but kept for interface consistency
-	addr := net.JoinHostPort(ip.String(), "443")
+func measureLatency(ctx context.Context, p probe, domain string, ip net.IP, network string, start time.Time) (Result, error) { //nolint:unparam // error is always nil but kept for interface consistency
 
 	var measurements []int64
 
@@ -100,7 +101,7 @@ func measureLatency(ctx context.Context, d *SafeDialer, domain string, ip net.IP
 			break
 		}
 
-		ttfb, err := measureTTFB(ctx, d, domain, addr, network)
+		ttfb, err := measureTTFB(ctx, p, domain, ip, network)
 		if err != nil {
 			if len(measurements) == 0 {
 				return Result{
@@ -150,37 +151,12 @@ func measureLatency(ctx context.Context, d *SafeDialer, domain string, ip net.IP
 }
 
 // measureTTFB measures time to first byte for a single HTTPS request.
-func measureTTFB(ctx context.Context, d *SafeDialer, domain, addr, network string) (int64, error) {
+func measureTTFB(ctx context.Context, p probe, domain string, ip net.IP, network string) (int64, error) {
 	reqCtx, cancel := context.WithTimeout(ctx, latencyTimeout)
 	defer cancel()
 
-	transport := &http.Transport{
-		DialContext: func(dialCtx context.Context, _, _ string) (net.Conn, error) {
-			return d.dialer.DialContext(dialCtx, network, addr)
-		},
-		TLSClientConfig: &tls.Config{
-			ServerName: domain,
-			MinVersion: tls.VersionTLS12,
-		},
-		DisableKeepAlives: true,
-	}
-
-	client := &http.Client{
-		Transport: transport,
-		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
-			return http.ErrUseLastResponse
-		},
-	}
-
-	url := fmt.Sprintf("https://%s/", domain)
-	req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, url, http.NoBody)
-	if err != nil {
-		return 0, err
-	}
-	req.Header.Set("User-Agent", userAgent)
-
 	reqStart := time.Now()
-	resp, err := client.Do(req)
+	resp, err := p.get(reqCtx, ip, domain, "https", probeOptions{TLS: true, Network: network})
 	if err != nil {
 		return 0, err
 	}
