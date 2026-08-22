@@ -905,8 +905,9 @@ On-disk layout:
 /var/lib/whynoipv6/datasets/
 ├── manifest.json                      # the one file the API serves; rewritten atomically after every export
 ├── DICTIONARY.md                      # column + status-semantics docs
-├── latest -> 2026-07-07               # symlink to newest COMPLETE snapshot
-├── 2026-07-07/                        # immutable once published
+├── latest -> 2026-07-07r2             # symlink to newest COMPLETE snapshot
+├── 2026-07-07/                        # immutable once published — never rewritten
+├── 2026-07-07r2/                      # a same-day re-export; published beside, not over
 │   ├── datapackage.json               # Frictionless: files, hashes, Table Schema
 │   ├── whynoipv6-top100k.csv.gz
 │   ├── whynoipv6-top100k.parquet
@@ -965,7 +966,7 @@ location = /datasets {
     proxy_set_header Host            $host;
 }
 # dated snapshots: immutable forever
-location ~ ^/datasets/\d{4}-\d{2}-\d{2}/ {
+location ~ ^/datasets/\d{4}-\d{2}-\d{2}(r\d+)?/ {
     root /var/lib/whynoipv6;
     add_header Cache-Control "public, max-age=31536000, immutable";
     add_header Access-Control-Allow-Origin "*";

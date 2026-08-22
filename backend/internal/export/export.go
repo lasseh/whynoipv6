@@ -32,6 +32,12 @@ import (
 // set; bump when either changes (07 §5.3).
 const SchemaVersion = 1
 
+// maxSnapshotRevisions bounds same-day re-exports. Publication never
+// overwrites, so a wedged loop re-running the export would otherwise fill
+// the volume one snapshot at a time; failing loudly at the ceiling is the
+// cheaper failure.
+const maxSnapshotRevisions = 24
+
 const license = "CC-BY-NC-4.0"
 
 // Row is the exported record — one column set across every tier/format.
@@ -125,9 +131,16 @@ type Exporter struct {
 	Now func() time.Time
 }
 
-// Run produces the dated snapshot for today, atomically publishes it
-// (tmp-dir rename(2)), rewrites manifest.json + the latest symlink, and
-// prunes per retention (dailies 90 d, first-of-month forever).
+// Run produces today's snapshot, publishes it with a single rename(2) onto
+// a path that did not exist, rewrites manifest.json + the latest symlink,
+// and prunes per retention (dailies 90 d, first-of-month forever).
+//
+// Publication never unlinks. rename(2) onto a non-empty directory fails
+// EEXIST, so replacing a snapshot in place would mean removing it first,
+// which opens a window where a dated URL 404s — on paths nginx serves
+// `immutable, max-age=31536000`. Instead a same-day re-export publishes the
+// next revision (2026-08-21, then 2026-08-21r2 …) and repoints latest, so
+// every published URL keeps serving the bytes it was first published with.
 func (e *Exporter) Run(ctx context.Context, generation int32) error {
 	now := time.Now().UTC()
 	if e.Now != nil {
@@ -195,17 +208,22 @@ func (e *Exporter) Run(ctx context.Context, generation int32) error {
 		return err
 	}
 
-	// Publish atomically: tmp-dir rename(2) to the immutable dated path.
-	final := filepath.Join(e.Dir, date)
-	_ = os.RemoveAll(final) // same-day re-export replaces the snapshot
-	if err := os.Rename(tmp, final); err != nil {
+	// Publish to a path that does not exist yet, so rename(2) is the whole
+	// operation and a published snapshot is never unlinked. A same-day
+	// re-export lands on the next revision rather than replacing the bytes
+	// under a URL that is served immutable for a year.
+	name, err := e.freshSnapshotName(date)
+	if err != nil {
+		return err
+	}
+	if err := os.Rename(tmp, filepath.Join(e.Dir, name)); err != nil {
 		return fmt.Errorf("publish: %w", err)
 	}
 
 	if err := os.WriteFile(filepath.Join(e.Dir, "DICTIONARY.md"), []byte(dictionaryText(listID)), 0o644); err != nil {
 		return err
 	}
-	if err := e.updateLatest(date); err != nil {
+	if err := e.updateLatest(name); err != nil {
 		return err
 	}
 	if err := e.prune(now); err != nil {
@@ -350,12 +368,57 @@ func fileDigest(path string) (size int64, digest string, err error) {
 	return int64(len(b)), fmt.Sprintf("%x", sha256.Sum256(b)), nil
 }
 
+// snapshotName parses a published snapshot directory name into its calendar
+// date and revision. The bare date is revision 1; a same-day re-export adds
+// an "r2", "r3" … suffix. It is the one definition of what counts as a
+// snapshot directory — publication, retention and the manifest all read it,
+// so they cannot disagree about which directories exist.
+func snapshotName(name string) (date time.Time, rev int, ok bool) {
+	datePart, revPart, hasRev := strings.Cut(name, "r")
+	d, err := time.Parse("2006-01-02", datePart)
+	if err != nil {
+		return time.Time{}, 0, false
+	}
+	if !hasRev {
+		return d, 1, true
+	}
+	n, err := strconv.Atoi(revPart)
+	if err != nil || n < 2 {
+		return time.Time{}, 0, false
+	}
+	return d, n, true
+}
+
+// snapshotDirName renders the inverse of snapshotName.
+func snapshotDirName(date string, rev int) string {
+	if rev <= 1 {
+		return date
+	}
+	return date + "r" + strconv.Itoa(rev)
+}
+
+// freshSnapshotName picks the lowest revision for today that does not exist
+// yet, so publication is a pure rename(2) onto a free path. Published
+// snapshots are never unlinked, which is what lets the dated URLs be served
+// immutable.
+func (e *Exporter) freshSnapshotName(date string) (string, error) {
+	for rev := 1; rev <= maxSnapshotRevisions; rev++ {
+		name := snapshotDirName(date, rev)
+		if _, err := os.Lstat(filepath.Join(e.Dir, name)); os.IsNotExist(err) {
+			return name, nil
+		} else if err != nil {
+			return "", fmt.Errorf("publish probe %s: %w", name, err)
+		}
+	}
+	return "", fmt.Errorf("publish: %d revisions already exist for %s", maxSnapshotRevisions, date)
+}
+
 // updateLatest repoints the latest symlink atomically.
-func (e *Exporter) updateLatest(date string) error {
+func (e *Exporter) updateLatest(name string) error {
 	link := filepath.Join(e.Dir, "latest")
 	tmp := link + ".tmp"
 	_ = os.Remove(tmp)
-	if err := os.Symlink(date, tmp); err != nil {
+	if err := os.Symlink(name, tmp); err != nil {
 		return fmt.Errorf("latest symlink: %w", err)
 	}
 	if err := os.Rename(tmp, link); err != nil {
@@ -379,10 +442,13 @@ func (e *Exporter) prune(now time.Time) error {
 		if !ent.IsDir() {
 			continue
 		}
-		d, err := time.Parse("2006-01-02", ent.Name())
-		if err != nil {
+		d, _, ok := snapshotName(ent.Name())
+		if !ok {
 			continue
 		}
+		// Retention is per calendar date, so every revision of a pruned day
+		// goes together and every revision of a kept day stays: a published
+		// URL disappears only when its whole date ages out.
 		if d.Day() != 1 && d.Before(cutoff) {
 			if err := os.RemoveAll(filepath.Join(e.Dir, ent.Name())); err != nil {
 				return fmt.Errorf("prune %s: %w", ent.Name(), err)
@@ -425,28 +491,42 @@ func (e *Exporter) writeManifest(ctx context.Context, now time.Time, generation 
 	if err != nil {
 		return err
 	}
-	var dates []string
+	type snapshot struct {
+		name string
+		date time.Time
+		rev  int
+	}
+	var found []snapshot
 	for _, ent := range entries {
 		if !ent.IsDir() {
 			continue
 		}
-		if _, err := time.Parse("2006-01-02", ent.Name()); err == nil {
-			dates = append(dates, ent.Name())
+		if d, rev, ok := snapshotName(ent.Name()); ok {
+			found = append(found, snapshot{name: ent.Name(), date: d, rev: rev})
 		}
 	}
-	sort.Sort(sort.Reverse(sort.StringSlice(dates))) // newest first
-	if len(dates) == 0 {
+	// Newest first, and within one date the newest revision first — so
+	// Latest names the snapshot the export just published.
+	sort.Slice(found, func(i, j int) bool {
+		if !found[i].date.Equal(found[j].date) {
+			return found[i].date.After(found[j].date)
+		}
+		return found[i].rev > found[j].rev
+	})
+	if len(found) == 0 {
 		return fmt.Errorf("no snapshots to index")
 	}
 
-	snaps := make([]ManifestEntry, len(dates))
-	for i, d := range dates {
+	snaps := make([]ManifestEntry, len(found))
+	for i, s := range found {
 		snaps[i] = ManifestEntry{
-			Date: d, Path: "datasets/" + d + "/",
+			// date stays the calendar day; path carries the revision, so a
+			// consumer can group re-exports without parsing directory names.
+			Date: s.date.Format("2006-01-02"), Path: "datasets/" + s.name + "/",
 			Tiers:          []string{"top100k", "top1m", "full"},
 			Formats:        []string{formatCSVGz, formatParquet},
-			DatapackageURL: "/datasets/" + d + "/datapackage.json",
-			SHA256SumsURL:  "/datasets/" + d + "/SHA256SUMS",
+			DatapackageURL: "/datasets/" + s.name + "/datapackage.json",
+			SHA256SumsURL:  "/datasets/" + s.name + "/SHA256SUMS",
 		}
 	}
 	// Cite the specific Tranco list ID (07 §5.3); the generic string only

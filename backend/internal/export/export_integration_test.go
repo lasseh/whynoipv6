@@ -234,8 +234,27 @@ func TestDatasetExport(t *testing.T) {
 		t.Error("DICTIONARY.md missing")
 	}
 
-	// Re-running the same day replaces the snapshot idempotently.
+	// Re-running the same day publishes the next revision beside the first
+	// rather than replacing it: the already-published path is served
+	// immutable for a year, so its bytes must survive.
+	firstSums, err := os.ReadFile(filepath.Join(dir, today, "SHA256SUMS"))
+	if err != nil {
+		t.Fatalf("read first SHA256SUMS: %v", err)
+	}
 	if err := e.Run(context.Background(), 20260710); err != nil {
 		t.Fatalf("same-day re-export: %v", err)
+	}
+	afterSums, err := os.ReadFile(filepath.Join(dir, today, "SHA256SUMS"))
+	if err != nil {
+		t.Fatalf("the first snapshot disappeared after a re-export: %v", err)
+	}
+	if string(firstSums) != string(afterSums) {
+		t.Error("re-export rewrote an already-published snapshot")
+	}
+	if _, err := os.Stat(filepath.Join(dir, today+"r2")); err != nil {
+		t.Errorf("re-export did not publish a fresh revision: %v", err)
+	}
+	if target, err := os.Readlink(filepath.Join(dir, "latest")); err != nil || target != today+"r2" {
+		t.Errorf("latest -> %q err=%v, want %s", target, err, today+"r2")
 	}
 }

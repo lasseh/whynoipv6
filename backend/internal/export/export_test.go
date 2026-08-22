@@ -255,3 +255,194 @@ func TestRunPrunesRetention(t *testing.T) {
 		t.Errorf("first-of-month %s was pruned: %v", monthFirst, err)
 	}
 }
+
+// snapshotName is the one definition of a snapshot directory; publication,
+// retention and the manifest all read it.
+func TestSnapshotName(t *testing.T) {
+	cases := []struct {
+		name string
+		date string
+		rev  int
+		ok   bool
+	}{
+		{"2026-08-20", "2026-08-20", 1, true},
+		{"2026-08-20r2", "2026-08-20", 2, true},
+		{"2026-08-20r13", "2026-08-20", 13, true},
+		{"2026-08-20r1", "", 0, false},  // revision 1 is spelled as the bare date
+		{"2026-08-20r0", "", 0, false},  // ditto
+		{"2026-08-20r", "", 0, false},   // no number
+		{"2026-08-20rx", "", 0, false},  // not a number
+		{"latest", "", 0, false},        // the symlink
+		{".export-123", "", 0, false},   // staging
+		{"manifest.json", "", 0, false}, // a file
+		{"2026-13-45", "", 0, false},    // not a date
+	}
+	for _, tc := range cases {
+		d, rev, ok := snapshotName(tc.name)
+		if ok != tc.ok {
+			t.Errorf("snapshotName(%q) ok = %v, want %v", tc.name, ok, tc.ok)
+			continue
+		}
+		if !ok {
+			continue
+		}
+		if got := d.Format("2006-01-02"); got != tc.date || rev != tc.rev {
+			t.Errorf("snapshotName(%q) = (%s, %d), want (%s, %d)", tc.name, got, rev, tc.date, tc.rev)
+		}
+	}
+}
+
+// The defect this replaces: publication used to RemoveAll the dated path
+// before renaming onto it, so a same-day re-export briefly 404'd a URL
+// served immutable for a year. A published snapshot must now keep its
+// bytes, and the re-export must land beside it.
+func TestReExportNeverMutatesAPublishedSnapshot(t *testing.T) {
+	dir := t.TempDir()
+	now := time.Date(2026, 8, 20, 3, 0, 0, 0, time.UTC)
+
+	runExport(t, &fakeSource{rows: rankedRows(3), listID: "FIRST"}, dir, now)
+	first := filepath.Join(dir, "2026-08-20")
+	before, err := os.ReadFile(filepath.Join(first, "SHA256SUMS"))
+	if err != nil {
+		t.Fatalf("read first SHA256SUMS: %v", err)
+	}
+
+	// A re-export on the same day, with different data.
+	runExport(t, &fakeSource{rows: rankedRows(9), listID: "SECOND"}, dir, now)
+
+	after, err := os.ReadFile(filepath.Join(first, "SHA256SUMS"))
+	if err != nil {
+		t.Fatalf("the first snapshot disappeared: %v", err)
+	}
+	if string(before) != string(after) {
+		t.Error("the first snapshot's bytes changed — an immutable URL was rewritten")
+	}
+
+	second := filepath.Join(dir, "2026-08-20r2")
+	if _, err := os.Stat(second); err != nil {
+		t.Fatalf("re-export did not publish a fresh path: %v", err)
+	}
+	if b, err := os.ReadFile(filepath.Join(second, "SHA256SUMS")); err != nil {
+		t.Fatalf("read second SHA256SUMS: %v", err)
+	} else if string(b) == string(before) {
+		t.Error("the re-export published identical digests despite different data")
+	}
+
+	// A third lands on r3.
+	runExport(t, &fakeSource{rows: rankedRows(4)}, dir, now)
+	if _, err := os.Stat(filepath.Join(dir, "2026-08-20r3")); err != nil {
+		t.Errorf("third export did not land on r3: %v", err)
+	}
+}
+
+// latest follows the newest revision, and the manifest indexes every
+// revision with the newest first.
+func TestReExportRepointsLatestAndIndexesRevisions(t *testing.T) {
+	dir := t.TempDir()
+	now := time.Date(2026, 8, 20, 3, 0, 0, 0, time.UTC)
+	runExport(t, &fakeSource{rows: rankedRows(2)}, dir, now)
+	runExport(t, &fakeSource{rows: rankedRows(2)}, dir, now)
+
+	target, err := os.Readlink(filepath.Join(dir, "latest"))
+	if err != nil {
+		t.Fatalf("readlink latest: %v", err)
+	}
+	if target != "2026-08-20r2" {
+		t.Errorf("latest -> %q, want 2026-08-20r2", target)
+	}
+
+	m := readJSON[Manifest](t, filepath.Join(dir, "manifest.json"))
+	if len(m.Snapshots) != 2 {
+		t.Fatalf("manifest indexed %d snapshots, want 2", len(m.Snapshots))
+	}
+	if m.Snapshots[0].Path != "datasets/2026-08-20r2/" {
+		t.Errorf("newest snapshot path = %q", m.Snapshots[0].Path)
+	}
+	if m.Snapshots[1].Path != "datasets/2026-08-20/" {
+		t.Errorf("older snapshot path = %q", m.Snapshots[1].Path)
+	}
+	// The revision rides the path; date stays the calendar day so consumers
+	// can group re-exports without parsing directory names.
+	for _, s := range m.Snapshots {
+		if s.Date != "2026-08-20" {
+			t.Errorf("snapshot date = %q, want the calendar day", s.Date)
+		}
+	}
+	if m.Latest.Path != "datasets/2026-08-20r2/" {
+		t.Errorf("manifest latest = %q", m.Latest.Path)
+	}
+}
+
+// Ordering across dates as well as revisions.
+func TestManifestOrdersDatesThenRevisions(t *testing.T) {
+	dir := t.TempDir()
+	runExport(t, &fakeSource{rows: rankedRows(1)}, dir, time.Date(2026, 8, 19, 3, 0, 0, 0, time.UTC))
+	runExport(t, &fakeSource{rows: rankedRows(1)}, dir, time.Date(2026, 8, 20, 3, 0, 0, 0, time.UTC))
+	runExport(t, &fakeSource{rows: rankedRows(1)}, dir, time.Date(2026, 8, 20, 3, 0, 0, 0, time.UTC))
+
+	m := readJSON[Manifest](t, filepath.Join(dir, "manifest.json"))
+	want := []string{"datasets/2026-08-20r2/", "datasets/2026-08-20/", "datasets/2026-08-19/"}
+	if len(m.Snapshots) != len(want) {
+		t.Fatalf("indexed %d snapshots, want %d", len(m.Snapshots), len(want))
+	}
+	for i, w := range want {
+		if m.Snapshots[i].Path != w {
+			t.Errorf("snapshot %d = %q, want %q", i, m.Snapshots[i].Path, w)
+		}
+	}
+}
+
+// Retention is per calendar date: every revision of a pruned day goes, and
+// every revision of a kept day stays.
+func TestPruneKeepsAllRevisionsOfAKeptDate(t *testing.T) {
+	dir := t.TempDir()
+	now := time.Date(2026, 8, 20, 3, 0, 0, 0, time.UTC)
+
+	stale := now.AddDate(0, 0, -95)
+	if stale.Day() == 1 {
+		stale = stale.AddDate(0, 0, -1)
+	}
+	staleDate := stale.Format("2006-01-02")
+	for _, d := range []string{staleDate, staleDate + "r2", "2026-08-19", "2026-08-19r2"} {
+		if err := os.MkdirAll(filepath.Join(dir, d), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	e := &Exporter{Dir: dir, Source: &fakeSource{rows: rankedRows(1)}, RetentionDays: 90,
+		Now: func() time.Time { return now }}
+	if err := e.Run(context.Background(), 1); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	for _, gone := range []string{staleDate, staleDate + "r2"} {
+		if _, err := os.Stat(filepath.Join(dir, gone)); !os.IsNotExist(err) {
+			t.Errorf("%s survived retention", gone)
+		}
+	}
+	for _, kept := range []string{"2026-08-19", "2026-08-19r2"} {
+		if _, err := os.Stat(filepath.Join(dir, kept)); err != nil {
+			t.Errorf("%s was pruned but its date is within retention", kept)
+		}
+	}
+}
+
+// The revision ceiling fails loudly rather than filling the volume.
+func TestPublishCeiling(t *testing.T) {
+	dir := t.TempDir()
+	now := time.Date(2026, 8, 20, 3, 0, 0, 0, time.UTC)
+	for rev := 1; rev <= maxSnapshotRevisions; rev++ {
+		if err := os.MkdirAll(filepath.Join(dir, snapshotDirName("2026-08-20", rev)), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	e := &Exporter{Dir: dir, Source: &fakeSource{rows: rankedRows(1)},
+		Now: func() time.Time { return now }}
+	err := e.Run(context.Background(), 1)
+	if err == nil {
+		t.Fatal("Run succeeded past the revision ceiling")
+	}
+	if !strings.Contains(err.Error(), "revisions already exist") {
+		t.Errorf("error = %v", err)
+	}
+}

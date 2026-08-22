@@ -521,7 +521,7 @@ server {
                application/feed+json text/csv image/svg+xml;
 
     # --- datasets: dated snapshots are immutable forever ---
-    location ~ ^/datasets/\d{4}-\d{2}-\d{2}/ {
+    location ~ ^/datasets/\d{4}-\d{2}-\d{2}(r\d+)?/ {
         root /var/lib/whynoipv6;
         add_header Cache-Control "public, max-age=31536000, immutable";
         add_header Access-Control-Allow-Origin "*";
