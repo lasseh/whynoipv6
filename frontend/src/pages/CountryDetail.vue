@@ -29,8 +29,9 @@ const { data: country, notFound } = useEntity(
 
 const anchorTop = ref<HTMLElement | null>(null)
 
-const { items, page, loading, error, next, prev, setFilter, filters, reload } = useCursorList({
+const { items, page, loading, error, next, prev, setFilter, filters } = useCursorList({
   anchor: anchorTop,
+  key: () => code.value,
   fetch: (params, signal) =>
     listCountryDomains(
       code.value,
@@ -41,14 +42,6 @@ const { items, page, loading, error, next, prev, setFilter, filters, reload } = 
       signal,
     ),
   filters: { filter: { values: ['sinners', 'heroes'], default: 'sinners' } },
-})
-
-// vue-router reuses the instance on param-only navigation
-// (/countries/NO → /countries/SE): the entity refetches itself; the list
-// fetch closes over code, so it needs the explicit nudge. The guard skips
-// the fire on route leave, when code flips to '' before unmount.
-watch(code, (c) => {
-  if (c) reload()
 })
 
 // Data-driven title once the country loads.

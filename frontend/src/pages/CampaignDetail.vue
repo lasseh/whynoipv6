@@ -30,8 +30,9 @@ const notFound = ref(false)
 
 const anchorTop = ref<HTMLElement | null>(null)
 
-const { items, page, meta, loading, error, next, prev, reload } = useCursorList({
+const { items, page, meta, loading, error, next, prev } = useCursorList({
   anchor: anchorTop,
+  key: () => uuid.value,
   fetch: async (params, signal) => {
     try {
       const res = await getCampaign(
@@ -59,14 +60,12 @@ const { data: changelogRes } = useEntity(
 )
 const campaignChangelog = computed(() => changelogRes.value?.items ?? [])
 
-// vue-router reuses the instance on param-only navigation
-// (/campaigns/a → /campaigns/b): the entity refetches itself; the
-// composite list fetch closes over uuid, so it needs the explicit nudge.
+// The list engine owns the refetch via `key`; these two side surfaces are
+// this page's own state, so they still reset on a new campaign.
 watch(uuid, (u) => {
   if (!u) return
   campaign.value = null
   notFound.value = false
-  reload()
 })
 
 // Data-driven title once the campaign loads.

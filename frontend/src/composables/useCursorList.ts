@@ -34,6 +34,16 @@ export interface CursorListOptions<T, K extends string = never> {
    * clears the cursor.
    */
   filters?: Record<K, FilterSpec>
+  /**
+   * The entity this list belongs to, when `fetch` closes over a path param
+   * (/countries/:code, /campaigns/:uuid). vue-router reuses the instance on
+   * param-only navigation, so without this the engine would keep serving the
+   * previous entity's rows: a key change clears items/page/meta and refetches.
+   *
+   * It completes the trigger set. What makes this list reload is exactly
+   * cursor, filters and key — all three owned here, none left to the caller.
+   */
+  key?: () => string | undefined
   /** Scrolled into view on next()/prev() so pagination lands at the list top. */
   anchor?: Ref<HTMLElement | null>
 }
@@ -55,6 +65,7 @@ export function useCursorList<T, K extends string = never>(opts: CursorListOptio
   const error = ref<ApiProblem | null>(null)
 
   const cursor = computed(() => first(route.query.cursor))
+  const key = computed(() => opts.key?.())
   const filters = computed(
     () =>
       Object.fromEntries(
@@ -100,6 +111,19 @@ export function useCursorList<T, K extends string = never>(opts: CursorListOptio
     // filters is a fresh object each recompute; only reload on value change.
     if (JSON.stringify(next) !== JSON.stringify(prev)) void load()
   })
+
+  // A key change is a different entity, not a different page of the same one:
+  // drop what the previous entity loaded before refetching, so nothing paints
+  // the old rows under the new heading. The falsy guard skips the fire on
+  // route leave, when the param flips to '' before unmount.
+  watch(key, (k) => {
+    if (!k) return
+    items.value = []
+    page.value = null
+    meta.value = null
+    void load()
+  })
+
   void load()
 
   function withoutCursor(query: LocationQuery): LocationQuery {

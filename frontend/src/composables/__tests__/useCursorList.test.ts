@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from 'vitest'
-import { defineComponent, h } from 'vue'
+import { defineComponent, h, ref } from 'vue'
+import type { Ref } from 'vue'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import type { Router } from 'vue-router'
@@ -28,6 +29,7 @@ const tierFilters: Record<string, FilterSpec> = {
 async function setup(
   fetch: CursorListOptions<string>['fetch'],
   filters?: Record<string, FilterSpec>,
+  key?: Ref<string>,
 ): Promise<{ router: Router; list: List }> {
   const router = createRouter({
     history: createMemoryHistory(),
@@ -38,7 +40,11 @@ async function setup(
   let list: List | undefined
   const Host = defineComponent({
     setup() {
-      list = useCursorList<string>({ fetch, ...(filters && { filters }) })
+      list = useCursorList<string>({
+        fetch,
+        ...(filters && { filters }),
+        ...(key && { key: () => key.value }),
+      })
       return () => h('div')
     },
   })
@@ -46,6 +52,15 @@ async function setup(
   await flushPromises()
   if (!list) throw new Error('composable did not run')
   return { router, list }
+}
+
+// setupKeyed drives the `key` option from a ref, the way a page drives it
+// from a route param.
+async function setupKeyed(
+  fetch: CursorListOptions<string>['fetch'],
+  key: Ref<string>,
+): Promise<{ list: List }> {
+  return setup(fetch, undefined, key)
 }
 
 describe('useCursorList', () => {
@@ -172,5 +187,69 @@ describe('useCursorList', () => {
     expect(list.error.value).toBe(boom)
     expect(list.loading.value).toBe(false)
     expect(list.items.value).toEqual([])
+  })
+  // The trigger set is cursor, filters AND key. Before `key` existed this
+  // was unreachable: each page hand-wrote its own watch(param, reload), and
+  // neither page test ever re-navigated, so nothing asserted it.
+  it('refetches when the entity key changes', async () => {
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(collection(['no-1', 'no-2']))
+      .mockResolvedValueOnce(collection(['se-1']))
+    const key = ref('NO')
+    const { list } = await setupKeyed(fetch, key)
+
+    expect(fetch).toHaveBeenCalledTimes(1)
+    expect(list.items.value).toEqual(['no-1', 'no-2'])
+
+    key.value = 'SE'
+    await flushPromises()
+
+    expect(fetch).toHaveBeenCalledTimes(2)
+    expect(list.items.value).toEqual(['se-1'])
+  })
+
+  // A keyed reload must not paint the previous entity's rows under the new
+  // heading, so items/page/meta are cleared before the refetch resolves.
+  it('clears the previous entity before the new one arrives', async () => {
+    let release: ((c: ItemCollection<string>) => void) | undefined
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(collection(['no-1'], { next_cursor: 'c2', has_more: true }))
+      .mockImplementationOnce(
+        () =>
+          new Promise<ItemCollection<string>>((resolve) => {
+            release = resolve
+          }),
+      )
+    const key = ref('NO')
+    const { list } = await setupKeyed(fetch, key)
+    expect(list.items.value).toEqual(['no-1'])
+    expect(list.page.value?.has_more).toBe(true)
+
+    key.value = 'SE'
+    await flushPromises()
+
+    // In flight: nothing from the old entity is still on screen.
+    expect(list.items.value).toEqual([])
+    expect(list.page.value).toBeNull()
+    expect(list.meta.value).toBeNull()
+
+    release?.(collection(['se-1']))
+    await flushPromises()
+    expect(list.items.value).toEqual(['se-1'])
+  })
+
+  // Route leave flips the param to '' before unmount; that must not fire a
+  // fetch for an entity that no longer exists.
+  it('ignores an empty key on route leave', async () => {
+    const fetch = vi.fn().mockResolvedValue(collection(['a']))
+    const key = ref('NO')
+    await setupKeyed(fetch, key)
+    expect(fetch).toHaveBeenCalledTimes(1)
+
+    key.value = ''
+    await flushPromises()
+    expect(fetch).toHaveBeenCalledTimes(1)
   })
 })
