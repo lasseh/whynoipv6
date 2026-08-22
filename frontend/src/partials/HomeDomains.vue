@@ -3,6 +3,7 @@ import { computed } from 'vue'
 
 // Partials
 import DomainTable from '@/components/DomainTable.vue'
+import ListState from '@/components/ListState.vue'
 
 import { useResource } from '@/composables/useResource'
 import { listSinners } from '@/api'
@@ -39,7 +40,9 @@ const domainList = computed(() => data.value ?? [])
 
         <!-- DomainList -->
         <div>
-          <DomainTable :domains="domainList" :loading="loading" />
+          <ListState :loading="loading" :count="domainList.length" empty-text="No domains found">
+            <DomainTable :domains="domainList" />
+          </ListState>
         </div>
 
         <!-- Button to Domain List-->

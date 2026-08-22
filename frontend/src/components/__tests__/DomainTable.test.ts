@@ -37,15 +37,13 @@ const stubs = { RouterLink: { template: '<a><slot /></a>' } }
 
 // The empty state must not flash while the first page is still loading —
 // it renders only once loading is false and the list is genuinely empty.
-describe('table empty state vs loading', () => {
-  it('suppresses the empty state while loading', () => {
-    const wrapper = mount(DomainTable, { props: { domains: [], loading: true } })
-    expect(wrapper.text()).not.toContain('No domains found')
-  })
-
-  it('shows the empty state once loading settles empty', () => {
-    const wrapper = mount(DomainTable, { props: { domains: [], loading: false } })
-    expect(wrapper.text()).toContain('No domains found')
+// The error / loading / empty states moved to ListState, which wraps this at
+// every call site. What is left here is the table's own contract: no rows,
+// no table.
+describe('table with no rows', () => {
+  it('renders nothing rather than an empty shell', () => {
+    const wrapper = mount(DomainTable, { props: { domains: [] } })
+    expect(wrapper.find('table').exists()).toBe(false)
   })
 })
 

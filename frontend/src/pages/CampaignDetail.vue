@@ -3,7 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
 import PageShell from '@/components/PageShell.vue'
-import ApiError from '@/components/ApiError.vue'
+import ListState from '@/components/ListState.vue'
 import Breadcrumb from '@/components/Breadcrumb.vue'
 
 import DomainTable from '@/components/DomainTable.vue'
@@ -129,9 +129,14 @@ watch(campaign, (c) => {
 
             <!-- CampaignDomains -->
             <div>
-              <!-- Error state (§6.3) -->
-              <ApiError v-if="error" :problem="error" />
-              <DomainTable v-else :domains="items" :campaign-uuid="uuid" :loading="loading" />
+              <ListState
+                :loading="loading"
+                :error="error"
+                :count="items.length"
+                empty-text="No domains found"
+              >
+                <DomainTable :domains="items" :campaign-uuid="uuid" />
+              </ListState>
             </div>
 
             <!-- Pagination -->

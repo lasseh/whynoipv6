@@ -9,15 +9,11 @@ import StatusTh from '@/components/table/StatusTh.vue'
 // and never 0 (§7.3), DomainDetail links) and campaign members
 // (`campaignUuid` set: member links, the server's v6_ready row highlight
 // (07 §4.7 — never re-derived here), no Rank column).
-// `loading` suppresses the empty state so it can't flash before the first
-// page arrives.
-withDefaults(
-  defineProps<{ domains?: DomainSummary[]; loading?: boolean; campaignUuid?: string }>(),
-  {
-    domains: () => [],
-    loading: false,
-  },
-)
+// Rows to markup. The error / first-load / empty states belong to ListState,
+// which wraps this at every call site.
+withDefaults(defineProps<{ domains?: DomainSummary[]; campaignUuid?: string }>(), {
+  domains: () => [],
+})
 </script>
 
 <template>
@@ -116,12 +112,5 @@ withDefaults(
         </tr>
       </tbody>
     </table>
-
-    <!-- No Data Available State -->
-    <div v-else-if="!loading" class="flex justify-center">
-      <div class="text-center">
-        <div class="text-xl font-medium">No domains found</div>
-      </div>
-    </div>
   </div>
 </template>

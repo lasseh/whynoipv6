@@ -2,12 +2,11 @@
 import { ref } from 'vue'
 
 import PageShell from '@/components/PageShell.vue'
-import ApiError from '@/components/ApiError.vue'
+import ListState from '@/components/ListState.vue'
 import SegmentedTabs from '@/components/SegmentedTabs.vue'
 
 import DomainTable from '@/components/DomainTable.vue'
 import Pagination from '@/components/Pagination.vue'
-import LoadingSpinner from '@/components/LoadingSpinner.vue'
 
 import { useCursorList } from '@/composables/useCursorList'
 import { TIERS, tierBySlug } from '@/tiers'
@@ -50,18 +49,21 @@ const tierTabs = TIERS.filter((t) => !t.hidden).map((t) => ({ value: t.slug, lab
             />
           </div>
 
-          <!-- Error state -->
-          <ApiError v-if="error" :problem="error" />
-
           <!-- Domains. min-h-screen reserves the space the rows will fill:
                the table renders nothing until the first page arrives, and
                without the placeholder the footer sits inside the viewport
                and gets shoved off it when ~50 rows land (CLS 0.19 on the
                Lighthouse mobile run). A full page of rows is always taller
                than a viewport, so the reservation costs nothing once loaded. -->
-          <div v-else class="min-h-screen">
-            <DomainTable :domains="items" :loading="loading" />
-            <LoadingSpinner v-if="loading" />
+          <div class="min-h-screen">
+            <ListState
+              :loading="loading"
+              :error="error"
+              :count="items.length"
+              empty-text="No domains found"
+            >
+              <DomainTable :domains="items" />
+            </ListState>
           </div>
 
           <!-- Pagination -->

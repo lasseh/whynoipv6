@@ -93,7 +93,7 @@ function submitSearch() {
             </header>
             <!-- Domains -->
             <div>
-              <DomainTable :domains="items" :loading="loading" />
+              <DomainTable :domains="items" />
               <LoadingSpinner v-if="loading" />
             </div>
 

@@ -4,12 +4,11 @@ import { useRoute } from 'vue-router'
 
 import PageShell from '@/components/PageShell.vue'
 import SegmentedTabs from '@/components/SegmentedTabs.vue'
-import ApiError from '@/components/ApiError.vue'
+import ListState from '@/components/ListState.vue'
 import Breadcrumb from '@/components/Breadcrumb.vue'
 
 import DomainTable from '@/components/DomainTable.vue'
 import Pagination from '@/components/Pagination.vue'
-import LoadingSpinner from '@/components/LoadingSpinner.vue'
 import RatingBadge from '@/components/RatingBadge.vue'
 import ProgressBar from '@/components/ProgressBar.vue'
 
@@ -117,10 +116,14 @@ watch(country, (c) => {
             </div>
 
             <div class="min-h-screen">
-              <!-- Error state (§6.3) -->
-              <ApiError v-if="error" :problem="error" />
-              <DomainTable v-else-if="items.length > 0" :domains="items" />
-              <LoadingSpinner v-if="loading" />
+              <ListState
+                :loading="loading"
+                :error="error"
+                :count="items.length"
+                empty-text="No domains found"
+              >
+                <DomainTable :domains="items" />
+              </ListState>
             </div>
 
             <!-- Pagination -->
