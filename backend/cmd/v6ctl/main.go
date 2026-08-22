@@ -80,6 +80,7 @@ func main() {
 	root.AddCommand(enableCmd())
 	root.AddCommand(statsCmd())
 	root.AddCommand(opsCmd())
+	root.AddCommand(logsCmd())
 	root.AddCommand(shameCmd())
 	root.AddCommand(exportCmd())
 	root.AddCommand(resourceCmd())

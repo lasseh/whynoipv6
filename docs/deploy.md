@@ -122,6 +122,7 @@ docker compose run --rm --entrypoint /v6ctl migrate <verb> [args...]
 | `stats recalc` | re-run today's stats snapshots and counters |
 | `export` | write the nightly static dataset snapshots (CSV.gz + Parquet) |
 | `ops unbound-stats` | scrape both Unbound instances into `unbound_stats` |
+| `logs [-f] [-n N] [--since …] [--level …]` | pretty-print a unit's JSON logs from journald (or stdin with `-`); needs no DB (09-ops §13) |
 
 Two verbs need more than `DATABASE_URL`:
 

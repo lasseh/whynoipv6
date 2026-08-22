@@ -1,0 +1,21 @@
+[90m03:00:01.114[0m [32mINFO [0m [1mconfiguration           [0m [36mDATABASE_URL[0m[90m=[0mpostgres://whynoipv6@127.0.0.1:1/whynoipv6
+                                            [36mAPI_LISTEN[0m[90m=[0m[::1]:8080
+                                            [36mDATASETS_DIR[0m[90m=[0m/var/lib/whynoipv6/datasets
+                                            [90m… +68 more (--full)[0m
+[90m03:00:01.180[0m [32mINFO [0m [1mcrawler started         [0m [36mworker_slots[0m[90m=[0m64
+[90mStarted WhyNoIPv6 crawler.[0m
+[90m03:00:02.004[0m [33mWARN [0m [1mipv6 preflight failed; claiming nothing[0m [36mrun_id[0m[90m=[0m7c9e6679 [36mworker[0m[90m=[0mv6-crawl01:1187
+                                                           [36merr[0m[90m=[0m[31mdial tcp [2606:4700:4700::1111]:443: connect: network is unreachable[0m
+[90m03:00:33.221[0m [90mDEBUG[0m [1mdomain processed        [0m [36mrun_id[0m[90m=[0m7c9e6679 [36mworker[0m[90m=[0mv6-crawl01:1187 [36mdomain[0m[90m=[0mvg.no
+                                            [36mduration_ms[0m[90m=[0m412 [36mlease_lost[0m[90m=[0mfalse [36mtransitions[0m[90m=[0m1
+[90m03:00:33.400[0m [90mDEBUG[0m [1mdomain processed        [0m [36mrun_id[0m[90m=[0m7c9e6679 [36mworker[0m[90m=[0mv6-crawl01:1187
+                                            [36mdomain[0m[90m=[0msome-very-long-hostname-for-wrapping.example.co.uk
+                                            [36mduration_ms[0m[90m=[0m8402 [36mlease_lost[0m[90m=[0mfalse [36mtransitions[0m[90m=[0m3
+[90m03:00:34.010[0m [33mWARN [0m [1mlease lost, commit discarded[0m [36mrun_id[0m[90m=[0m7c9e6679 [36mworker[0m[90m=[0mv6-crawl01:1187
+                                                [36mrun_id[0m[90m=[0mdeadbeef [36mdomain[0m[90m=[0mfinn.no
+[90m03:12:45.000[0m [1;31mERROR[0m [1mmetrics checkpoint failed[0m [36mrun_id[0m[90m=[0m7c9e6679 [36mworker[0m[90m=[0mv6-crawl01:1187
+                                             [36merr[0m[90m=[0m[31mERROR: duplicate key value violates unique constraint "crawler_metrics_pkey"\n  (SQLSTATE 23505)[0m
+[90m03:12:46.000[0m [32mINFO [0m [1mresolver upstreams      [0m [36mupstreams[0m[90m=[0m["127.0.0.1:53","127.0.0.1:5353"]
+[90m03:12:47.000[0m [1;31mERROR+4[0m [1mfatal: run aborted      [0m [36merr[0m[90m=[0m[31mpreflight never recovered[0m
+[90m04:00:07.310[0m [32mINFO [0m [1mshutdown complete       [0m [36mrun_id[0m[90m=[0m7c9e6679 [36mworker[0m[90m=[0mv6-crawl01:1187
+[90mpanic: runtime error: invalid memory address or nil pointer dereference[0m

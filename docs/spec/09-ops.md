@@ -1185,6 +1185,22 @@ access-log middleware** (a small custom one — do **not** use chi's default tex
 `info` level) with `request_id`, `method`, `path`, `status`, `bytes`,
 `duration_ms`, `remote_ip`. **Exclude the health endpoints** (`GET /livez`, `GET /readyz` — 07-api.md §2.7) from the access log.
 
+**Reading the logs.** `v6ctl logs` renders the JSON back into aligned, level-colored
+lines: one record per line, attributes wrapped to the terminal under a hanging indent,
+`run_id` cut to 8 characters, `component` dropped when it selected the unit itself, and the
+startup `configuration` record collapsed to its first few keys plus a count. `--full`
+restores all four. It reads stdin when piped or given `-`, otherwise runs
+`journalctl -u <unit> -o cat --no-pager` itself; `-o cat` is mandatory, because journald's
+own line prefix breaks the parse. The command overrides the root `PersistentPreRunE`, so
+it needs no `DATABASE_URL` and prints no config summary of its own into the stream it is
+reading. Rendering lives in `internal/logfmt`; a line that is not a JSON object (systemd's
+own unit messages, a Go panic) passes through dimmed rather than being dropped.
+
+**Levels are filtered client-side, necessarily.** The binaries write plain stdout with no
+`SyslogLevelPrefix`, so journald stamps every record the same priority and
+`journalctl -p err` returns the whole stream. `v6ctl logs --level warn` is the filter that
+works; for anything scripted, `journalctl -o cat | jq 'fromjson? | select(.level=="ERROR")'`.
+
 ---
 
 ## 14. Makefile, `.golangci.yml`, CI

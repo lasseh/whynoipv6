@@ -1,0 +1,21 @@
+03:00:01.114 INFO  configuration            DATABASE_URL=postgres://whynoipv6@127.0.0.1:1/whynoipv6
+                                            API_LISTEN=[::1]:8080
+                                            DATASETS_DIR=/var/lib/whynoipv6/datasets
+                                            … +68 more (--full)
+03:00:01.180 INFO  crawler started          worker_slots=64
+Started WhyNoIPv6 crawler.
+03:00:02.004 WARN  ipv6 preflight failed; claiming nothing run_id=7c9e6679 worker=v6-crawl01:1187
+                                                           err=dial tcp [2606:4700:4700::1111]:443: connect: network is unreachable
+03:00:33.221 DEBUG domain processed         run_id=7c9e6679 worker=v6-crawl01:1187 domain=vg.no
+                                            duration_ms=412 lease_lost=false transitions=1
+03:00:33.400 DEBUG domain processed         run_id=7c9e6679 worker=v6-crawl01:1187
+                                            domain=some-very-long-hostname-for-wrapping.example.co.uk
+                                            duration_ms=8402 lease_lost=false transitions=3
+03:00:34.010 WARN  lease lost, commit discarded run_id=7c9e6679 worker=v6-crawl01:1187
+                                                run_id=deadbeef domain=finn.no
+03:12:45.000 ERROR metrics checkpoint failed run_id=7c9e6679 worker=v6-crawl01:1187
+                                             err=ERROR: duplicate key value violates unique constraint "crawler_metrics_pkey"\n  (SQLSTATE 23505)
+03:12:46.000 INFO  resolver upstreams       upstreams=["127.0.0.1:53","127.0.0.1:5353"]
+03:12:47.000 ERROR+4 fatal: run aborted       err=preflight never recovered
+04:00:07.310 INFO  shutdown complete        run_id=7c9e6679 worker=v6-crawl01:1187
+panic: runtime error: invalid memory address or nil pointer dereference
