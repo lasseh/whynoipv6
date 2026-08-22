@@ -131,8 +131,7 @@ func run() error {
 	}
 
 	frontier := crawler.NewFrontier(pool, crawler.FrontierConfigFrom(cfg))
-	// Workers commit under rootCtx (drain); the claim loop stops first.
-	frontier.Process = func(_ context.Context, d crawler.ClaimedDomain) { w.Process(rootCtx, d) }
+	frontier.Process = w.Process
 	frontier.Preflight = func(ctx context.Context) bool {
 		if preflight.Run(ctx) {
 			return true
@@ -197,7 +196,9 @@ func run() error {
 	}
 
 	slog.Info("crawler started", "worker_slots", cfg.Int("worker_slots"))
-	frontier.Run(claimCtx) // returns once claiming stopped and slots drained
+	// claimCtx stops the loop taking new work; rootCtx carries the drain
+	// budget, so an in-flight commit finishes rather than being cancelled.
+	frontier.Run(claimCtx, rootCtx) // returns once claiming stopped and slots drained
 	aux.Wait()
 
 	// Final checkpoint (is_final) with a fresh short context: rootCtx may

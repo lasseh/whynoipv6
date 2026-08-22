@@ -105,16 +105,26 @@ func (f *Frontier) ClaimBatch(ctx context.Context) ([]ClaimedDomain, error) {
 }
 
 // Run is the §12 claim loop: preflight → claim → dispatch to the slot pool,
-// claiming again as soon as the batch is dispatched. Returns when ctx is
+// claiming again as soon as the batch is dispatched. Returns when claim is
 // cancelled and every in-flight slot has finished.
-func (f *Frontier) Run(ctx context.Context) {
+//
+// Two contexts, the same shape LiveChecker.Run already takes (04 §14):
+// claim stops the loop from taking new work, while work is what slot
+// bodies run under — cmd wiring passes the drain-budget root, so a SIGTERM
+// finishes an in-flight commit instead of cancelling it. Naming both in the
+// signature is what makes the split visible; when Run handed slot bodies
+// the claim context, every caller had to silently discard it and reach for
+// the drain context from an enclosing scope, and the shutdown test
+// reproduced that same substitution — so a regression in the wiring would
+// have left it green.
+func (f *Frontier) Run(claim, work context.Context) {
 	slots := make(chan ClaimedDomain)
 	done := make(chan struct{})
 	for range f.cfg.WorkerSlots {
 		go func() {
 			defer func() { done <- struct{}{} }()
 			for d := range slots {
-				f.Process(ctx, d)
+				f.Process(work, d)
 			}
 		}()
 	}
@@ -126,28 +136,28 @@ func (f *Frontier) Run(ctx context.Context) {
 	}()
 
 	for {
-		if ctx.Err() != nil {
+		if claim.Err() != nil {
 			return
 		}
-		if f.Preflight != nil && !f.Preflight(ctx) {
-			if !sleepCtx(ctx, f.cfg.RetryInterval) {
+		if f.Preflight != nil && !f.Preflight(claim) {
+			if !sleepCtx(claim, f.cfg.RetryInterval) {
 				return
 			}
 			continue
 		}
-		batch, err := f.ClaimBatch(ctx)
+		batch, err := f.ClaimBatch(claim)
 		if err != nil {
-			if ctx.Err() != nil {
+			if claim.Err() != nil {
 				return
 			}
 			slog.Error("claim batch failed", "err", err.Error())
-			if !sleepCtx(ctx, f.cfg.EmptyPoll) {
+			if !sleepCtx(claim, f.cfg.EmptyPoll) {
 				return
 			}
 			continue
 		}
 		if len(batch) == 0 {
-			if !sleepCtx(ctx, f.cfg.EmptyPoll) {
+			if !sleepCtx(claim, f.cfg.EmptyPoll) {
 				return
 			}
 			continue
@@ -155,7 +165,7 @@ func (f *Frontier) Run(ctx context.Context) {
 		for i := range batch {
 			select {
 			case slots <- batch[i]: // blocks until a slot is free
-			case <-ctx.Done():
+			case <-claim.Done():
 				return // undispatched claims expire via the 30-min lease
 			}
 		}

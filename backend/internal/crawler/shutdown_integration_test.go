@@ -29,20 +29,23 @@ func TestShutdown(t *testing.T) {
 	f := NewFrontier(pool, FrontierConfig{
 		BatchSize: 40, Order: "rank", EmptyPoll: 50 * time.Millisecond, WorkerSlots: 4,
 	})
-	f.Process = func(_ context.Context, d ClaimedDomain) {
+	// The slot body uses the context Run hands it. That context is the
+	// work context, not the claim context — a fact the signature now
+	// carries, so this test can no longer pass while the wiring is wrong.
+	f.Process = func(work context.Context, d ClaimedDomain) {
 		time.Sleep(120 * time.Millisecond) // simulate scan wall time
 		obs := stableObs(domain.DimBase, domain.ObsSupported)
-		res, err := committer.Commit(rootCtx, &CommitInput{
+		res, err := committer.Commit(work, &CommitInput{
 			Snapshot: d, Obs: obs,
 			Attribution: &Attribution{AsnID: d.AsnID, CountryID: d.CountryID},
 			Details:     []byte(`{}`), DurationMS: 120, T: time.Now().UTC(),
 		})
-		metrics.RecordScan(rootCtx, &obs, false, res, err, 120*time.Millisecond)
+		metrics.RecordScan(work, &obs, false, res, err, 120*time.Millisecond)
 	}
 
 	claimCtx, stopClaim := context.WithCancel(ctx)
 	done := make(chan struct{})
-	go func() { f.Run(claimCtx); close(done) }()
+	go func() { f.Run(claimCtx, rootCtx); close(done) }()
 
 	// SIGTERM analog mid-batch: stop claiming while workers are busy.
 	time.Sleep(400 * time.Millisecond)

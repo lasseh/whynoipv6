@@ -130,7 +130,7 @@ func TestClaimLoopDispatch(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	loopDone := make(chan struct{})
-	go func() { f.Run(ctx); close(loopDone) }()
+	go func() { f.Run(ctx, ctx); close(loopDone) }()
 
 	select {
 	case <-donech:
