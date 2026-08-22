@@ -181,12 +181,59 @@ type validationError struct{ field, msg string }
 
 func (e validationError) Error() string { return e.field + ": " + e.msg }
 
-// parseDomainFilter validates the §3.3 grammar into the builder filter.
-// Unknown-but-well-formed country/ASN values resolve to an impossible id so
-// the list is simply empty (the value is not *invalid*).
-func (s *Server) parseDomainFilter(r *http.Request, q url.Values) (postgres.DomainListFilter, error) {
-	var f postgres.DomainListFilter
+// domainFilterSpec is the §3.3 grammar's output: everything the query
+// string says, with the two pivots left unresolved. Splitting it from
+// postgres.DomainListFilter is what keeps the grammar pure — twelve of the
+// fourteen validations touch no database, and only the two that do need a
+// *Server.
+type domainFilterSpec struct {
+	postgres.DomainListFilter
+
+	// CountryCode is the upper-cased ISO code, resolved to CountryID by
+	// resolveDomainFilter; "" = the param was absent.
+	CountryCode string
+	// ASNNumber is the parsed AS number, resolved to ASNID; nil = absent.
+	ASNNumber *int64
+}
+
+// resolveDomainFilter turns the grammar's output into the builder filter by
+// resolving the two pivots. It owns the unknown-value rule: a well-formed
+// but unknown country or ASN is not *invalid*, so it resolves to an
+// impossible id and the list comes back empty rather than 422.
+func (s *Server) resolveDomainFilter(ctx context.Context, spec *domainFilterSpec) (postgres.DomainListFilter, error) {
+	f := spec.DomainListFilter
 	impossible := int32(-1)
+
+	if spec.CountryCode != "" {
+		id, err := s.q.CountryIDByCode(ctx, spec.CountryCode)
+		switch {
+		case errors.Is(err, pgx.ErrNoRows):
+			f.CountryID = &impossible
+		case err != nil:
+			return f, fmt.Errorf("country lookup: %w", err)
+		default:
+			f.CountryID = &id
+		}
+	}
+	if spec.ASNNumber != nil {
+		id, err := s.q.ASNIDByNumber(ctx, *spec.ASNNumber)
+		switch {
+		case errors.Is(err, pgx.ErrNoRows):
+			f.ASNID = &impossible
+		case err != nil:
+			return f, fmt.Errorf("asn lookup: %w", err)
+		default:
+			f.ASNID = &id
+		}
+	}
+	return f, nil
+}
+
+// parseDomainFilter validates the §3.3 grammar. It is pure: the two pivot
+// lookups live in resolveDomainFilter, so every closed-set rejection here
+// is table-testable without a database.
+func parseDomainFilter(q url.Values) (domainFilterSpec, error) {
+	var f domainFilterSpec
 
 	if v := q.Get(paramClass); v != "" {
 		if !classValues[v] {
@@ -207,30 +254,14 @@ func (s *Server) parseDomainFilter(r *http.Request, q url.Values) (postgres.Doma
 		f.AlmostHero = true
 	}
 	if v := q.Get(paramCountry); v != "" {
-		id, err := s.q.CountryIDByCode(r.Context(), strings.ToUpper(v))
-		switch {
-		case errors.Is(err, pgx.ErrNoRows):
-			f.CountryID = &impossible
-		case err != nil:
-			return f, fmt.Errorf("country lookup: %w", err)
-		default:
-			f.CountryID = &id
-		}
+		f.CountryCode = strings.ToUpper(v)
 	}
 	if v := q.Get(paramASN); v != "" {
 		n, err := strconv.ParseInt(v, 10, 64)
 		if err != nil || n < 0 {
 			return f, validationError{paramASN, "must be a non-negative AS number"}
 		}
-		id, err := s.q.ASNIDByNumber(r.Context(), n)
-		switch {
-		case errors.Is(err, pgx.ErrNoRows):
-			f.ASNID = &impossible
-		case err != nil:
-			return f, fmt.Errorf("asn lookup: %w", err)
-		default:
-			f.ASNID = &id
-		}
+		f.ASNNumber = &n
 	}
 	if v := q.Get(paramProvider); v != "" {
 		id, err := strconv.ParseInt(v, 10, 64)
@@ -384,12 +415,17 @@ func (s *Server) serveDomainList(w http.ResponseWriter, r *http.Request, preset 
 		return
 	}
 
-	filter, err := s.parseDomainFilter(r, q)
+	spec, err := parseDomainFilter(q)
 	var ve validationError
 	if errors.As(err, &ve) {
 		ValidationError(w, r, []FieldError{{Field: ve.field, Reason: ve.msg}})
 		return
 	}
+	if err != nil {
+		InternalError(w, r, err)
+		return
+	}
+	filter, err := s.resolveDomainFilter(r.Context(), &spec)
 	if err != nil {
 		InternalError(w, r, err)
 		return
