@@ -115,7 +115,7 @@ docker compose run --rm --entrypoint /v6ctl migrate <verb> [args...]
 | `provider seed [--path …]` | load the curated DNS-provider mapping (embedded list by default; idempotent) |
 | `provider add <name> <ns-suffix>…` / `remove` / `list` | curate the DNS-provider mapping |
 | `shame add <host> [--reason …]` / `remove` / `list` | curate the editorial top-shame list |
-| `disable <host>` / `disable --service-list <file>` | manually disable hosts (e.g. service/CDN domains) |
+| `disable <host>` / `disable --service-list <file>` | manually disable hosts (e.g. service/CDN domains); `make service-list` is the dev-stack shortcut for the curated `service_domains.txt` |
 | `enable <host>` | re-enable a manually disabled host |
 | `service-candidates list` / `confirm <host>` / `dismiss <host>` | triage auto-detected service domains |
 | `resource add <domain> <host> [--advisory]` / `remove` | curate manual page-resource links |

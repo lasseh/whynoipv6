@@ -48,3 +48,12 @@ release: ## Cut a release (prompts for vX.Y.Z; gates, tags, pushes — release.y
 	git tag -a "$$version" -m "Release $$version" || exit 1; \
 	git push origin "$$version" || exit 1; \
 	echo "==> pushed $$version — release.yml now builds binaries, the GitHub release, and the GHCR image"
+
+##@ Operations
+.PHONY: service-list
+
+# `migrate` is the compose service (it has DATABASE_URL and no other job);
+# `disable` is the v6ctl verb. The list is not a compose mount, so bind it in.
+service-list: ## Apply the curated service-domain list to the dev DB (idempotent)
+	docker compose run --rm -v $(CURDIR)/service_domains.txt:/service_domains.txt:ro \
+	  --entrypoint /v6ctl migrate disable --service-list /service_domains.txt
