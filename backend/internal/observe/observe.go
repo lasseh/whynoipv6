@@ -442,13 +442,49 @@ func linksForHosts(rawHosts []string, byHost map[string]domain.IPv6Status) []Lin
 	return links
 }
 
+// ResourceReader is the seam under the two LinkSet constructors — the only
+// database access in this package. *db.Queries satisfies it in production
+// (via Resources); the package tests substitute an in-memory reader, which
+// is what makes the constructors reachable without postgres.
+type ResourceReader interface {
+	DomainRequiredLinks(ctx context.Context, domainID int64) ([]db.DomainRequiredLinksRow, error)
+	ResourceHostStatuses(ctx context.Context, hosts []string) ([]db.ResourceHostStatusesRow, error)
+}
+
+// Resources adapts a pool to the ResourceReader seam.
+func Resources(pool *pgxpool.Pool) ResourceReader { return db.New(pool) }
+
+// DiscoveredHosts canonicalizes a scan's discovered resource hosts —
+// the one host-form convention both LinkSet paths share (06 §1
+// call-site table; canonicalization failures are skipped).
+//
+// The registry is keyed on the canonical form and ResourceHostStatuses
+// matches host equality exactly, so a raw url.Hostname() string —
+// unicode where the registry holds punycode, an IP literal, a
+// trailing-dot FQDN — silently misses and defers the resources
+// dimension. Canonicalizing here rather than in a caller is what keeps
+// the commit and live paths agreeing.
+func DiscoveredHosts(sr checker.ScanResult) []string {
+	_, d, ok := sr.ResourceDiscovery()
+	if !ok {
+		return nil
+	}
+	out := make([]string, 0, len(d.Hosts))
+	for _, h := range d.Hosts {
+		if canonical, err := domain.Canonicalize(h); err == nil {
+			out = append(out, canonical)
+		}
+	}
+	return out
+}
+
 // PersistedLinks loads the persisted required-host statuses for one domain —
 // the commit-path LinkSet constructor (02 §6), sibling of LiveLinks.
-func PersistedLinks(ctx context.Context, pool *pgxpool.Pool, domainID int64, enabled bool) []LinkedResource {
+func PersistedLinks(ctx context.Context, r ResourceReader, domainID int64, enabled bool) []LinkedResource {
 	if !enabled {
 		return nil
 	}
-	rows, err := db.New(pool).DomainRequiredLinks(ctx, domainID)
+	rows, err := r.DomainRequiredLinks(ctx, domainID)
 	if err != nil {
 		slog.Warn("resource link read failed", "err", err.Error())
 		return nil
@@ -460,21 +496,17 @@ func PersistedLinks(ctx context.Context, pool *pgxpool.Pool, domainID int64, ena
 // confirmed registry — read-only, no registry rows written (Rule 0). A
 // discovered host with no registry row maps to a nil status (→ error in
 // the roll-up, per §5.1.4 "missing/unswept → NULL → error").
-func LiveLinks(ctx context.Context, pool *pgxpool.Pool, sr checker.ScanResult, enabled bool) []LinkedResource {
+func LiveLinks(ctx context.Context, r ResourceReader, sr checker.ScanResult, enabled bool) []LinkedResource {
 	if !enabled {
 		return nil
 	}
-	_, disc, ok := sr.ResourceDiscovery()
-	if !ok {
-		return nil
-	}
-	rawHosts := disc.Hosts
-	if len(rawHosts) == 0 {
+	hosts := DiscoveredHosts(sr)
+	if len(hosts) == 0 {
 		return nil
 	}
 	// One set-based probe, not a per-host loop.
 	byHost := map[string]domain.IPv6Status{}
-	rows, err := db.New(pool).ResourceHostStatuses(ctx, rawHosts)
+	rows, err := r.ResourceHostStatuses(ctx, hosts)
 	if err != nil {
 		slog.Warn("resource host status read failed", "err", err.Error())
 	}
@@ -483,5 +515,5 @@ func LiveLinks(ctx context.Context, pool *pgxpool.Pool, sr checker.ScanResult, e
 			byHost[row.Host] = domain.IPv6Status(*row.AaaaStatus)
 		}
 	}
-	return linksForHosts(rawHosts, byHost)
+	return linksForHosts(hosts, byHost)
 }

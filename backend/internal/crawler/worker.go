@@ -82,12 +82,12 @@ func (w *Worker) Process(ctx context.Context, d ClaimedDomain) { //nolint:gocrit
 	if w.ResourcesEnabled {
 		if st, _, ok := sr.ResourceDiscovery(); ok && st == checker.StatusSupported {
 			discoveryOK = true
-			discovered = discoveredHosts(sr)
+			discovered = observe.DiscoveredHosts(sr)
 		}
 		if w.Links != nil {
 			links = w.Links(ctx, d.ID)
 		} else {
-			links = observe.PersistedLinks(ctx, w.Pool, d.ID, true)
+			links = observe.PersistedLinks(ctx, observe.Resources(w.Pool), d.ID, true)
 		}
 		// The 02 §6 D-fold: hosts discovered this scan but not yet persisted
 		// enter the roll-up as NULL entries, deferring the resources
@@ -249,22 +249,6 @@ func nsHosts(sr checker.ScanResult) []string {
 		hosts = append(hosts, h)
 	}
 	return hosts
-}
-
-// discoveredHosts canonicalizes the resource_discovery host list
-// (canonicalization failures are skipped — 06 §1 call-site table).
-func discoveredHosts(sr checker.ScanResult) []string {
-	_, d, ok := sr.ResourceDiscovery()
-	if !ok {
-		return nil
-	}
-	out := make([]string, 0, len(d.Hosts))
-	for _, h := range d.Hosts {
-		if canonical, err := domain.Canonicalize(h); err == nil {
-			out = append(out, canonical)
-		}
-	}
-	return out
 }
 
 // buildDetails assembles the scan_detail payload (03 §14.2): the engine

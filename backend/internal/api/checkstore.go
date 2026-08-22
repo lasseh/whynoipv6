@@ -126,5 +126,5 @@ func (p pgCheckStore) LatestScanDetail(ctx context.Context, domainID int64) ([]b
 }
 
 func (p pgCheckStore) LiveLinks(ctx context.Context, sr checker.ScanResult, enabled bool) []observe.LinkedResource {
-	return observe.LiveLinks(ctx, p.pool, sr, enabled)
+	return observe.LiveLinks(ctx, observe.Resources(p.pool), sr, enabled)
 }

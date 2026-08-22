@@ -133,7 +133,7 @@ func (lc *LiveChecker) process(ctx context.Context, id int64, host string) {
 		return
 	}
 
-	links := observe.LiveLinks(ctx, lc.Pool, sr, lc.Cfg.ResourcesEnabled)
+	links := observe.LiveLinks(ctx, observe.Resources(lc.Pool), sr, lc.Cfg.ResourcesEnabled)
 	res := observe.MapLiveResult(kind, sr, lc.Preflight.LastPass(), time.Now().UTC(), links, lc.Cfg.ResourcesEnabled)
 	raw, err := json.Marshal(res)
 	if err != nil {
