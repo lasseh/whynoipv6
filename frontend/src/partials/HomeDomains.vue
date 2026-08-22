@@ -1,33 +1,20 @@
 <script setup lang="ts">
-import { onMounted, onScopeDispose, ref } from 'vue'
+import { computed } from 'vue'
 
 // Partials
 import DomainTable from '@/components/DomainTable.vue'
 
+import { useResource } from '@/composables/useResource'
 import { listSinners } from '@/api'
 import type { DomainSummary } from '@/api'
 
-const domainList = ref<DomainSummary[]>([])
-const loading = ref(true)
-
-// Abort the one-shot fetch when the visitor leaves before it lands.
-const controller = new AbortController()
-onScopeDispose(() => controller.abort())
-
-async function getDomainList() {
-  try {
-    const response = await listSinners(undefined, controller.signal)
-    domainList.value = response.items
-  } catch {
-    if (!controller.signal.aborted) domainList.value = []
-  } finally {
-    loading.value = false
-  }
-}
-
-onMounted(() => {
-  void getDomainList()
-})
+// One-shot on mount, aborted if the visitor leaves first. An empty table is
+// the non-fatal outcome on the home page.
+const { data, loading } = useResource(
+  (signal) => listSinners(undefined, signal).then((r) => r.items),
+  { fallback: [] as DomainSummary[] },
+)
+const domainList = computed(() => data.value ?? [])
 </script>
 
 <template>

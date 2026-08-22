@@ -1,24 +1,19 @@
-import { onScopeDispose, ref } from 'vue'
+import { computed } from 'vue'
 import { getVisitorIP } from '@/api'
+import { useResource } from '@/composables/useResource'
 
 // GET /ip for the visitor banner (§9.5): warn iff family !== "ipv6" — no
 // string sniffing. Fails silent: network error → no banner. Aborted on
 // unmount so the fetch never outlives its scope.
+//
+// The fallback is what "fails silent" means here, and it is now stated
+// rather than implied by an empty catch — this was the one copy of the
+// pattern that wrote its refs with no aborted guard at all.
 export function useVisitorIp() {
-  const ip = ref<string | null>(null)
-  const warn = ref(false)
+  const { data } = useResource((signal) => getVisitorIP(signal), { fallback: null })
 
-  const controller = new AbortController()
-  onScopeDispose(() => controller.abort())
-
-  getVisitorIP(controller.signal)
-    .then((res) => {
-      ip.value = res.ip
-      warn.value = res.family !== 'ipv6'
-    })
-    .catch(() => {
-      warn.value = false
-    })
+  const ip = computed(() => data.value?.ip ?? null)
+  const warn = computed(() => (data.value ? data.value.family !== 'ipv6' : false))
 
   return { ip, warn }
 }

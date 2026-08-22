@@ -2,29 +2,21 @@
 // The reverse-DNS panel reads the same daily snapshot the overview tab does.
 // Fetched here rather than lifted into the page because the two tabs never
 // render together, so there is no duplicate request to save.
-import { computed, onScopeDispose, shallowRef } from 'vue'
+import { computed } from 'vue'
 
 import ShareBar from '@/components/ShareBar.vue'
 import { fmtCompact, fmtFull, fmtPercent, shareColor } from '@/components/charts/chart'
 
+import { useResource } from '@/composables/useResource'
 import { getOverviewStats } from '@/api'
 import type { GlobalStatsPoint } from '@/api'
 
-const overview = shallowRef<GlobalStatsPoint | null>(null)
-
-const controller = new AbortController()
-onScopeDispose(() => controller.abort())
-
-async function load() {
-  try {
-    const response = await getOverviewStats(undefined, controller.signal)
-    overview.value = response.points.at(-1) ?? null
-  } catch {
-    // The panel going quiet must not blank the leagues beside it.
-    if (!controller.signal.aborted) overview.value = null
-  }
-}
-void load()
+// The fallback states the rule the hand-rolled catch used to: this panel
+// going quiet must not blank the leagues beside it.
+const { data: overview } = useResource(
+  (signal) => getOverviewStats(undefined, signal).then((r) => r.points.at(-1) ?? null),
+  { fallback: null as GlobalStatsPoint | null },
+)
 
 // Nullable all the way through: snapshots taken before the PTR columns existed
 // carry no value, and an em dash is the honest render. Coercing to 0 would

@@ -2,32 +2,25 @@
 // Only networks have a daily series; DNS and hosting have no history stored
 // at all, so this panel owns its own fetch and does not follow the provider
 // switcher.
-import { computed, onScopeDispose, shallowRef } from 'vue'
+import { computed } from 'vue'
 
 import ChartPanel from '@/components/charts/ChartPanel.vue'
 import Sparkline from '@/components/charts/Sparkline.vue'
 import { fmtPercent, shareColor } from '@/components/charts/chart'
 
+import { useResource } from '@/composables/useResource'
 import { getNetworkStats } from '@/api'
 import type { NetworkTrend } from '@/api'
 
-const networks = shallowRef<NetworkTrend[]>([])
-
-const controller = new AbortController()
-onScopeDispose(() => controller.abort())
-
 // One request for all seven small multiples; /asns/{number}/stats would be
-// seven round trips for the same panel.
-async function load() {
-  try {
-    const response = await getNetworkStats(undefined, controller.signal)
-    networks.value = response.networks
-  } catch {
-    // The panel going quiet must not blank the leagues beside it.
-    if (!controller.signal.aborted) networks.value = []
-  }
-}
-void load()
+// seven round trips for the same panel. The fallback states the rule the
+// hand-rolled catch used to: this panel going quiet must not blank the
+// leagues beside it.
+const { data } = useResource(
+  (signal) => getNetworkStats(undefined, signal).then((r) => r.networks),
+  { fallback: [] as NetworkTrend[] },
+)
+const networks = computed(() => data.value ?? [])
 
 // Small multiples, because these seven sit between 0.8% and 86% and a shared
 // axis flattens five of them onto the baseline.

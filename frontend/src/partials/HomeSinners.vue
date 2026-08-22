@@ -1,14 +1,10 @@
 <script setup lang="ts">
-import { onMounted, onScopeDispose, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import CrossIcon from '@/components/icons/Cross.vue'
+import { useResource } from '@/composables/useResource'
 import { listShame } from '@/api'
 import type { ShameItem } from '@/api'
 
-// Abort the one-shot fetch when the visitor leaves before it lands.
-const controller = new AbortController()
-onScopeDispose(() => controller.abort())
-
-const splitDomainShamers = ref<ShameItem[][]>([])
 const randomTestimonial = ref<{
   statement: string
   name: string
@@ -41,19 +37,19 @@ function getRandomTestimonial() {
   randomTestimonial.value = testimonials[randomIndex]
 }
 
-async function getDomainShamers() {
-  try {
-    const response = await listShame(controller.signal)
-    const items = response.items
-    const midpoint = Math.ceil(items.length / 2)
-    splitDomainShamers.value = [items.slice(0, midpoint), items.slice(midpoint)]
-  } catch {
-    if (!controller.signal.aborted) splitDomainShamers.value = []
-  }
-}
+// One-shot on setup, aborted if the visitor leaves first. An empty list is
+// the non-fatal outcome on the home page.
+const { data: shamers } = useResource((signal) => listShame(signal).then((r) => r.items), {
+  fallback: [] as ShameItem[],
+})
+
+const splitDomainShamers = computed<ShameItem[][]>(() => {
+  const items = shamers.value ?? []
+  const midpoint = Math.ceil(items.length / 2)
+  return [items.slice(0, midpoint), items.slice(midpoint)]
+})
 
 onMounted(() => {
-  void getDomainShamers()
   getRandomTestimonial()
 })
 </script>
