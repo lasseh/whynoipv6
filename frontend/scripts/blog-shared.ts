@@ -4,6 +4,11 @@
 // never drift apart. Pure types and constants only — anything heavier (fs,
 // markdown-it) lives in scripts/posts.ts and must not leak into the app bundle.
 
+// The suffix comes from the same module the runtime head writer reads, so a
+// prerendered title and a hydrated one cannot drift apart.
+import { SITE_NAME, withSiteName } from '../src/site'
+
+export { SITE_NAME, withSiteName }
 export const ORIGIN = 'https://whynoipv6.com'
 
 /** Frontmatter-derived post metadata — everything the list/teaser surfaces
@@ -35,14 +40,14 @@ export function comparePostMeta(a: PostMeta, b: PostMeta): number {
 // Route meta (§9.6) for the two blog routes — also the prerendered head for
 // /blog and the RSS channel description.
 export const BLOG_LIST_META = {
-  title: 'Blog - Why No IPv6',
+  title: withSiteName('Blog'),
   description: 'Write-ups from the crawl data: adoption numbers, notable changes, and methodology.',
 }
 
 // Pre-load fallback for /blog/:slug — the page swaps in the real title once
 // the post chunk loads; crawlers get the real one from the prerendered head.
 export const BLOG_POST_META = {
-  title: 'Blog - Why No IPv6',
+  title: withSiteName('Blog'),
   description:
     'A write-up from the Why No IPv6 crawl and what the top-million data says about adoption.',
 }

@@ -17,7 +17,7 @@ import { basename, join, resolve } from 'node:path'
 
 import type { Plugin, ResolvedConfig } from 'vite'
 
-import { BLOG_LIST_META, ORIGIN } from './blog-shared'
+import { BLOG_LIST_META, ORIGIN, withSiteName } from './blog-shared'
 import type { Post } from './blog-shared'
 import {
   blogJsonLd,
@@ -87,7 +87,7 @@ export function blogPlugin(): Plugin {
           join(outDir, 'blog', `${post.meta.slug}.html`),
           rewriteHead(template, {
             path: `/blog/${post.meta.slug}`,
-            title: `${post.meta.title} - Why No IPv6`,
+            title: withSiteName(post.meta.title),
             description: post.meta.description,
             ogType: 'article',
             published: post.meta.date,
