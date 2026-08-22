@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"strconv"
@@ -21,9 +22,10 @@ const sourceConfirmedState = "confirmed_state"
 
 // sourceTelemetry labels GET /stats/crawler alone. Crawler throughput is
 // neither confirmed state nor the measurement cagg — it is how much work the
-// fleet did. statsMeta hardcodes confirmed_state for every series, so this
-// endpoint deliberately builds its own meta rather than reusing it; labelling
-// telemetry as confirmed_state is exactly the conflation §4.10 forbids.
+// fleet did. ServeSeries hardcodes confirmed_state for every series, so this
+// endpoint deliberately builds its own meta rather than riding the rim;
+// labelling telemetry as confirmed_state is exactly the conflation §4.10
+// forbids.
 const sourceTelemetry = "telemetry"
 
 // weeklySample keeps the latest snapshot per ISO week (07 §4.10 — a sample,
@@ -70,16 +72,6 @@ func statsWindow(r *http.Request) (from, to time.Time, weekly bool, err error) {
 	return parseHistoryWindow(r.URL.Query())
 }
 
-func (s *Server) statsMeta(r *http.Request) (Meta, int32, error) {
-	generation, asOf, err := s.generation(r.Context())
-	if err != nil {
-		return Meta{}, 0, err
-	}
-	m := NewMeta(asOf, generation)
-	m.Source = sourceConfirmedState
-	return m, generation, nil
-}
-
 // GlobalStatsPoint carries the full stats_global_daily payload (07 §4.10).
 type GlobalStatsPoint struct {
 	Day                string `json:"day"`
@@ -111,45 +103,29 @@ type GlobalStatsPoint struct {
 
 // getStatsOverview is GET /stats/overview — the headline dashboard.
 func (s *Server) getStatsOverview(w http.ResponseWriter, r *http.Request) {
-	from, to, weekly, err := statsWindow(r)
-	if err != nil {
-		InvalidParameter(w, r, err.Error())
-		return
-	}
-	meta, generation, err := s.statsMeta(r)
-	if err != nil {
-		InternalError(w, r, err)
-		return
-	}
-	if CacheList(w, r, generation) {
-		return
-	}
-	rows, err := s.q.StatsGlobalRange(r.Context(), db.StatsGlobalRangeParams{
-		FromDay: postgres.Date(from), ToDay: postgres.Date(to),
+	ServeSeries(s, w, r, SeriesSpec[db.StatsGlobalRangeRow, GlobalStatsPoint]{
+		Fetch: func(ctx context.Context, from, to time.Time) ([]db.StatsGlobalRangeRow, error) {
+			return s.q.StatsGlobalRange(ctx, db.StatsGlobalRangeParams{
+				FromDay: postgres.Date(from), ToDay: postgres.Date(to),
+			})
+		},
+		Day: func(row *db.StatsGlobalRangeRow) time.Time { return row.Day.Time },
+		Point: func(row *db.StatsGlobalRangeRow) GlobalStatsPoint {
+			return GlobalStatsPoint{
+				Day:     row.Day.Time.Format("2006-01-02"),
+				Domains: row.Domains, Heroes: row.Heroes, Partial: row.Partial,
+				Sinners: row.Sinners, Inactive: row.Inactive, Unknown: row.Unknown,
+				Saints: row.Saints, Disabled: row.Disabled,
+				BaseSupported: row.BaseSupported, WwwSupported: row.WwwSupported,
+				NsSupported: row.NsSupported, MxSupported: row.MxSupported,
+				ConnSupported: row.ConnSupported, ResourcesSupported: row.ResourcesSupported,
+				TopHeroes: row.TopHeroes, TopNameserver: row.TopNameserver,
+				TrackedTotal: row.TrackedTotal,
+				PtrSupported: row.PtrSupported, PtrGraded: row.PtrGraded,
+				SmtpSupported: row.SmtpSupported, SmtpGraded: row.SmtpGraded,
+			}
+		},
 	})
-	if err != nil {
-		InternalError(w, r, err)
-		return
-	}
-	points := make([]GlobalStatsPoint, len(rows))
-	days := make([]time.Time, len(rows))
-	for i := range rows {
-		days[i] = rows[i].Day.Time
-		points[i] = GlobalStatsPoint{
-			Day:     rows[i].Day.Time.Format("2006-01-02"),
-			Domains: rows[i].Domains, Heroes: rows[i].Heroes, Partial: rows[i].Partial,
-			Sinners: rows[i].Sinners, Inactive: rows[i].Inactive, Unknown: rows[i].Unknown,
-			Saints: rows[i].Saints, Disabled: rows[i].Disabled,
-			BaseSupported: rows[i].BaseSupported, WwwSupported: rows[i].WwwSupported,
-			NsSupported: rows[i].NsSupported, MxSupported: rows[i].MxSupported,
-			ConnSupported: rows[i].ConnSupported, ResourcesSupported: rows[i].ResourcesSupported,
-			TopHeroes: rows[i].TopHeroes, TopNameserver: rows[i].TopNameserver,
-			TrackedTotal: rows[i].TrackedTotal,
-			PtrSupported: rows[i].PtrSupported, PtrGraded: rows[i].PtrGraded,
-			SmtpSupported: rows[i].SmtpSupported, SmtpGraded: rows[i].SmtpGraded,
-		}
-	}
-	WriteJSON(w, http.StatusOK, PointsEnvelope{Points: sampleWeekly(points, days, weekly), Meta: meta})
 }
 
 // CrawlerStats is GET /stats/crawler: a single resource, so it takes §2.4's
@@ -226,37 +202,21 @@ func (s *Server) getCountryStats(w http.ResponseWriter, r *http.Request) {
 		InternalError(w, r, err)
 		return
 	}
-	from, to, weekly, err := statsWindow(r)
-	if err != nil {
-		InvalidParameter(w, r, err.Error())
-		return
-	}
-	meta, generation, err := s.statsMeta(r)
-	if err != nil {
-		InternalError(w, r, err)
-		return
-	}
-	if CacheList(w, r, generation) {
-		return
-	}
-	rows, err := s.q.StatsCountryRange(r.Context(), db.StatsCountryRangeParams{
-		CountryID: id, FromDay: postgres.Date(from), ToDay: postgres.Date(to),
+	ServeSeries(s, w, r, SeriesSpec[db.StatsCountryRangeRow, CountryStatsPoint]{
+		Fetch: func(ctx context.Context, from, to time.Time) ([]db.StatsCountryRangeRow, error) {
+			return s.q.StatsCountryRange(ctx, db.StatsCountryRangeParams{
+				CountryID: id, FromDay: postgres.Date(from), ToDay: postgres.Date(to),
+			})
+		},
+		Day: func(row *db.StatsCountryRangeRow) time.Time { return row.Day.Time },
+		Point: func(row *db.StatsCountryRangeRow) CountryStatsPoint {
+			return CountryStatsPoint{
+				Day:     row.Day.Time.Format("2006-01-02"),
+				Domains: row.Domains, Sinners: row.Sinners, Partial: row.Partial,
+				Heroes: row.Heroes, BaseSupported: row.BaseSupported, ConnSupported: row.ConnSupported,
+			}
+		},
 	})
-	if err != nil {
-		InternalError(w, r, err)
-		return
-	}
-	points := make([]CountryStatsPoint, len(rows))
-	days := make([]time.Time, len(rows))
-	for i := range rows {
-		days[i] = rows[i].Day.Time
-		points[i] = CountryStatsPoint{
-			Day:     rows[i].Day.Time.Format("2006-01-02"),
-			Domains: rows[i].Domains, Sinners: rows[i].Sinners, Partial: rows[i].Partial,
-			Heroes: rows[i].Heroes, BaseSupported: rows[i].BaseSupported, ConnSupported: rows[i].ConnSupported,
-		}
-	}
-	WriteJSON(w, http.StatusOK, PointsEnvelope{Points: sampleWeekly(points, days, weekly), Meta: meta})
 }
 
 // CampaignStatsPoint mirrors stats_campaign_daily incl. the v6_ready track.
@@ -285,40 +245,24 @@ func (s *Server) getCampaignStats(w http.ResponseWriter, r *http.Request) {
 		NotFound(w, r, "Campaign not found", "This campaign is disabled.")
 		return
 	}
-	from, to, weekly, err := statsWindow(r)
-	if err != nil {
-		InvalidParameter(w, r, err.Error())
-		return
-	}
-	meta, generation, err := s.statsMeta(r)
-	if err != nil {
-		InternalError(w, r, err)
-		return
-	}
-	if CacheList(w, r, generation) {
-		return
-	}
-	rows, err := s.q.StatsCampaignRange(r.Context(), db.StatsCampaignRangeParams{
-		CampaignID: row.ID, FromDay: postgres.Date(from), ToDay: postgres.Date(to),
+	ServeSeries(s, w, r, SeriesSpec[db.StatsCampaignRangeRow, CampaignStatsPoint]{
+		Fetch: func(ctx context.Context, from, to time.Time) ([]db.StatsCampaignRangeRow, error) {
+			return s.q.StatsCampaignRange(ctx, db.StatsCampaignRangeParams{
+				CampaignID: row.ID, FromDay: postgres.Date(from), ToDay: postgres.Date(to),
+			})
+		},
+		Day: func(sr *db.StatsCampaignRangeRow) time.Time { return sr.Day.Time },
+		Point: func(sr *db.StatsCampaignRangeRow) CampaignStatsPoint {
+			return CampaignStatsPoint{
+				Day:     sr.Day.Time.Format("2006-01-02"),
+				Domains: sr.Domains, V6Ready: sr.V6Ready,
+				Sinners: sr.Sinners, Partial: sr.Partial, Heroes: sr.Heroes,
+				BaseSupported: sr.BaseSupported, WwwSupported: sr.WwwSupported,
+				NsSupported: sr.NsSupported, MxSupported: sr.MxSupported,
+				ConnSupported: sr.ConnSupported,
+			}
+		},
 	})
-	if err != nil {
-		InternalError(w, r, err)
-		return
-	}
-	points := make([]CampaignStatsPoint, len(rows))
-	days := make([]time.Time, len(rows))
-	for i := range rows {
-		days[i] = rows[i].Day.Time
-		points[i] = CampaignStatsPoint{
-			Day:     rows[i].Day.Time.Format("2006-01-02"),
-			Domains: rows[i].Domains, V6Ready: rows[i].V6Ready,
-			Sinners: rows[i].Sinners, Partial: rows[i].Partial, Heroes: rows[i].Heroes,
-			BaseSupported: rows[i].BaseSupported, WwwSupported: rows[i].WwwSupported,
-			NsSupported: rows[i].NsSupported, MxSupported: rows[i].MxSupported,
-			ConnSupported: rows[i].ConnSupported,
-		}
-	}
-	WriteJSON(w, http.StatusOK, PointsEnvelope{Points: sampleWeekly(points, days, weekly), Meta: meta})
 }
 
 // ChangePoint is a per-day transition tally. Event counts, not state: a
@@ -336,47 +280,27 @@ type ChangePoint struct {
 // transitions continuously, and a generation-seeded ETag would 304-freeze
 // this endpoint until the next daily stats tick (07 §6.1).
 func (s *Server) getChangeStats(w http.ResponseWriter, r *http.Request) {
-	from, to, weekly, err := statsWindow(r)
-	if err != nil {
-		InvalidParameter(w, r, err.Error())
-		return
-	}
-	// Same server-side floor the per-domain history uses: a wide `from`
-	// must not walk past the columnstore boundary of a forever-retained
-	// hypertable.
-	from = capHistoryWindow(from, to)
-	maxTS, err := s.q.ChangelogMaxTS(r.Context())
-	if err != nil {
-		InternalError(w, r, err)
-		return
-	}
-	generation, asOf, err := s.generation(r.Context())
-	if err != nil {
-		InternalError(w, r, err)
-		return
-	}
-	if CacheChangelog(w, r, maxTS.Time) {
-		return
-	}
-	rows, err := s.q.StatsChangesRange(r.Context(), db.StatsChangesRangeParams{
-		FromDay: postgres.TS(from), ToDay: postgres.TS(to),
+	ServeSeries(s, w, r, SeriesSpec[db.StatsChangesRangeRow, ChangePoint]{
+		Live: true,
+		// Same server-side floor the per-domain history uses: a wide
+		// `from` must not walk past the columnstore boundary of a
+		// forever-retained hypertable.
+		Window: func(from, to time.Time) (time.Time, time.Time) {
+			return capHistoryWindow(from, to), to
+		},
+		Fetch: func(ctx context.Context, from, to time.Time) ([]db.StatsChangesRangeRow, error) {
+			return s.q.StatsChangesRange(ctx, db.StatsChangesRangeParams{
+				FromDay: postgres.TS(from), ToDay: postgres.TS(to),
+			})
+		},
+		Day: func(sr *db.StatsChangesRangeRow) time.Time { return sr.Day.Time },
+		Point: func(sr *db.StatsChangesRangeRow) ChangePoint {
+			return ChangePoint{
+				Day:    sr.Day.Time.UTC().Format("2006-01-02"),
+				Gained: sr.Gained, Lost: sr.Lost,
+			}
+		},
 	})
-	if err != nil {
-		InternalError(w, r, err)
-		return
-	}
-	points := make([]ChangePoint, len(rows))
-	days := make([]time.Time, len(rows))
-	for i := range rows {
-		days[i] = rows[i].Day.Time
-		points[i] = ChangePoint{
-			Day:    rows[i].Day.Time.UTC().Format("2006-01-02"),
-			Gained: rows[i].Gained, Lost: rows[i].Lost,
-		}
-	}
-	meta := NewMeta(asOf, generation)
-	meta.Source = sourceConfirmedState
-	WriteJSON(w, http.StatusOK, PointsEnvelope{Points: sampleWeekly(points, days, weekly), Meta: meta})
 }
 
 // Network series sizing. Seven small multiples is what the panel draws; the
@@ -440,14 +364,12 @@ func (s *Server) getNetworkStats(w http.ResponseWriter, r *http.Request) {
 		InvalidParameter(w, r, err.Error())
 		return
 	}
-	meta, generation, err := s.statsMeta(r)
-	if err != nil {
-		InternalError(w, r, err)
+	generation, asOf, ok := s.enterCache(w, r, false)
+	if !ok {
 		return
 	}
-	if CacheList(w, r, generation) {
-		return
-	}
+	meta := NewMeta(asOf, generation)
+	meta.Source = sourceConfirmedState
 	rows, err := s.q.StatsTopNetworks(r.Context(), db.StatsTopNetworksParams{
 		FromDay: postgres.TS(from), ToDay: postgres.TS(to), TopN: int32(limit),
 	})
@@ -507,35 +429,19 @@ func (s *Server) getASNStats(w http.ResponseWriter, r *http.Request) {
 		InternalError(w, r, err)
 		return
 	}
-	from, to, weekly, err := statsWindow(r)
-	if err != nil {
-		InvalidParameter(w, r, err.Error())
-		return
-	}
-	meta, generation, err := s.statsMeta(r)
-	if err != nil {
-		InternalError(w, r, err)
-		return
-	}
-	if CacheList(w, r, generation) {
-		return
-	}
-	rows, err := s.q.StatsASNRange(r.Context(), db.StatsASNRangeParams{
-		AsnID: id, FromDay: postgres.TS(from), ToDay: postgres.TS(to),
+	ServeSeries(s, w, r, SeriesSpec[db.StatsASNRangeRow, ASNStatsPoint]{
+		Fetch: func(ctx context.Context, from, to time.Time) ([]db.StatsASNRangeRow, error) {
+			return s.q.StatsASNRange(ctx, db.StatsASNRangeParams{
+				AsnID: id, FromDay: postgres.TS(from), ToDay: postgres.TS(to),
+			})
+		},
+		Day: func(sr *db.StatsASNRangeRow) time.Time { return sr.Day.Time },
+		Point: func(sr *db.StatsASNRangeRow) ASNStatsPoint {
+			return ASNStatsPoint{
+				Day:        sr.Day.Time.UTC().Format("2006-01-02"),
+				CountTotal: sr.Domains, CountV6: sr.V6Domains,
+				Sinners: sr.Sinners, Heroes: sr.Heroes,
+			}
+		},
 	})
-	if err != nil {
-		InternalError(w, r, err)
-		return
-	}
-	points := make([]ASNStatsPoint, len(rows))
-	days := make([]time.Time, len(rows))
-	for i := range rows {
-		days[i] = rows[i].Day.Time
-		points[i] = ASNStatsPoint{
-			Day:        rows[i].Day.Time.UTC().Format("2006-01-02"),
-			CountTotal: rows[i].Domains, CountV6: rows[i].V6Domains,
-			Sinners: rows[i].Sinners, Heroes: rows[i].Heroes,
-		}
-	}
-	WriteJSON(w, http.StatusOK, PointsEnvelope{Points: sampleWeekly(points, days, weekly), Meta: meta})
 }

@@ -77,3 +77,20 @@ crystallized *after* the spec was frozen.
   `serveDomainList`'s rim (one pinned copy) and `writeRecentWindow`.
   _Avoid:_ hand-writing the sort→format→limit→generation→304 sequence in a
   handler.
+
+- **Series spec.** The `{points}` counterpart to the list spec —
+  `api.SeriesSpec{Live, Window, Fetch, Day, Point}` consumed by
+  `api.ServeSeries`, which owns the §4.10 rim: window parsing, the optional
+  window floor, generation/maxTS through the same `metaSource` seam, the
+  ETag/304 gate before any fetch, the row→point map, weekly sampling, and
+  the `{points,meta}` envelope. Five adopters (overview, country, campaign,
+  changes, asn); `Live` is `/stats/changes` alone and `Window` is its
+  `capHistoryWindow` floor. The lockstep `sampleWeekly` documents — points
+  and days the same length, or the weekly sample indexes out of range — is
+  structural here: the rim derives both slices from one row index, so no
+  adopter can desynchronize them. Each adopter keeps its own day formatting,
+  because `pgtype.Date` rows carry no zone and `Timestamptz` rows do.
+  Deliberate non-adopters: `getNetworkStats` (grouped envelope; reuses only
+  `sampleWeekly` and `enterCache`) and `getCrawlerStats` (telemetry, not
+  confirmed state — labelling it `confirmed_state` is the conflation §4.10
+  forbids). _Avoid:_ building parallel points/days slices in a handler.
