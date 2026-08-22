@@ -109,7 +109,9 @@ One execution, numbered. HTTP client: 60s total timeout per request, no retries 
    WHERE d.rank IS NOT NULL
      AND NOT EXISTS (SELECT 1 FROM tranco_staging s WHERE s.host = d.host);  -- would_delist
    ```
-9. **Sanity guard** (before any rank change): abort when `valid_rows < tranco.min_rows` OR (`ranked_count > 0` AND `would_delist * 100.0 / ranked_count > tranco.max_delist_pct`). The `ranked_count > 0` guard makes the very first import (empty DB) pass the delist check trivially; the `min_rows` check still applies. `--force` bypasses both conditions. **On abort:** ROLLBACK (yesterday's ranks untouched), then in a **fresh transaction** insert the provenance row with `aborted = true` and the reason in `note` (no conflict target — abort rows may repeat):
+9. **Sanity guard** (before any rank change): abort when `valid_rows < tranco.min_rows` OR (`ranked_count > 0` AND `would_delist * 100.0 / ranked_count > budget`). The `ranked_count > 0` guard makes the very first import (empty DB) pass the delist check trivially; the `min_rows` check still applies. `--force` bypasses both conditions.
+
+   **The budget scales with staleness:** `budget = min(tranco.max_delist_pct * max(days_since_last_success, 1), 10.0)`, where `days_since_last_success` comes from the step-2.1 staleness query (`max(imported_at) WHERE aborted = false`) and is **1** when no successful import is recorded. `tranco.max_delist_pct` describes ONE list's normal churn (~0.5% observed), but `would_delist` is measured against a DB frozen at the last successful import, which diverges further every day an import is missed. An unscaled guard therefore makes the first abort permanent — the gap only grows, so no later list can pass it, ranks stay frozen and no new domain ever enters. The 10% ceiling means waiting cannot admit a list that is simply broken; `--force` is the operator route past it and `min_rows` still applies underneath. The abort note carries the effective budget and the staleness that produced it. **On abort:** ROLLBACK (yesterday's ranks untouched), then in a **fresh transaction** insert the provenance row with `aborted = true` and the reason in `note` (no conflict target — abort rows may repeat):
 
    ```sql
    INSERT INTO tranco_import
@@ -184,7 +186,8 @@ One execution, numbered. HTTP client: 60s total timeout per request, no retries 
 ```yaml
 tranco:
   min_rows: 950000          # int; abort import below this many valid rows
-  max_delist_pct: 2.0       # float; abort if more than this % of ranked rows would delist
+  max_delist_pct: 2.0       # float; delist allowance per day since the last successful
+                            # import, capped at 10% (§2.2 step 9)
   import_at: "23:15"        # string, UTC HH:MM; daily cycle start
   retry_interval: 2h        # duration; re-attempt spacing within a cycle
   stale_warn_after: 48h     # duration; ops-webhook warning threshold
@@ -739,7 +742,7 @@ Hardcoded constants (deliberately not config): v6ctl advisory-lock wait 5m; disc
 1. Canonicalize passes the §1 vector table; no other normalization code exists in the module (grep gate: `strings.ToLower` on hostnames outside `internal/domain/host.go` fails review).
 2. A Tranco CSV fixture containing CRLF lines, `_wildcard_.ph`, mixed-case duplicates folding to one host, and an IDN line imports with correct `line_count/rejected_count/duplicate_count/imported_count/delisted`, lowest-rank-wins fold, and 24h-spread `next_check_at`.
 3. Re-importing the same list ID is a no-op (short-circuit in step 2; provenance `ON CONFLICT … DO NOTHING` as the second guard); an aborted list is never auto-retried; `--force` imports it.
-4. A fixture where >2% of ranked rows would delist aborts with `aborted=true` + note and leaves all ranks unchanged; the same fixture with `--force` applies.
+4. A fixture where >2% of ranked rows would delist aborts with `aborted=true` + note and leaves all ranks unchanged; the same fixture with `--force` applies. The same fixture against a DB whose last successful import is 5 days old **imports** (the budget scaled to 10%), and a fixture past the 10% ceiling still aborts at that staleness.
 5. Re-entry: a `delisted` row present in today's list is re-enabled with `next_check_at = now()`; a `dead` row stays disabled with `next_check_at = now()`; `service`/`manual` rows only get rank updates.
 6. Campaign sync against a fixture repo covers: new file without uuid (insert + write-back), rename (source_file update), file deletion (soft-disable via uuid-set diff), re-appearance (re-enable, no membership churn), duplicate uuid across files (source_file match wins), unknown uuid on a new file (adopted) and on a file that already owns a campaign (rejected), subdomain entry (parent auto-created, `created_by='parent_link'`, `parent_id` set), and the membership re-entry rule.
 7. `v6ctl campaign validate` reproduces every §4.2 blocking check on fixture PRs (added-file-with-uuid, modified-uuid, rename-with-preserved-uuid, within-file duplicate, oversize file) and never fails on cross-file duplicates.

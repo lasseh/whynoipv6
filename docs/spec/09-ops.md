@@ -192,7 +192,7 @@ Provider names/addresses (`1.1.1.1`, `8.8.8.8`, `9.9.9.9` + their v6 forms), the
 | Key | env var | Type | Default | From | Meaning |
 |---|---|---|---|---|---|
 | `tranco.min_rows` | `TRANCO_MIN_ROWS` | int | `950000` | 06 | Abort import below this many valid rows. |
-| `tranco.max_delist_pct` | `TRANCO_MAX_DELIST_PCT` | float | `2.0` | 06 | Abort if more than this % of ranked rows would delist. |
+| `tranco.max_delist_pct` | `TRANCO_MAX_DELIST_PCT` | float | `2.0` | 06 | Delist allowance per day since the last successful import (hard-capped at 10%); abort above it. |
 | `tranco.import_at` | `TRANCO_IMPORT_AT` | string `HH:MM` UTC | `23:15` | 06 | Daily import-cycle start (coordinator goroutine; no systemd timer). |
 | `tranco.retry_interval` | `TRANCO_RETRY_INTERVAL` | duration | `2h` | 06 | Re-attempt spacing within a cycle. |
 | `tranco.stale_warn_after` | `TRANCO_STALE_WARN_AFTER` | duration | `48h` | 06 | Ops-webhook warning when no successful import for this long (rate-limited 1/24h). |

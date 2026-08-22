@@ -191,6 +191,45 @@ func TestTrancoSanityGuard(t *testing.T) {
 	}
 }
 
+// TestTrancoStaleBudget covers §9.4: the delist budget scales with how many
+// days of churn the import has to absorb, so a run that aborted once does
+// not stay wedged forever against an ever-staler DB.
+func TestTrancoStaleBudget(t *testing.T) {
+	pool := pgtest.NewDB(t)
+	ctx := context.Background()
+
+	lines := make([]string, 0, 100)
+	for i := 1; i <= 100; i++ {
+		lines = append(lines, fmt.Sprintf("%d,d%d.example", i, i))
+	}
+	if rep := importList(t, pool, "L030", crlf(lines...), false); rep.Outcome != TrancoImported {
+		t.Fatalf("seed import: %s", rep.Outcome)
+	}
+
+	// Backdate the success: 5 days stale buys min(2.0*5, 10) = 10%.
+	if _, err := pool.Exec(ctx,
+		"UPDATE tranco_import SET imported_at = now() - interval '5 days' WHERE NOT aborted"); err != nil {
+		t.Fatal(err)
+	}
+
+	// The same 5-of-100 drop that aborts on a fresh DB now fits the budget.
+	rep := importList(t, pool, "L031", crlf(lines[:95]...), false)
+	if rep.Outcome != TrancoImported || rep.Delisted != 5 {
+		t.Fatalf("stale budget = %s delisted=%d (%s), want imported/5", rep.Outcome, rep.Delisted, rep.Note)
+	}
+
+	// The ceiling binds: 10 days would buy 20% unscaled, but 15% still
+	// aborts because the budget is capped at 10%.
+	if _, err := pool.Exec(ctx,
+		"UPDATE tranco_import SET imported_at = now() - interval '10 days' WHERE NOT aborted"); err != nil {
+		t.Fatal(err)
+	}
+	rep = importList(t, pool, "L032", crlf(lines[:85]...), false)
+	if rep.Outcome != TrancoAborted {
+		t.Errorf("15%% delist at a 10%% ceiling = %s, want aborted", rep.Outcome)
+	}
+}
+
 // TestTrancoReEntry covers §9.5: delisted rows re-enable with an immediate
 // rescan; dead rows stay disabled but rescan now; service/manual rows get
 // only the rank update.

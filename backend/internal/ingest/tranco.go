@@ -228,12 +228,23 @@ func (ti *TrancoImporter) applyList(ctx context.Context, rep *TrancoReport, rows
 	}
 
 	if !force {
+		days := 1.0
+		last, err := q.TrancoLastSuccessAt(ctx)
+		if err != nil {
+			return fmt.Errorf("tranco: last success: %w", err)
+		}
+		if last.Valid {
+			days = time.Since(last.Time).Hours() / 24
+		}
+		budget := delistBudget(ti.cfg.MaxDelistPct, days)
+
 		var note string
 		switch {
 		case validRows < ti.cfg.MinRows:
 			note = fmt.Sprintf("valid rows %d below tranco.min_rows %d", validRows, ti.cfg.MinRows)
-		case rankedCount > 0 && float64(wouldDelist)*100.0/float64(rankedCount) > ti.cfg.MaxDelistPct:
-			note = fmt.Sprintf("would delist %d of %d ranked rows (> %.1f%%)", wouldDelist, rankedCount, ti.cfg.MaxDelistPct)
+		case rankedCount > 0 && float64(wouldDelist)*100.0/float64(rankedCount) > budget:
+			note = fmt.Sprintf("would delist %d of %d ranked rows (> %.1f%% budget after %.1f days stale)",
+				wouldDelist, rankedCount, budget, days)
 		}
 		if note != "" {
 			_ = tx.Rollback(ctx)
@@ -287,6 +298,22 @@ func (ti *TrancoImporter) applyList(ctx context.Context, rep *TrancoReport, rows
 	}
 	rep.Outcome = TrancoImported
 	return nil
+}
+
+// maxDelistCeilingPct caps the scaled delist budget. Waiting long enough
+// must not admit a list that is simply broken; --force is the operator
+// route past it, and tranco.min_rows still applies underneath.
+const maxDelistCeilingPct = 10.0
+
+// delistBudget is the delist allowance for an import that has to absorb
+// days worth of churn. tranco.max_delist_pct describes ONE list's normal
+// churn (~0.5% in practice), but the comparison runs against a DB frozen
+// at the last successful import, which diverges further every day one is
+// missed — so an unscaled guard makes the first abort permanent: the gap
+// only grows, and no later list can ever pass it. Fractions of a day
+// round up to one so a same-day retry gets the plain per-day allowance.
+func delistBudget(perDay, days float64) float64 {
+	return min(perDay*max(days, 1), maxDelistCeilingPct)
 }
 
 // maxTrancoLines bounds the decompressed line count (the list is ~1M rows)
