@@ -383,8 +383,8 @@ early risk experiments.
 - **Acceptance:** `TestCampaignSync` integration case covers new-file-without-uuid (insert +
   write-back), rename (source_file update), deletion (soft-disable via uuid-set diff),
   re-appearance (re-enable, no membership churn), duplicate uuid across files (source_file
-  match wins), unknown uuid (adopted on a new file, rejected on one that already owns a
-  campaign), subdomain entry (parent auto-created,
+  match wins), unknown uuid (always adopted; an in-place uuid change forks into
+  disabled + created), subdomain entry (parent auto-created,
   `created_by='parent_link'`, `parent_id` set), the membership re-entry rule (06-ingest §9.6),
   **and `tags` from a tagged campaign YAML landing in `campaign.tags` (empty/NULL when
   untagged, updated idempotently on re-sync)**; a full run over the 28 real campaign YAMLs

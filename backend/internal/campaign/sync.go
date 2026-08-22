@@ -134,19 +134,13 @@ func Sync(ctx context.Context, cfg Config, pool *pgxpool.Pool) (*Report, error) 
 			case !isNoRows(err):
 				return nil, fmt.Errorf("campaign sync: lookup uuid %s: %w", f.Path, err)
 			default:
-				// Unknown uuid. When the path owns no campaign row the file
-				// is simply new, so adopt its uuid: rejecting stalls the
-				// campaign forever, and the "remove the uuid field" route
-				// only works where write-back can push a generated uuid
-				// back (campaign.push, false in containers). A path that
-				// already has a row under a different uuid is a uuid edited
-				// in place (§3.4 step 5) and stays rejected.
-				if _, priorErr := q.CampaignUUIDBySourceFile(ctx, &f.Path); priorErr == nil {
-					rep.RejectedFiles[f.Path] = "unknown uuid on a file that already has a campaign — a uuid edited in place; restore the old value or remove the uuid field"
-					continue
-				} else if !isNoRows(priorErr) {
-					return nil, fmt.Errorf("campaign sync: prior uuid %s: %w", f.Path, priorErr)
-				}
+				// Unknown uuid: the file is new to this DB, so adopt it.
+				// The repo assigns uuids (its own `make fix-uuids`) and PR
+				// validation pins them (§4.2), so identity is decided there,
+				// not here. Nothing in this path can mint one instead —
+				// step 6's write-back needs campaign.push, false wherever
+				// the sync runs off a mounted checkout — so rejecting would
+				// strand the campaign for good.
 				campaignID, err = q.CampaignInsert(ctx, db.CampaignInsertParams{
 					Uuid: mustUUID(f.UUID), Name: f.Title, Description: f.Description,
 					SourceFile: &f.Path, Tags: f.Tags,

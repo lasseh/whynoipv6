@@ -152,7 +152,8 @@ func TestCampaignSync(t *testing.T) {
 		t.Errorf("re-appearance: %+v", rep)
 	}
 
-	// --- unknown uuid: adopted on a new file, rejected when edited in place.
+	// --- unknown uuid is always adopted; editing one in place forks the
+	// campaign (old row soft-disabled by the uuid-set diff, new one created).
 	writeFixture(t, dir, "b.yml", `title: Campaign B
 description: Unknown uuid fixture.
 uuid: 3b3b3b3b-1111-2222-3333-444444444444
@@ -170,8 +171,11 @@ domains:
     - b-one.no
 `)
 	rep = run(t, pool, dir)
-	if _, ok := rep.RejectedFiles["b.yml"]; !ok {
-		t.Errorf("a uuid edited in place should reject b.yml: %+v", rep.RejectedFiles)
+	if len(rep.Created) != 1 || len(rep.Disabled) != 1 {
+		t.Errorf("a uuid edited in place should fork: created=%v disabled=%v", rep.Created, rep.Disabled)
+	}
+	if _, ok := rep.RejectedFiles["b.yml"]; ok {
+		t.Errorf("a uuid edited in place must not be rejected: %+v", rep.RejectedFiles)
 	}
 	writeFixture(t, dir, "b.yml", `title: Campaign B
 description: Unknown uuid fixture.
