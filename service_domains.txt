@@ -117,6 +117,7 @@ aaplimg.com
 a2z.com
 amazon.dev
 aws.dev
+amazonaws.com
 
 # --- Web ads / tracking / analytics / consent serving ---
 amazon-adsystem.com
