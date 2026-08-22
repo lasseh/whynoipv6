@@ -27,7 +27,6 @@ type Config struct {
 	GitRemote              string
 	MaxDomainsPerFile      int
 	MaxSubdomainsPerDomain int
-	AdoptUnknownUUIDs      bool // v6ctl --adopt-unknown-uuids only; never cron/webhook
 	Pull                   bool // git pull --ff-only before parsing (prod: true)
 	Push                   bool // commit+push the uuid write-back (prod: true)
 }
@@ -132,7 +131,22 @@ func Sync(ctx context.Context, cfg Config, pool *pgxpool.Pool) (*Report, error) 
 					return nil, fmt.Errorf("campaign sync: update %s: %w", f.Path, err)
 				}
 				rep.Updated = append(rep.Updated, f.Path)
-			case cfg.AdoptUnknownUUIDs:
+			case !isNoRows(err):
+				return nil, fmt.Errorf("campaign sync: lookup uuid %s: %w", f.Path, err)
+			default:
+				// Unknown uuid. When the path owns no campaign row the file
+				// is simply new, so adopt its uuid: rejecting stalls the
+				// campaign forever, and the "remove the uuid field" route
+				// only works where write-back can push a generated uuid
+				// back (campaign.push, false in containers). A path that
+				// already has a row under a different uuid is a uuid edited
+				// in place (§3.4 step 5) and stays rejected.
+				if _, priorErr := q.CampaignUUIDBySourceFile(ctx, &f.Path); priorErr == nil {
+					rep.RejectedFiles[f.Path] = "unknown uuid on a file that already has a campaign — a uuid edited in place; restore the old value or remove the uuid field"
+					continue
+				} else if !isNoRows(priorErr) {
+					return nil, fmt.Errorf("campaign sync: prior uuid %s: %w", f.Path, priorErr)
+				}
 				campaignID, err = q.CampaignInsert(ctx, db.CampaignInsertParams{
 					Uuid: mustUUID(f.UUID), Name: f.Title, Description: f.Description,
 					SourceFile: &f.Path, Tags: f.Tags,
@@ -141,9 +155,6 @@ func Sync(ctx context.Context, cfg Config, pool *pgxpool.Pool) (*Report, error) 
 					return nil, fmt.Errorf("campaign sync: adopt %s: %w", f.Path, err)
 				}
 				rep.Created = append(rep.Created, f.Path)
-			default:
-				rep.RejectedFiles[f.Path] = "unknown uuid — invented or DB drift; remove the uuid field to register as a new campaign"
-				continue
 			}
 			seenUUIDs = append(seenUUIDs, mustUUID(f.UUID))
 

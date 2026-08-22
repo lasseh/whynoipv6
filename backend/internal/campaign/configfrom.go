@@ -10,8 +10,7 @@ type ConfigSource interface {
 
 // ConfigFrom binds the campaign.* registry keys (09-ops §2.6), Pull/Push
 // included — containerized deployments run the git-less distroless image
-// against a mounted checkout and set both false. AdoptUnknownUUIDs stays
-// with the caller — it is invocation policy, not registry state.
+// against a mounted checkout and set both false.
 func ConfigFrom(src ConfigSource) Config {
 	return Config{
 		RepoPath:               src.String("campaign.repo_path"),

@@ -7,7 +7,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/lasseh/whynoipv6/internal/campaign"
-	"github.com/lasseh/whynoipv6/internal/config"
 )
 
 func campaignCmd() *cobra.Command {
@@ -16,7 +15,6 @@ func campaignCmd() *cobra.Command {
 		Short: "Campaign repository sync",
 	}
 
-	var adopt bool
 	syncCmd := &cobra.Command{
 		Use:   "sync",
 		Short: "Sync the campaign YAML checkout into the database",
@@ -28,7 +26,7 @@ func campaignCmd() *cobra.Command {
 				return err
 			}
 			defer pool.Close()
-			rep, err := campaign.Sync(cmd.Context(), campaignConfig(cfg, adopt), pool)
+			rep, err := campaign.Sync(cmd.Context(), campaign.ConfigFrom(cfg), pool)
 			if err != nil {
 				return err
 			}
@@ -54,17 +52,7 @@ func campaignCmd() *cobra.Command {
 			return nil
 		},
 	}
-	syncCmd.Flags().BoolVar(&adopt, "adopt-unknown-uuids", false,
-		"insert campaigns whose files carry a uuid unknown to the DB (one-time bootstrap; never cron)")
 	cmd.AddCommand(syncCmd)
 	cmd.AddCommand(campaignValidateCmd())
 	return cmd
-}
-
-// campaignConfig binds the registry keys (pull/push included — default
-// true) and applies v6ctl's one invocation-policy flag.
-func campaignConfig(cfg *config.Config, adopt bool) campaign.Config {
-	c := campaign.ConfigFrom(cfg)
-	c.AdoptUnknownUUIDs = adopt
-	return c
 }

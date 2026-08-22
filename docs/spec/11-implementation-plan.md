@@ -379,15 +379,16 @@ early risk experiments.
 - **Deliverables:** `internal/campaign/` (YAML parse tolerating the format variance, idempotent
   `Sync`, uuid write-back plumbing, **`tags`/`mandate` parsing into `campaign.tags`** —
   OPEN-12, see 05-schema.md — Campaign mandate tagging; 06-ingest.md — Campaign repo sync);
-  `cmd/v6ctl/` verb `campaign sync` (`--adopt-unknown-uuids`).
+  `cmd/v6ctl/` verb `campaign sync`.
 - **Acceptance:** `TestCampaignSync` integration case covers new-file-without-uuid (insert +
   write-back), rename (source_file update), deletion (soft-disable via uuid-set diff),
   re-appearance (re-enable, no membership churn), duplicate uuid across files (source_file
-  match wins), unknown uuid rejected without the flag, subdomain entry (parent auto-created,
+  match wins), unknown uuid (adopted on a new file, rejected on one that already owns a
+  campaign), subdomain entry (parent auto-created,
   `created_by='parent_link'`, `parent_id` set), the membership re-entry rule (06-ingest §9.6),
   **and `tags` from a tagged campaign YAML landing in `campaign.tags` (empty/NULL when
-  untagged, updated idempotently on re-sync)**; a full run over the 28 real campaign YAMLs with
-  `--adopt-unknown-uuids` imports ~30k entities with correct parents. Fixtures: 06-ingest.md §9
+  untagged, updated idempotently on re-sync)**; a full run over the 28 real campaign YAMLs
+  imports ~30k entities with correct parents. Fixtures: 06-ingest.md §9
   (ingest fixtures; 00 §8.2 exception).
 
 ### P1.9 — GeoIP / ASN attribution

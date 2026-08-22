@@ -3,6 +3,7 @@ package main
 import (
 	"testing"
 
+	"github.com/lasseh/whynoipv6/internal/campaign"
 	"github.com/lasseh/whynoipv6/internal/config"
 	"github.com/lasseh/whynoipv6/internal/ingest"
 )
@@ -17,6 +18,6 @@ func TestConfigBinding(t *testing.T) {
 	}
 	_ = cfg.String("unbound_stats.control")
 	_ = cfg.Duration("tranco.stale_warn_after")
-	_ = campaignConfig(cfg, false)
+	_ = campaign.ConfigFrom(cfg)
 	_ = ingest.TrancoConfigFrom(cfg)
 }

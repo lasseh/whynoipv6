@@ -39,12 +39,11 @@ func writeSubdomainFixture(t *testing.T, dir, name, content string) {
 	writeFixture(t, sub, name, content)
 }
 
-func run(t *testing.T, pool *pgxpool.Pool, dir string, adopt bool) *Report {
+func run(t *testing.T, pool *pgxpool.Pool, dir string) *Report {
 	t.Helper()
 	rep, err := Sync(context.Background(), Config{
 		RepoPath: dir, GitRemote: "origin", MaxDomainsPerFile: 1000,
-		MaxSubdomainsPerDomain: 20,
-		AdoptUnknownUUIDs:      adopt, Pull: false, Push: false,
+		MaxSubdomainsPerDomain: 20, Pull: false, Push: false,
 	}, pool)
 	if err != nil {
 		t.Fatalf("sync: %v", err)
@@ -67,7 +66,7 @@ func TestCampaignSync(t *testing.T) {
 
 	// --- new file without uuid: insert + write-back.
 	writeFixture(t, dir, "a.yml", campA)
-	rep := run(t, pool, dir, false)
+	rep := run(t, pool, dir)
 	if len(rep.Created) != 1 || rep.MembershipAdds != 2 {
 		t.Fatalf("create: %+v", rep)
 	}
@@ -106,7 +105,7 @@ func TestCampaignSync(t *testing.T) {
 	}
 
 	// --- idempotent re-run: no churn.
-	rep = run(t, pool, dir, false)
+	rep = run(t, pool, dir)
 	if len(rep.Created) != 0 || len(rep.Updated) != 1 || rep.MembershipAdds != 0 || rep.MembershipRemoves != 0 {
 		t.Errorf("re-run should be churn-free: %+v", rep)
 	}
@@ -115,7 +114,7 @@ func TestCampaignSync(t *testing.T) {
 	if err := os.Rename(filepath.Join(dir, "a.yml"), filepath.Join(dir, "a-renamed.yml")); err != nil {
 		t.Fatal(err)
 	}
-	rep = run(t, pool, dir, false)
+	rep = run(t, pool, dir)
 	if len(rep.Renamed) != 1 || rep.MembershipAdds != 0 {
 		t.Errorf("rename: %+v", rep)
 	}
@@ -131,7 +130,7 @@ func TestCampaignSync(t *testing.T) {
 	if err := os.Remove(filepath.Join(dir, "a-renamed.yml")); err != nil {
 		t.Fatal(err)
 	}
-	rep = run(t, pool, dir, false)
+	rep = run(t, pool, dir)
 	if len(rep.Disabled) != 1 {
 		t.Fatalf("disable: %+v", rep)
 	}
@@ -148,25 +147,40 @@ func TestCampaignSync(t *testing.T) {
 
 	// --- re-appearance (same uuid): re-enable, no membership churn.
 	writeFixture(t, dir, "a-renamed.yml", campA[:len(campA)-1]+"\nuuid: "+uuidLine+"\n")
-	rep = run(t, pool, dir, false)
+	rep = run(t, pool, dir)
 	if len(rep.ReEnabled) != 1 || rep.MembershipAdds != 0 {
 		t.Errorf("re-appearance: %+v", rep)
 	}
 
-	// --- unknown uuid rejected without the flag; adopted with it.
+	// --- unknown uuid: adopted on a new file, rejected when edited in place.
 	writeFixture(t, dir, "b.yml", `title: Campaign B
 description: Unknown uuid fixture.
 uuid: 3b3b3b3b-1111-2222-3333-444444444444
 domains:
     - b-one.no
 `)
-	rep = run(t, pool, dir, false)
-	if _, ok := rep.RejectedFiles["b.yml"]; !ok {
-		t.Errorf("unknown uuid should reject b.yml: %+v", rep.RejectedFiles)
-	}
-	rep = run(t, pool, dir, true)
+	rep = run(t, pool, dir)
 	if len(rep.Created) != 1 {
-		t.Errorf("adopt-unknown-uuids should insert b.yml: %+v", rep)
+		t.Errorf("unknown uuid on a new file should insert b.yml: %+v", rep)
+	}
+	writeFixture(t, dir, "b.yml", `title: Campaign B
+description: Unknown uuid fixture.
+uuid: 3b3b3b3b-1111-2222-3333-999999999999
+domains:
+    - b-one.no
+`)
+	rep = run(t, pool, dir)
+	if _, ok := rep.RejectedFiles["b.yml"]; !ok {
+		t.Errorf("a uuid edited in place should reject b.yml: %+v", rep.RejectedFiles)
+	}
+	writeFixture(t, dir, "b.yml", `title: Campaign B
+description: Unknown uuid fixture.
+uuid: 3b3b3b3b-1111-2222-3333-444444444444
+domains:
+    - b-one.no
+`)
+	if rep = run(t, pool, dir); len(rep.ReEnabled) != 1 {
+		t.Errorf("restoring the uuid should re-enable b.yml: %+v", rep)
 	}
 
 	// --- duplicate uuid across files: source_file match wins.
@@ -176,7 +190,7 @@ uuid: 3b3b3b3b-1111-2222-3333-444444444444
 domains:
     - b-two.no
 `)
-	rep = run(t, pool, dir, false)
+	rep = run(t, pool, dir)
 	if _, ok := rep.RejectedFiles["b-copy.yml"]; !ok {
 		t.Errorf("duplicate uuid should reject the copy: %+v", rep.RejectedFiles)
 	}
@@ -196,7 +210,7 @@ domains:
 	if _, err := pool.Exec(ctx, "DELETE FROM campaign_domain"); err != nil {
 		t.Fatal(err)
 	}
-	rep = run(t, pool, dir, false)
+	rep = run(t, pool, dir)
 	if rep.MembershipAdds != 3 {
 		t.Errorf("membership re-add count = %d, want 3", rep.MembershipAdds)
 	}
@@ -220,7 +234,7 @@ func TestSubdomainSync(t *testing.T) {
 
 	// campA seeds a-one.no (created_by='campaign'), the apex the lists hang off.
 	writeFixture(t, dir, "a.yml", campA)
-	run(t, pool, dir, false)
+	run(t, pool, dir)
 
 	count := func(query string, args ...any) int {
 		t.Helper()
@@ -238,7 +252,7 @@ func TestSubdomainSync(t *testing.T) {
 
 	// --- a list whose apex is not tracked: reported, and no rows created.
 	writeSubdomainFixture(t, dir, "unknown-apex.no.yml", "subdomains:\n  - api\n")
-	rep := run(t, pool, dir, false)
+	rep := run(t, pool, dir)
 	if reason, ok := rep.RejectedFiles["subdomains/unknown-apex.no.yml"]; !ok ||
 		!strings.Contains(reason, "not tracked") {
 		t.Errorf("unknown apex should be reported: %v", rep.RejectedFiles)
@@ -252,7 +266,7 @@ func TestSubdomainSync(t *testing.T) {
 
 	// --- a tracked apex: children created and listed, parent untouched.
 	writeSubdomainFixture(t, dir, "a-one.no.yml", "subdomains:\n  - login\n  - api\n")
-	rep = run(t, pool, dir, false)
+	rep = run(t, pool, dir)
 	if rep.CuratedAdds != 2 || rep.CuratedRemoves != 0 {
 		t.Fatalf("first apply = +%d/-%d, want +2/-0", rep.CuratedAdds, rep.CuratedRemoves)
 	}
@@ -275,7 +289,7 @@ func TestSubdomainSync(t *testing.T) {
 	}
 
 	// --- idempotent re-run.
-	if rep = run(t, pool, dir, false); rep.CuratedAdds != 0 || rep.CuratedRemoves != 0 {
+	if rep = run(t, pool, dir); rep.CuratedAdds != 0 || rep.CuratedRemoves != 0 {
 		t.Errorf("re-run should be churn-free: +%d/-%d", rep.CuratedAdds, rep.CuratedRemoves)
 	}
 
@@ -286,7 +300,7 @@ func TestSubdomainSync(t *testing.T) {
 		t.Fatal(err)
 	}
 	writeSubdomainFixture(t, dir, "a-one.no.yml", "subdomains:\n  - login\n  - api\n  - shop\n")
-	rep = run(t, pool, dir, false)
+	rep = run(t, pool, dir)
 	if rep.CuratedAdds != 1 {
 		t.Errorf("adding a known host = +%d, want +1", rep.CuratedAdds)
 	}
@@ -316,7 +330,7 @@ func TestSubdomainSync(t *testing.T) {
 
 	// --- dropping an entry drops membership only; the row stays for the sweep.
 	writeSubdomainFixture(t, dir, "a-one.no.yml", "subdomains:\n  - login\n  - api\n")
-	rep = run(t, pool, dir, false)
+	rep = run(t, pool, dir)
 	if rep.CuratedRemoves != 1 {
 		t.Errorf("dropping an entry = -%d, want -1", rep.CuratedRemoves)
 	}
@@ -334,7 +348,7 @@ func TestSubdomainSync(t *testing.T) {
 		t.Fatal(err)
 	}
 	writeSubdomainFixture(t, dir, "a-one.no.yml", "subdomains:\n  - login\n  - api\n  - shop\n")
-	run(t, pool, dir, false)
+	run(t, pool, dir)
 	var disabled, dueNow bool
 	if err := pool.QueryRow(ctx,
 		"SELECT disabled, next_check_at <= now() FROM domain WHERE host='shop.a-one.no'").
@@ -348,7 +362,7 @@ func TestSubdomainSync(t *testing.T) {
 	// --- a disabled apex: the list is skipped, but its hosts keep membership.
 	// Disabling a parent must not silently start its children's delist grace.
 	mustExecTest(t, pool, "UPDATE domain SET disabled=true, disabled_reason='manual' WHERE host='a-one.no'")
-	rep = run(t, pool, dir, false)
+	rep = run(t, pool, dir)
 	if reason, ok := rep.RejectedFiles["subdomains/a-one.no.yml"]; !ok ||
 		!strings.Contains(reason, "disabled") {
 		t.Errorf("disabled apex should be reported: %v", rep.RejectedFiles)
@@ -361,7 +375,7 @@ func TestSubdomainSync(t *testing.T) {
 	// --- two files claiming one apex: neither is applied, and removals are
 	// suspended, so whichever file sorts first cannot supersede the other.
 	writeSubdomainFixture(t, dir, "a-one.no.yaml", "subdomains:\n  - extra\n")
-	rep = run(t, pool, dir, false)
+	rep = run(t, pool, dir)
 	for _, name := range []string{"subdomains/a-one.no.yml", "subdomains/a-one.no.yaml"} {
 		if reason, ok := rep.RejectedFiles[name]; !ok || !strings.Contains(reason, "more than one file") {
 			t.Errorf("both claimants should be rejected, %s was not: %v", name, rep.RejectedFiles)
@@ -385,7 +399,7 @@ func TestSubdomainSync(t *testing.T) {
 
 	// --- a file that fails to parse must not unlist anything.
 	writeSubdomainFixture(t, dir, "a-two.no.yml", "subdomains:\n  - www\n")
-	rep = run(t, pool, dir, false)
+	rep = run(t, pool, dir)
 	if _, ok := rep.RejectedFiles["subdomains/a-two.no.yml"]; !ok {
 		t.Errorf("broken list should be reported: %v", rep.RejectedFiles)
 	}
@@ -403,7 +417,7 @@ func TestSubdomainSync(t *testing.T) {
 	if err := os.Remove(filepath.Join(dir, SubdomainsDir, "a-one.no.yml")); err != nil {
 		t.Fatal(err)
 	}
-	rep = run(t, pool, dir, false)
+	rep = run(t, pool, dir)
 	if rep.CuratedRemoves != 3 {
 		t.Errorf("emptied directory = -%d, want -3", rep.CuratedRemoves)
 	}
@@ -413,8 +427,9 @@ func TestSubdomainSync(t *testing.T) {
 }
 
 // TestCampaignSyncRealRepo runs the full sync over the live campaign-repo
-// checkout with --adopt-unknown-uuids (P1.8 acceptance: ~30k entities with
-// correct parents). Skipped when the checkout is absent.
+// checkout (P1.8 acceptance: ~30k entities with correct parents; the files
+// carry production uuids, which the sync adopts). Skipped when the checkout
+// is absent.
 func TestCampaignSyncRealRepo(t *testing.T) {
 	repo := os.Getenv("CAMPAIGN_REPO_PATH")
 	if repo == "" {
@@ -447,7 +462,7 @@ func TestCampaignSyncRealRepo(t *testing.T) {
 	// (campaign.max_domains_per_file, default 5000) and is set explicitly here.
 	rep, err := Sync(context.Background(), Config{
 		RepoPath: dir, GitRemote: "origin", MaxDomainsPerFile: 5000,
-		AdoptUnknownUUIDs: true, Pull: false, Push: false,
+		Pull: false, Push: false,
 	}, pool)
 	if err != nil {
 		t.Fatalf("sync: %v", err)

@@ -109,7 +109,7 @@ docker compose run --rm --entrypoint /v6ctl migrate <verb> [args...]
 | `migrate force <n>` | stamp a version after manual repair |
 | `tranco import [--force]` | one import attempt of the Tranco top-1M (`--force` bypasses the sanity guard: ≥950k rows, ≤2% delist) |
 | `tranco status` | last 10 imports + staleness check |
-| `campaign sync [--adopt-unknown-uuids]` | sync the campaign-YAML checkout into the DB (see below) |
+| `campaign sync` | sync the campaign-YAML checkout into the DB (see below) |
 | `campaign validate --repo <path> [--base <ref>]` | CI-style validation of campaign YAML, no DB needed |
 | `geoip update [--token …] [--dir …]` | download a fresh IPinfo Lite mmdb (atomic replace; crawler hot-reloads hourly) |
 | `provider seed [--path …]` | load the curated DNS-provider mapping (embedded list by default; idempotent) |
