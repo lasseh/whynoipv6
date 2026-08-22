@@ -68,7 +68,7 @@ func Load(binary string) (*Config, error) {
 	if dsn == "" {
 		return nil, errors.New("DATABASE_URL is required (postgres://USER:PASS@HOST:5432/whynoipv6)")
 	}
-	lvl, err := parseLevel(v.GetString("LOG_LEVEL"))
+	lvl, err := parseLevel("LOG_LEVEL", v.GetString("LOG_LEVEL"))
 	if err != nil {
 		return nil, err
 	}
@@ -85,7 +85,7 @@ func Load(binary string) (*Config, error) {
 	}, nil
 }
 
-func parseLevel(s string) (slog.Level, error) {
+func parseLevel(name, s string) (slog.Level, error) {
 	switch strings.ToLower(s) {
 	case "debug":
 		return slog.LevelDebug, nil
@@ -96,7 +96,7 @@ func parseLevel(s string) (slog.Level, error) {
 	case "error":
 		return slog.LevelError, nil
 	default:
-		return 0, fmt.Errorf("LOG_LEVEL: unknown level %q (debug|info|warn|error)", s)
+		return 0, fmt.Errorf("%s: unknown level %q (debug|info|warn|error)", name, s)
 	}
 }
 
@@ -152,8 +152,10 @@ func (c *Config) Keys() []string {
 // JSON handler, stdout for api/crawler, stderr for v6ctl, component attr
 // stamped on the local handler. When taillight.url is set, records also fan
 // out to a Taillight log shipper; the returned flush drains its buffer and
-// must be called on shutdown (no-op when shipping is off). A malformed
-// taillight.url is fatal, like every other misconfiguration.
+// must be called on shutdown (no-op when shipping is off). The shipper ships
+// at taillight.log_level, which defaults to LOG_LEVEL — set it higher to keep
+// local debug on stdout without shipping it. A malformed taillight.url or
+// taillight.log_level is fatal, like every other misconfiguration.
 func (c *Config) InstallLogger() (*slog.Logger, func(), error) {
 	w := os.Stdout
 	if c.Binary == "v6ctl" {
@@ -167,12 +169,20 @@ func (c *Config) InstallLogger() (*slog.Logger, func(), error) {
 	handler := local
 	flush := func() {}
 	if endpoint := c.String("taillight.url"); endpoint != "" {
+		shipLevel := c.LogLevel
+		if s := c.String("taillight.log_level"); s != "" {
+			lvl, err := parseLevel("TAILLIGHT_LOG_LEVEL", s)
+			if err != nil {
+				return nil, nil, err
+			}
+			shipLevel = lvl
+		}
 		shipper, err := logshipper.New(logshipper.Config{
 			Endpoint:     endpoint,
 			APIKey:       logshipper.Secret(c.String("taillight.api_key")),
 			Service:      "whynoipv6",
 			Component:    c.Binary,
-			MinLevel:     c.LogLevel,
+			MinLevel:     shipLevel,
 			MaxAttrBytes: 16384,
 		})
 		if err != nil {

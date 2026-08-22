@@ -53,8 +53,9 @@ services:
       DATABASE_URL: postgres://whynoipv6:whynoipv6@db:5432/whynoipv6?sslmode=disable
       API_LISTEN: ":8080"                      # dev override: non-loopback so host can reach it
       DATASETS_DIR: /var/lib/whynoipv6/datasets
-      # info, not debug: per-request access-log lines are debug-level, and the
-      # Taillight shipper's MinLevel follows LOG_LEVEL — debug would ship them.
+      # info, not debug: per-request access-log lines are debug-level. To read
+      # them without shipping them, set LOG_LEVEL=debug + TAILLIGHT_LOG_LEVEL=info
+      # (the shipper's MinLevel only follows LOG_LEVEL when unset).
       LOG_LEVEL: info
       # Dev-only: the prod default (10/h per IP) makes live-check testing
       # impossible from a single machine.
@@ -135,8 +136,9 @@ services:
       # (native netfilter, no such limit).
       WORKER_SLOTS: "${CRAWLER_WORKER_SLOTS:-4}"
       GEOIP_PATH: /var/lib/GeoIP
-      # info, not debug: the shipper's MinLevel follows LOG_LEVEL, and the
-      # crawler logs per-domain at debug — shipping that floods Taillight.
+      # info, not debug: the crawler logs per-domain at debug, and shipping
+      # that floods Taillight. To read it locally anyway, set LOG_LEVEL=debug
+      # + TAILLIGHT_LOG_LEVEL=info so only the shipper stays at info.
       LOG_LEVEL: info
       # No git in the distroless image — campaign-init owns clone/refresh.
       CAMPAIGN_PULL: "false"

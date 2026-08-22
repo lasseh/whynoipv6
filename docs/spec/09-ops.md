@@ -232,6 +232,7 @@ Provider names/addresses (`1.1.1.1`, `8.8.8.8`, `9.9.9.9` + their v6 forms), the
 | `ops.healthcheck_min_interval` | `OPS_HEALTHCHECK_MIN_INTERVAL` | duration | `60s` | crawler | 04,12 | Minimum spacing between per-process heartbeat pings. |
 | `taillight.url` | `TAILLIGHT_URL` | string (URL) | `""` (disabled) | all | 09 §13 | Taillight applog ingest endpoint (`…/api/v1/applog/ingest`). When set, slog records fan out to Taillight via the `logshipper` handler (§13). Empty = local JSON only. |
 | `taillight.api_key` | `TAILLIGHT_API_KEY` | string (secret) | `""` | all | 09 §13 | Taillight API key with `ingest` scope. Redacted in the startup summary. |
+| `taillight.log_level` | `TAILLIGHT_LOG_LEVEL` | string (level) | `""` (follows `LOG_LEVEL`) | all | 09 §13 | Minimum level the Taillight shipper ships, independent of the local stdout handler. Empty = same as `LOG_LEVEL`. Set it higher (e.g. `LOG_LEVEL=debug` + `TAILLIGHT_LOG_LEVEL=info`) to keep per-domain debug in journald without flooding Taillight. Unknown level = fatal startup error. |
 
 ### 2.9 Unbound stats (v6ctl on the Unbound host)
 
@@ -1129,10 +1130,15 @@ command output on stdout stays pipeable. JSON always — no format knob. `lvl` c
 **Taillight shipping (optional).** When `taillight.url` is set (§2.8), the installed
 handler is a `logshipper.MultiHandler` fanning out to the local JSON handler **and** a
 [Taillight](https://github.com/lasseh/taillight) shipper (`pkg/logshipper`): service
-`whynoipv6`, component = binary name, `MinLevel` = `LOG_LEVEL`, batching defaults.
-The shipper is non-blocking (drops on overflow rather than stalling the process).
+`whynoipv6`, component = binary name, `MinLevel` = `taillight.log_level` (§2.8),
+batching defaults. `taillight.log_level` defaults to `LOG_LEVEL`; the two levels are
+independent, so `LOG_LEVEL=debug` + `TAILLIGHT_LOG_LEVEL=info` keeps the local stdout
+handler at debug for journald while shipping only info and above. The `MultiHandler`
+consults each child's `Enabled` per record, so the drop is at the shipper, not the log
+call. The shipper is non-blocking (drops on overflow rather than stalling the process).
 Each binary drains it on shutdown via the flush func returned by `InstallLogger`;
-a malformed `taillight.url` is a fatal startup error like any other misconfiguration.
+a malformed `taillight.url` or `taillight.log_level` is a fatal startup error like any
+other misconfiguration.
 
 **Standard attribute keys (exact names):**
 - `component` — binary name (`api`|`crawler`|`v6ctl`), stamped once on the local JSON

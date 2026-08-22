@@ -2,6 +2,7 @@ package config
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"log/slog"
 	"net/http"
@@ -97,6 +98,83 @@ func TestInstallLoggerShipsToTaillight(t *testing.T) {
 	}
 	if gotAuth != "Bearer test-key" {
 		t.Errorf("Authorization = %q, want Bearer test-key", gotAuth)
+	}
+}
+
+// TestInstallLoggerTaillightLogLevel: taillight.log_level filters the shipper
+// only. With LOG_LEVEL=debug the local stdout handler stays at debug (journald
+// sees per-domain lines) while the shipper, at info, drops them.
+func TestInstallLoggerTaillightLogLevel(t *testing.T) {
+	var (
+		mu   sync.Mutex
+		body []byte
+	)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		mu.Lock()
+		body = append(body, b...)
+		mu.Unlock()
+		w.WriteHeader(http.StatusAccepted)
+		_, _ = w.Write([]byte(`{"accepted":1}`))
+	}))
+	defer srv.Close()
+
+	t.Setenv("DATABASE_URL", "postgres://u:pw@dbhost:5432/whynoipv6")
+	t.Setenv("TAILLIGHT_URL", srv.URL+"/api/v1/applog/ingest")
+	t.Setenv("TAILLIGHT_API_KEY", "test-key")
+	t.Setenv("LOG_LEVEL", "debug")
+	t.Setenv("TAILLIGHT_LOG_LEVEL", "info")
+
+	cfg, err := Load("crawler")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.LogLevel != slog.LevelDebug {
+		t.Fatalf("cfg.LogLevel = %v, want debug (the local handler must stay verbose)", cfg.LogLevel)
+	}
+	prev := slog.Default()
+	t.Cleanup(func() { slog.SetDefault(prev) })
+
+	log, flush, err := cfg.InstallLogger()
+	if err != nil {
+		t.Fatalf("InstallLogger: %v", err)
+	}
+	if !log.Enabled(context.Background(), slog.LevelDebug) {
+		t.Error("logger is not debug-enabled: the local handler was filtered to the shipper's level")
+	}
+	log.Debug("per-domain debug line", "domain", "example.com")
+	log.Info("lifecycle line")
+	flush()
+
+	mu.Lock()
+	out := string(body)
+	mu.Unlock()
+	// Asserting both in one payload: a bare absence check would also pass if
+	// nothing shipped at all.
+	if !strings.Contains(out, `"msg":"lifecycle line"`) {
+		t.Errorf("info record was not shipped: %s", out)
+	}
+	if strings.Contains(out, "per-domain debug line") {
+		t.Errorf("debug record shipped despite TAILLIGHT_LOG_LEVEL=info: %s", out)
+	}
+}
+
+// TestInstallLoggerBadTaillightLogLevel: an unknown shipper level is fatal at
+// startup, like a malformed taillight.url.
+func TestInstallLoggerBadTaillightLogLevel(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://u:pw@dbhost:5432/whynoipv6")
+	t.Setenv("TAILLIGHT_URL", "https://taillight.example.com/api/v1/applog/ingest")
+	t.Setenv("TAILLIGHT_LOG_LEVEL", "verbose")
+
+	cfg, err := Load("api")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	prev := slog.Default()
+	t.Cleanup(func() { slog.SetDefault(prev) })
+
+	if _, _, err := cfg.InstallLogger(); err == nil {
+		t.Fatal("InstallLogger with unknown taillight.log_level: want error, got nil")
 	}
 }
 
