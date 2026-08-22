@@ -20,7 +20,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/parquet-go/parquet-go"
@@ -112,6 +111,10 @@ var tiers = []struct {
 type Exporter struct {
 	Pool *pgxpool.Pool
 	Dir  string // $DATASETS_DIR
+
+	// Source overrides the row seam; nil adapts Pool (see source.go).
+	// Production sets only Pool.
+	Source Source
 
 	// RetentionDays prunes dailies older than this (datasets.retention_days;
 	// ≤0 falls back to the spec default 90). First-of-month snapshots are
@@ -301,18 +304,11 @@ func (e *Exporter) writeTier(ctx context.Context, csvPath, parquetPath string,
 	defer func() { _ = pf.Close() }()
 	pw := parquet.NewGenericWriter[Row](pf, parquet.Compression(&parquet.Snappy))
 
-	rows, err := e.Pool.Query(ctx, db.ExportRows, rankedOnly, maxRank)
-	if err != nil {
-		return fmt.Errorf("export rows: %w", err)
-	}
-	defer rows.Close()
 	chunk := make([]Row, 0, parquetChunk)
-	for rows.Next() {
-		d, err := pgx.RowToStructByPos[db.ExportRowsRow](rows)
+	for row, err := range e.src().Rows(ctx, rankedOnly, maxRank) {
 		if err != nil {
-			return fmt.Errorf("export scan: %w", err)
+			return err
 		}
-		row := exportRow(&d)
 		if err := cw.Write(row.csv()); err != nil {
 			return err
 		}
@@ -323,9 +319,6 @@ func (e *Exporter) writeTier(ctx context.Context, csvPath, parquetPath string,
 			}
 			chunk = chunk[:0]
 		}
-	}
-	if err := rows.Err(); err != nil {
-		return fmt.Errorf("export rows: %w", err)
 	}
 	if len(chunk) > 0 {
 		if _, err := pw.Write(chunk); err != nil {
@@ -511,11 +504,7 @@ func dpSources(listID string) []dpSource {
 // trancoListID returns the newest successful import's list ID ("" pre-first
 // import).
 func (e *Exporter) trancoListID(ctx context.Context) string {
-	listID, err := db.New(e.Pool).TrancoLatestSuccessListID(ctx)
-	if err != nil {
-		return ""
-	}
-	return listID
+	return e.src().ListID(ctx)
 }
 
 type dpLicense struct {
