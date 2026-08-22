@@ -296,7 +296,7 @@ LIMIT $3 + 1;                        -- N+1 fetch → compute has_more, drop the
 ```
 
 - **`host` (campaign members, and the `sort=host` option):** `host` alone is a unique natural id, so `host > $1` is already a strict total order — no tiebreaker, no NULL. This is the ordering for campaign members, whose `rank` is usually NULL.
-- **Nullable-rank ordering (`dependents`, §4.11):** the reverse `dependents` set mixes ranked and rank-NULL rows, ordered `rank NULLS LAST`. A plain `(rank, id) > (…)` evaluates to `UNKNOWN` on NULL rank and would drop the null-rank tail, so `dependents` uses a **null-flag-first** key:
+- **Nullable-rank ordering (`dependents`, §4.11; `search`, §3.3):** the reverse `dependents` set and the `?q=` search scope both mix ranked and rank-NULL rows, ordered `rank NULLS LAST`. A plain `(rank, id) > (…)` evaluates to `UNKNOWN` on NULL rank and would drop the null-rank tail, so both use a **null-flag-first** key:
 
 ```sql
 SELECT ... FROM domain
@@ -305,7 +305,7 @@ ORDER BY (rank IS NULL), rank, id
 LIMIT $4 + 1;
 ```
 
-The seek tuple is then `[is_rank_null, last_rank, last_id]`. The `rank IS NOT NULL` global-list seek is **never** reused verbatim for this nullable ordering.
+The seek tuple is then `[is_rank_null, last_rank, last_id]`. The `rank IS NOT NULL` global-list seek is **never** reused verbatim for this nullable ordering. `dependents` and `search` are **distinct cursor sort keys** over that one shape: a cursor minted on one is not replayable on the other, and `search` — resolved before the deep-link params — keeps `?after_rank`/`?around_rank` rejected under `?q=`.
 
 **Staleness handling.** A cursor whose `g` differs from the current crawl generation is *re-anchored*: the server seeks to the same `last_rank` in the current generation and continues. Re-anchoring is **best-effort**, not exact — ranks are reassigned every generation, so rows whose rank crossed the cursor boundary between fetches may be skipped or repeated (a bounded, browse-acceptable anomaly); within a single generation the keyset walk is exact. If the filter fingerprint `f` no longer matches the request's filters, the cursor is rejected with `400 invalid-parameter`. Bidirectional paging (`prev_cursor`) is supported.
 
@@ -329,7 +329,7 @@ Filters are plain query params, aligned with response field names, and **constra
 | `flag` | one of `class_flags` | **expensive** — scope-required (below) | |
 | `base`/`www`/`ns`/`mx`/`conn`/`resources` | an `ipv6_status` value | **expensive** — scope-required (below) | per-dimension confirmed-status filters (drives the mail track) |
 | `rank_max` / `rank_min` | int | `idx_domain_rank` | cohort ranges (top-1000 etc.) |
-| `q` | substring | `idx_domain_host_trgm` | search; **does not** compose with rank ordering — ordered and cursor-paged on the `host` seek key (§3.2); trigram similarity is not a strict total order, so relevance never orders pages. **Scope exception (Decision 2026-07-11):** `?q=` spans **all non-disabled rows including rank-NULL** (campaign-only hosts, subdomains, live-check origins) — the one read that surfaces rank-NULL rows outside their sub-collections; without it, search cannot find campaign-only hosts (12-frontend.md §7.3). The host seek needs no rank, so the ordering is unaffected; `rank` serves as `null` in the row |
+| `q` | substring | `idx_domain_host_trgm` | search; **does not** compose with the client sorts — it overrides `?sort=` and orders on its own `search` seek key (§3.2), the null-flag-first `rank NULLS LAST` shape. Trigram similarity is not a strict total order, so *relevance* never orders pages; rank is, and it does (**Amendment 2026-08-22** — the old `host` ordering put `54-google.com` above `google.com` on `?q=google`). **Scope exception (Decision 2026-07-11):** `?q=` spans **all non-disabled rows including rank-NULL** (campaign-only hosts, subdomains, live-check origins) — the one read that surfaces rank-NULL rows outside their sub-collections; without it, search cannot find campaign-only hosts (12-frontend.md §7.3). Those rows carry `rank: null` and sort **behind every ranked match**, so on a broad substring they are reachable only deep in the walk — the visibility guarantee is "findable", not "on page 1". **Cost:** the trigram index serves the predicate but not the ordering, so a broad substring (`?q=com`, ~580k matches) falls back to a scan plus a bounded top-N heapsort — measured 60–80 ms at 1M rows (synthetic dataset, warm cache; including the `?format=csv` 10k cap), against sub-millisecond for the old host-index walk. Bounded, CDN-cached, and not worth a second index |
 | `sort` | `rank` (default) \| `-rank` \| `host` | index-dependent | each sort binds a distinct cursor ordering (§3.2) |
 | `fields` | comma list | — | sparse fieldset to trim the leaderboard row |
 | `format` | `json` (default) \| `csv` | — | content negotiation (§5.5) |

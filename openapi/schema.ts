@@ -1705,7 +1705,7 @@ export interface components {
         dimResources: components["schemas"]["IPv6Status"];
         rankMin: number;
         rankMax: number;
-        /** @description Substring search; forces the host ordering. */
+        /** @description Substring search. On the domain lists it overrides the ?sort= ordering and orders by rank with rank-NULL rows last (?sort= still scopes the cursor); on /asns it filters the leaderboard without changing its ordering. */
         q: string;
         /** @description Sparse fieldset (comma-separated top-level keys). */
         fields: string;
@@ -1759,7 +1759,7 @@ export interface operations {
                 resources?: components["parameters"]["dimResources"];
                 rank_min?: components["parameters"]["rankMin"];
                 rank_max?: components["parameters"]["rankMax"];
-                /** @description Substring search; forces the host ordering. */
+                /** @description Substring search. On the domain lists it overrides the ?sort= ordering and orders by rank with rank-NULL rows last (?sort= still scopes the cursor); on /asns it filters the leaderboard without changing its ordering. */
                 q?: components["parameters"]["q"];
                 sort?: components["parameters"]["sort"];
                 /** @description Sparse fieldset (comma-separated top-level keys). */
@@ -1967,7 +1967,7 @@ export interface operations {
                 mx?: components["parameters"]["dimMX"];
                 rank_min?: components["parameters"]["rankMin"];
                 rank_max?: components["parameters"]["rankMax"];
-                /** @description Substring search; forces the host ordering. */
+                /** @description Substring search. On the domain lists it overrides the ?sort= ordering and orders by rank with rank-NULL rows last (?sort= still scopes the cursor); on /asns it filters the leaderboard without changing its ordering. */
                 q?: components["parameters"]["q"];
                 sort?: components["parameters"]["sort"];
                 /** @description Sparse fieldset (comma-separated top-level keys). */
@@ -2010,7 +2010,7 @@ export interface operations {
                 mx?: components["parameters"]["dimMX"];
                 rank_min?: components["parameters"]["rankMin"];
                 rank_max?: components["parameters"]["rankMax"];
-                /** @description Substring search; forces the host ordering. */
+                /** @description Substring search. On the domain lists it overrides the ?sort= ordering and orders by rank with rank-NULL rows last (?sort= still scopes the cursor); on /asns it filters the leaderboard without changing its ordering. */
                 q?: components["parameters"]["q"];
                 sort?: components["parameters"]["sort"];
                 /** @description Sparse fieldset (comma-separated top-level keys). */
@@ -2053,7 +2053,7 @@ export interface operations {
                 mx?: components["parameters"]["dimMX"];
                 rank_min?: components["parameters"]["rankMin"];
                 rank_max?: components["parameters"]["rankMax"];
-                /** @description Substring search; forces the host ordering. */
+                /** @description Substring search. On the domain lists it overrides the ?sort= ordering and orders by rank with rank-NULL rows last (?sort= still scopes the cursor); on /asns it filters the leaderboard without changing its ordering. */
                 q?: components["parameters"]["q"];
                 sort?: components["parameters"]["sort"];
                 /** @description Sparse fieldset (comma-separated top-level keys). */
@@ -2096,7 +2096,7 @@ export interface operations {
                 mx?: components["parameters"]["dimMX"];
                 rank_min?: components["parameters"]["rankMin"];
                 rank_max?: components["parameters"]["rankMax"];
-                /** @description Substring search; forces the host ordering. */
+                /** @description Substring search. On the domain lists it overrides the ?sort= ordering and orders by rank with rank-NULL rows last (?sort= still scopes the cursor); on /asns it filters the leaderboard without changing its ordering. */
                 q?: components["parameters"]["q"];
                 sort?: components["parameters"]["sort"];
                 /** @description Sparse fieldset (comma-separated top-level keys). */
@@ -2207,7 +2207,7 @@ export interface operations {
                 mx?: components["parameters"]["dimMX"];
                 rank_min?: components["parameters"]["rankMin"];
                 rank_max?: components["parameters"]["rankMax"];
-                /** @description Substring search; forces the host ordering. */
+                /** @description Substring search. On the domain lists it overrides the ?sort= ordering and orders by rank with rank-NULL rows last (?sort= still scopes the cursor); on /asns it filters the leaderboard without changing its ordering. */
                 q?: components["parameters"]["q"];
                 sort?: components["parameters"]["sort"];
                 /** @description Sparse fieldset (comma-separated top-level keys). */
@@ -2320,7 +2320,7 @@ export interface operations {
         parameters: {
             query?: {
                 sort?: "count_v6" | "count_total";
-                /** @description Substring search; forces the host ordering. */
+                /** @description Substring search. On the domain lists it overrides the ?sort= ordering and orders by rank with rank-NULL rows last (?sort= still scopes the cursor); on /asns it filters the leaderboard without changing its ordering. */
                 q?: components["parameters"]["q"];
                 format?: components["parameters"]["format"];
                 /** @description Opaque keyset cursor from `page.next_cursor`. */
@@ -2387,7 +2387,7 @@ export interface operations {
                 mx?: components["parameters"]["dimMX"];
                 rank_min?: components["parameters"]["rankMin"];
                 rank_max?: components["parameters"]["rankMax"];
-                /** @description Substring search; forces the host ordering. */
+                /** @description Substring search. On the domain lists it overrides the ?sort= ordering and orders by rank with rank-NULL rows last (?sort= still scopes the cursor); on /asns it filters the leaderboard without changing its ordering. */
                 q?: components["parameters"]["q"];
                 sort?: components["parameters"]["sort"];
                 /** @description Sparse fieldset (comma-separated top-level keys). */
@@ -2535,7 +2535,7 @@ export interface operations {
                 mx?: components["parameters"]["dimMX"];
                 rank_min?: components["parameters"]["rankMin"];
                 rank_max?: components["parameters"]["rankMax"];
-                /** @description Substring search; forces the host ordering. */
+                /** @description Substring search. On the domain lists it overrides the ?sort= ordering and orders by rank with rank-NULL rows last (?sort= still scopes the cursor); on /asns it filters the leaderboard without changing its ordering. */
                 q?: components["parameters"]["q"];
                 sort?: components["parameters"]["sort"];
                 /** @description Sparse fieldset (comma-separated top-level keys). */

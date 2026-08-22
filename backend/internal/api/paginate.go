@@ -17,8 +17,9 @@ import (
 const (
 	SortRank       = "rank"       // (rank, id) — the default and all scoped lists
 	SortRankDesc   = "-rank"      // (rank, id) descending
-	SortHost       = "host"       // host alone (campaign members, ?q= search)
+	SortHost       = "host"       // host alone (subdomains, campaign members)
 	SortDependents = "dependents" // (rank IS NULL, rank, id) — null-flag-first
+	SortSearch     = "search"     // ?q= — the dependents key, rank NULLS LAST
 
 	// The /asns leaderboard orderings (07 §4.6): (count, number) descending;
 	// the count rides the Seek.Rank slot, the number rides Seek.ID.
@@ -72,10 +73,10 @@ func (c *Cursor) Backward() bool { return c.D == "p" }
 
 // Seek is the typed seek tuple for the query builder.
 type Seek struct {
-	Rank     *int32 // rank orderings + dependents (nil on the null tail)
+	Rank     *int32 // rank orderings + dependents/search (nil on the null tail)
 	ID       int64  // tiebreaker (0 after re-anchoring)
 	Host     string // host ordering
-	RankNull bool   // dependents ordering: the null-flag component
+	RankNull bool   // dependents/search orderings: the null-flag component
 	TS       int64  // changelog ordering: UnixNano event time
 	Field    string // changelog ordering: dimension tiebreaker
 }
@@ -158,7 +159,7 @@ func (c *Cursor) SeekTuple() (Seek, error) {
 		}
 		s.TS, s.ID, s.Field = ts, id, field
 		return s, nil // ts-ordered: exact across generations, never re-anchored
-	case SortDependents:
+	case SortDependents, SortSearch:
 		if len(c.K) != 3 {
 			return s, fmt.Errorf("%w: seek tuple shape", ErrCursorInvalid)
 		}

@@ -1087,7 +1087,11 @@ components:
     q:
       name: q
       in: query
-      description: Substring search; forces the host ordering.
+      description: >-
+        Substring search. On the domain lists it overrides the ?sort= ordering
+        and orders by rank with rank-NULL rows last (?sort= still scopes the
+        cursor); on /asns it filters the leaderboard without changing its
+        ordering.
       schema: { type: string }
     fields:
       name: fields

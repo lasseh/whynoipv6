@@ -362,7 +362,10 @@ func (s *Server) serveDomainList(w http.ResponseWriter, r *http.Request, preset 
 		return
 	}
 
-	// Sort: ?q= never composes with rank ordering (07 §3.3) — forced to host.
+	// Sort: ?q= never composes with the client sorts (07 §3.3) — forced to
+	// the search ordering, rank NULLS LAST. Its own key, not SortRank: the
+	// search scope spans rank-NULL rows, which cannot anchor a (rank, id)
+	// cursor, and the distinct key keeps after_rank/around_rank rejected.
 	sortKey := q.Get("sort")
 	switch sortKey {
 	case "":
@@ -373,7 +376,7 @@ func (s *Server) serveDomainList(w http.ResponseWriter, r *http.Request, preset 
 		return
 	}
 	if q.Get("q") != "" {
-		sortKey = SortHost
+		sortKey = SortSearch
 	}
 
 	wantCSV, err := parseFormat(q)
@@ -469,7 +472,9 @@ func (s *Server) serveDomainList(w http.ResponseWriter, r *http.Request, preset 
 			Fetch: func(ctx context.Context, seek *Seek, lim int, backward bool) ([]postgres.DomainRow, error) {
 				var ds *postgres.DomainSeek
 				if seek != nil {
-					ds = &postgres.DomainSeek{Rank: seek.Rank, ID: seek.ID, Host: seek.Host}
+					ds = &postgres.DomainSeek{
+						Rank: seek.Rank, ID: seek.ID, Host: seek.Host, RankNull: seek.RankNull,
+					}
 				}
 				return postgres.ListDomains(ctx, s.pool, &filter,
 					postgres.ListSort(sortKey), ds, afterRank, lim, backward)
@@ -512,6 +517,14 @@ func domainKey(sortKey string) func(*postgres.DomainRow) []any {
 	return func(row *postgres.DomainRow) []any {
 		if sortKey == SortHost {
 			return []any{row.Host}
+		}
+		if sortKey == SortSearch {
+			// Null-flag-first: the rank slot is inert on the null tail.
+			var rank int32
+			if row.Rank != nil {
+				rank = *row.Rank
+			}
+			return []any{row.Rank == nil, rank, row.ID}
 		}
 		if row.Rank == nil {
 			return nil

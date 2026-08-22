@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -355,14 +356,71 @@ func TestKeysetPagination(t *testing.T) {
 	}
 }
 
-// TestSearchForcesHostOrder (07 §3.3): ?q= never composes with rank order.
-func TestSearchForcesHostOrder(t *testing.T) {
+// TestSearchOrdersByRank (07 §3.3): ?q= overrides the client sorts and
+// orders by rank, NULLS LAST — the rank-NULL rows the search scope pulls in
+// sort behind every ranked match.
+func TestSearchOrdersByRank(t *testing.T) {
 	srv, _ := newAPI(t)
 	var env envelope
-	getJSON(t, srv.URL+"/domains?q=d1", &env)
-	h := hosts(t, env.Items)
-	if len(h) != 2 || h[0] != "d1.example" || h[1] != "d10.example" {
-		t.Errorf("q=d1 = %v, want host-ordered [d1.example d10.example]", h)
+	getJSON(t, srv.URL+"/domains?q=example", &env)
+	want := []string{
+		"d1.example", "d2.example", "d3.example", "d4.example", "d5.example",
+		"d6.example", "d7.example", "d8.example", "d10.example", // d9 disabled
+		"campaign-only.example", // rank NULL → last
+	}
+	if h := hosts(t, env.Items); !slices.Equal(h, want) {
+		t.Errorf("q=example = %v, want rank-ordered %v", h, want)
+	}
+	// An explicit sort loses to the search ordering, and the rank deep links
+	// stay rejected on it. The ordering is overridden, not the cursor scope:
+	// sort= is part of the filter fingerprint, so the two spellings still
+	// page separately.
+	getJSON(t, srv.URL+"/domains?q=example&sort=host", &env)
+	if h := hosts(t, env.Items); !slices.Equal(h, want) {
+		t.Errorf("q=example&sort=host = %v, want rank-ordered %v", h, want)
+	}
+	var paged envelope
+	getJSON(t, srv.URL+"/domains?q=example&limit=2", &paged)
+	if paged.Page.NextCursor == nil {
+		t.Fatal("q=example&limit=2 must mint a next_cursor")
+	}
+	var problem struct{ Type string }
+	resp := getJSON(t, srv.URL+"/domains?q=example&sort=host&limit=2&cursor="+*paged.Page.NextCursor, &problem)
+	if resp.StatusCode != 400 {
+		t.Errorf("cursor replayed with sort=host = %d, want 400 (fingerprint scope)", resp.StatusCode)
+	}
+	if resp := getJSON(t, srv.URL+"/domains?q=example&after_rank=3", &problem); resp.StatusCode != 400 {
+		t.Errorf("q= with after_rank = %d, want 400", resp.StatusCode)
+	}
+}
+
+// TestSearchPagesAcrossTheNullTail (07 §3.2): the search cursor is the
+// null-flag-first key, so the walk crosses the ranked → rank-NULL partition
+// boundary exactly once, and prev_cursor crosses back.
+func TestSearchPagesAcrossTheNullTail(t *testing.T) {
+	srv, _ := newAPI(t)
+	var first envelope
+	getJSON(t, srv.URL+"/domains?q=example&limit=9", &first)
+	if h := hosts(t, first.Items); len(h) != 9 || h[8] != "d10.example" {
+		t.Fatalf("page 1 = %v, want the 9 ranked matches", h)
+	}
+	if !first.Page.HasMore || first.Page.NextCursor == nil {
+		t.Fatal("page 1 must carry a next_cursor onto the null tail")
+	}
+
+	var second envelope
+	getJSON(t, srv.URL+"/domains?q=example&limit=9&cursor="+*first.Page.NextCursor, &second)
+	if h := hosts(t, second.Items); len(h) != 1 || h[0] != "campaign-only.example" {
+		t.Fatalf("page 2 = %v, want [campaign-only.example]", h)
+	}
+	if second.Page.PrevCursor == nil {
+		t.Fatal("page 2 must carry a prev_cursor back into the ranked partition")
+	}
+
+	var back envelope
+	getJSON(t, srv.URL+"/domains?q=example&limit=9&cursor="+*second.Page.PrevCursor, &back)
+	if h := hosts(t, back.Items); !slices.Equal(h, hosts(t, first.Items)) {
+		t.Errorf("prev walk = %v, want page 1 %v", h, hosts(t, first.Items))
 	}
 }
 

@@ -78,9 +78,10 @@ func (f *DomainListFilter) validateLiterals() error {
 // DomainSeek is the decoded cursor seek (mirrors api.Seek without the
 // import cycle).
 type DomainSeek struct {
-	Rank *int32
-	ID   int64
-	Host string
+	Rank     *int32
+	ID       int64
+	Host     string
+	RankNull bool
 }
 
 // DomainRow is the §4.2 summary row scanned via RowToStructByName.
@@ -136,13 +137,14 @@ a.number AS asn_number, a.name AS asn_name,
 dp.id AS provider_id, dp.name AS provider_name,
 d.hosting_provider, d.last_checked_at`
 
-// ListSort names the three orderings (07 §3.2).
+// ListSort names the four orderings (07 §3.2).
 type ListSort string
 
 const (
 	ListSortRank     ListSort = "rank"
 	ListSortRankDesc ListSort = "-rank"
 	ListSortHost     ListSort = "host"
+	ListSortSearch   ListSort = "search"
 )
 
 // ORDER BY fragments shared by the forward/backward walks.
@@ -184,7 +186,8 @@ func buildDomainList(f *DomainListFilter, sortKey ListSort, seek *DomainSeek, af
 		// (campaign-only hosts, subdomains, live-check origins) — the one
 		// read that surfaces rank-NULL rows outside their sub-collections
 		// (07 §3.1/§3.3, Decision 2026-07-11). Only rank IS NOT NULL is
-		// dropped; NOT disabled stays. The host seek is unaffected.
+		// dropped; NOT disabled stays. Those rows sort last under the
+		// ListSortSearch null-flag-first ordering below.
 		q = q.Where(sq.Expr("NOT d.disabled"))
 	default:
 		q = q.Where(sq.Expr("d.rank IS NOT NULL AND NOT d.disabled"))
@@ -239,6 +242,28 @@ func buildDomainList(f *DomainListFilter, sortKey ListSort, seek *DomainSeek, af
 	// backward flips the seek comparison and the ORDER BY (the §3.2
 	// prev_cursor walk); the caller re-reverses the rows for display.
 	switch sortKey {
+	case ListSortSearch:
+		// ?q= orders by rank NULLS LAST on the null-flag-first key, the
+		// same shape ListDependents walks: the rank-NULL rows the search
+		// scope pulls in cannot anchor a plain (rank, id) seek, and a
+		// literal (rank, ...) row comparison would drop the whole NULL
+		// tail (NULL inside a row comparison → UNKNOWN). The rank
+		// component therefore rides COALESCE(rank, 0) on both sides —
+		// equal within the null partition, where d.id takes over.
+		cmp, order := ">", []string{"(d.rank IS NULL)", "COALESCE(d.rank, 0)", orderIDAsc}
+		if backward {
+			cmp, order = "<", []string{"(d.rank IS NULL) DESC", "COALESCE(d.rank, 0) DESC", orderIDDesc}
+		}
+		if seek != nil {
+			rank := int32(0)
+			if seek.Rank != nil {
+				rank = *seek.Rank
+			}
+			q = q.Where(sq.Expr(fmt.Sprintf(
+				"((d.rank IS NULL), COALESCE(d.rank, 0), d.id) %s (%t, %d, %d)",
+				cmp, seek.RankNull, rank, seek.ID)))
+		}
+		q = q.OrderBy(order...)
 	case ListSortHost:
 		if seek != nil && seek.Host != "" {
 			if backward {
