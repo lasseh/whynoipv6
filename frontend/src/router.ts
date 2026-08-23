@@ -39,6 +39,7 @@ const routes: RouteRecordRaw[] = [
     name: 'DomainNotFound',
     component: () => import('@/pages/DomainNotFound.vue'),
     meta: {
+      noindex: true,
       title: 'Domain Not Found - Why No IPv6',
       description:
         "This domain isn't in our database: not yet crawled, outside the Tranco top million, or a typo.",
@@ -128,6 +129,7 @@ const routes: RouteRecordRaw[] = [
     name: 'CampaignDomainNotFound',
     component: () => import('@/pages/DomainNotFound.vue'),
     meta: {
+      noindex: true,
       title: 'Campaign Domain Not Found - Why No IPv6',
       description:
         "This domain isn't tracked in this campaign. Either it was never on the list, or that's a typo.",
@@ -220,6 +222,7 @@ const routes: RouteRecordRaw[] = [
     name: 'PageNotFound',
     component: () => import('@/pages/PageNotFound.vue'),
     meta: {
+      noindex: true,
       title: 'Page Not Found - Why No IPv6',
       description:
         "No route to this page. Unlike a missing AAAA record, this one probably isn't deliberate.",

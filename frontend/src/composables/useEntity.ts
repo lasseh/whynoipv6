@@ -5,6 +5,7 @@
 // it; the country/campaign pages consume it directly.
 import { onScopeDispose, shallowRef, watch } from 'vue'
 import { ApiProblem } from '@/api/problem'
+import { setPageNoindex } from '@/composables/usePageMeta'
 
 export interface EntityOptions {
   /** Runs on a not-found problem (e.g. a redirect); notFound is set either way. */
@@ -36,6 +37,11 @@ export function useEntity<T>(
       data.value = result
     } catch (e) {
       if (c.signal.aborted) return
+      // Both branches render an explanation at HTTP 200 — a missing country
+      // and a failed fetch look the same to a crawler, and Google files them
+      // as soft 404s. Marking it here rather than per page is what keeps a
+      // new detail surface from quietly becoming indexable.
+      setPageNoindex()
       if (e instanceof ApiProblem && e.code === 'not-found') {
         notFound.value = true
         opts.onNotFound?.(k)

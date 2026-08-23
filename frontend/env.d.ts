@@ -6,6 +6,8 @@ declare module 'vue-router' {
   interface RouteMeta {
     title?: string
     description?: string
+    /** Emit <meta name="robots" content="noindex"> for this route. */
+    noindex?: boolean
   }
 }
 

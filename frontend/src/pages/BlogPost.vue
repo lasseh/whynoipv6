@@ -7,7 +7,7 @@ import Breadcrumb from '@/components/Breadcrumb.vue'
 
 import { loadPost, posts } from '@/blog'
 import type { Post } from '@/blog'
-import { setPageMeta } from '@/composables/usePageMeta'
+import { setPageMeta, setPageNoindex } from '@/composables/usePageMeta'
 import { formatDate } from '@/utils/date'
 
 const route = useRoute()
@@ -35,6 +35,8 @@ watch(
     if (route.params.slug !== slug) return // raced a later navigation
     post.value = loaded
     missing.value = loaded === null
+    // An unknown slug still answers 200 with the inline not-found; say so.
+    if (loaded === null) setPageNoindex()
   },
   { immediate: true },
 )

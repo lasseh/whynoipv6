@@ -1,3 +1,21 @@
 User-agent: *
 Allow: /
+
+# Unbounded URL spaces. Each of these answers 200 for any input, so a crawler
+# following them never runs out of pages to fetch, and none of what it finds is
+# worth indexing. Blocked here rather than with noindex because that tag is
+# written by JS (src/composables/usePageMeta.ts) and only appears after the
+# page renders — by which point the fetch has already happened.
+#
+# /check/<host> is the sharp one: a miss triggers a real live scan against a
+# third party, so crawling it costs someone else's infrastructure, not just
+# ours. Bare /check is the form with the input box and stays indexable.
+Disallow: /check/
+Disallow: /search?
+
+# Not listed: /domains/*/not-found and /campaigns/*/*/not-found. Those need to
+# stay crawlable so Google can see the noindex (served as X-Robots-Tag by
+# deploy/nginx/whynoipv6.com.conf) and drop the ones it has already indexed —
+# a Disallow here would freeze them in the index instead.
+
 Sitemap: https://whynoipv6.com/sitemap.xml

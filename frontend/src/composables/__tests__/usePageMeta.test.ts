@@ -1,7 +1,12 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
-import { installPageMeta, setPageMeta, setPageTitle } from '@/composables/usePageMeta'
+import {
+  installPageMeta,
+  setPageMeta,
+  setPageNoindex,
+  setPageTitle,
+} from '@/composables/usePageMeta'
 
 const meta = (sel: string) => document.head.querySelector(sel)?.getAttribute('content')
 
@@ -97,6 +102,76 @@ describe('usePageMeta', () => {
     await router.push('/faq')
     await router.isReady()
     expect(document.title).toBe('FAQ - Why No IPv6')
+  })
+
+  // The soft-404 surfaces (GSC coverage, 2026-08-23): every not-found state
+  // renders an explanation at HTTP 200, so the robots tag is the only thing
+  // separating them from real content.
+  describe('noindex', () => {
+    const robotsRouter = () =>
+      createRouter({
+        history: createMemoryHistory(),
+        routes: [
+          { path: '/', component: { template: '<div />' } },
+          {
+            path: '/countries/:id',
+            component: { template: '<div />' },
+            meta: { title: 'Country Details - Why No IPv6', description: 'A country.' },
+          },
+          {
+            path: '/domains/:domain/not-found',
+            component: { template: '<div />' },
+            meta: {
+              noindex: true,
+              title: 'Domain Not Found - Why No IPv6',
+              description: 'Not in the crawl.',
+            },
+          },
+        ],
+      })
+
+    it('emits the tag for a route that declares noindex', async () => {
+      const router = robotsRouter()
+      installPageMeta(router)
+      await router.push('/domains/nope.example/not-found')
+      await router.isReady()
+      expect(meta('meta[name="robots"]')).toBe('noindex')
+    })
+
+    it('leaves an indexable route with no robots tag at all', async () => {
+      const router = robotsRouter()
+      installPageMeta(router)
+      await router.push('/countries/no')
+      await router.isReady()
+      // Absence is the indexable default; an explicit "index" says nothing
+      // and would have to be kept in sync with every crawler's parsing.
+      expect(document.head.querySelector('meta[name="robots"]')).toBeNull()
+    })
+
+    // The regression this guards: a component sets the tag after its fetch
+    // 404s, the user clicks through to a real page, and the tag rides along
+    // — silently deindexing content that was fine.
+    it('clears a component-set tag on the next navigation', async () => {
+      const router = robotsRouter()
+      installPageMeta(router)
+      await router.push('/countries/xx')
+      await router.isReady()
+      setPageNoindex()
+      expect(meta('meta[name="robots"]')).toBe('noindex')
+
+      await router.push('/countries/no')
+      expect(document.head.querySelector('meta[name="robots"]')).toBeNull()
+    })
+
+    it('holds exactly one robots tag across repeated marks', async () => {
+      const router = robotsRouter()
+      installPageMeta(router)
+      await router.push('/countries/xx')
+      await router.isReady()
+      setPageNoindex()
+      setPageNoindex()
+      expect(document.head.querySelectorAll('meta[name="robots"]')).toHaveLength(1)
+    })
   })
 
   // A data-driven title refines every tag the title appears in, so the

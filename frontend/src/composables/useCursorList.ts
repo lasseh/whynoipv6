@@ -7,6 +7,7 @@ import type { Ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import type { LocationQuery, LocationQueryValue } from 'vue-router'
 import { ApiProblem } from '@/api/problem'
+import { setPageNoindex } from '@/composables/usePageMeta'
 import type { Meta, Page } from '@/api'
 
 export interface ItemCollection<T> {
@@ -101,6 +102,9 @@ export function useCursorList<T, K extends string = never>(opts: CursorListOptio
         void router.replace({ query: withoutCursor(route.query) })
         return
       }
+      // A list that failed to load renders an error card at HTTP 200, same
+      // as the detail surfaces (useEntity) — not a page worth indexing.
+      setPageNoindex()
       error.value = ApiProblem.from(e)
     } finally {
       if (controller === c) loading.value = false

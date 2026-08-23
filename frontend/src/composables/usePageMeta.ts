@@ -13,6 +13,10 @@ function headTag(selector: string, create: () => HTMLElement): HTMLElement {
   return tag
 }
 
+function removeHeadTag(selector: string): void {
+  document.head.querySelector(selector)?.remove()
+}
+
 function setMetaProperty(property: string, content: string): void {
   headTag(`meta[property="${property}"]`, () => {
     const el = document.createElement('meta')
@@ -57,6 +61,33 @@ function applyDescription(description: string): void {
 }
 
 /**
+ * The robots tag, which exists only to say noindex — its absence is the
+ * indexable default, so the tag is removed rather than set to "index".
+ * deploy/nginx sends X-Robots-Tag for the /not-found routes as well, because
+ * this one is written by JS and a crawler that does not render never sees it;
+ * the two must agree.
+ */
+function applyRobots(noindex: boolean): void {
+  if (noindex) {
+    setMetaName('robots', 'noindex')
+  } else {
+    removeHeadTag('meta[name="robots"]')
+  }
+}
+
+/**
+ * Mark the current page noindex from a component — for the states only the
+ * API's answer reveals (an unknown country, a campaign that isn't there, a
+ * failed fetch). Routes that are *always* unindexable declare
+ * `meta: { noindex: true }` instead; both land on the same tag, and the
+ * navigation guard clears it on the way out, so a page that sets it can
+ * never leak the tag onto the next one.
+ */
+export function setPageNoindex(): void {
+  applyRobots(true)
+}
+
+/**
  * Title *and* the share tags, for content whose real meta is only known
  * after load (blog posts). Blog posts are prerendered with correct per-post
  * tags (scripts/blog-plugin.ts), but the route guard would otherwise
@@ -96,6 +127,9 @@ export function installPageMeta(router: Router): void {
       )
     }
     if (to.meta.description) applyDescription(to.meta.description)
+    // Unconditional, unlike title/description: this has to clear the tag a
+    // previous page set, not just apply the new route's value.
+    applyRobots(to.meta.noindex === true)
     // Per-route canonical + og:url — every path claims itself, not the homepage.
     const url = `${location.origin}${to.path}`
     headTag('link[rel="canonical"]', () => {
