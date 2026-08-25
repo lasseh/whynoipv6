@@ -8,8 +8,10 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/json"
 	"encoding/pem"
 	"fmt"
+	"io"
 	"math/big"
 	"net"
 	"net/http"
@@ -202,15 +204,12 @@ func TestNginxSiteCanonicalRedirects(t *testing.T) {
 		}
 	}
 
-	conf, err := filepath.Abs(filepath.Join("..", "..", "..", "deploy", "nginx", "whynoipv6.com.conf"))
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	name := fmt.Sprintf("wni6-nginx-site-test-%d", time.Now().UnixNano())
 	run := exec.Command("docker", "run", "-d", "--rm", "--name", name,
 		"-p", "127.0.0.1:0:443",
-		"-v", conf+":/etc/nginx/conf.d/site.conf:ro",
+		// Drill off: on the 6th of the month the shipped vhost answers 503 to
+		// every IPv4 client, and the docker gateway is one.
+		"-v", writeVhost(t, dir, "off")+":/etc/nginx/conf.d/site.conf:ro",
 		"-v", certDir+":/etc/ssl/cloudflare:ro",
 		"-v", root+":/var/www/whynoipv6.com:ro",
 		"nginx:alpine")
@@ -346,4 +345,313 @@ func TestNginxSiteCanonicalRedirects(t *testing.T) {
 			t.Errorf("status = %d, want 200 (SPA fallback)", resp.StatusCode)
 		}
 	})
+}
+
+// writeVhost copies the shipped frontend vhost into dir with the IPv4-outage
+// switch forced to mode ("off", "on" or "schedule") and returns the new path.
+// The coordinated window is gated on $time_iso8601, and a test cannot move the
+// container's clock onto the 6th — so the drill is exercised through the same
+// maps via the manual switch instead. Callers that are not testing the drill
+// pin themselves to "off" so they do not start failing on the 6th.
+func writeVhost(t *testing.T, dir, mode string) string {
+	t.Helper()
+	src, err := filepath.Abs(filepath.Join("..", "..", "..", "deploy", "nginx", "whynoipv6.com.conf"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, err := os.ReadFile(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const knob = "\n    default schedule;\n"
+	if n := strings.Count(string(body), knob); n != 1 {
+		t.Fatalf("drill switch appears %d times in the vhost, want 1 — writeVhost needs updating", n)
+	}
+	out := filepath.Join(dir, "site.conf")
+	patched := strings.Replace(string(body), knob, "\n    default "+mode+";\n", 1)
+	if err := os.WriteFile(out, []byte(patched), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return out
+}
+
+// writeRealIPShim emulates the host-level conf.d/cloudflare.conf that the
+// nginx role clones from lasseh/nginx-conf. Production is Cloudflare-fronted,
+// so the socket peer is an edge PoP and $remote_addr means nothing until
+// real_ip_header rewrites it from CF-Connecting-IP. Every consumer of the
+// visitor's address depends on it — the rate limiters, X-Umami-Client-IP, and
+// now the drill's address-family test. Driving the tests through the same
+// header is the point: a family check written against the socket peer would
+// pass locally and misfire behind the CDN.
+func writeRealIPShim(t *testing.T, dir string) string {
+	t.Helper()
+	out := filepath.Join(dir, "realip.conf")
+	body := "set_real_ip_from 0.0.0.0/0;\nset_real_ip_from ::/0;\nreal_ip_header CF-Connecting-IP;\n"
+	if err := os.WriteFile(out, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return out
+}
+
+// TestNginxIPv4OutageDrill pins the planned IPv4 unavailability signalling
+// (draft-martin-retry-over-ipv6): during a window, IPv4 visitors get 503 plus
+// Retry-Over-IPv6 and a body that explains it, while IPv6 visitors are served
+// normally.
+//
+// Status codes are asserted explicitly, not just headers. The failure mode this
+// guards is a silent 200 carrying correct signal headers — and the one that
+// actually happened in development: error_page does an internal redirect that
+// re-runs the server rewrite phase, so the gate fired a second time and, with
+// recursive_error_pages off, nginx answered with its own 503 body and none of
+// the headers. Asserting the body is therefore load-bearing. Skips when docker
+// is unavailable.
+func TestNginxIPv4OutageDrill(t *testing.T) {
+	if _, err := exec.LookPath("docker"); err != nil {
+		t.Skip("docker unavailable")
+	}
+
+	dir := t.TempDir()
+	certDir := filepath.Join(dir, "cloudflare")
+	if err := os.MkdirAll(certDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeSelfSigned(t, certDir)
+
+	// The helper page ships from frontend/public/, so it reaches the webroot
+	// with the bundle rsync rather than with the vhost. Use the real file: a
+	// build that stops emitting it turns the drill into a 404.
+	helper, err := filepath.Abs(filepath.Join("..", "..", "..", "frontend", "public", "ipv4-unavailable.html"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	helperBody, err := os.ReadFile(helper)
+	if err != nil {
+		t.Fatalf("helper page missing: %v", err)
+	}
+	root := filepath.Join(dir, "www")
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for path, body := range map[string]string{
+		"index.html":            "<!doctype html><title>Why No IPv6</title>",
+		"ipv4-unavailable.html": string(helperBody),
+	} {
+		if err := os.WriteFile(filepath.Join(root, path), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	name := fmt.Sprintf("wni6-nginx-drill-test-%d", time.Now().UnixNano())
+	run := exec.Command("docker", "run", "-d", "--rm", "--name", name,
+		"-p", "127.0.0.1:0:443",
+		"-v", writeVhost(t, dir, "on")+":/etc/nginx/conf.d/site.conf:ro",
+		"-v", writeRealIPShim(t, dir)+":/etc/nginx/conf.d/00-realip.conf:ro",
+		"-v", certDir+":/etc/ssl/cloudflare:ro",
+		"-v", root+":/var/www/whynoipv6.com:ro",
+		"nginx:alpine")
+	if out, err := run.CombinedOutput(); err != nil {
+		t.Skipf("docker run failed (offline?): %v\n%s", err, out)
+	}
+	t.Cleanup(func() { _ = exec.Command("docker", "rm", "-f", name).Run() })
+
+	if out, err := exec.Command("docker", "exec", name, "nginx", "-t").CombinedOutput(); err != nil {
+		t.Fatalf("nginx -t: %v\n%s", err, out)
+	}
+
+	portOut, err := exec.Command("docker", "port", name, "443/tcp").Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	hostPort := strings.TrimSpace(strings.Split(string(portOut), "\n")[0])
+	client := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, //nolint:gosec // self-signed test cert
+		},
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+		Timeout:       5 * time.Second,
+	}
+	// get drives the visitor's address family through CF-Connecting-IP, exactly
+	// as Cloudflare does in production.
+	get := func(path, clientIP, accept string) (*http.Response, string) {
+		t.Helper()
+		var resp *http.Response
+		var lastErr error
+		for i := 0; i < 20; i++ {
+			req, _ := http.NewRequest(http.MethodGet, "https://"+hostPort+path, nil)
+			req.Host = "whynoipv6.com"
+			req.Header.Set("CF-Connecting-IP", clientIP)
+			req.Header.Set("Accept", accept)
+			resp, lastErr = client.Do(req)
+			if lastErr == nil {
+				body, _ := io.ReadAll(resp.Body)
+				resp.Body.Close()
+				return resp, string(body)
+			}
+			time.Sleep(250 * time.Millisecond)
+		}
+		t.Fatalf("GET %s as %s: %v", path, clientIP, lastErr)
+		return nil, ""
+	}
+
+	const (
+		v4       = "203.0.113.9"
+		v6       = "2001:db8::1"
+		acceptHT = "text/html,application/xhtml+xml"
+		acceptPJ = "application/problem+json"
+	)
+
+	t.Run("IPv4 gets the signal and the helper page", func(t *testing.T) {
+		resp, body := get("/", v4, acceptHT)
+		if resp.StatusCode != http.StatusServiceUnavailable {
+			t.Errorf("status = %d, want 503", resp.StatusCode)
+		}
+		if got := resp.Header.Get("Retry-Over-IPv6"); got != "?1" {
+			t.Errorf("Retry-Over-IPv6 = %q, want %q", got, "?1")
+		}
+		if got := resp.Header.Get("Cache-Control"); got != "private, no-store" {
+			t.Errorf("Cache-Control = %q, want %q", got, "private, no-store")
+		}
+		if resp.Header.Get("Retry-After") == "" {
+			t.Error("Retry-After missing")
+		}
+		if got := resp.Header.Get("Retry-Over-IPv6-Token"); !strings.HasPrefix(got, `"`) {
+			t.Errorf("Retry-Over-IPv6-Token = %q, want a quoted-string", got)
+		}
+		// nginx's own 503 page instead of ours means the error_page handler was
+		// never reached — see the note on the rewrite phase above.
+		if !strings.Contains(body, "IPv4") || strings.Contains(body, "503 Service Temporarily Unavailable") {
+			t.Errorf("body is not the helper page (%d bytes): %.200q", len(body), body)
+		}
+	})
+
+	t.Run("problem+json for machines", func(t *testing.T) {
+		resp, body := get("/domains", v4, acceptPJ)
+		if resp.StatusCode != http.StatusServiceUnavailable {
+			t.Errorf("status = %d, want 503", resp.StatusCode)
+		}
+		if ct := resp.Header.Get("Content-Type"); !strings.HasPrefix(ct, "application/problem+json") {
+			t.Errorf("Content-Type = %q, want application/problem+json", ct)
+		}
+		var problem struct {
+			Type                 string `json:"type"`
+			Status               int    `json:"status"`
+			IPv4UnavailableUntil string `json:"ipv4UnavailableUntil"`
+		}
+		if err := json.Unmarshal([]byte(body), &problem); err != nil {
+			t.Fatalf("body is not JSON (%d bytes): %v: %.200q", len(body), err, body)
+		}
+		if problem.Type != "urn:ietf:params:problem:ipv4-unavailable" || problem.Status != 503 {
+			t.Errorf("problem = %+v", problem)
+		}
+		// Built by interpolating a named capture into a map value, which nginx
+		// -t cannot check: an empty string here means the capture did not
+		// survive into the response.
+		if _, err := time.Parse(time.RFC3339, problem.IPv4UnavailableUntil); err != nil {
+			t.Errorf("ipv4UnavailableUntil = %q, want RFC 3339: %v", problem.IPv4UnavailableUntil, err)
+		}
+	})
+
+	t.Run("IPv6 is served normally", func(t *testing.T) {
+		resp, _ := get("/", v6, acceptHT)
+		if resp.StatusCode != http.StatusOK {
+			t.Errorf("status = %d, want 200", resp.StatusCode)
+		}
+		if got := resp.Header.Get("Retry-Over-IPv6"); got != "" {
+			t.Errorf("Retry-Over-IPv6 = %q on IPv6, want it absent", got)
+		}
+	})
+
+	t.Run("loopback is skipped for health checks", func(t *testing.T) {
+		resp, _ := get("/", "127.0.0.1", acceptHT)
+		if resp.StatusCode != http.StatusOK {
+			t.Errorf("status = %d, want 200", resp.StatusCode)
+		}
+	})
+
+	// The helper page is only ever reached through error_page. Served directly
+	// it would tell an IPv6 visitor they are on IPv4, at an indexable URL.
+	t.Run("helper page is not a public URL", func(t *testing.T) {
+		resp, _ := get("/ipv4-unavailable.html", v6, acceptHT)
+		if resp.StatusCode != http.StatusNotFound {
+			t.Errorf("status = %d, want 404", resp.StatusCode)
+		}
+	})
+
+	// The gate sits ahead of the canonicalisation rewrites in the rewrite
+	// phase, so it must not have displaced them for everyone else.
+	t.Run("canonical redirects survive on IPv6", func(t *testing.T) {
+		resp, _ := get("/domain/reddit.com", v6, acceptHT)
+		if resp.StatusCode != http.StatusMovedPermanently {
+			t.Errorf("status = %d, want 301", resp.StatusCode)
+		}
+	})
+}
+
+// TestNginxIPv4OutageOff pins the resting state: with the switch off, nothing
+// about the vhost changes for an IPv4 visitor. This is the rollback assertion —
+// the drill has to be one line away from gone.
+func TestNginxIPv4OutageOff(t *testing.T) {
+	if _, err := exec.LookPath("docker"); err != nil {
+		t.Skip("docker unavailable")
+	}
+
+	dir := t.TempDir()
+	certDir := filepath.Join(dir, "cloudflare")
+	if err := os.MkdirAll(certDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeSelfSigned(t, certDir)
+	root := filepath.Join(dir, "www")
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "index.html"), []byte("<!doctype html>shell"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	name := fmt.Sprintf("wni6-nginx-nodrill-test-%d", time.Now().UnixNano())
+	run := exec.Command("docker", "run", "-d", "--rm", "--name", name,
+		"-p", "127.0.0.1:0:443",
+		"-v", writeVhost(t, dir, "off")+":/etc/nginx/conf.d/site.conf:ro",
+		"-v", writeRealIPShim(t, dir)+":/etc/nginx/conf.d/00-realip.conf:ro",
+		"-v", certDir+":/etc/ssl/cloudflare:ro",
+		"-v", root+":/var/www/whynoipv6.com:ro",
+		"nginx:alpine")
+	if out, err := run.CombinedOutput(); err != nil {
+		t.Skipf("docker run failed (offline?): %v\n%s", err, out)
+	}
+	t.Cleanup(func() { _ = exec.Command("docker", "rm", "-f", name).Run() })
+
+	portOut, err := exec.Command("docker", "port", name, "443/tcp").Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	hostPort := strings.TrimSpace(strings.Split(string(portOut), "\n")[0])
+	client := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, //nolint:gosec // self-signed test cert
+		},
+		Timeout: 5 * time.Second,
+	}
+	var resp *http.Response
+	for i := 0; i < 20; i++ {
+		req, _ := http.NewRequest(http.MethodGet, "https://"+hostPort+"/", nil)
+		req.Host = "whynoipv6.com"
+		req.Header.Set("CF-Connecting-IP", "203.0.113.9")
+		var err error
+		if resp, err = client.Do(req); err == nil {
+			break
+		}
+		time.Sleep(250 * time.Millisecond)
+	}
+	if resp == nil {
+		t.Fatal("no response")
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("status = %d, want 200 with the drill off", resp.StatusCode)
+	}
+	if got := resp.Header.Get("Retry-Over-IPv6"); got != "" {
+		t.Errorf("Retry-Over-IPv6 = %q with the drill off, want it absent", got)
+	}
 }
