@@ -14,7 +14,8 @@ import SubdomainTable from '@/components/SubdomainTable.vue'
 import { getCampaign, getCampaignDomainChangelog } from '@/api'
 import { useDomainDetail } from '@/composables/useDomainDetail'
 import { useEntity } from '@/composables/useEntity'
-import { setPageTitle } from '@/composables/usePageMeta'
+import { setPageMeta, setPageTitle } from '@/composables/usePageMeta'
+import { domainPageHead } from '@/utils/domain-head'
 
 const route = useRoute()
 const uuid = computed(() => route.params.uuid as string)
@@ -43,10 +44,15 @@ const { data: campaignHeader } = useEntity(
 )
 const campaignName = computed(() => campaignHeader.value?.name ?? '')
 
-// Data-driven title once the domain loads — the "does example.com support
-// IPv6" long-tail query, mirrored by DomainDetail.
+// Data-driven head once the domain loads — the "does example.com support
+// IPv6" long-tail query, plus a description naming this domain's own results.
+// Built in one place so this surface and DomainDetail cannot drift. A domain with
+// nothing confirmed yet keeps the route's description.
 watch(domain, (d) => {
-  if (d) setPageTitle(`Does ${d.host} support IPv6?`)
+  if (!d) return
+  const { title, description } = domainPageHead(d)
+  if (description) setPageMeta(title, description)
+  else setPageTitle(title)
 })
 </script>
 

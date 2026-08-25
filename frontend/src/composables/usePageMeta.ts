@@ -102,10 +102,12 @@ export function setPageMeta(title: string, description: string): void {
 }
 
 /**
- * Data-driven title for entity pages (domain, country, campaign, live
- * check) — call once the entity has loaded; the route's description stays,
- * because it already describes the page accurately and the entity name adds
- * nothing to it.
+ * Data-driven title for entity pages (country, campaign, live check) — call
+ * once the entity has loaded; the route's description stays, because it
+ * already describes the page accurately and the entity name adds nothing to
+ * it. The domain report surfaces are the exception and call setPageMeta with
+ * a per-domain description (utils/domain-head.ts): one shared sentence across
+ * ~15k crawled pages is what a search engine reads as duplicate.
  *
  * It writes every tag the title appears in, not just document.title. Writing
  * a subset is what let og:title track the page while twitter:title kept
