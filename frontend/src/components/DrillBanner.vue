@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watchEffect } from 'vue'
+import { drillBannerVisible } from '@/components/drill-banner-state'
 import { drillPhase, formatWindow, nextWindow } from '@/utils/ipv4-drill'
 
 // The advance notice draft-martin-retry-over-ipv6 asks for: at least seven
@@ -26,6 +27,11 @@ const dismissedFor = (() => {
 
 const windowKey = window_.toISOString().slice(0, 10)
 const show = ref(phase !== 'idle' && dismissedFor !== windowKey)
+
+// Notification.vue reads this to keep its toast clear of the bar.
+watchEffect(() => {
+  drillBannerVisible.value = show.value
+})
 
 function dismiss() {
   show.value = false

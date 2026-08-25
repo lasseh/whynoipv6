@@ -1,12 +1,16 @@
 <script setup lang="ts">
 import PageShell from '@/components/PageShell.vue'
-import { formatWindow, nextWindow } from '@/utils/ipv4-drill'
+import { drillPhase, formatWindow, nextWindow } from '@/utils/ipv4-drill'
 
 // The year-round explanation of the monthly drill. The 503 body an IPv4
 // visitor gets during a window is public/ipv4-unavailable.html, which is a
 // standalone file because nothing on this origin is reachable for that
 // reader — so the two overlap on purpose, and this one carries the detail.
-const next = formatWindow(nextWindow(new Date()))
+// nextWindow stays on the current month for the whole of the 6th, so on the
+// one day this page gets real traffic "next window" would name today.
+const now = new Date()
+const open = drillPhase(now) === 'active'
+const next = formatWindow(nextWindow(now))
 </script>
 
 <template>
@@ -18,9 +22,12 @@ const next = formatWindow(nextWindow(new Date()))
             <h1 class="h2 mb-4">We switch off IPv4 once a month</h1>
             <p class="text-base text-gray-400">
               On the 6th of every month, 00:00 to 24:00 UTC, this site stops answering over IPv4.
-              Over IPv6 it runs exactly as it always does. Next window:
-              <span class="font-mono text-gray-200">{{ next }}</span
-              >.
+              Over IPv6 it runs exactly as it always does.
+              <template v-if="open">The window is open right now.</template>
+              <template v-else
+                >Next window: <span class="font-mono text-gray-200">{{ next }}</span
+                >.</template
+              >
             </p>
           </div>
 

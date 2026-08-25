@@ -435,6 +435,12 @@ func TestNginxIPv4OutageDrill(t *testing.T) {
 	for path, body := range map[string]string{
 		"index.html":            "<!doctype html><title>Why No IPv6</title>",
 		"ipv4-unavailable.html": string(helperBody),
+		// Bait for the bypass case below. It has to be a real file: for a URI
+		// with nothing behind it, try_files internally redirects to the shell,
+		// that redirect re-runs the rewrite phase, and the gate fires again —
+		// so an unanchored exemption would still answer 503 and the test would
+		// prove nothing.
+		"__ipv4-unavailable-x": "served despite the drill",
 	} {
 		if err := os.WriteFile(filepath.Join(root, path), []byte(body), 0o644); err != nil {
 			t.Fatal(err)
@@ -574,6 +580,17 @@ func TestNginxIPv4OutageDrill(t *testing.T) {
 		resp, _ := get("/ipv4-unavailable.html", v6, acceptHT)
 		if resp.StatusCode != http.StatusNotFound {
 			t.Errorf("status = %d, want 404", resp.StatusCode)
+		}
+	})
+
+	// The gate clears itself for the error_page handlers so the rewrite phase
+	// does not fire twice. That exemption is anchored to the two real handler
+	// URIs — an unanchored prefix would hand every IPv4 client a way to opt
+	// out of the drill by guessing the stem.
+	t.Run("the handler exemption cannot be used to bypass the gate", func(t *testing.T) {
+		resp, body := get("/__ipv4-unavailable-x", v4, acceptHT)
+		if resp.StatusCode == http.StatusOK {
+			t.Errorf("bypassed the drill: 200 with %.60q", body)
 		}
 	})
 
