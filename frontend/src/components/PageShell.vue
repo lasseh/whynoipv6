@@ -2,6 +2,7 @@
 import Header from '@/partials/Header.vue'
 import PageIllustration from '@/partials/PageIllustration.vue'
 import Footer from '@/partials/Footer.vue'
+import DrillBanner from '@/components/DrillBanner.vue'
 </script>
 
 <!-- The one page chrome: header, illustration, footer. Pages render their
@@ -24,5 +25,9 @@ import Footer from '@/partials/Footer.vue'
     </main>
 
     <Footer />
+
+    <!-- Advance notice of the monthly IPv4 outage; renders nothing outside
+         the notice period. -->
+    <DrillBanner />
   </div>
 </template>

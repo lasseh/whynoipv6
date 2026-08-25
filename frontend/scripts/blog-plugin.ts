@@ -46,6 +46,7 @@ const STATIC_ROUTES: [string, string][] = [
   ['/faq', '1.0'],
   ['/blog', '0.8'],
   ['/bot', '0.5'],
+  ['/ipv4-outage', '0.5'],
 ]
 
 function readPosts(root: string): Post[] {

@@ -180,6 +180,16 @@ const routes: RouteRecordRaw[] = [
     },
   },
   {
+    path: '/ipv4-outage',
+    name: 'Ipv4Outage',
+    component: () => import('@/pages/Ipv4Outage.vue'),
+    meta: {
+      title: 'Planned IPv4 Outages - Why No IPv6',
+      description:
+        'On the 6th of every month this site stops answering over IPv4 for the day, and signals it with Retry-Over-IPv6. What that means and why we do it.',
+    },
+  },
+  {
     // Published in the crawler's User-Agent string
     // (WhyNoIPv6Bot/1.0 (+https://whynoipv6.com/bot)) — keep this path stable.
     path: '/bot',
