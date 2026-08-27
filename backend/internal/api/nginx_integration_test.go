@@ -393,6 +393,11 @@ func writeRealIPShim(t *testing.T, dir string) string {
 	return out
 }
 
+// browserUA stands in for an ordinary visitor. It matters that this is set
+// explicitly: Go's default User-Agent contains no crawler token, but relying on
+// that would make every "human" assertion depend on a default staying benign.
+const browserUA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0 Safari/537.36"
+
 // TestNginxIPv4OutageDrill pins the planned IPv4 unavailability signalling
 // (draft-martin-retry-over-ipv6): during a window, IPv4 visitors get 503 plus
 // Retry-Over-IPv6 and a body that explains it, while IPv6 visitors are served
@@ -435,6 +440,8 @@ func TestNginxIPv4OutageDrill(t *testing.T) {
 	for path, body := range map[string]string{
 		"index.html":            "<!doctype html><title>Why No IPv6</title>",
 		"ipv4-unavailable.html": string(helperBody),
+		"robots.txt":            "User-agent: *\nAllow: /\n",
+		"sitemap.xml":           "<urlset/>",
 		// Bait for the bypass case below. It has to be a real file: for a URI
 		// with nothing behind it, try_files internally redirects to the shell,
 		// that redirect re-runs the rewrite phase, and the gate fires again —
@@ -476,9 +483,10 @@ func TestNginxIPv4OutageDrill(t *testing.T) {
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 		Timeout:       5 * time.Second,
 	}
-	// get drives the visitor's address family through CF-Connecting-IP, exactly
-	// as Cloudflare does in production.
-	get := func(path, clientIP, accept string) (*http.Response, string) {
+	// getAs drives the visitor's address family through CF-Connecting-IP,
+	// exactly as Cloudflare does in production, and the crawler exemption
+	// through User-Agent.
+	getAs := func(path, clientIP, accept, ua string) (*http.Response, string) {
 		t.Helper()
 		var resp *http.Response
 		var lastErr error
@@ -487,6 +495,7 @@ func TestNginxIPv4OutageDrill(t *testing.T) {
 			req.Host = "whynoipv6.com"
 			req.Header.Set("CF-Connecting-IP", clientIP)
 			req.Header.Set("Accept", accept)
+			req.Header.Set("User-Agent", ua)
 			resp, lastErr = client.Do(req)
 			if lastErr == nil {
 				body, _ := io.ReadAll(resp.Body)
@@ -498,6 +507,10 @@ func TestNginxIPv4OutageDrill(t *testing.T) {
 		t.Fatalf("GET %s as %s: %v", path, clientIP, lastErr)
 		return nil, ""
 	}
+	get := func(path, clientIP, accept string) (*http.Response, string) {
+		t.Helper()
+		return getAs(path, clientIP, accept, browserUA)
+	}
 
 	const (
 		v4       = "203.0.113.9"
@@ -505,6 +518,40 @@ func TestNginxIPv4OutageDrill(t *testing.T) {
 		acceptHT = "text/html,application/xhtml+xml"
 		acceptPJ = "application/problem+json"
 	)
+
+	// Search engines sit the drill out. Googlebot is IPv4-almost-exclusively,
+	// so without the exemption every window is a site-wide outage in Search
+	// Console, and a monthly all-day 5xx is the shape that suppresses crawl
+	// rate. Nothing here is a security boundary: the UA is spoofable, and
+	// opting yourself out of a voluntary drill costs nobody anything.
+	t.Run("search engines are served normally over IPv4", func(t *testing.T) {
+		for name, ua := range map[string]string{
+			"Googlebot": "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)",
+			"bingbot":   "Mozilla/5.0 (compatible; bingbot/2.0; +http://www.bing.com/bingbot.htm)",
+			"Applebot":  "Mozilla/5.0 (compatible; Applebot/0.1; +http://www.apple.com/go/applebot)",
+		} {
+			resp, _ := getAs("/domains", v4, acceptHT, ua)
+			if resp.StatusCode != http.StatusOK {
+				t.Errorf("%s: status = %d, want 200", name, resp.StatusCode)
+			}
+			if got := resp.Header.Get("Retry-Over-IPv6"); got != "" {
+				t.Errorf("%s got the signal header %q", name, got)
+			}
+		}
+	})
+
+	// A 5xx on robots.txt does not read as "briefly unavailable" — Google
+	// takes it as disallow-everything and stops crawling until it can fetch
+	// one again. Gating it would turn a one-day drill into a deindexing risk,
+	// so it is exempt for every client, crawler or not.
+	t.Run("crawler control files are never gated", func(t *testing.T) {
+		for _, path := range []string{"/robots.txt", "/sitemap.xml"} {
+			resp, _ := get(path, v4, acceptHT)
+			if resp.StatusCode != http.StatusOK {
+				t.Errorf("%s: status = %d, want 200 even during a window", path, resp.StatusCode)
+			}
+		}
+	})
 
 	t.Run("IPv4 gets the signal and the helper page", func(t *testing.T) {
 		resp, body := get("/", v4, acceptHT)

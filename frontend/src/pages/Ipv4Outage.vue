@@ -65,6 +65,22 @@ const next = formatWindow(nextWindow(now))
             </li>
 
             <li class="py-4">
+              <h4 class="text-xl font-medium mb-2">Search engines sit it out</h4>
+              <p class="text-base text-gray-400 mb-2">
+                Googlebot still crawls over IPv4 almost exclusively, and a search engine reads a
+                <span class="font-mono text-gray-200">503</span> across a whole day as a site that
+                has fallen over rather than one making a point. So crawlers are served normally
+                during a window, and <span class="font-mono text-gray-200">robots.txt</span> is
+                never withheld from anyone.
+              </p>
+              <p class="text-base text-gray-400">
+                We would rather say that plainly than quietly claim a cleaner outage than we run.
+                The drill is about whether people reach us over IPv6, and a crawler was never going
+                to act on the signal anyway.
+              </p>
+            </li>
+
+            <li class="py-4">
               <h4 class="text-xl font-medium mb-2">The signal is a proposed standard</h4>
               <p class="text-base text-gray-400 mb-2">
                 This follows
