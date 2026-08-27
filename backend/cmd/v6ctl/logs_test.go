@@ -20,29 +20,34 @@ func TestJournalctlArgs(t *testing.T) {
 	}{
 		{
 			name:  "defaults",
-			flags: logsFlags{unit: "crawler", lines: 1000},
-			want:  []string{"--unit", "whynoipv6-crawler.service", "--output", "cat", "--no-pager", "--lines", "1000"},
+			flags: logsFlags{units: []string{"crawler"}, lines: 1000},
+			want:  []string{"--unit", "whynoipv6-crawler*.service", "--output", "cat", "--no-pager", "--lines", "1000"},
 			skip:  []string{"--follow", "--since"},
 		},
 		{
 			name:  "an unknown unit name passes through",
-			flags: logsFlags{unit: "whynoipv6-notify@export.service"},
+			flags: logsFlags{units: []string{"whynoipv6-notify@export.service"}},
 			want:  []string{"--unit", "whynoipv6-notify@export.service"},
 		},
 		{
+			name:  "a glob passes through untouched",
+			flags: logsFlags{units: []string{"whynoipv6-crawler@[12].service"}},
+			want:  []string{"--unit", "whynoipv6-crawler@[12].service"},
+		},
+		{
 			name:  "no limit drops --lines",
-			flags: logsFlags{unit: "api", lines: 0},
-			want:  []string{"--unit", "whynoipv6-api.service"},
+			flags: logsFlags{units: []string{"api"}, lines: 0},
+			want:  []string{"--unit", "whynoipv6-api*.service"},
 			skip:  []string{"--lines"},
 		},
 		{
 			name:  "follow, since and until",
-			flags: logsFlags{unit: "crawler", follow: true, since: "1 hour ago", until: "now"},
+			flags: logsFlags{units: []string{"crawler"}, follow: true, since: "1 hour ago", until: "now"},
 			want:  []string{"--follow", "--since", "1 hour ago", "--until", "now"},
 		},
 		{
 			name:  "extra arguments are appended verbatim",
-			flags: logsFlags{unit: "crawler"},
+			flags: logsFlags{units: []string{"crawler"}},
 			extra: []string{"--grep", "preflight"},
 			want:  []string{"--grep", "preflight"},
 		},
@@ -65,6 +70,22 @@ func TestJournalctlArgs(t *testing.T) {
 				t.Errorf("-o cat is mandatory: %v", got)
 			}
 		})
+	}
+}
+
+// TestJournalctlArgsMultipleUnits: -u is repeatable, and each unit needs its
+// own --unit flag. Two crawler processes on one host run as a template, so
+// the crawler alias is a glob and a reader may want several units at once.
+func TestJournalctlArgsMultipleUnits(t *testing.T) {
+	got := journalctlArgs(&logsFlags{units: []string{"api", "crawler"}}, nil)
+	joined := strings.Join(got, "\x00")
+	for _, want := range []string{"--unit\x00whynoipv6-api*.service", "--unit\x00whynoipv6-crawler*.service"} {
+		if !strings.Contains(joined, want) {
+			t.Errorf("missing %q in %v", strings.ReplaceAll(want, "\x00", " "), got)
+		}
+	}
+	if n := strings.Count(joined, "--unit"); n != 2 {
+		t.Errorf("got %d --unit flags, want 2: %v", n, got)
 	}
 }
 

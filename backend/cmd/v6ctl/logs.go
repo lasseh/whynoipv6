@@ -20,20 +20,24 @@ import (
 
 const journalctl = "journalctl"
 
-// journalUnits maps the short name an operator types to the unit file in
-// deploy/systemd. A prefix rule would be wrong: the naming is not uniform
-// across the fleet (v6ctl-geoip-update.timer), so this stays a table. Any
-// name carrying a "." or "@" is passed to journalctl untouched.
+// journalUnits maps the short name an operator types to a journalctl --unit
+// pattern. They are globs on purpose: a service run more than once per host
+// is a template, so the crawler is whynoipv6-crawler@1.service and
+// whynoipv6-crawler@2.service rather than the plain unit the repo's
+// deploy/systemd/ ships, and one pattern covers both shapes. A prefix rule
+// over all of them would still be wrong — the fleet's naming is not uniform
+// (v6ctl-geoip-update.timer) — so this stays a table. Anything not in it
+// reaches journalctl untouched, globs included.
 var journalUnits = map[string]string{
-	"api":           "whynoipv6-api.service",
-	"crawler":       "whynoipv6-crawler.service",
-	"export":        "whynoipv6-export.service",
-	"unbound-stats": "whynoipv6-unbound-stats.service",
+	"api":           "whynoipv6-api*.service",
+	"crawler":       "whynoipv6-crawler*.service",
+	"export":        "whynoipv6-export*.service",
+	"unbound-stats": "whynoipv6-unbound-stats*.service",
 }
 
 // logsFlags is the flag set of `v6ctl logs`.
 type logsFlags struct {
-	unit   string
+	units  []string
 	lines  int
 	follow bool
 	since  string
@@ -66,7 +70,8 @@ func logsCmd() *cobra.Command {
 		},
 	}
 	flags := cmd.Flags()
-	flags.StringVarP(&f.unit, "unit", "u", "crawler", "unit to read (api|crawler|export|unbound-stats, or a unit name)")
+	flags.StringSliceVarP(&f.units, "unit", "u", []string{"crawler"},
+		"units to read; repeatable, and a unit name may be a glob (api|crawler|export|unbound-stats expand to one)")
 	flags.IntVarP(&f.lines, "lines", "n", 1000, "records to read from the journal (0 = no limit)")
 	flags.BoolVarP(&f.follow, "follow", "f", false, "keep reading as records arrive")
 	flags.StringVar(&f.since, "since", "", "journalctl --since expression")
@@ -160,7 +165,8 @@ func runJournalctl(cmd *cobra.Command, formatter *logfmt.Formatter, f *logsFlags
 		return fmt.Errorf("%s: %w", journalctl, waitErr)
 	}
 	if written == 0 && !f.follow {
-		fmt.Fprintf(os.Stderr, "no records matched (unit %s)\n", resolveUnit(f.unit))
+		fmt.Fprintf(os.Stderr, "no records matched %v; `systemctl list-units 'whynoipv6-*'` "+
+			"lists what this host actually runs\n", resolveUnits(f.units))
 	}
 	return nil
 }
@@ -169,7 +175,10 @@ func runJournalctl(cmd *cobra.Command, formatter *logfmt.Formatter, f *logsFlags
 // own line prefix would break the parse. Kept pure so it can be tested.
 func journalctlArgs(f *logsFlags, extra []string) []string {
 	args := make([]string, 0, 12+len(extra))
-	args = append(args, "--unit", resolveUnit(f.unit), "--output", "cat", "--no-pager")
+	for _, unit := range resolveUnits(f.units) {
+		args = append(args, "--unit", unit)
+	}
+	args = append(args, "--output", "cat", "--no-pager")
 	if f.follow {
 		args = append(args, "--follow")
 	}
@@ -185,13 +194,17 @@ func journalctlArgs(f *logsFlags, extra []string) []string {
 	return append(args, extra...)
 }
 
-// resolveUnit expands a short name; anything that already looks like a unit
-// name is left alone.
-func resolveUnit(name string) string {
-	if unit, ok := journalUnits[name]; ok {
-		return unit
+// resolveUnits expands the short names; anything else is left alone, so a
+// glob or a full unit name reaches journalctl as written.
+func resolveUnits(names []string) []string {
+	out := make([]string, 0, len(names))
+	for _, name := range names {
+		if unit, ok := journalUnits[name]; ok {
+			name = unit
+		}
+		out = append(out, name)
 	}
-	return name
+	return out
 }
 
 // render copies src through the formatter to stdout. Buffering is decided by

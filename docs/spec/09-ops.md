@@ -1191,7 +1191,12 @@ lines: one record per line, attributes wrapped to the terminal under a hanging i
 startup `configuration` record collapsed to its first few keys plus a count. `--full`
 restores all four. It reads stdin when piped or given `-`, otherwise runs
 `journalctl -u <unit> -o cat --no-pager` itself; `-o cat` is mandatory, because journald's
-own line prefix breaks the parse. The command overrides the root `PersistentPreRunE`, so
+own line prefix breaks the parse. `-u` is repeatable and its short names (`api`, `crawler`,
+`export`, `unbound-stats`) expand to **globs** — a service that runs more than once per
+host is a systemd template, so the two crawler processes (`CRAWLER_PROCS`, 00-overview) are
+`whynoipv6-crawler@1.service` and `whynoipv6-crawler@2.service`, and
+`whynoipv6-crawler*.service` reads both. Any other value, glob or full unit name, reaches
+journalctl untouched. The command overrides the root `PersistentPreRunE`, so
 it needs no `DATABASE_URL` and prints no config summary of its own into the stream it is
 reading. Rendering lives in `internal/logfmt`; a line that is not a JSON object (systemd's
 own unit messages, a Go panic) passes through dimmed rather than being dropped.
