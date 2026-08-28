@@ -207,9 +207,9 @@ func TestNginxSiteCanonicalRedirects(t *testing.T) {
 	name := fmt.Sprintf("wni6-nginx-site-test-%d", time.Now().UnixNano())
 	run := exec.Command("docker", "run", "-d", "--rm", "--name", name,
 		"-p", "127.0.0.1:0:443",
-		// Drill off: on the 6th of the month the shipped vhost answers 503 to
-		// every IPv4 client, and the docker gateway is one.
-		"-v", writeVhost(t, dir, "off")+":/etc/nginx/conf.d/site.conf:ro",
+		// The drill-free vhost: redirects, headers and the SPA fallback are the
+		// same in both files, and TestNginxVhostsAgree pins that they stay so.
+		"-v", writeBaseVhost(t, dir)+":/etc/nginx/conf.d/site.conf:ro",
 		"-v", certDir+":/etc/ssl/cloudflare:ro",
 		"-v", root+":/var/www/whynoipv6.com:ro",
 		"nginx:alpine")
@@ -347,19 +347,43 @@ func TestNginxSiteCanonicalRedirects(t *testing.T) {
 	})
 }
 
-// writeVhost copies the shipped frontend vhost into dir with the IPv4-outage
-// switch forced to mode ("off", "on" or "schedule") and returns the new path.
-// The coordinated window is gated on $time_iso8601, and a test cannot move the
-// container's clock onto the 6th — so the drill is exercised through the same
-// maps via the manual switch instead. Callers that are not testing the drill
-// pin themselves to "off" so they do not start failing on the 6th.
-func writeVhost(t *testing.T, dir, mode string) string {
+// vhostPath resolves one of the two shipped frontend vhosts. Ansible picks
+// which of them lands on the server: whynoipv6.com.conf is the plain site,
+// whynoipv6.com.drill.conf is the same site plus the IPv4-outage machinery.
+func vhostPath(t *testing.T, name string) string {
 	t.Helper()
-	src, err := filepath.Abs(filepath.Join("..", "..", "..", "deploy", "nginx", "whynoipv6.com.conf"))
+	p, err := filepath.Abs(filepath.Join("..", "..", "..", "deploy", "nginx", name))
 	if err != nil {
 		t.Fatal(err)
 	}
-	body, err := os.ReadFile(src)
+	return p
+}
+
+// writeBaseVhost copies the drill-free vhost into dir and returns the new path.
+// Nothing to patch: it carries no outage machinery at all, so it cannot start
+// failing on the 6th.
+func writeBaseVhost(t *testing.T, dir string) string {
+	t.Helper()
+	body, err := os.ReadFile(vhostPath(t, "whynoipv6.com.conf"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := filepath.Join(dir, "site.conf")
+	if err := os.WriteFile(out, body, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return out
+}
+
+// writeVhost copies the drill vhost into dir with the IPv4-outage switch forced
+// to mode ("off", "on" or "schedule") and returns the new path. The coordinated
+// window is gated on $time_iso8601, and a test cannot move the container's clock
+// onto the 6th — so the drill is exercised through the same maps via the manual
+// switch instead. Callers that are not testing the drill pin themselves to "off"
+// so they do not start failing on the 6th.
+func writeVhost(t *testing.T, dir, mode string) string {
+	t.Helper()
+	body, err := os.ReadFile(vhostPath(t, "whynoipv6.com.drill.conf"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -373,6 +397,38 @@ func writeVhost(t *testing.T, dir, mode string) string {
 		t.Fatal(err)
 	}
 	return out
+}
+
+// TestNginxVhostsAgree pins that whynoipv6.com.drill.conf is still the plain
+// vhost plus the outage machinery, and nothing else. The two files are 90%
+// identical and Ansible ships one or the other, so an edit applied to only one
+// of them is the failure mode that costs a deploy: the drill file quietly falls
+// behind on a redirect or a security header, and nobody finds out until the
+// month it is the one on the server.
+//
+// The check is that every line of the plain vhost appears in the drill vhost in
+// the same order — which is exactly what "the drill is purely additive" means.
+// It needs no docker, so it runs even where the container tests skip.
+func TestNginxVhostsAgree(t *testing.T) {
+	read := func(name string) []string {
+		body, err := os.ReadFile(vhostPath(t, name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return strings.Split(string(body), "\n")
+	}
+	base, drill := read("whynoipv6.com.conf"), read("whynoipv6.com.drill.conf")
+
+	i := 0
+	for _, line := range drill {
+		if i < len(base) && line == base[i] {
+			i++
+		}
+	}
+	if i != len(base) {
+		t.Errorf("whynoipv6.com.conf:%d is missing from whynoipv6.com.drill.conf:\n\t%q\n"+
+			"the two vhosts have diverged — apply the edit to both", i+1, base[i])
+	}
 }
 
 // writeRealIPShim emulates the host-level conf.d/cloudflare.conf that the

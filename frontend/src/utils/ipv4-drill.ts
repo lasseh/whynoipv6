@@ -1,8 +1,8 @@
 // The coordinated IPv4 outage window from draft-martin-retry-over-ipv6: the
-// 6th of each month, 00:00-24:00 UTC. deploy/nginx/whynoipv6.com.conf gates
-// the same day off $time_iso8601 — these two definitions must agree, and the
-// only reason this client-side copy exists is the draft's requirement to show
-// a notice for at least seven days before a window opens.
+// 6th of each month, 00:00-24:00 UTC. deploy/nginx/whynoipv6.com.drill.conf
+// gates the same day off $time_iso8601 — these two definitions must agree, and
+// the only reason this client-side copy exists is the draft's requirement to
+// show a notice for at least seven days before a window opens.
 //
 // Everything here is UTC, deliberately: a visitor west of Greenwich would
 // otherwise see the banner clear a day early. All arithmetic goes through

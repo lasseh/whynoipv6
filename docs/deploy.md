@@ -239,6 +239,24 @@ across processes by Postgres advisory locks.
   `/api/send` proxy to Umami Cloud (resolved at request time via the host's
   unbound instances), with `X-Umami-Client-IP` carrying the real visitor IP
   for geolocation.
+- `whynoipv6.com.drill.conf` — the same vhost plus the planned IPv4 outage
+  (draft-martin-retry-over-ipv6): on the 6th of each month, 00:00–24:00 UTC,
+  IPv4 visitors get `503` + `Retry-Over-IPv6: ?1` and a page explaining it,
+  while IPv6 is served normally. Search engines and `robots.txt`/`sitemap.xml`
+  sit the window out.
+
+  **Ansible picks one of the two as `whynoipv6.com.conf` on the server.** The
+  drill file arrives armed (`$ipv4_outage_mode` defaults to `schedule`), so
+  deploying it is the decision to run the drill — there is no second switch to
+  flip afterwards. Set the map to `off` to disable it without swapping files,
+  or to `on` for an ad-hoc window from the next reload.
+
+  The two files are identical apart from the outage machinery, and
+  `TestNginxVhostsAgree` fails if they drift, so **every edit to one must be
+  applied to the other**. Two out-of-repo prerequisites: the nginx process must
+  run with `TZ=UTC` ($time_iso8601 is local time), and the zone's Cloudflare
+  "Always Online" must be off or the edge serves an archived page over the 503.
+  `ipv4-unavailable.html` ships in the bundle rsync, not with this file.
 
 ### Backups ([`deploy/pgbackrest/`](../deploy/pgbackrest/))
 
