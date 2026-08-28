@@ -64,8 +64,11 @@ services:
     depends_on:
       migrate: {condition: service_completed_successfully}
 
-  # Built bundle served by nginx on :8081 (5173 stays free for local
+  # Built bundle served by nginx on :18081 (5173 stays free for local
   # `npm run dev`, which hits the api container via .env.development).
+  # 18081 and not 8081: the 8000s are the busiest range on a dev laptop, and
+  # 8081 in particular collided with another project's container here. Same
+  # +10000 idiom as db's 15432.
   # VITE_API_URL is baked at build time, so it must be the host-visible origin.
   frontend:
     build:
@@ -77,7 +80,7 @@ services:
       # interpolation, not env_file — this one must stay a ${...} reference.
       args: {VITE_API_URL: "${FRONTEND_API_URL:-http://localhost:8080}"}
     restart: unless-stopped
-    ports: ["8081:80"]
+    ports: ["18081:80"]
     depends_on: [api]
 
   # Init container: fetch the IPinfo Lite mmdb into the geoip volume before the
@@ -172,11 +175,14 @@ services:
       unbound2: {condition: service_started}
 
   # Dashboards + alert rules A1–A5 provisioned from deploy/grafana (09-ops §12).
-  # Loopback-only publish: reach it via ssh -L 3000:localhost:3000 on the server.
+  # Loopback-only publish: reach it via ssh -L 3000:localhost:13000 on the
+  # server. Published on 13000 and not 3000 because 3000 is where that tunnel
+  # lands on the laptop — with both on 3000, running compose locally fights the
+  # tunnel for the port and whichever came second loses.
   grafana:
     image: grafana/grafana:latest
     restart: unless-stopped
-    ports: ["127.0.0.1:3000:3000"]
+    ports: ["127.0.0.1:13000:3000"]
     environment:
       GF_SECURITY_ADMIN_USER: admin
       GF_SECURITY_ADMIN_PASSWORD: admin

@@ -53,11 +53,11 @@ This brings up, in dependency order:
 | `unbound1`, `unbound2` | bulk recursors, host ports `5301`/`5302` |
 | `migrate` | init container: `v6ctl migrate up`, then exits |
 | `api` | the API on `http://localhost:8080` |
-| `frontend` | nginx-served production bundle on `http://localhost:8081` |
+| `frontend` | nginx-served production bundle on `http://localhost:18081` |
 | `geoip-init` | init container: `v6ctl geoip update` → fetches `ipinfo_lite.mmdb` into the `geoip` volume |
 | `crawler` | the scanning daemon (starts after `migrate` + `geoip-init` succeed) |
 | `unbound-stats` | sidecar scraping both recursors into `unbound_stats` every 60s |
-| `grafana` | dashboards + alert rules A1–A5 from `deploy/grafana/`, `http://127.0.0.1:3000` (admin/admin) |
+| `grafana` | dashboards + alert rules A1–A5 from `deploy/grafana/`, `http://127.0.0.1:13000` (admin/admin); on the dev host reach it with `ssh -L 3000:localhost:13000` |
 
 Useful daily commands:
 
