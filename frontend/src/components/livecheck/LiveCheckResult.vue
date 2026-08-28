@@ -12,7 +12,9 @@ import type { CheckEnvelope } from '@/api'
 import { liveStatus } from '@/utils/status'
 import { formatDateTime } from '@/utils/date'
 
-const props = defineProps<{ envelope: CheckEnvelope }>()
+const props = withDefaults(defineProps<{ envelope: CheckEnvelope; example?: boolean }>(), {
+  example: false,
+})
 
 const glyphs = { check: CheckIcon, cross: CrossIcon, minus: MinusIcon } as const
 
@@ -85,7 +87,7 @@ async function copyLink() {
   <div class="mt-8">
     <div class="flex items-center justify-between mb-3">
       <h2 class="text-xl font-bold text-pink-600 font-mono">{{ envelope.host }}</h2>
-      <span class="inline-flex items-center gap-2">
+      <span v-if="!example">
         <button
           type="button"
           class="text-xs text-gray-400 hover:text-fuchsia-400 underline underline-offset-2 cursor-pointer"
@@ -93,10 +95,6 @@ async function copyLink() {
         >
           {{ copied ? 'Copied' : 'Copy link' }}
         </button>
-        <span
-          class="text-xs uppercase tracking-wide text-gray-400 border border-gray-700 rounded px-2 py-0.5"
-          >Live observation</span
-        >
       </span>
     </div>
 
@@ -163,7 +161,10 @@ async function copyLink() {
       </RouterLink>
     </div>
 
-    <div class="mt-3 text-xs text-gray-500">
+    <div v-if="example" class="mt-3 text-xs text-gray-500">
+      Example data. Run a check above for a live result.
+    </div>
+    <div v-else class="mt-3 text-xs text-gray-500">
       Checked
       {{ envelope.result?.checked_at ? formatDateTime(envelope.result.checked_at) : 'just now' }}
       <template v-if="durationSeconds"> · scan took {{ durationSeconds }}s </template>

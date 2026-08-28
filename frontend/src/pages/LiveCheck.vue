@@ -7,6 +7,7 @@ import ApiError from '@/components/ApiError.vue'
 import LiveCheckProgress from '@/components/livecheck/LiveCheckProgress.vue'
 import LiveCheckResult from '@/components/livecheck/LiveCheckResult.vue'
 
+import type { CheckEnvelope } from '@/api'
 import { useLiveCheck } from '@/composables/useLiveCheck'
 import { setPageTitle } from '@/composables/usePageMeta'
 
@@ -19,6 +20,34 @@ const { host, envelope, problem, running, retryLeft, submit, cancel } = useLiveC
 
 const done = computed(() => envelope.value?.status === 'done')
 const failed = computed(() => envelope.value?.status === 'failed')
+
+const exampleEnvelope: CheckEnvelope = {
+  id: null,
+  host: 'example.com',
+  status: 'done',
+  cached: false,
+  created_at: '',
+  completed_at: null,
+  error: null,
+  result: {
+    checks: {
+      base: { status: 'supported' },
+      www: { status: 'supported' },
+      ns: { status: 'supported' },
+      mx: { status: 'unsupported' },
+      conn: { status: 'supported' },
+      resources: { status: 'partial' },
+      tls: { status: 'supported' },
+      smtp: { status: 'unsupported' },
+      parity: { status: 'supported' },
+      dnssec: { status: 'supported' },
+      ptr: { status: 'not_applicable' },
+      spf: { status: 'supported' },
+    },
+    latency: { v4_ms: 31, v6_ms: 27 },
+  },
+  confirmed: null,
+}
 
 // Data-driven title once a result is on screen; also watches the target so
 // the canonicalizing router.replace (whose beforeEach resets the static
@@ -36,9 +65,8 @@ watch([envelope, () => route.params.target], ([env]) => {
           <div class="text-center mb-8">
             <h1 class="h2 mb-4">Live IPv6 Check</h1>
             <p class="text-lg text-gray-400">
-              The live check scans DNS and mail, then attempts a real IPv6 connection. This is a
-              live observation; tracked, confirmed status updates on the crawler's schedule, not
-              yours.
+              Run a live IPv6 check against any domain. We inspect the website, DNS, mail servers,
+              and page resources, then show exactly where IPv6 works and where it gives up.
             </p>
           </div>
 
@@ -102,6 +130,16 @@ watch([envelope, () => route.params.target], ([env]) => {
 
           <!-- Result -->
           <LiveCheckResult v-else-if="done && envelope" :envelope="envelope" />
+
+          <!-- Empty state -->
+          <template v-else-if="!problem">
+            <div class="flex items-center gap-4 mt-10" aria-hidden="true">
+              <hr class="grow border-gray-700" />
+              <span class="text-xs uppercase tracking-wide text-gray-500">Example</span>
+              <hr class="grow border-gray-700" />
+            </div>
+            <LiveCheckResult :envelope="exampleEnvelope" example />
+          </template>
         </div>
       </div>
     </section>

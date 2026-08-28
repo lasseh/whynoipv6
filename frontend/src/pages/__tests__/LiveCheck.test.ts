@@ -77,6 +77,15 @@ describe('LiveCheck page', () => {
     vi.useRealTimers()
   })
 
+  it('shows a labelled example before the first check', async () => {
+    const wrapper = await mountPage()
+
+    expect(wrapper.text()).toContain('example.com')
+    expect(wrapper.text()).toContain('Example data')
+    expect(wrapper.text()).not.toContain('Example result')
+    expect(wrapper.text()).not.toContain('Copy link')
+  })
+
   it('enqueues, polls every 2s, and renders the live observation result', async () => {
     createCheck.mockResolvedValue(accepted)
     getCheck.mockResolvedValue(doneEnvelope)
@@ -92,7 +101,6 @@ describe('LiveCheck page', () => {
     await flushPromises()
 
     expect(getCheck).toHaveBeenCalledWith(42, expect.anything())
-    expect(wrapper.text()).toContain('Live observation')
     expect(wrapper.text()).toContain('Nameservers')
     expect(wrapper.text()).toContain('Missing') // mx unsupported
     expect(wrapper.text()).not.toContain('Resolvers disagreed')
@@ -138,7 +146,7 @@ describe('LiveCheck page', () => {
     await vi.advanceTimersByTimeAsync(2_000)
     await flushPromises()
     expect(getCheck).toHaveBeenCalledTimes(2)
-    expect(wrapper.text()).toContain('Live observation')
+    expect(wrapper.text()).toContain('Copy link')
   })
 
   it('strips pasted URLs down to the hostname', async () => {
@@ -201,7 +209,7 @@ describe('LiveCheck page', () => {
 
     expect(getCheck).not.toHaveBeenCalled()
     expect(wrapper.text()).toContain('stored result')
-    expect(wrapper.text()).toContain('Live observation')
+    expect(wrapper.text()).toContain('Copy link')
   })
 
   it('shows the failed envelope error', async () => {
@@ -270,7 +278,7 @@ describe('LiveCheck page', () => {
     expect(getLatestCheck).toHaveBeenCalledWith('example.com', expect.anything())
     expect(createCheck).not.toHaveBeenCalled()
     expect(wrapper.text()).toContain('stored result')
-    expect(wrapper.text()).toContain('Live observation')
+    expect(wrapper.text()).toContain('Copy link')
     expect(wrapper.find('input').element.value).toBe('example.com')
   })
 
@@ -288,7 +296,7 @@ describe('LiveCheck page', () => {
 
     await vi.advanceTimersByTimeAsync(2_000)
     await flushPromises()
-    expect(wrapper.text()).toContain('Live observation')
+    expect(wrapper.text()).toContain('Copy link')
   })
 
   it('loads a legacy /check/{id} link and upgrades the URL to the domain', async () => {
@@ -299,7 +307,7 @@ describe('LiveCheck page', () => {
 
     expect(createCheck).not.toHaveBeenCalled()
     expect(getCheck).toHaveBeenCalledWith(42, expect.anything())
-    expect(wrapper.text()).toContain('Live observation')
+    expect(wrapper.text()).toContain('Copy link')
     expect(wrapper.find('input').element.value).toBe('example.com')
     expect(wrapper.router.currentRoute.value.path).toBe('/check/example.com')
   })
@@ -315,7 +323,7 @@ describe('LiveCheck page', () => {
 
     await vi.advanceTimersByTimeAsync(2_000)
     await flushPromises()
-    expect(wrapper.text()).toContain('Live observation')
+    expect(wrapper.text()).toContain('Copy link')
   })
 
   it('shows the expiry note for a reaped job id', async () => {
