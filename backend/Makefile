@@ -38,9 +38,13 @@ test: ## Run tests (race detector always on)
 lint: ## Run golangci-lint (vet, fmt, imports included)
 	golangci-lint run ./...
 
+# -count=1 because these tests read things go's cache does not track: the nginx
+# vhosts under ../deploy (outside the module, so file-read tracking does not
+# reach them) and the state of docker. Without it, editing a vhost and re-running
+# reports a cached pass and TestNginxVhostsAgree never runs.
 test-integration: ## Integration tests (one dockerized PG18+Timescale for the whole run; //go:build integration files)
 	@$(MAKE) testdb-up
-	@PGTEST_DSN="$(PGTEST_DSN)" $(TEST_CMD) -race -tags=integration ./...; status=$$?; \
+	@PGTEST_DSN="$(PGTEST_DSN)" $(TEST_CMD) -count=1 -race -tags=integration ./...; status=$$?; \
 	  if [ $$status -ne 0 ]; then \
 	    echo "==> test database state (exit code, then the last 200 log lines)"; \
 	    docker ps -a --filter name=$(PGTEST_CONTAINER) --format '{{.Names}} {{.Status}}'; \

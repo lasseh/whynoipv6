@@ -406,9 +406,13 @@ func writeVhost(t *testing.T, dir, mode string) string {
 // behind on a redirect or a security header, and nobody finds out until the
 // month it is the one on the server.
 //
-// The check is that every line of the plain vhost appears in the drill vhost in
-// the same order — which is exactly what "the drill is purely additive" means.
-// It needs no docker, so it runs even where the container tests skip.
+// The drill vhost marks its additions with `# >>> ipv4 drill` / `# <<< ipv4
+// drill`. Cut those out and what remains must equal the plain vhost byte for
+// byte. Equality and not "every base line appears somewhere in the drill file":
+// that weaker check passes when a line is *deleted* from the plain vhost, so
+// the plain site could quietly ship without its ssl_protocols line while the
+// drill file kept it. It needs no docker, so it runs even where the container
+// tests skip.
 func TestNginxVhostsAgree(t *testing.T) {
 	read := func(name string) []string {
 		body, err := os.ReadFile(vhostPath(t, name))
@@ -419,15 +423,46 @@ func TestNginxVhostsAgree(t *testing.T) {
 	}
 	base, drill := read("whynoipv6.com.conf"), read("whynoipv6.com.drill.conf")
 
-	i := 0
-	for _, line := range drill {
-		if i < len(base) && line == base[i] {
-			i++
+	var stripped []string
+	inDrillBlock, blocks := false, 0
+	for n, line := range drill {
+		switch strings.TrimSpace(line) {
+		case "# >>> ipv4 drill":
+			if inDrillBlock {
+				t.Fatalf("whynoipv6.com.drill.conf:%d: nested drill block", n+1)
+			}
+			inDrillBlock = true
+		case "# <<< ipv4 drill":
+			if !inDrillBlock {
+				t.Fatalf("whynoipv6.com.drill.conf:%d: drill block closed but never opened", n+1)
+			}
+			inDrillBlock, blocks = false, blocks+1
+		default:
+			if !inDrillBlock {
+				stripped = append(stripped, line)
+			}
 		}
 	}
-	if i != len(base) {
-		t.Errorf("whynoipv6.com.conf:%d is missing from whynoipv6.com.drill.conf:\n\t%q\n"+
-			"the two vhosts have diverged — apply the edit to both", i+1, base[i])
+	if inDrillBlock {
+		t.Fatal("whynoipv6.com.drill.conf: unterminated drill block")
+	}
+	if blocks == 0 {
+		t.Fatal("whynoipv6.com.drill.conf carries no drill blocks — has the machinery been removed?")
+	}
+
+	for i := range max(len(base), len(stripped)) {
+		var b, s string
+		if i < len(base) {
+			b = base[i]
+		}
+		if i < len(stripped) {
+			s = stripped[i]
+		}
+		if b != s {
+			t.Fatalf("the two vhosts have diverged at line %d — apply the edit to both\n"+
+				"\twhynoipv6.com.conf:       %q\n"+
+				"\twhynoipv6.com.drill.conf: %q", i+1, b, s)
+		}
 	}
 }
 
