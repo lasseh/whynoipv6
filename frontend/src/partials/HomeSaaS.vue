@@ -13,14 +13,11 @@
           </header>
 
           <!-- Content -->
-          <div class="text-lg text-gray-400">
-            <p class="mb-2">
-              IPv6 has been a standard since 1998. IPv4 ran out of addresses more than a decade ago.
-              The most-visited websites on the internet still haven't connected those two facts, so
-              we keep score. Publicly,
-              <span class="font-semibold a-gradient"
-                >until a globally routable AAAA record says otherwise.</span
-              >
+          <div class="max-w-5xl text-lg leading-8 text-gray-400">
+            <p>
+              We check the top million domains for IPv6 support and publish the results. Sites with
+              working IPv6 earn a place among the heroes. Sites without it stay on the Wall of Shame
+              <span class="font-semibold a-gradient">until they enable IPv6.</span>
             </p>
           </div>
         </article>
@@ -29,22 +26,27 @@
           <!-- Items -->
           <div class="grid gap-20">
             <!-- Item -->
-            <div class="md:grid md:grid-cols-12 md:gap-6">
+            <div class="md:grid md:grid-cols-12 md:gap-10 lg:gap-16">
               <!-- SaaS -->
               <div
                 class="max-w-xl md:max-w-none md:w-full mx-auto md:col-span-5 lg:col-span-6 mb-8 md:mb-0 md:order-1"
               >
                 <h2 class="h4 mb-3">How does it work?</h2>
-                <p class="text-base text-gray-400 mb-0">
-                  The crawler checks active domains on a daily schedule: AAAA records for the
-                  domain, www, nameserver hosts, and mail hosts, plus a real connection over IPv6.
-                  Failures can back off. The results determine each domain's tier and stay public.
-                  Anyone can submit a campaign list for the crawler too.
+                <p class="text-base leading-7 text-gray-400 mb-4">
+                  The crawler checks active domains every day. It looks for globally routable AAAA
+                  records on the domain, www, nameservers, and mail servers, then makes a real
+                  connection over IPv6.
                 </p>
-                <h2 class="h4 mb-3 mt-6">Why shame?</h2>
-                <p class="text-base text-gray-400 mb-0">
-                  World IPv6 Launch was in 2012. The missing part isn't another conference talk, so
-                  here is the public list.
+                <p class="text-base leading-7 text-gray-400 mb-0">
+                  The results decide who becomes a Hero and who joins the Wall of Shame. Want to
+                  audit your own corner of the internet? Submit a campaign list and the crawler will
+                  keep watch.
+                </p>
+                <h2 class="h4 mb-3 mt-8">Why shame?</h2>
+                <p class="text-base leading-7 text-gray-400 mb-0">
+                  Polite reminders have expired. World IPv6 Launch was in 2012, and some major sites
+                  still treat IPv6 as a future project. Shame was not the first idea. It is simply
+                  the one left after waiting this long.
                 </p>
               </div>
               <!-- Buttons -->
@@ -53,10 +55,10 @@
                   <!-- Tabs buttons -->
                   <div class="mb-8 md:mb-0 space-y-2">
                     <div
-                      class="text-left flex items-center px-6 py-3 rounded border border-transparent hover:bg-zinc-800"
+                      class="text-left flex items-start px-6 py-4 rounded border border-transparent hover:bg-zinc-800"
                     >
                       <svg
-                        class="shrink-0 fill-zinc-400 mr-3"
+                        class="shrink-0 fill-zinc-400 mr-3 mt-1"
                         xmlns="http://www.w3.org/2000/svg"
                         width="24"
                         height="24"
@@ -72,17 +74,17 @@
                         <div class="text-base font-semibold text-zinc-200 mb-1 a-gradient">
                           Public Accountability
                         </div>
-                        <div class="text-zinc-400 text-base">
-                          Our public reports make missing IPv6 support visible and harder for
-                          companies to ignore.
+                        <div class="text-zinc-400 text-base leading-7">
+                          Companies can ignore another polite reminder. Their domain sitting on a
+                          public Wall of Shame is harder to dismiss.
                         </div>
                       </div>
                     </div>
                     <div
-                      class="text-left flex items-center px-6 py-3 rounded border border-transparent hover:bg-zinc-800"
+                      class="text-left flex items-start px-6 py-4 rounded border border-transparent hover:bg-zinc-800"
                     >
                       <svg
-                        class="shrink-0 fill-zinc-400 mr-3"
+                        class="shrink-0 fill-zinc-400 mr-3 mt-1"
                         xmlns="http://www.w3.org/2000/svg"
                         width="24"
                         height="24"
@@ -99,17 +101,17 @@
                         <div class="text-base font-semibold text-zinc-200 mb-1 a-gradient">
                           Community Action
                         </div>
-                        <div class="text-zinc-400 text-base">
-                          Share what you find, start conversations, and use the data to push for
-                          wider IPv6 adoption.
+                        <div class="text-zinc-400 text-base leading-7">
+                          We list the Sinners. You supply the uncomfortable questions. Share the
+                          results, tag the company, and ask why IPv6 is still missing.
                         </div>
                       </div>
                     </div>
                     <div
-                      class="text-left flex items-center px-6 py-3 rounded border border-transparent hover:bg-zinc-800"
+                      class="text-left flex items-start px-6 py-4 rounded border border-transparent hover:bg-zinc-800"
                     >
                       <svg
-                        class="shrink-0 fill-zinc-400 mr-3"
+                        class="shrink-0 fill-zinc-400 mr-3 mt-1"
                         xmlns="http://www.w3.org/2000/svg"
                         width="24"
                         height="24"
@@ -127,9 +129,9 @@
                         <div class="text-base font-semibold text-zinc-200 mb-1 a-gradient">
                           User-Led Shaming
                         </div>
-                        <div class="text-zinc-400 text-base">
-                          Found a well-known site without IPv6? Submit it, and we'll add it to our
-                          daily checks.
+                        <div class="text-zinc-400 text-base leading-7">
+                          The top million does not contain every domain worth shaming. Submit a
+                          campaign and put your own corner of the internet under inspection.
                         </div>
                       </div>
                     </div>

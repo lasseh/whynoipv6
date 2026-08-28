@@ -85,20 +85,23 @@ const campaigns = computed(() =>
             <!-- Campaign info content -->
             <div class="text-lg text-gray-400">
               <p class="mb-4">
-                Campaigns are reader-submitted lists of domains with something in common: a
-                country's banks, its ISPs, its government. Each list is crawled and scored as a
-                group. An entry is ready when its tracked hostname and at least one nameserver host
-                publish AAAA records, and www is either supported or not applicable.
+                Campaigns track groups with something in common, such as banks, governments, network
+                operators, and public services. We check their domains every day and publish who
+                supports IPv6 and who is still holding the group back.
+              </p>
+              <p class="mb-4">
+                The Mandate view is less polite. These organizations are already required to deploy
+                IPv6 by law, policy, decree, or contract. We track whether they actually did it,
+                because a requirement nobody checks is just paperwork.
               </p>
               <p class="mb-8">
-                Have a list of domains that should know better? Open an issue in the
+                Have a group that deserves the same attention? Submit it through the
                 <a
                   href="https://github.com/lasseh/whynoipv6-campaign"
                   class="underline a-gradient"
                   target="_blank"
                   >campaign repo</a
-                >
-                and we'll put it on the scoreboard.
+                >.
               </p>
             </div>
 

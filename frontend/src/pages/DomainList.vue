@@ -30,13 +30,18 @@ const tierTabs = TIERS.filter((t) => !t.hidden).map((t) => ({ value: t.slug, lab
         <div class="pt-24 pb-12 md:pt-32 md:pb-20">
           <header ref="anchorTop" class="mb-8">
             <div class="text-center md:text-left">
-              <h1 class="h2 mb-4">The Tranco top million, judged by their AAAA records</h1>
+              <h1 class="h2 mb-4">One million domains, checked and judged</h1>
+              <p class="text-lg text-gray-400 mb-4">
+                The crawler works through the Tranco top million every day. It checks IPv6 on the
+                apex, www, nameservers, and mail servers, then opens a real IPv6 connection to
+                confirm the website answers. The important DNS checks use three public resolvers,
+                with two required to agree.
+              </p>
               <p class="text-lg text-gray-400">
-                We check the apex, www, nameserver and mail hosts, and whether the site actually
-                answers over IPv6. Passing every required check makes a Hero. Saints pass the
-                page-resource grade too. A Sinner still has an apex A record but no globally
-                routable AAAA record. Active domains normally run daily, with other schedules for
-                retries and backoff.
+                Domains with only IPv4 become Sinners. Those that pass every required IPv6 check
+                become Heroes. Saints also pass the external page-resource check. We wait for
+                repeated scans to agree before changing a domain's tier. Even public shame needs
+                quality control.
               </p>
             </div>
           </header>

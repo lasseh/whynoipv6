@@ -24,16 +24,17 @@ const domainList = computed(() => data.value ?? [])
       <div class="pt-4 pb-4 md:pt-4 md:pb-4">
         <header class="mb-6">
           <!-- Title and excerpt -->
-          <div class="text-left">
+          <div class="max-w-4xl text-left">
             <h2 class="h3 mb-4">Wall of Shame</h2>
-            <p class="text-base text-gray-400">
-              The Tranco top million, kept on the crawler's schedule: every domain's IPv6 support,
-              or lack of it, on public display.
+            <p class="text-base leading-7 text-gray-400 mb-4">
+              This is where the excuses become rows. We check the Tranco top million and keep the
+              domains still missing IPv6 on public display.
             </p>
-            <p class="text-base text-gray-400">
-              Every domain listed here still publishes an apex A record but no globally routable
-              AAAA record. Nameserver IPv6 support is shown alongside; some manage one without the
-              other.
+            <p class="text-base leading-7 text-gray-400 mb-0">
+              Every domain here has IPv4 at its apex but no globally routable IPv6 address. The
+              crawler checks the rest of the setup too, including www, nameservers, mail servers,
+              and real IPv6 connectivity. Their IPv6 neglect is measured, ranked, and displayed in
+              public.
             </p>
           </div>
         </header>

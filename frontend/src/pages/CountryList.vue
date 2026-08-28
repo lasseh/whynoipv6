@@ -33,7 +33,9 @@ const {
             <div class="sm:flex sm:justify-between sm:items-center mb-4">
               <!-- Left: Title -->
               <div class="mb-4 sm:mb-0">
-                <h1 class="text-2xl md:text-3xl text-zinc-100 font-bold">IPv6 by Country</h1>
+                <h1 class="text-2xl md:text-3xl text-zinc-100 font-bold">
+                  The top million, grouped by country
+                </h1>
               </div>
 
               <!-- Right: Actions -->
@@ -46,10 +48,14 @@ const {
             <!-- content -->
             <div class="text-lg text-gray-400">
               <p class="mb-4 md:mr-32">
-                IPv6 adoption, country by country. A ccTLD decides where a domain belongs; otherwise
-                we use GeoIP. The percentage is the share of ranked domains with confirmed apex
-                IPv6, not a measure of the country's networks. Sinners and Heroes get tabs; Partial,
-                Inactive, and Unknown still count. Pick yours and meet the local Sinners.
+                We group ranked domains by country and calculate the share with confirmed IPv6 at
+                the apex. Country-code domains belong to the country named by their suffix. For
+                generic domains such as .com, we use the server's location.
+              </p>
+              <p class="mb-4 md:mr-32">
+                This is a view of web-facing domains, not a measure of national IPv6 adoption,
+                domain ownership, or internet access. Open a country to see the domains attributed
+                to it, including the Sinners bringing down the average.
               </p>
             </div>
 
