@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import DrillBanner from '@/components/DrillBanner.vue'
-import { drillBannerVisible } from '@/components/drill-banner-state'
+import { drillBannerHeight } from '@/components/drill-banner-state'
 
 // This banner is only on screen for eight days a month, so nobody meets it
 // during ordinary development and a regression would sit unnoticed until the
@@ -27,6 +27,26 @@ function useStorage(storage: unknown) {
   vi.stubGlobal('localStorage', storage)
 }
 
+// jsdom ships no ResizeObserver, and the banner uses one to publish its height.
+// The stub reports a fixed height on observe so the "how tall is the bar"
+// contract can be asserted at all; jsdom lays nothing out, so a real one would
+// only ever report 0.
+const STUB_BAR_HEIGHT = 109
+function stubResizeObserver() {
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      constructor(private cb: () => void) {}
+      observe(el: Element) {
+        el.getBoundingClientRect = () => ({ height: STUB_BAR_HEIGHT }) as DOMRect
+        this.cb()
+      }
+      disconnect() {}
+      unobserve() {}
+    },
+  )
+}
+
 function render() {
   return mount(DrillBanner, { global: { stubs: { RouterLink } } })
 }
@@ -34,7 +54,8 @@ function render() {
 beforeEach(() => {
   vi.useFakeTimers()
   useStorage(fakeStorage())
-  drillBannerVisible.value = false
+  stubResizeObserver()
+  drillBannerHeight.value = 0
 })
 
 afterEach(() => {
@@ -46,7 +67,7 @@ describe('DrillBanner', () => {
   it('says nothing outside the notice period', () => {
     vi.setSystemTime(new Date('2026-09-20T12:00:00Z'))
     expect(render().text()).toBe('')
-    expect(drillBannerVisible.value).toBe(false)
+    expect(drillBannerHeight.value).toBe(0)
   })
 
   it('announces the window during the notice period, with its date', () => {
@@ -54,7 +75,7 @@ describe('DrillBanner', () => {
     const text = render().text()
     expect(text).toContain('Planned IPv4 outage on 6 October')
     expect(text).toContain('Over IPv6 nothing changes')
-    expect(drillBannerVisible.value).toBe(true)
+    expect(drillBannerHeight.value).toBe(STUB_BAR_HEIGHT)
   })
 
   // During a window an IPv4 visitor gets the 503 and never loads the SPA, so
@@ -74,7 +95,7 @@ describe('DrillBanner', () => {
     const first = render()
     await first.get('button').trigger('click')
     expect(first.text()).toBe('')
-    expect(drillBannerVisible.value).toBe(false)
+    expect(drillBannerHeight.value).toBe(0)
     expect(storage.getItem('wni6-ipv4-drill-dismissed')).toBe('2026-10-06')
 
     // Same window: still dismissed.

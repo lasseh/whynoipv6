@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref, watch } from 'vue'
 import { useVisitorIp } from '@/composables/useVisitorIp'
-import { drillBannerVisible } from '@/components/drill-banner-state'
+import { drillBannerHeight } from '@/components/drill-banner-state'
 
 // Visitor IPv6 banner (§9.5): GET /ip, warn iff family !== "ipv6" — no string
 // sniffing. Auto-hides after 15 s or shortly after the user scrolls; a failed
@@ -44,7 +44,7 @@ onUnmounted(() => {
     <div v-if="showNotification" role="alert">
       <div
         class="flex-col w-full max-w-lg px-4 py-2 fixed right-4 flex gap-4 rounded-sm text-sm bg-zinc-800 shadow-lg border border-zinc-700 text-slate-300"
-        :class="drillBannerVisible ? 'bottom-20' : 'bottom-4'"
+        :style="{ bottom: `${drillBannerHeight + 16}px` }"
       >
         <div class="flex w-full justify-between items-start">
           <div class="flex">

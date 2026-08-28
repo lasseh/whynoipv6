@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, watchEffect } from 'vue'
-import { drillBannerVisible } from '@/components/drill-banner-state'
+import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { drillBannerHeight } from '@/components/drill-banner-state'
 import { drillPhase, formatWindow, nextWindow } from '@/utils/ipv4-drill'
 
 // The advance notice draft-martin-retry-over-ipv6 asks for: at least seven
@@ -28,13 +28,33 @@ const dismissedFor = (() => {
 const windowKey = window_.toISOString().slice(0, 10)
 const show = ref(phase !== 'idle' && dismissedFor !== windowKey)
 
-// Notification.vue reads this to keep its toast clear of the bar.
-watchEffect(() => {
-  drillBannerVisible.value = show.value
+// Notification.vue reads this to keep its toast clear of the bar. Measured
+// rather than assumed: the copy wraps to three lines on a phone, so the bar is
+// more than twice as tall there as on a desktop. ResizeObserver and not a
+// one-shot read because that height changes on rotate and on resize.
+const bar = ref<HTMLElement | null>(null)
+let observer: ResizeObserver | undefined
+
+onMounted(() => {
+  const el = bar.value
+  if (!el) return
+  observer = new ResizeObserver(() => {
+    drillBannerHeight.value = el.getBoundingClientRect().height
+  })
+  observer.observe(el)
 })
+
+function release() {
+  observer?.disconnect()
+  observer = undefined
+  drillBannerHeight.value = 0
+}
+
+onBeforeUnmount(release)
 
 function dismiss() {
   show.value = false
+  release()
   try {
     localStorage.setItem(storageKey, windowKey)
   } catch {
@@ -46,6 +66,7 @@ function dismiss() {
 <template>
   <div
     v-if="show"
+    ref="bar"
     role="status"
     class="fixed inset-x-0 bottom-0 z-40 border-t border-zinc-700 bg-zinc-800/95 backdrop-blur-sm"
   >
