@@ -165,7 +165,7 @@ func (c *ResponseParity) fetch(ctx context.Context, domain string, ip net.IP, ne
 	return ParityFetch{
 		Address:        ip.String(),
 		StatusCode:     resp.StatusCode,
-		ContentType:    resp.Header.Get("Content-Type"),
+		ContentType:    sanitizeText(resp.Header.Get("Content-Type")),
 		ContentLength:  contentLength,
 		ResponseTimeMS: time.Since(reqStart).Milliseconds(),
 	}, nil

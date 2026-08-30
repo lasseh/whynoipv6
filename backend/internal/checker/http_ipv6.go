@@ -55,7 +55,7 @@ func (c *HTTPIPv6) tryHTTP(ctx context.Context, domain string, ip net.IP) (Resul
 			Address:        ip.String(),
 			StatusCode:     resp.StatusCode,
 			ResponseTimeMS: &rt,
-			Server:         resp.Header.Get("Server"),
+			Server:         sanitizeText(resp.Header.Get("Server")),
 		},
 	}, nil
 }

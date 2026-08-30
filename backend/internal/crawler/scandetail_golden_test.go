@@ -1,6 +1,7 @@
 package crawler
 
 import (
+	"bytes"
 	"encoding/json"
 	"flag"
 	"os"
@@ -455,5 +456,63 @@ func fixtureErrorPaths(ts time.Time) checker.ScanResult {
 				Hosts: []string{}, TotalHosts: fxPtr(0),
 			}, 300*time.Millisecond),
 		},
+	}
+}
+
+// TestBuildDetailsNULGuard covers the last line of defence for the adsb.lol
+// failure: a NUL that reaches a detail field despite checker.sanitizeText
+// must not produce a payload jsonb rejects (SQLSTATE 22P05), because that
+// rejection discards the domain's whole commit unit, not just the details.
+func TestBuildDetailsNULGuard(t *testing.T) {
+	scanTime := time.Date(2026, 7, 1, 12, 0, 0, 0, time.UTC)
+	sr := fixtureHero(scanTime)
+
+	poisoned := sr.Results["smtp_ipv6"]
+	poisoned.Detail = &checker.SMTPDetail{
+		MXHost:  "mx1.hero.no.",
+		Address: "2a02:c0:3::25",
+		Banner:  "220 \x00Rmx1.hero.no ESMTP",
+	}
+	sr.Results["smtp_ipv6"] = poisoned
+
+	obs := observe.MapObservations(domain.KindApex, sr, scanTime, scanTime, heroLinks(), true)
+	raw := buildDetails(sr, &obs)
+
+	if bytes.Contains(raw, nulEscape) {
+		t.Fatalf("buildDetails emitted a NUL escape jsonb will reject:\n%s", raw)
+	}
+	if string(raw) != "{}" {
+		t.Errorf("guard should have dropped the payload, got %s", raw)
+	}
+}
+
+// TestBuildDetailsKeepsBackslashes guards the guard. A literal backslash in
+// remote text is ordinary — the real adsb.lol banner has one — and must not
+// be mistaken for the escape and cost a scan its details.
+func TestBuildDetailsKeepsBackslashes(t *testing.T) {
+	scanTime := time.Date(2026, 7, 1, 12, 0, 0, 0, time.UTC)
+	sr := fixtureHero(scanTime)
+
+	backslashed := sr.Results["smtp_ipv6"]
+	backslashed.Detail = &checker.SMTPDetail{
+		MXHost:  "mx1.hero.no.",
+		Address: "2a02:c0:3::25",
+		Banner:  `220 mx1.hero.no ESMTP i\'ll watch the inbox`,
+	}
+	sr.Results["smtp_ipv6"] = backslashed
+
+	obs := observe.MapObservations(domain.KindApex, sr, scanTime, scanTime, heroLinks(), true)
+	raw := buildDetails(sr, &obs)
+
+	if string(raw) == "{}" {
+		t.Fatal("guard tripped on an ordinary backslash")
+	}
+	var loaded checker.ScanResult
+	if err := json.Unmarshal(raw, &loaded); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	got, _ := loaded.Results["smtp_ipv6"].Detail.(*checker.SMTPDetail)
+	if got == nil || got.Banner != `220 mx1.hero.no ESMTP i\'ll watch the inbox` {
+		t.Errorf("banner drifted: %#v", got)
 	}
 }

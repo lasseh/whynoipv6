@@ -122,7 +122,7 @@ func (c *SMTPIPv6) tryMX(ctx context.Context, mxHost string, preference uint16) 
 	if err != nil {
 		return Result{}, fmt.Errorf("reading SMTP banner: %w", err)
 	}
-	banner = strings.TrimSpace(banner)
+	banner = sanitizeText(strings.TrimSpace(banner))
 
 	d := &SMTPDetail{
 		MXHost:       mxHost,
@@ -152,7 +152,7 @@ func (c *SMTPIPv6) tryMX(ctx context.Context, mxHost string, preference uint16) 
 		if readErr != nil {
 			break
 		}
-		line = strings.TrimSpace(line)
+		line = sanitizeText(strings.TrimSpace(line))
 		ehloLines = append(ehloLines, line)
 		// Last line of EHLO response has "250 " (space, not dash).
 		if len(line) >= 4 && line[3] == ' ' {

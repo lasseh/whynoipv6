@@ -314,7 +314,7 @@ func (r *Resolver) LookupTXT(ctx context.Context, name string) ([]string, error)
 			// Concatenate TXT strings per RFC 7208 section 3.3.
 			var full strings.Builder
 			for _, s := range txt.Txt {
-				full.WriteString(s)
+				full.WriteString(sanitizeText(s))
 			}
 			records = append(records, full.String())
 		}
@@ -343,7 +343,7 @@ func (r *Resolver) LookupPTR(ctx context.Context, name string) ([]string, error)
 	var names []string
 	for _, rr := range resp.Answer {
 		if ptr, ok := rr.(*dns.PTR); ok {
-			names = append(names, ptr.Ptr)
+			names = append(names, sanitizeText(ptr.Ptr))
 		}
 	}
 	return names, nil

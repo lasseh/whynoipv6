@@ -1,6 +1,7 @@
 package crawler
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"log/slog"
@@ -251,6 +252,10 @@ func nsHosts(sr checker.ScanResult) []string {
 	return hosts
 }
 
+// nulEscape is how json.Marshal writes a NUL byte. Spelled byte-by-byte
+// because a Go literal of it is the very thing it looks for.
+var nulEscape = []byte{'\\', 'u', '0', '0', '0', '0'}
+
 // buildDetails assembles the scan_detail payload (03 §14.2): the engine
 // ScanResult serialization plus the conn and consensus hoists.
 func buildDetails(sr checker.ScanResult, obs *observe.Observations) []byte {
@@ -267,6 +272,15 @@ func buildDetails(sr checker.ScanResult, obs *observe.Observations) []byte {
 	raw, err := json.Marshal(payload)
 	if err != nil {
 		slog.Error("scan detail marshal failed", "domain", sr.Domain, "err", err.Error())
+		return []byte(`{}`)
+	}
+	if bytes.Contains(raw, nulEscape) {
+		// Some remote string reached the payload without passing
+		// checker.sanitizeText. jsonb rejects the escape (SQLSTATE 22P05)
+		// and takes the entire commit batch with it, so drop the details
+		// and keep the scan. A literal backslash before the escape text is
+		// a false positive; costing one scan's details is the cheaper error.
+		slog.Error("scan detail carries a NUL escape, dropping details", "domain", sr.Domain)
 		return []byte(`{}`)
 	}
 	return raw

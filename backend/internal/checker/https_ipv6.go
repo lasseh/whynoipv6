@@ -88,7 +88,7 @@ func (c *HTTPSIPv6) tryHTTPS(ctx context.Context, domain string, ip net.IP) (Res
 		Address:        ip.String(),
 		StatusCode:     resp.StatusCode,
 		ResponseTimeMS: &rt,
-		Server:         resp.Header.Get("Server"),
+		Server:         sanitizeText(resp.Header.Get("Server")),
 	}
 	if resp.TLS != nil {
 		d.TLSVersion = tlsVersionString(resp.TLS.Version)

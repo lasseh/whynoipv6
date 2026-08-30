@@ -130,9 +130,9 @@ func (c *TLSIPv6) Check(ctx context.Context, domain string, kind Kind) (Result, 
 	now := time.Now()
 
 	setValid(true)
-	d.Issuer = leaf.Issuer.CommonName
-	d.Subject = leaf.Subject.CommonName
-	d.SAN = leaf.DNSNames
+	d.Issuer = sanitizeText(leaf.Issuer.CommonName)
+	d.Subject = sanitizeText(leaf.Subject.CommonName)
+	d.SAN = sanitizeTexts(leaf.DNSNames)
 	d.NotBefore = leaf.NotBefore.Format(time.RFC3339)
 	d.NotAfter = leaf.NotAfter.Format(time.RFC3339)
 
