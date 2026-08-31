@@ -1,8 +1,8 @@
 <br>
 <div align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset=".github/images/Github-logo-white.png">
-    <img alt="Why No IPv6: Shame!" src=".github/images/Github-logo-black.png">
+    <source media="(prefers-color-scheme: dark)" srcset=".github/images/github-logo-dark.webp">
+    <img alt="Why No IPv6: Shame as a Service" src=".github/images/github-logo-light.webp">
   </picture>
 </div>
 <br>
@@ -13,10 +13,6 @@
 [![Issues - whynoipv6](https://img.shields.io/github/issues/lasseh/whynoipv6)](https://github.com/lasseh/whynoipv6/issues)
 [![GitHub status](https://img.shields.io/badge/GitHub_IPv6-Missing-red?logo=github)](https://whynoipv6.com/domains/github.com)
 
-</div>
-<h1 align="center">Shame as a Service</h1>
-<div align="center">
-Shaming the world's most popular websites for lacking IPv6 support.
 </div>
 <br>
 <p align="center">
