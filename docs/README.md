@@ -9,12 +9,20 @@
 - **[`internals.md`](internals.md)** — the codebase tour: package map, life of a scan,
   DB layer, conventions, frontend structure.
 
-## Authoritative: the build spec
+## What is authoritative
 
-**[`spec/`](spec/)** is the single source of truth for the implementation. Start at
-[`spec/00-overview.md`](spec/00-overview.md). It is Round 3.0 — clean root API, keyset
-pagination, RFC 9457, no legacy compat, no history import. If any other document here
-disagrees with `spec/`, the spec wins.
+**The shipped code is.** For any question about current behavior, read the code — then
+[`adr/`](adr/) for decisions taken since launch, then the three docs above.
+
+[`spec/`](spec/) is the **frozen design record** that drove the build, not a live
+contract. It is thorough and still worth reading for *why* — section numbers are cited
+from ~150 source-file headers (`db/query/*.sql` → `05-schema.md`, `internal/checker/*`
+→ `01-engine.md`, `deploy/**` → `09-ops.md`), so those citations stay resolvable. But
+where the spec and the code disagree, the code is right and the spec is stale. Do not
+"fix" code to match it.
+
+Start at [`spec/00-overview.md`](spec/00-overview.md) for the glossary and sizing
+constants — the two things it still single-sources.
 
 ## Decisions ([`adr/`](adr/))
 
@@ -23,12 +31,13 @@ spec froze lands here, not in `spec/`.
 
 ## Runbooks ([`runbooks/`](runbooks/))
 
-Operational procedures: [`cutover.md`](runbooks/cutover.md) (the production DNS-flip
-checklist — build gate green, **production cutover still pending**),
-[`cloudflare-origin-cert.md`](runbooks/cloudflare-origin-cert.md) (the dashboard +
-vault steps for the origin certificate),
-[`frontier-surgery.md`](runbooks/frontier-surgery.md),
-[`timescale-jobs.md`](runbooks/timescale-jobs.md), [`unbound.md`](runbooks/unbound.md).
+Operational procedures:
+[`cloudflare-origin-cert.md`](runbooks/cloudflare-origin-cert.md) (dashboard + vault
+steps for the origin certificate),
+[`frontier-surgery.md`](runbooks/frontier-surgery.md) (bulk `next_check_at` /
+lifecycle repair), [`timescale-jobs.md`](runbooks/timescale-jobs.md) (compression,
+retention, continuous aggregates), [`unbound.md`](runbooks/unbound.md) (the two local
+recursors).
 
 ## Active / forward-looking
 
@@ -37,5 +46,5 @@ vault steps for the origin certificate),
 
 ## Agent scaffolding ([`agents/`](agents/))
 
-Local agent conventions (issue tracker under `.scratch/`, triage labels, domain docs) —
-see the repo-root `CLAUDE.md`.
+[`issue-tracker.md`](agents/issue-tracker.md) — the local `.scratch/<slug>/` ticket
+convention and its triage vocabulary. See the repo-root `CLAUDE.md`.

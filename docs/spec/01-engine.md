@@ -2,6 +2,8 @@
 
 _Status: Round 3.0 — API redesign folded in (decisions 2026-07-09): clean root API, keyset pagination, RFC 9457, no legacy compat, no history import._
 
+_Frozen 2026-08 — historical design record. The shipped code is the implementation; where it differs, the code and [`docs/adr/`](../adr/) win._
+
 **Purpose:** Defines the scanning engine of the WhyNoIPv6 crawler: the complete lift of `v6audit/internal/checker` into `internal/checker`, the exact per-check behavior of all 15 checks, the bulk DNS resolver, the SSRF-safe dialer, the consensus resolver seam, the two-phase runner, and the IPv6 self-preflight. Everything in this file is engine-side: it produces 5-valued `checker.Result`s and a `ScanResult`; turning those into per-dimension observations, quorum verdicts, and confirmed state belongs to other files.
 
 **Deliverables:**

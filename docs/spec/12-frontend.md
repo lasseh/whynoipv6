@@ -2,6 +2,8 @@
 
 _Status: Draft 2.0 — deep review applied 2026-07-11: web-verified ecosystem research (Vite 8/Rolldown, openapi-fetch maintenance-mode, AOS replacement, AI-crawler prerender question) + adversarial contract review against openapi.yaml and the old site (campaign-list adoption, search scope, trailing-slash redirects, Tracker sourcing, changelog phrasing). Originally authored from a full inventory of the live frontend (`whynoipv6-web`), the Tailwind-v4 attempt (`whynoipv6-web2`), and 07-api.md Round 3.0._
 
+_Frozen 2026-08 — historical design record. The shipped code is the implementation; where it differs, the code and [`docs/adr/`](../adr/) win._
+
 **Purpose:** The complete contract for rebuilding the Vue app in `frontend/`. Two locked goals, in priority order:
 
 1. **Visual fidelity is absolute.** The rebuilt site must be pixel-faithful to the current whynoipv6.com — same dark theme, same palette, same fonts and type scale, same layout, same component look. §2 pins every token; nothing in this rebuild is a redesign.

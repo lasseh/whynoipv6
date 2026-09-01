@@ -37,5 +37,6 @@ attached.
 - Rank-based crawl prioritization does not exist; every domain re-checks daily. If
   scan volume outgrows that, revive bands per spec 04 §4's removed design (this ADR is
   the pointer to its shape) rather than reinventing it.
-- `docs/spec/11-implementation-plan.md` P2.7 still describes the band deliverables as
-  planned at the time; it is historical and intentionally not rewritten.
+- The build task graph (`docs/spec/11-implementation-plan.md`) described the band
+  deliverables as planned at the time. It was deleted once the build shipped; read it in
+  git history if the original P2.7 wording matters.

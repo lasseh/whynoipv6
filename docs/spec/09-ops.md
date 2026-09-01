@@ -2,6 +2,8 @@
 
 _Status: Round 3.0 — API redesign folded in (decisions 2026-07-09): clean root API, keyset pagination, RFC 9457, no legacy compat, no history import._
 
+_Frozen 2026-08 — historical design record. The shipped code is the implementation; where it differs, the code and [`docs/adr/`](../adr/) win._
+
 **Purpose:** Everything a single maintainer needs to build, configure, deploy, and
 run the three binaries on his own VMs. This file is the **single source of truth for
 every configuration key** across `api`, `crawler`, and `v6ctl` (§2), and it owns all

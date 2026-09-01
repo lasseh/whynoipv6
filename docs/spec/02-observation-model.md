@@ -2,6 +2,8 @@
 
 _Status: Round 3.0 — API redesign folded in (decisions 2026-07-09): clean root API, keyset pagination, RFC 9457, no legacy compat, no history import._
 
+_Frozen 2026-08 — historical design record. The shipped code is the implementation; where it differs, the code and [`docs/adr/`](../adr/) win._
+
 **Purpose:** Defines how raw engine results become per-dimension observations: the 7-value internal observation vocabulary and its usage rules, the consensus (quorum) resolver package with its rate control and breakers, the normative mapping tables from engine outcomes to the six core dimensions (`base`, `www`, `ns`, `mx`, `conn`, `resources`), and the worker-side Result→observation mapper. Everything downstream of an observation (confirm/pending state machine, changelog, classification) is out of scope here.
 
 **Deliverables:**

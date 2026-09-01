@@ -9,7 +9,9 @@ feature requests — and are not managed from here.
 - One feature per directory: `.scratch/<feature-slug>/`
 - The PRD is `.scratch/<feature-slug>/PRD.md`
 - Implementation issues are `.scratch/<feature-slug>/issues/<NN>-<slug>.md`, numbered from `01`
-- Triage state is recorded as a `Status:` line near the top of each issue file (see `triage-labels.md` for the role strings)
+- Triage state is a `Status:` line near the top of each issue file. The role strings are
+  `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix` — when a
+  skill names a triage role, use these.
 - Comments and conversation history append to the bottom of the file under a `## Comments` heading
 
 ## When a skill says "publish to the issue tracker"

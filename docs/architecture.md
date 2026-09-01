@@ -154,8 +154,9 @@ manual run can never race the scheduled one.
 | Current public state | `domain` (one row per host) | current |
 
 History is never mutated; the current state is always recomputable from the pipeline
-going forward (the cutover deliberately imported no legacy history — see
-[ADR index](adr/) and [`runbooks/cutover.md`](runbooks/cutover.md)).
+going forward. The cutover from the old backend deliberately imported no legacy
+history, so `changelog` and `scan` start at the launch date
+([`spec/08-migration-cutover.md`](spec/08-migration-cutover.md) §1).
 
 ## Design decisions worth knowing
 

@@ -2,6 +2,8 @@
 
 _Status: Round 3.0 — API redesign folded in (decisions 2026-07-09): clean root API, keyset pagination, RFC 9457, no legacy compat, no history import._
 
+_Frozen 2026-08 — historical design record. The shipped code is the implementation; where it differs, the code and [`docs/adr/`](../adr/) win._
+
 **Purpose:** The entry point to the WhyNoIPv6 backend implementation spec. It states what the system is, restates the hard constraints verbatim, fixes the final monorepo layout, and is the **single source** for two things every other file cites by name: the canonical sizing-constants table and the project glossary. It also carries the spec-file index, the reading order, and the spec conventions (single-source rules, `**Decision:**` markers, cross-reference form) that all ten content files obey.
 
 **Deliverables:** This file governs no Go package. It defines the repository's top-level directory tree (every other file's package paths must resolve inside it), the named sizing constants, and the shared vocabulary. It produces documentation only.

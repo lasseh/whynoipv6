@@ -2,6 +2,8 @@
 
 _Status: Round 3.0 — API redesign folded in (decisions 2026-07-09): clean root API, keyset pagination, RFC 9457, no legacy compat, no history import._
 
+_Frozen 2026-08 — historical design record. The shipped code is the implementation; where it differs, the code and [`docs/adr/`](../adr/) win._
+
 **Purpose:** This file is the single source of truth for ALL SQL DDL in the system: every extension, enum, table, index, constraint, storage parameter, hypertable conversion, columnstore setting, retention policy, continuous aggregate, and seed row — organized as three runnable golang-migrate migration files. It also pins the migration tooling (golang-migrate embedded in `v6ctl`), the sqlc configuration and package layout, and the application-side `updated_at` maintenance rule. No other spec file may contain `CREATE`/`ALTER`/`DROP` statements; other files reference tables and columns by name and quote their own `SELECT`/`INSERT`/`UPDATE`/`DELETE` statements.
 
 **Deliverables:**

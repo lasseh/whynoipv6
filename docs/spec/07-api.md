@@ -2,6 +2,8 @@
 
 _Status: Round 3.0 — API redesign folded in (decisions 2026-07-09): clean root API, keyset pagination, RFC 9457, no legacy compat, no history import._
 
+_Frozen 2026-08 — historical design record. The shipped code is the implementation; where it differs, the code and [`docs/adr/`](../adr/) win._
+
 **Purpose:** The complete, self-contained HTTP contract of the public API — a read-only, anonymous, **unversioned** JSON API served at the **root of `api.whynoipv6.com`**. It serves the *real* WhyNoIPv6 data model (the 4-value confirmed `ipv6_status` per dimension, the `classification` enum, `class_flags[]`, `saint`, and the `*_since` provenance timestamps) directly — no projection, no message rendering, no legacy compatibility layer. Every list is a keyset/cursor-paginated collection over an object envelope; every error is RFC 9457 `application/problem+json`; the whole surface is OpenAPI-3.0.3-first. An implementer must be able to build `internal/api` and `openapi/openapi.yaml` from this file alone, using the schema in 05-schema.md and the shared engine mapper in 02-observation-model.md.
 
 **Deliverables:**

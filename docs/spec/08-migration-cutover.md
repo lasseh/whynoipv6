@@ -2,6 +2,8 @@
 
 _Status: Round 3.0 — API redesign folded in (decisions 2026-07-09): clean root API, keyset pagination, RFC 9457, no legacy compat, no history import._
 
+_Frozen 2026-08 — historical design record. The shipped code is the implementation; where it differs, the code and [`docs/adr/`](../adr/) win._
+
 **Purpose:** Specifies the one-time operational runbook that switches public traffic from
 the old backend to the new one. The cutover is a **pure DNS/upstream flip with no
 production data import** (OPEN-9, start fresh, design §9): both the `changelog` table and
@@ -82,8 +84,8 @@ starting:
 4. **Crawler soaked:** the new crawler has run ≥3 full passes on the (initially empty)
    frontier (04-lifecycle-scheduling.md), so confirmed state and native changelog rows have
    begun accumulating and the anti-flap machine is warm. (This is the **production cutover**
-   precondition; the build-phase gate P4.G uses a bounded sample crawl — the two are
-   different gates, 11-implementation-plan.md.)
+   precondition; the build-phase gate P4.G used a bounded sample crawl — the two were
+   different gates.)
 5. **Backups live and restore-tested** (09-ops.md); the daily tick is writing `stats_*`
    rows.
 

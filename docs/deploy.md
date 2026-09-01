@@ -2,8 +2,7 @@
 
 How to get WhyNoIPv6 running — the local Docker dev environment, every one-off
 import/tool command, and the production layout. Architecture background is in
-[`architecture.md`](architecture.md); the one-time production cutover checklist is
-[`runbooks/cutover.md`](runbooks/cutover.md).
+[`architecture.md`](architecture.md).
 
 ## 1. Local development (Docker Compose)
 
