@@ -16,7 +16,7 @@
 
 [`spec/`](spec/) is the **frozen design record** that drove the build, not a live
 contract. It is thorough and still worth reading for *why* — section numbers are cited
-from ~150 source-file headers (`db/query/*.sql` → `05-schema.md`, `internal/checker/*`
+from 136 source-file headers (`db/query/*.sql` → `05-schema.md`, `internal/checker/*`
 → `01-engine.md`, `deploy/**` → `09-ops.md`), so those citations stay resolvable. But
 where the spec and the code disagree, the code is right and the spec is stale. Do not
 "fix" code to match it.
