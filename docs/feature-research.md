@@ -1,11 +1,41 @@
 # WhyNoIPv6 — Feature Research (Deep-Research Round)
 
-**Status:** Research round 1 — evidence-backed feature candidates for iteration.
+**Status:** Research round 1 (2026-07-06), **audited against the shipped code
+2026-09-01** — of the top ten, four shipped, two are partial and four were never
+built. See "Shipped status" below before treating any item as a to-do.
 **Method:** multi-agent deep research (5 search angles, 22 primary sources fetched,
 106 claims extracted, 25 adversarially verified with 3-vote panels — 24 confirmed,
 1 refuted). Every top-10 item traces to at least one unanimously verified claim.
 **Scope guard:** everything below respects the hard constraints — public/anonymous
 (no accounts), no scores/grades (3-state + ladder only), Tranco-only, non-commercial.
+
+---
+
+## Shipped status (audited 2026-09-01)
+
+| # | Feature | Status | Evidence |
+|---|---|---|---|
+| 1 | Embeddable badge | **shipped** | `/badge/{host}.svg` + `/badge/{host}.json` |
+| 2 | Hall of Fame + provider league tables | **shipped** | `/heroes`, `/saints`, `/almost-heroes`; `/providers`, `/providers/{id}/domains`, `/hosting`, `/asns`; `LeagueTable.vue` on `/metrics?filter=asn` |
+| 3 | Fix guides + retest-now | **not built** | No fix-guide content keyed off `class_flags`. The `/check/:target` live-check page exists, but no red domain page offers a retest button or a per-failure guide |
+| 4 | Timelines + compare-two-dates | **partial** | Timelines shipped (`/countries/{code}/stats`, `/campaigns/{uuid}/stats`, `/stats/changes`, `/domains/{host}/history`). The API takes `from`/`to` on `/changelog`, but no UI exposes a two-date compare |
+| 5 | Citable datasets | **shipped** (no DOI) | `/datasets` manifest; `datapackage.json`, `DICTIONARY.md`, `SHA256SUMS`, CC-BY-NC-4.0, Tranco list-ID provenance in `internal/export`. Zenodo DOI stays deferred-on-demand per 07-api §5.3 |
+| 6 | State of IPv6 report | **not built** | No generator in `v6ctl`. The blog (`/blog`) became the editorial channel instead |
+| 7 | CSV export | **shipped** | `?format=csv` / `text/csv` on the country, ASN, provider and hosting list endpoints |
+| 8 | Methodology + criteria changelog | **partial** | The ladder, Hero and Saint criteria are written up in the FAQ (`FaqRulesApi.vue`). The designed `GET /methodology` with a structured `criteria_changelog[]` (07-api §1016) was never built |
+| 9 | Notification toolkit | **not built** | No RDAP, `security.txt` or RFC 2142 contact discovery; no letter templates |
+| 10 | Mail/MX recognition track | **not built** | MX is a column in the domain table; there is no mail-hero list or mail-specific view |
+
+Second tier: **Atom/JSON feeds shipped and went further than proposed** — Atom *and*
+JSON Feed 1.1, global plus per-domain, per-country and per-campaign (10 feed
+endpoints). `/mandates` **shipped in the API** but has no frontend route, so there is
+no /mandates page. Social cards are **partial**: a static `og:image` share card plus
+per-page `og:title` via `usePageMeta`, not per-domain rendered status cards.
+`llms.txt` shipped (`frontend/public/llms.txt`) despite being filed as "defer".
+
+Untouched: 3, 6, 9 and 10. Two of those (3 fix guides, 9 one-shot outreach) are what
+the research rated the highest-conversion levers of the whole set, and 10 (the mail
+track) is among the cheapest — the schema already carries the MX and SMTP dimensions.
 
 ---
 
@@ -99,7 +129,10 @@ absence of evidence, not evidence against). My own read on each:
 - One claim was refuted and excluded: that internet.nl's batch API has "hundreds of
   active users" (traction unverified; the feature exists in production regardless).
 
-## Suggested build order (mapped to the backend phases in `backend-design.md`)
+## Suggested build order (historical — phases 4–6 have shipped)
+
+_Kept as the record of the original sequencing. The phases below are done; what is
+still open is the "not built" and "partial" set in the audit at the top._
 
 Nearly everything rides on already-designed machinery (confirmed status, changelog,
 stats tables, live-check queue, datasets):
