@@ -32,6 +32,10 @@ campaigns. It measures IPv6 support across websites, authoritative DNS, and mail
 infrastructure. The results are published as domain tier lists and adoption views by
 country, network, provider, and campaign.
 
+<div align="center">
+  <img alt="The github.com report: apex and www missing IPv6, nameservers and mail supported, with a 90-day timeline" src=".github/images/github-status.png">
+</div>
+
 ## Why is IPv6 important?
 
 The unallocated IPv4 address pools are exhausted. Keeping the IPv4 internet growing now
