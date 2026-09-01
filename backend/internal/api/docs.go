@@ -8,7 +8,7 @@ import (
 )
 
 // The §7 discoverability surface: the machine-readable contract at a stable
-// path, a Redoc reader, and an llms.txt index. All meta routes — outside
+// path, a Scalar reference, and an llms.txt index. All meta routes — outside
 // the OpenAPI document itself, like the health endpoints.
 
 // getOpenAPIJSON serves the embedded contract as JSON.
@@ -29,20 +29,54 @@ func (s *Server) getOpenAPIJSON(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(raw)
 }
 
-// redocPage is a minimal Redoc reader over /openapi.json.
-const redocPage = `<!DOCTYPE html>
-<html>
+// scalarPage is a Scalar API reference over /openapi.json — a reader with a
+// working request console. Try-it needs no proxy: the page is served from the
+// same origin as the API it calls.
+//
+// The palette mirrors the frontend: the bg-zinc-900/text-slate-200 body in
+// frontend/index.html plus the custom gray and fuchsia tokens in
+// frontend/src/css/style.css. The site is dark-only, so the reference is
+// forced dark and the toggle hidden — Scalar's light mode would match nothing.
+// Scalar's own typeface is Inter, which is the site font, so fonts are left
+// at their defaults.
+const scalarPage = `<!DOCTYPE html>
+<html lang="en">
 <head>
   <title>WhyNoIPv6 API</title>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <style>body { margin: 0; padding: 0; }</style>
+  <style>
+    body { margin: 0; padding: 0; }
+    .dark-mode {
+      --scalar-background-1: #18181b;
+      --scalar-background-2: #25282c;
+      --scalar-background-3: #33363a;
+      --scalar-background-accent: #d946ef1f;
+      --scalar-color-1: #e2e8f0;
+      --scalar-color-2: #9ba9b4;
+      --scalar-color-3: #707d86;
+      --scalar-color-accent: #d946ef;
+      --scalar-border-color: #33363a;
+      --scalar-link-color: #d946ef;
+      --scalar-link-color-hover: #e879f9;
+      --scalar-button-1: #a21caf;
+      --scalar-button-1-hover: #86198f;
+      --scalar-button-1-color: #fff;
+    }
+  </style>
 </head>
 <body>
-  <redoc spec-url="/openapi.json"></redoc>
-  <script src="https://cdn.redoc.ly/redoc/v2.5.3/bundles/redoc.standalone.js"
-          integrity="sha384-xiEssMQFSpSfLbzRZCGfxxIM5QDb2DTrU6vyoZdp2sV1L6pmOMy6MpTtUoLbpC96"
+  <div id="app"></div>
+  <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.67.0/dist/browser/standalone.js"
+          integrity="sha384-6c7Vmx+i0yi8gBbltn0x1cavD+zsMGw2xmXXVyacPJLIGBxwaVimW5TW0WiW17Ir"
           crossorigin="anonymous"></script>
+  <script>
+    Scalar.createApiReference('#app', {
+      url: '/openapi.json',
+      forceDarkModeState: 'dark',
+      hideDarkModeToggle: true,
+    })
+  </script>
 </body>
 </html>
 `
@@ -51,7 +85,7 @@ func (s *Server) getDocs(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Cache-Control", "public, max-age=3600")
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte(redocPage))
+	_, _ = w.Write([]byte(scalarPage))
 }
 
 // llmsTxt is the documentation index for LLM consumers.
@@ -66,7 +100,7 @@ const llmsTxt = `# WhyNoIPv6 API
 ## Docs
 
 - [OpenAPI contract](/openapi.json): every endpoint, schema, and error shape
-- [Interactive reference](/docs): the same contract rendered with Redoc
+- [Interactive reference](/docs): the same contract with a live request console
 
 ## Data
 

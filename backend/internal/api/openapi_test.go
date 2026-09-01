@@ -113,7 +113,7 @@ func TestOpenAPIRouteCoverage(t *testing.T) {
 	}
 }
 
-// TestDiscoverability (07 §7): the embedded contract, Redoc reader, and
+// TestDiscoverability (07 §7): the embedded contract, Scalar reference, and
 // llms.txt are served DB-free.
 func TestDiscoverability(t *testing.T) {
 	srv := httptest.NewServer(NewRouter(nil, Options{}))
