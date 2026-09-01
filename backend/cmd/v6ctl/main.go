@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/spf13/cobra"
@@ -30,6 +31,11 @@ func newPool(cmd *cobra.Command) (*pgxpool.Pool, error) {
 	}
 	return pool, nil
 }
+
+// singletonWait is the blocking advisory-lock wait for operator-triggered
+// singleton runs (`tranco import`, `campaign sync`): hardcoded, no config
+// key (04-lifecycle-scheduling.md §10).
+const singletonWait = 5 * time.Minute
 
 // underOps reports whether cmd sits in the `ops` command subtree. Those are
 // timer-driven scrapes (unbound-stats fires every minute), so their config
