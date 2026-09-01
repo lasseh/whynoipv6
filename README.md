@@ -19,8 +19,6 @@
     <a href="https://github.com/lasseh/whynoipv6/issues/new?assignees=lasseh&labels=bug&projects=&template=bug_report.md&title=%F0%9F%90%9B+Bug+Report%3A+">Report Bug</a>
     ·
     <a href="https://github.com/lasseh/whynoipv6/issues/new?assignees=lasseh&labels=enhancement&projects=&template=feature_request.md&title=%F0%9F%9A%80+Feature%3A+">Request Feature</a>
-    ·
-    <a href="https://twitter.com/WhyNoIPv6">Twitter</a>
   </p>
 
 ## What is WhyNoIPv6.com?
