@@ -108,7 +108,7 @@ docker compose run --rm --entrypoint /v6ctl migrate <verb> [args...]
 | `migrate force <n>` | stamp a version after manual repair |
 | `tranco import [--force]` | one import attempt of the Tranco top-1M (`--force` bypasses the sanity guard: ≥950k rows, ≤2% delist) |
 | `tranco status` | last 10 imports + staleness check |
-| `campaign sync` | sync the campaign-YAML checkout into the DB (see below) |
+| `campaign sync` | sync the campaign-YAML checkout into the DB (see below); **exits 1 when the sync completed with rejections** |
 | `campaign validate --repo <path> [--base <ref>]` | CI-style validation of campaign YAML, no DB needed |
 | `geoip update [--token …] [--dir …]` | download a fresh IPinfo Lite mmdb (atomic replace; crawler hot-reloads hourly) |
 | `provider seed [--path …]` | load the curated DNS-provider mapping (embedded list by default; idempotent) |
@@ -140,6 +140,15 @@ docker compose run --rm --user root --entrypoint /v6ctl api export
 # (the distroless image has no git):
 docker compose run --rm --entrypoint /v6ctl crawler campaign sync
 ```
+
+**`campaign sync` exit codes.** `0` is a clean sync. `1` covers both a sync
+that never ran (bad config, git failure, DB error) and one that **completed
+with rejections** — a rejected campaign file, a rejected host entry, a
+`CuratedFrozen` run whose curated removals were suspended, or a failed UUID
+write-back. The database work commits either way; the exit code is what
+reaches the webhook-triggered CI job and systemd `OnFailure`, which is why a
+partial sync is not allowed to look clean. Read the printed report to tell
+the two apart: a run that never started prints no `created:` line.
 
 ### The DNS-provider mapping
 
