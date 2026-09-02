@@ -43,7 +43,9 @@ var hostingASNTags = map[uint]string{
 func NormalizeHosting(cdnDetected bool, cnameChain []string, asn uint) *string {
 	if cdnDetected {
 		for _, cname := range cnameChain {
-			c := strings.TrimSuffix(cname, ".")
+			// Folded like the NS hosts in provider.go: a mixed-case CNAME
+			// target must still hit its suffix key.
+			c := strings.ToLower(strings.TrimSuffix(cname, "."))
 			for suffix, tag := range cdnSuffixTags {
 				if c == suffix || strings.HasSuffix(c, "."+suffix) {
 					t := tag

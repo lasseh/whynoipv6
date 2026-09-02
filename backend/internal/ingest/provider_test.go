@@ -81,6 +81,11 @@ func TestHostingTag(t *testing.T) {
 		if got == nil || *got != "cloudfront" {
 			t.Errorf("CDN chain = %v, want cloudfront", got)
 		}
+		// CNAME targets arrive as served; the suffix match folds case.
+		got = NormalizeHosting(true, []string{"Dualstack.X.CloudFront.NET."}, 0)
+		if got == nil || *got != "cloudfront" {
+			t.Errorf("mixed-case CDN chain = %v, want cloudfront", got)
+		}
 	})
 	t.Run("asn_fallback", func(t *testing.T) {
 		got := NormalizeHosting(false, nil, 24940)

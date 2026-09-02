@@ -2,12 +2,14 @@ package ingest
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	db "github.com/lasseh/whynoipv6/internal/postgres/db"
@@ -120,12 +122,18 @@ func ProviderAdd(ctx context.Context, q *db.Queries, name string, suffixes []str
 	if name == "" || len(norm) == 0 {
 		return fmt.Errorf("provider add: name and at least one suffix required")
 	}
+	// dns_provider.name carries no UNIQUE (05 §1, deliberate), so only a
+	// genuine miss may insert: any other lookup failure would mint a
+	// duplicate row that `provider remove`'s scalar subquery then chokes on.
 	row, err := q.ProviderByName(ctx, name)
-	if err != nil {
+	switch {
+	case errors.Is(err, pgx.ErrNoRows):
 		if _, err := q.ProviderInsert(ctx, db.ProviderInsertParams{Name: name, NsSuffixes: norm}); err != nil {
 			return fmt.Errorf("provider add: %w", err)
 		}
 		return nil
+	case err != nil:
+		return fmt.Errorf("provider add: lookup %q: %w", name, err)
 	}
 	return q.ProviderAppendSuffixes(ctx, db.ProviderAppendSuffixesParams{ID: row.ID, Suffixes: norm})
 }
