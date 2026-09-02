@@ -213,6 +213,8 @@ The `status` member must equal the HTTP status line. `type` URIs are stable and 
 | `manifest-unavailable` | 503 | `/datasets` manifest missing/unparseable (the only 503) |
 | `internal-error` | 500 | unexpected fault; `detail` is generic, never a stack trace |
 
+_Erratum 2026-09-02: the `not-acceptable` row is **withdrawn**. `Accept` is ignored — RFC 9110 §12.5.1 permits it, `openapi.yaml` never declared a 406, and representation is chosen by URL or `?format=` (§5.5, §6.2), so no request can make the JSON core unsatisfiable. The `api.NotAcceptable` constructor is deleted; no endpoint emits 406 and no endpoint sets `Vary: Accept`. See also the errata on §5.5, §6.2 and 10-testing.md §7's error registry._
+
 Note the deliberate split between `validation-error` (your *value* is invalid) and `scope-required` (your value is valid but needs an indexed companion scope, §3.3). Conflating the two misleads clients. The legacy byte-exact, capitalization-divergent error strings are deleted.
 
 ### 2.6 HTTP semantics
@@ -1010,6 +1012,8 @@ Per item: `id`/`guid` = the composite `(host, ts, field)`; `date_published` = `t
 
 *Rejected — `Accept: text/csv` negotiation* (needs `Vary: Accept`, invisible in a shared link). `Accept` is reserved for the JSON core (default `application/json`; `406 not-acceptable` when unsatisfiable).
 
+_Erratum 2026-09-02: the trailing clause is withdrawn. `Accept` is not reserved for anything — it is **ignored**, and no `406` is emitted (§2.5 erratum). The rejection of `Accept: text/csv` stands on its own reasoning; `?format=csv` is the only CSV selector._
+
 ### 5.6 Methodology, mandates
 
 - **Diff / "who went green"** (OPEN-7, re-resolved: **cut from this build**). A dedicated `GET /diff` endpoint added no information the confirmed-transition surfaces don't already carry — "who went green between A and B" is the `/changelog` list (§4.8) filtered client-side, and "what changed recently" is the change feeds (§5.4). Its response contract was never pinned; rather than invent one, the endpoint is dropped. It can return later as a purely additive endpoint if a real consumer appears.
@@ -1043,6 +1047,8 @@ Use `public` (never `private`) — there is no per-user data, and `public` is wh
 ### 6.2 Content negotiation
 
 `Accept`-header negotiation for the JSON core (default `application/json`; `406 not-acceptable` when unsatisfiable, as a Problem Detail). Genuinely-different representations are **distinct URLs**, not `Accept` variants: badge `.svg`/`.json`, feeds `.atom`/`.feed.json`, CSV `?format=csv`. Set `Vary: Accept` on any Accept-negotiated endpoint and `Vary: Accept-Encoding` everywhere compression applies.
+
+_Erratum 2026-09-02: there is no `Accept` negotiation. Every endpoint serves its one representation whatever `Accept` says — `Accept: text/xml` on `/domains` returns `200 application/json` — so no endpoint is Accept-negotiated and **none sets `Vary: Accept`**; adding it would split every CDN cache key for no client benefit. The second sentence stands: representations are distinct URLs or `?format=`. `Vary: Accept-Encoding` where compression applies is unaffected._
 
 ### 6.3 Rate limiting
 

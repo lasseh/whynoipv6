@@ -6,7 +6,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -587,5 +589,40 @@ func TestFieldsTrim(t *testing.T) {
 			keys = append(keys, k)
 		}
 		t.Errorf("trimmed row has keys %v, want exactly host,rank,classification,saint", keys)
+	}
+}
+
+// TestAcceptIsIgnored pins the decision behind review issue 05 (07 §2.5,
+// §5.5 and §6.2 errata): the API serves its one representation whatever
+// Accept says. No 406, and no Vary: Accept — the header would split every
+// CDN cache key for a negotiation that does not exist.
+func TestAcceptIsIgnored(t *testing.T) {
+	srv, _ := newAPI(t)
+	for _, accept := range []string{"text/xml", "application/xml", "text/csv", "image/png"} {
+		t.Run(accept, func(t *testing.T) {
+			req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, srv.URL+"/domains", nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			req.Header.Set("Accept", accept)
+			resp, err := http.DefaultClient.Do(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer resp.Body.Close()
+			if resp.StatusCode != http.StatusOK {
+				t.Errorf("status = %d, want 200", resp.StatusCode)
+			}
+			if ct := resp.Header.Get("Content-Type"); !strings.HasPrefix(ct, "application/json") {
+				t.Errorf("content-type = %q, want application/json", ct)
+			}
+			for _, v := range resp.Header.Values("Vary") {
+				for _, part := range strings.Split(v, ",") {
+					if strings.EqualFold(strings.TrimSpace(part), "Accept") {
+						t.Errorf("Vary = %q, must not list Accept", v)
+					}
+				}
+			}
+		})
 	}
 }

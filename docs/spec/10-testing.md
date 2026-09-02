@@ -712,6 +712,8 @@ line, and `type`/`title` match the fixed registry:
 | manifest_unavailable | `manifest-unavailable` | 503 | `/datasets` manifest missing/unparseable (the only 503) |
 | internal_error | `internal-error` | 500 | unexpected fault; `detail` generic, never a stack trace |
 
+_Erratum 2026-09-02: the `not_acceptable` row is **withdrawn** — there is no trigger to test. `Accept` is ignored and no endpoint emits 406 (07 §2.5, §6.2 errata). The replacement assertion is the inverse: `Accept: text/xml` on a JSON endpoint returns `200 application/json` and no `Vary: Accept` — `TestAcceptIsIgnored` in `internal/api`._
+
 Assert the deliberate `validation-error` (value not in enum) vs `scope-required` (valid value,
 needs an indexed companion) **split** — a bare `?flag=broken_v6` and a bare `?mx=unsupported`
 both return `scope-required`, not `validation-error`. Negative invariant (replaces the deleted

@@ -152,12 +152,6 @@ func RateLimited(w http.ResponseWriter, r *http.Request, retryAfter int) {
 		Status: http.StatusTooManyRequests, RetryAfter: &retryAfter})
 }
 
-// NotAcceptable emits the 406 not-acceptable problem: an Accept header a
-// JSON endpoint cannot satisfy (07 §2.5).
-func NotAcceptable(w http.ResponseWriter, r *http.Request) {
-	WriteProblem(w, r, Problem{Type: problemBase + "not-acceptable", Title: "Not acceptable", Status: http.StatusNotAcceptable})
-}
-
 // UnsupportedMediaType emits the 415 unsupported-media-type problem: a
 // POST /check body that is not JSON (07 §2.5).
 func UnsupportedMediaType(w http.ResponseWriter, r *http.Request) {
