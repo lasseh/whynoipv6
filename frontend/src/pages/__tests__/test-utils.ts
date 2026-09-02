@@ -44,11 +44,20 @@ export async function makeRouter(
   return router
 }
 
-/** Chrome partials are stubbed in every page smoke test. */
+/**
+ * Chrome partials are stubbed in every page smoke test. DrillBanner is in here
+ * because it reads the wall clock: for the eight days a month it is on screen
+ * it constructs a ResizeObserver, which jsdom does not implement, and links to
+ * /ipv4-outage, which these hand-rolled memory routers do not declare. Both
+ * failures land on the page tests rather than the banner, and only on those
+ * days — the suite was green the rest of the month. Its own behaviour is
+ * covered against a frozen clock in components/__tests__/DrillBanner.test.ts.
+ */
 export const layoutStubs = {
   Header: true,
   Footer: true,
   PageIllustration: true,
+  DrillBanner: true,
 }
 
 const status = (value: Schemas['IPv6Status'] | null) => ({ value, since: null })
