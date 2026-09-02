@@ -207,11 +207,34 @@ func CacheDetail(w http.ResponseWriter, r *http.Request, generation int32, lastC
 	return applyETag(w, r, fmt.Sprintf(`W/"d%d-%d-%s"`, generation, lastChange.UnixNano(), queryFingerprint(r)))
 }
 
-// CacheChangelog: the live-surface class — ETag from the scope window's
-// max(changelog.ts), never the daily generation (07 §6.1).
+// CacheChangelog: the live-surface class — ETag from max(changelog.ts),
+// never the daily generation (07 §6.1). This is the seed for the
+// *paginated* changelog lists, which cache before they know their window,
+// so the mark is the table-wide one: over-invalidating, never stale.
 func CacheChangelog(w http.ResponseWriter, r *http.Request, maxTS time.Time) bool {
 	w.Header().Set("Cache-Control", "public, max-age=300")
 	return applyETag(w, r, fmt.Sprintf(`W/"cl%d-%s"`, maxTS.UnixNano(), queryFingerprint(r)))
+}
+
+// CacheChangelogWindow is the same class for the *fixed-window* surfaces —
+// the feeds and the scoped recent-window lists — which hold their rows
+// before caching. 07 §6.1's "the scope window's max(changelog.ts)" is that
+// window's newest ts, so a quiet scope 304s instead of being invalidated by
+// every transition elsewhere.
+//
+// The row count rides along because max(ts) alone cannot see a late commit:
+// changelog.ts is the worker-fixed scan start, so a slow scan inserts a row
+// with a ts older than a faster, later-started scan's row. That insert
+// leaves max(ts) untouched, and without the count a client would 304 over a
+// window that just gained an item — self-healing only when a strictly newer
+// transition lands, which for a sparse scope is days.
+func CacheChangelogWindow(w http.ResponseWriter, r *http.Request, items []ChangelogItem) bool {
+	newest := time.Unix(0, 0).UTC()
+	if len(items) > 0 {
+		newest = items[0].TS
+	}
+	w.Header().Set("Cache-Control", "public, max-age=300")
+	return applyETag(w, r, fmt.Sprintf(`W/"cl%d.%d-%s"`, newest.UnixNano(), len(items), queryFingerprint(r)))
 }
 
 // CacheShort: rolling counters that are not generation-scoped (07 §6.1

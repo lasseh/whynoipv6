@@ -242,12 +242,7 @@ func (s *Server) writeRecentWindow(w http.ResponseWriter, r *http.Request, items
 		InternalError(w, r, err)
 		return
 	}
-	maxTS, err := s.q.ChangelogMaxTS(r.Context())
-	if err != nil {
-		InternalError(w, r, err)
-		return
-	}
-	if CacheChangelog(w, r, maxTS.Time) {
+	if CacheChangelogWindow(w, r, items) {
 		return
 	}
 	WriteJSON(w, http.StatusOK, ListEnvelope{Items: items, Page: Page{}, Meta: NewMeta(asOf, generation)})

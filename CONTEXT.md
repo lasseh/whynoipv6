@@ -57,7 +57,7 @@ crystallized *after* the spec was frozen.
   commit columns positionally in a caller.
 
 - **Keyset spec.** The per-endpoint description of a keyset-paginated list —
-  `api.KeysetSpec{Sort, Positioned, Fetch, Key}` — consumed by `api.KeysetPage`,
+  `api.KeysetSpec{Sort, Preceded, Fetch, Key}` — consumed by `api.KeysetPage`,
   which owns the whole cursor pipeline (fingerprint → decode → seek → N+1 fetch →
   trim → cursor minting). Endpoints supply only what varies; the backward/positioned
   window conventions live in one place. The `around_rank` centered window shares
@@ -77,6 +77,19 @@ crystallized *after* the spec was frozen.
   `serveDomainList`'s rim (one pinned copy) and `writeRecentWindow`.
   _Avoid:_ hand-writing the sort→format→limit→generation→304 sequence in a
   handler.
+
+- **Changelog validator.** The live-surface ETag seed (07 §6.1), which comes
+  in two deliberate shapes. `CacheChangelogWindow` serves every
+  **fixed-window** surface — the feeds and `writeRecentWindow`'s scoped
+  lists — and seeds from the window it already holds: newest `ts` plus the
+  row count. The count is load-bearing, not belt-and-braces: `changelog.ts`
+  is the worker-fixed scan start, so a slow scan can insert a row *older*
+  than the window's max and leave a max-only validator unchanged.
+  `CacheChangelog` serves the **paginated** lists, which gate on the ETag
+  before they know their window, so they seed from the table-wide
+  `ChangelogMaxTS` — over-invalidating a quiet scope, never stale.
+  _Avoid:_ seeding a fixed-window surface from the global mark; it never
+  304s, because some domain somewhere transitions every few minutes.
 
 - **Series spec.** The `{points}` counterpart to the list spec —
   `api.SeriesSpec{Live, Window, Fetch, Day, Point}` consumed by

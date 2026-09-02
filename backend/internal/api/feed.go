@@ -140,7 +140,7 @@ func (s *Server) writeAtom(w http.ResponseWriter, r *http.Request, scope *feedSc
 	if len(scope.Items) > 0 {
 		updated = scope.Items[0].TS
 	}
-	if CacheChangelog(w, r, updated) {
+	if CacheChangelogWindow(w, r, scope.Items) {
 		return
 	}
 	f := atomFeed{
@@ -172,11 +172,7 @@ func (s *Server) writeAtom(w http.ResponseWriter, r *http.Request, scope *feedSc
 
 // writeJSONFeed renders the scope as application/feed+json.
 func (s *Server) writeJSONFeed(w http.ResponseWriter, r *http.Request, scope *feedScope) {
-	updated := time.Unix(0, 0).UTC()
-	if len(scope.Items) > 0 {
-		updated = scope.Items[0].TS
-	}
-	if CacheChangelog(w, r, updated) {
+	if CacheChangelogWindow(w, r, scope.Items) {
 		return
 	}
 	f := jsonFeed{

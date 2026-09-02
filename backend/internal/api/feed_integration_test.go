@@ -3,9 +3,11 @@
 package api_test
 
 import (
+	"context"
 	"encoding/csv"
 	"encoding/json"
 	"encoding/xml"
+	"net/http"
 	"strings"
 	"testing"
 
@@ -123,6 +125,66 @@ func TestFeeds(t *testing.T) {
 	_, body := fetch(t, srv.URL+"/domains/d3.example/changelog.feed.json")
 	if !strings.Contains(string(body), "d3.example now supports IPv6 on www") {
 		t.Errorf("rendered title missing from feed: %s", body)
+	}
+}
+
+// TestChangelogWindowValidator covers both halves of review issue 08
+// (07 §6.1). The scoped JSON lists seeded their ETag from the table-wide
+// max(ts), so a transition in another scope invalidated a window that had
+// not changed; and every fixed-window surface seeded from max(ts) alone, so
+// a late commit — changelog.ts is the worker-fixed scan start, and a slow
+// scan lands a row older than the window's newest — left the validator
+// untouched and 304'd over a window that had just gained an item.
+func TestChangelogWindowValidator(t *testing.T) {
+	srv, pool := newAPI(t)
+	seedEntities(t, pool)
+	seedChangelog(t, pool)
+	ctx := context.Background()
+
+	surfaces := []string{
+		"/countries/no/changelog",
+		"/countries/no/changelog.atom",
+		"/countries/no/changelog.feed.json",
+	}
+	before := make(map[string]string, len(surfaces))
+	for _, path := range surfaces {
+		resp, _ := fetch(t, srv.URL+path)
+		if before[path] = resp.Header.Get("ETag"); before[path] == "" {
+			t.Fatalf("%s: no ETag", path)
+		}
+	}
+
+	// A transition in a scope nobody asked about. The Norwegian window is
+	// byte-identical, so every surface must still 304.
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO changelog (domain_id, ts, field, old_value, new_value)
+		 SELECT id, now(), 'ns', 'unsupported', 'supported' FROM domain WHERE host = 'd5.example'`); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range surfaces {
+		t.Run("quiet_scope_304s "+path, func(t *testing.T) {
+			if code := conditionalGet(t, srv.URL+path, before[path]); code != http.StatusNotModified {
+				t.Errorf("revalidated %d, want 304 — an unrelated scope moved the validator", code)
+			}
+		})
+	}
+
+	// A late commit into the Norwegian window: ts older than the window's
+	// newest row, so max(ts) does not move but the window gains an item.
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO changelog (domain_id, ts, field, old_value, new_value)
+		 SELECT d.id, (SELECT min(ts) FROM changelog) - interval '1 hour',
+		        'mx', 'unsupported', 'supported'
+		 FROM domain d JOIN country c ON c.id = d.country_id
+		 WHERE c.code = 'NO' LIMIT 1`); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range surfaces {
+		t.Run("late_commit_invalidates "+path, func(t *testing.T) {
+			if code := conditionalGet(t, srv.URL+path, before[path]); code != http.StatusOK {
+				t.Errorf("revalidated %d, want 200 — the window gained a row", code)
+			}
+		})
 	}
 }
 
