@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
@@ -32,6 +33,7 @@ type fakeCheckStore struct {
 	dedupe       map[string]db.CheckJobDedupeRow
 	jobs         map[int64]db.CheckJobByIDRow
 	detail       []byte
+	detailErr    error
 
 	reentries []string
 	enqueued  []string
@@ -90,6 +92,9 @@ func (f *fakeCheckStore) EnqueueLocked(_ context.Context, host string, _ netip.A
 }
 
 func (f *fakeCheckStore) LatestScanDetail(context.Context, int64) ([]byte, error) {
+	if f.detailErr != nil {
+		return nil, f.detailErr
+	}
 	if f.detail == nil {
 		return nil, pgx.ErrNoRows
 	}
@@ -246,6 +251,62 @@ func TestPostCheckJobDedupe(t *testing.T) {
 	}
 	if !slices.Contains(f.reentries, "example.com") {
 		t.Error("re-entry must run on dedupe hits too (§5.1.6)")
+	}
+	// Nothing was inserted, so the window is reported as read (cap - N).
+	if got := rec.Header().Get("RateLimit"); !strings.Contains(got, "remaining=10") {
+		t.Errorf("RateLimit on a dedupe hit = %q, want remaining=10", got)
+	}
+}
+
+// A failed read is a 500, never a body that claims nothing is confirmed
+// (cacheable for a minute) or a fall-through into a fresh enqueue that
+// spends the caller's quota.
+func TestCheckDBErrorsAreNotNoRows(t *testing.T) {
+	t.Run("job envelope confirmed read", func(t *testing.T) {
+		f := &fakeCheckStore{
+			confirmedErr: errors.New("statement timeout"),
+			jobs: map[int64]db.CheckJobByIDRow{3: {ID: 3, Host: "example.com", Status: db.CheckJobStatus("done"),
+				CreatedAt: pgTime(time.Now()), CompletedAt: pgTime(time.Now())}},
+		}
+		rec := httptest.NewRecorder()
+		testCheckRouter(checkServer(f)).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/check/3", nil))
+		if rec.Code != http.StatusInternalServerError {
+			t.Fatalf("code = %d (%s), want 500", rec.Code, rec.Body.String())
+		}
+	})
+	t.Run("domain dedupe evidence read", func(t *testing.T) {
+		f := &fakeCheckStore{
+			confirmed: map[string]db.DomainConfirmedRow{
+				"example.com": {ID: 1, Kind: db.DomainKind("apex"), Classification: db.Classification("unknown"),
+					LastCheckedAt: pgTime(time.Now().Add(-10 * time.Minute))},
+			},
+			detailErr: errors.New("pool exhausted"),
+		}
+		rec := httptest.NewRecorder()
+		checkServer(f).postCheck(rec, postCheckReq(`{"host":"example.com"}`))
+		if rec.Code != http.StatusInternalServerError {
+			t.Fatalf("code = %d (%s), want 500", rec.Code, rec.Body.String())
+		}
+		if len(f.enqueued) != 0 {
+			t.Error("a failed evidence read fell through into an enqueue")
+		}
+	})
+}
+
+// TestRetryAfter: ceil(3600 − age) with a floor of 1; an untyped or nil
+// min(created_at) yields the full window.
+func TestRetryAfter(t *testing.T) {
+	if got := retryAfter(nil); got != 3600 {
+		t.Errorf("nil = %d, want 3600", got)
+	}
+	if got := retryAfter(time.Now().Add(-10 * time.Minute)); got < 2999 || got > 3001 {
+		t.Errorf("10 minutes old = %d, want ~3000", got)
+	}
+	if got := retryAfter(time.Now().Add(-2 * time.Hour)); got != 1 {
+		t.Errorf("2 hours old = %d, want 1", got)
+	}
+	if got := retryAfter(pgTime(time.Now())); got != 3600 {
+		t.Errorf("pgtype value (not time.Time) = %d, want the 3600 fallback", got)
 	}
 }
 
