@@ -348,11 +348,32 @@ func TestKeysetPagination(t *testing.T) {
 		t.Errorf("filter-mismatched cursor: %d %+v", resp.StatusCode, problem)
 	}
 
-	// after_rank deep link skips ahead.
+	// after_rank deep link skips ahead, and mints a prev_cursor because
+	// ranks 1-7 really do precede the window.
 	var deep envelope
 	getJSON(t, srv.URL+"/domains?after_rank=7", &deep)
 	if h := hosts(t, deep.Items); len(h) == 0 || h[0] != "d8.example" {
 		t.Errorf("after_rank=7 first row = %v, want d8.example", h)
+	}
+	if deep.Page.PrevCursor == nil {
+		t.Error("after_rank=7 must mint prev_cursor: ranks 1-7 precede the window")
+	}
+
+	// …but an after_rank with nothing before it must not (07 §2.4). Both
+	// reproducers: the global list from 0, and a scope whose first member
+	// sits above the anchor (the first sinner is rank 4).
+	for _, url := range []string{
+		srv.URL + "/domains?after_rank=0&limit=3",
+		srv.URL + "/domains?class=sinner&after_rank=2&limit=3",
+	} {
+		var edge envelope
+		getJSON(t, url, &edge)
+		if len(edge.Items) == 0 {
+			t.Fatalf("%s returned no rows", url)
+		}
+		if edge.Page.PrevCursor != nil {
+			t.Errorf("%s minted prev_cursor onto an empty previous page", url)
+		}
 	}
 }
 

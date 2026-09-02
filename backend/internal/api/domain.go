@@ -468,10 +468,23 @@ func (s *Server) serveDomainList(w http.ResponseWriter, r *http.Request, preset 
 			items[i] = summaryFromRow(&rows[i])
 		}
 	} else {
+		// after_rank positions the window without a cursor, so whether a
+		// previous page exists is a question only the scope can answer:
+		// one indexed backward seek from the window's first row (§2.4).
+		var preceded func(context.Context, *postgres.DomainRow) (bool, error)
+		if afterRank != nil {
+			preceded = func(ctx context.Context, first *postgres.DomainRow) (bool, error) {
+				before, err := postgres.ListDomains(ctx, s.pool, &filter,
+					postgres.ListSort(sortKey), &postgres.DomainSeek{
+						Rank: first.Rank, ID: first.ID, Host: first.Host, RankNull: first.Rank == nil,
+					}, nil, 1, true)
+				return len(before) > 0, err
+			}
+		}
 		var ok bool
 		items, page, ok = ListPage(w, r, generation, limit, KeysetSpec[postgres.DomainRow]{
 			Sort:        sortKey,
-			Positioned:  afterRank != nil,
+			Preceded:    preceded,
 			Fingerprint: fingerprint,
 			Fetch: func(ctx context.Context, seek *Seek, lim int, backward bool) ([]postgres.DomainRow, error) {
 				var ds *postgres.DomainSeek

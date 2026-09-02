@@ -12,10 +12,14 @@ type KeysetSpec[Row any] struct {
 	// Sort is the cursor sort domain (SortRank, SortHost, SortChangelog, …).
 	Sort string
 
-	// Positioned marks positioning that arrives outside the cursor
-	// (after_rank on /domains): the page then always has rows before it,
-	// so a prev_cursor is mintable even without a backward probe.
-	Positioned bool
+	// Preceded, when non-nil, answers whether any row precedes the window
+	// on a page positioned outside the cursor (after_rank on /domains).
+	// A cursor is its own proof that a previous row exists; a positioning
+	// param is not — after_rank=0, or below a scope's first rank, has
+	// nothing before it, and minting a prev_cursor there strands the
+	// client on an empty page (07 §2.4: prev_cursor is null when there is
+	// no previous page).
+	Preceded func(ctx context.Context, first *Row) (bool, error)
 
 	// Fingerprint, when non-empty, overrides the fingerprint KeysetPage
 	// derives from the raw query — set where the filter set includes
@@ -66,7 +70,17 @@ func KeysetPage[Row any](r *http.Request, generation int32, limit int, spec Keys
 		return nil, Page{}, err
 	}
 
-	rows, forwardMore, backwardMore := trimWindow(rows, limit, backward, seek != nil || spec.Positioned)
+	rows, forwardMore, backwardMore := trimWindow(rows, limit, backward, seek != nil)
+	// A window positioned by a param rather than a cursor has to ask the
+	// scope whether anything precedes it. Only on a forward first page, and
+	// only when the first row can anchor a cursor at all — a rank-NULL row
+	// on a rank ordering mints nothing either way.
+	if !backward && seek == nil && spec.Preceded != nil && len(rows) > 0 && spec.Key(&rows[0]) != nil {
+		backwardMore, err = spec.Preceded(r.Context(), &rows[0])
+		if err != nil {
+			return nil, Page{}, err
+		}
+	}
 	return rows, MintPage(generation, spec.Sort, fingerprint, forwardMore, backwardMore, rows, spec.Key), nil
 }
 

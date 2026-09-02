@@ -44,15 +44,23 @@ func (f *ksFetch) fn(_ context.Context, seek *Seek, limit int, backward bool) ([
 const ksGen int32 = 20260701
 
 // ksPage runs KeysetPage over a bare request with the given raw query.
-func ksPage(t *testing.T, rawQuery string, fetch *ksFetch, positioned bool) ([]ksRow, Page, error) {
+// preceded is the after_rank backward probe; nil = no positioning param.
+func ksPage(t *testing.T, rawQuery string, fetch *ksFetch,
+	preceded func(context.Context, *ksRow) (bool, error),
+) ([]ksRow, Page, error) {
 	t.Helper()
 	r := httptest.NewRequest("GET", "/domains?"+rawQuery, nil)
 	return KeysetPage(r, ksGen, 5, KeysetSpec[ksRow]{
-		Sort:       SortRank,
-		Positioned: positioned,
-		Fetch:      fetch.fn,
-		Key:        ksKey,
+		Sort:     SortRank,
+		Preceded: preceded,
+		Fetch:    fetch.fn,
+		Key:      ksKey,
 	})
+}
+
+// ksPreceded scripts the backward probe: does anything precede the window?
+func ksPreceded(before bool) func(context.Context, *ksRow) (bool, error) {
+	return func(context.Context, *ksRow) (bool, error) { return before, nil }
 }
 
 // ksCursor mints a token the way BuildPage would, against the fingerprint of
@@ -81,7 +89,7 @@ func ksDecode(t *testing.T, token string, filters url.Values) Seek {
 func TestKeysetPageForward(t *testing.T) {
 	t.Run("first_page_no_overflow", func(t *testing.T) {
 		f := &ksFetch{rows: ksRows(1, 2, 3)}
-		rows, page, err := ksPage(t, "", f, false)
+		rows, page, err := ksPage(t, "", f, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -95,7 +103,7 @@ func TestKeysetPageForward(t *testing.T) {
 
 	t.Run("first_page_overflow_mints_next", func(t *testing.T) {
 		f := &ksFetch{rows: ksRows(1, 2, 3, 4, 5, 6)}
-		rows, page, err := ksPage(t, "", f, false)
+		rows, page, err := ksPage(t, "", f, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -114,7 +122,7 @@ func TestKeysetPageForward(t *testing.T) {
 	t.Run("cursor_positioned_mints_prev", func(t *testing.T) {
 		f := &ksFetch{rows: ksRows(6, 7, 8)}
 		tok := ksCursor(ksGen, SortRank, nil, []any{int32(5), int64(5)}, false)
-		rows, page, err := ksPage(t, "cursor="+url.QueryEscape(tok), f, false)
+		rows, page, err := ksPage(t, "cursor="+url.QueryEscape(tok), f, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -133,14 +141,56 @@ func TestKeysetPageForward(t *testing.T) {
 		}
 	})
 
-	t.Run("after_rank_positioned_flag", func(t *testing.T) {
+	// after_rank positions the window with no cursor to prove a previous
+	// row exists, so the probe decides (07 §2.4). Minting unconditionally
+	// stranded /domains?after_rank=0 on an empty prev page.
+	t.Run("after_rank_probe", func(t *testing.T) {
+		for _, tt := range []struct {
+			name     string
+			before   bool
+			wantPrev bool
+		}{
+			{"rows before the window mint prev", true, true},
+			{"nothing before the window mints none", false, false},
+		} {
+			t.Run(tt.name, func(t *testing.T) {
+				f := &ksFetch{rows: ksRows(11, 12)}
+				_, page, err := ksPage(t, "", f, ksPreceded(tt.before))
+				if err != nil {
+					t.Fatal(err)
+				}
+				if (page.PrevCursor != nil) != tt.wantPrev {
+					t.Errorf("prev_cursor = %v, want minted %t", page.PrevCursor, tt.wantPrev)
+				}
+			})
+		}
+	})
+
+	t.Run("probe_error_surfaces", func(t *testing.T) {
 		f := &ksFetch{rows: ksRows(11, 12)}
-		_, page, err := ksPage(t, "", f, true) // spec.Positioned = after_rank
+		want := errors.New("probe failed")
+		_, _, err := ksPage(t, "", f, func(context.Context, *ksRow) (bool, error) {
+			return false, want
+		})
+		if !errors.Is(err, want) {
+			t.Errorf("err = %v, want the probe's own error", err)
+		}
+	})
+
+	t.Run("probe_skipped_on_a_cursor_page", func(t *testing.T) {
+		f := &ksFetch{rows: ksRows(6, 7, 8)}
+		tok := ksCursor(ksGen, SortRank, nil, []any{int32(5), int64(5)}, false)
+		probed := false
+		_, page, err := ksPage(t, "cursor="+url.QueryEscape(tok), f,
+			func(context.Context, *ksRow) (bool, error) { probed = true; return false, nil })
 		if err != nil {
 			t.Fatal(err)
 		}
+		if probed {
+			t.Error("a cursor is its own proof of a previous row; no probe should run")
+		}
 		if page.PrevCursor == nil {
-			t.Error("after_rank-positioned page must mint prev_cursor")
+			t.Error("cursor page must still mint prev_cursor")
 		}
 	})
 }
@@ -151,7 +201,7 @@ func TestKeysetPageBackward(t *testing.T) {
 		// convention): row 1 proves more rows exist above.
 		f := &ksFetch{rows: ksRows(1, 2, 3, 4, 5, 6)}
 		tok := ksCursor(ksGen, SortRank, nil, []any{int32(7), int64(7)}, true)
-		rows, page, err := ksPage(t, "cursor="+url.QueryEscape(tok), f, false)
+		rows, page, err := ksPage(t, "cursor="+url.QueryEscape(tok), f, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -172,7 +222,7 @@ func TestKeysetPageBackward(t *testing.T) {
 	t.Run("no_overflow_reaches_start", func(t *testing.T) {
 		f := &ksFetch{rows: ksRows(1, 2, 3)}
 		tok := ksCursor(ksGen, SortRank, nil, []any{int32(4), int64(4)}, true)
-		rows, page, err := ksPage(t, "cursor="+url.QueryEscape(tok), f, false)
+		rows, page, err := ksPage(t, "cursor="+url.QueryEscape(tok), f, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -190,7 +240,7 @@ func TestKeysetPageBackward(t *testing.T) {
 	t.Run("empty_backward_page", func(t *testing.T) {
 		f := &ksFetch{}
 		tok := ksCursor(ksGen, SortRank, nil, []any{int32(1), int64(1)}, true)
-		rows, page, err := ksPage(t, "cursor="+url.QueryEscape(tok), f, false)
+		rows, page, err := ksPage(t, "cursor="+url.QueryEscape(tok), f, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -207,7 +257,7 @@ func TestKeysetPageCursorValidation(t *testing.T) {
 	t.Run("wrong_sort_rejected", func(t *testing.T) {
 		f := &ksFetch{}
 		tok := ksCursor(ksGen, SortHost, nil, []any{"x.no"}, false)
-		_, _, err := ksPage(t, "cursor="+url.QueryEscape(tok), f, false)
+		_, _, err := ksPage(t, "cursor="+url.QueryEscape(tok), f, nil)
 		if !errors.Is(err, ErrCursorInvalid) {
 			t.Fatalf("err = %v, want ErrCursorInvalid", err)
 		}
@@ -219,7 +269,7 @@ func TestKeysetPageCursorValidation(t *testing.T) {
 	t.Run("fingerprint_mismatch_rejected", func(t *testing.T) {
 		f := &ksFetch{}
 		tok := ksCursor(ksGen, SortRank, nil, []any{int32(5), int64(5)}, false)
-		_, _, err := ksPage(t, "class=hero&cursor="+url.QueryEscape(tok), f, false)
+		_, _, err := ksPage(t, "class=hero&cursor="+url.QueryEscape(tok), f, nil)
 		if !errors.Is(err, ErrCursorInvalid) {
 			t.Fatalf("err = %v, want ErrCursorInvalid", err)
 		}
@@ -228,7 +278,7 @@ func TestKeysetPageCursorValidation(t *testing.T) {
 	t.Run("stale_generation_reanchors", func(t *testing.T) {
 		f := &ksFetch{rows: ksRows(6, 7)}
 		tok := ksCursor(ksGen-1, SortRank, nil, []any{int32(5), int64(5)}, false)
-		_, page, err := ksPage(t, "cursor="+url.QueryEscape(tok), f, false)
+		_, page, err := ksPage(t, "cursor="+url.QueryEscape(tok), f, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -245,7 +295,7 @@ func TestKeysetPageCursorValidation(t *testing.T) {
 
 	t.Run("fetch_error_propagates", func(t *testing.T) {
 		f := &ksFetch{err: errors.New("boom")}
-		_, _, err := ksPage(t, "", f, false)
+		_, _, err := ksPage(t, "", f, nil)
 		if err == nil || errors.Is(err, ErrCursorInvalid) {
 			t.Fatalf("err = %v, want the fetch error verbatim", err)
 		}
