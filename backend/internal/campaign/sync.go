@@ -175,7 +175,7 @@ func Sync(ctx context.Context, cfg Config, pool *pgxpool.Pool) (*Report, error) 
 			if newUUID == "" {
 				newUUID = uuid.NewString()
 			}
-			writeBack[filepath.Join(cfg.RepoPath, f.Path)] = newUUID
+			writeBack[filepath.Join(cfg.RepoPath, CampaignsDir, f.Path)] = newUUID
 			campaignID, err = upsertNoUUID(ctx, q, f, newUUID)
 			if err != nil {
 				return nil, fmt.Errorf("campaign sync: insert %s: %w", f.Path, err)

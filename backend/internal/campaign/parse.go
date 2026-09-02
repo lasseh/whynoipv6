@@ -26,7 +26,7 @@ type yamlFile struct {
 
 // File is one parsed, validated campaign YAML.
 type File struct {
-	Path        string // basename, the source_file value
+	Path        string // basename, the source_file value — an identity, not a path to open
 	Title       string
 	Description string
 	UUID        string   // "" when absent
@@ -126,10 +126,20 @@ func isYAML(name string) bool {
 	return ext == ".yml" || ext == ".yaml"
 }
 
-// ListYAMLFiles returns the root-level *.yml/*.yaml files of the checkout,
-// sorted (06-ingest.md §3.2 — root only, no subdirectories).
+// CampaignsDir is the checkout subdirectory holding the campaign files, one
+// file per campaign: campaigns/<Campaign_Name>.yml.
+const CampaignsDir = "campaigns"
+
+// ListYAMLFiles returns the campaigns/*.yml|*.yaml files of the checkout,
+// sorted (06-ingest.md §3.2 — that directory only, no nesting below it).
 func ListYAMLFiles(repoPath string) ([]string, error) {
-	return listYAMLIn(repoPath)
+	return listYAMLIn(filepath.Join(repoPath, CampaignsDir))
+}
+
+// campaignReportKey is a campaign file's repo-relative path, the name the
+// validator reports it under and reads it back through.
+func campaignReportKey(path string) string {
+	return filepath.Join(CampaignsDir, filepath.Base(path))
 }
 
 // listYAMLIn returns dir's sorted YAML files, ignoring subdirectories.

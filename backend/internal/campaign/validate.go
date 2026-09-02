@@ -32,15 +32,15 @@ type hostEntry struct {
 	Line      int
 }
 
-// changedFile is one PR-changed campaign file (git name-status).
+// changedFile is one PR-changed campaign or subdomain file (git name-status).
 type changedFile struct {
-	name   string // basename
+	name   string // repo-relative path, the value git and the report key use
 	status byte   // A, M, D
 }
 
 // Validate runs the §4.2 checks. base != "" is CI mode: only the files
 // changed vs the merge base are evaluated and the UUID diff rule applies;
-// base == "" is local mode: every root-level YAML plus every curated
+// base == "" is local mode: every campaigns/ YAML plus every curated
 // subdomain list, no git required. The verb never touches the DB or the
 // network.
 func Validate(ctx context.Context, repo, base string, maxDomains, maxSubdomains int) (*ValidateResult, error) {
@@ -66,7 +66,7 @@ func Validate(ctx context.Context, repo, base string, maxDomains, maxSubdomains 
 				continue
 			}
 			switch dir, _ := filepath.Split(parts[1]); dir {
-			case "": // root-level campaign file
+			case CampaignsDir + "/":
 				files = append(files, changedFile{name: parts[1], status: parts[0][0]})
 			case SubdomainsDir + "/":
 				subFiles = append(subFiles, changedFile{name: parts[1], status: parts[0][0]})
@@ -78,7 +78,7 @@ func Validate(ctx context.Context, repo, base string, maxDomains, maxSubdomains 
 			return nil, err
 		}
 		for _, p := range list {
-			files = append(files, changedFile{name: filepath.Base(p), status: 'M'})
+			files = append(files, changedFile{name: campaignReportKey(p), status: 'M'})
 		}
 		subList, err := ListSubdomainFiles(repo)
 		if err != nil {
@@ -109,7 +109,7 @@ func Validate(ctx context.Context, repo, base string, maxDomains, maxSubdomains 
 		}
 	}
 
-	// Head-state hosts of every root-level file (cross-file informational).
+	// Head-state hosts of every campaign file (cross-file informational).
 	headHosts := map[string]map[string]string{} // file → host → title
 	if all, err := ListYAMLFiles(repo); err == nil {
 		for _, p := range all {
@@ -118,7 +118,7 @@ func Validate(ctx context.Context, repo, base string, maxDomains, maxSubdomains 
 				for _, h := range f.Hosts {
 					m[h] = f.Title
 				}
-				headHosts[filepath.Base(p)] = m
+				headHosts[campaignReportKey(p)] = m
 			}
 		}
 	}
