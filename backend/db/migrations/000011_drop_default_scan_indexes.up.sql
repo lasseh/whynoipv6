@@ -1,0 +1,31 @@
+-- =============================================================================
+-- 000011_drop_default_scan_indexes.up.sql — remove the create_default_indexes
+-- artifacts on the two highest-volume hypertables.
+--
+-- 000002 converts every hypertable with create_default_indexes at its default
+-- (true), so TimescaleDB created a ts-leading btree on each one. On scan and
+-- scan_detail nothing reads it: both readers filter on domain_id and are
+-- served by the (domain_id, ts) primary key. 000001 says as much next to the
+-- scan table ("an additional index is pure write/storage overhead") and
+-- metrics.sql reasons from "the scan hypertable has no ts-leading index" —
+-- both were describing a schema the migrations did not actually produce.
+--
+-- Verified on the integration container before dropping: EXPLAIN of
+-- LatestScanDetail and ScanLatencyDaily plans identically with and without
+-- them (Index Scan using scan_detail_pkey / scan_pkey per chunk either way).
+-- At ~1M scan rows and 1-2 GB of scan_detail a day, that is two btrees of
+-- write and storage overhead no reader was designed for.
+--
+-- The other three defaults stay, deliberately:
+--   crawler_metrics_ts_idx, unbound_stats_ts_idx — Grafana reads both by ts,
+--     and CrawlerThroughput/TickSummaryCounts window on ts.
+--   stats_asn_daily_day_idx — load-bearing for StatsTopNetworks' max(day)
+--     and `day = newest` over 90-day chunks. It exists only because the
+--     default created it; it is kept on purpose, not by accident.
+--
+-- TestMigrations pins the full per-hypertable index set from here on, so the
+-- next undeclared index fails CI instead of appearing silently.
+-- =============================================================================
+
+DROP INDEX IF EXISTS scan_ts_idx;
+DROP INDEX IF EXISTS scan_detail_ts_idx;

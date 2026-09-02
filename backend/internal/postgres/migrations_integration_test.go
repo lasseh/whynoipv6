@@ -4,6 +4,8 @@ package postgres
 
 import (
 	"context"
+	"maps"
+	"slices"
 	"testing"
 
 	"github.com/lasseh/whynoipv6/internal/postgres/pgtest"
@@ -96,6 +98,43 @@ func TestMigrations(t *testing.T) {
 		t.Errorf("seeds = %d/%d/%d/%d, want 251/1/1/1", countries, sentinelASN, sentinelCountry, statsRows)
 	}
 
+	// The hypertable index inventory. create_hypertable defaults
+	// create_default_indexes to true, so 000002 silently minted a ts-leading
+	// btree on every hypertable it converted — including scan and
+	// scan_detail, where 000001 and metrics.sql both say no such index
+	// exists. 000011 drops those two; the three kept ones are load-bearing
+	// (Grafana's ts windows, and StatsTopNetworks' max(day)). Pinning the
+	// whole set means the next undeclared index fails here rather than
+	// appearing on the highest-volume tables unnoticed.
+	wantIndexes := map[string][]string{
+		"changelog":       {"changelog_pkey", "idx_changelog_ts"},
+		"crawler_metrics": {"crawler_metrics_ts_idx"},
+		"scan":            {"scan_pkey"},
+		"scan_detail":     {"scan_detail_pkey"},
+		"stats_asn_daily": {"stats_asn_daily_day_idx", "stats_asn_daily_pkey"},
+		"unbound_stats":   {"unbound_stats_ts_idx"},
+	}
+	gotIndexes := map[string][]string{}
+	idxRows, err := pool.Query(ctx, `SELECT tablename, indexname FROM pg_indexes
+		WHERE schemaname = 'public' AND tablename = ANY($1)
+		ORDER BY tablename, indexname`, slices.Sorted(maps.Keys(wantIndexes)))
+	if err != nil {
+		t.Fatalf("indexes: %v", err)
+	}
+	for idxRows.Next() {
+		var tbl, idx string
+		if err := idxRows.Scan(&tbl, &idx); err != nil {
+			t.Fatal(err)
+		}
+		gotIndexes[tbl] = append(gotIndexes[tbl], idx)
+	}
+	idxRows.Close()
+	for tbl, want := range wantIndexes {
+		if got := gotIndexes[tbl]; !slices.Equal(got, want) {
+			t.Errorf("%s indexes = %v, want %v", tbl, got, want)
+		}
+	}
+
 	// Constraint negatives (§9.2 item 5).
 	if _, err := pool.Exec(ctx,
 		"INSERT INTO changelog (domain_id, field, old_value, new_value) VALUES (1, 'base', NULL, 'supported')"); err == nil {
@@ -124,7 +163,7 @@ func TestMigrateDownUp(t *testing.T) {
 		t.Fatalf("migrate up after down: %v", err)
 	}
 	v, dirty, err := mig.Version()
-	if err != nil || dirty || v != 10 {
-		t.Errorf("version after down/up = %d dirty=%t err=%v, want 10 clean", v, dirty, err)
+	if err != nil || dirty || v != 11 {
+		t.Errorf("version after down/up = %d dirty=%t err=%v, want 11 clean", v, dirty, err)
 	}
 }
