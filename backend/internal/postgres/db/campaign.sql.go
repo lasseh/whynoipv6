@@ -74,6 +74,19 @@ func (q *Queries) CampaignByUUID(ctx context.Context, uuid pgtype.UUID) (Campaig
 	return i, err
 }
 
+const CampaignCountEnabled = `-- name: CampaignCountEnabled :one
+SELECT count(*) FROM campaign WHERE NOT disabled
+`
+
+// The empty-checkout guard (06 §3.3 step 5 erratum): a sync that parsed no
+// files is a broken clone, not a repo where every campaign was deleted.
+func (q *Queries) CampaignCountEnabled(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, CampaignCountEnabled)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const CampaignDisableAbsent = `-- name: CampaignDisableAbsent :many
 UPDATE campaign SET disabled = true, updated_at = now()
 WHERE NOT disabled AND uuid <> ALL($1::uuid[])

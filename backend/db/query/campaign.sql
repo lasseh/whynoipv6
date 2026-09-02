@@ -37,6 +37,11 @@ UPDATE campaign SET disabled = true, updated_at = now()
 WHERE NOT disabled AND uuid <> ALL($1::uuid[])
 RETURNING uuid, name;
 
+-- The empty-checkout guard (06 §3.3 step 5 erratum): a sync that parsed no
+-- files is a broken clone, not a repo where every campaign was deleted.
+-- name: CampaignCountEnabled :one
+SELECT count(*) FROM campaign WHERE NOT disabled;
+
 -- The public campaign surface (07 §4.7): exact member counts (bounded sets),
 -- ?tag= via the GIN-indexed tags array. Each row carries the same adoption
 -- pair as the detail via a lateral read of the latest stats_campaign_daily

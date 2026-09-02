@@ -58,6 +58,15 @@ domains:
     - api.a-two.no
 `
 
+// campKeeper exists so the checkout is never empty: an empty checkout is a
+// broken clone, not a repo where every campaign was deleted (review issue
+// 29), and Sync refuses it.
+const campKeeper = `title: Keeper
+description: Keeps the checkout non-empty.
+domains:
+    - keeper.no
+`
+
 // TestCampaignSync covers the 06-ingest §9.6 matrix on a fixture repo.
 func TestCampaignSync(t *testing.T) {
 	pool := pgtest.NewDB(t)
@@ -127,6 +136,13 @@ func TestCampaignSync(t *testing.T) {
 	}
 
 	// --- deletion: file removed → soft-disable, memberships kept.
+	//
+	// A second campaign has to be present for this to be a deletion at all:
+	// removing the last file leaves nothing parsed, which since review
+	// issue 29 is treated as a broken checkout and refused. That is the
+	// distinction the guard draws — a file gone from a healthy repo still
+	// disables its campaign.
+	writeFixture(t, dir, "keeper.yml", campKeeper)
 	if err := os.Remove(filepath.Join(dir, "a-renamed.yml")); err != nil {
 		t.Fatal(err)
 	}
@@ -215,8 +231,10 @@ domains:
 		t.Fatal(err)
 	}
 	rep = run(t, pool, dir)
-	if rep.MembershipAdds != 3 {
-		t.Errorf("membership re-add count = %d, want 3", rep.MembershipAdds)
+	// Three from campaign A plus keeper.yml's one, which the checkout has
+	// carried since the deletion case above.
+	if rep.MembershipAdds != 4 {
+		t.Errorf("membership re-add count = %d, want 4", rep.MembershipAdds)
 	}
 	row := pool.QueryRow(ctx,
 		"SELECT disabled, next_check_at <= now() FROM domain WHERE host='a-one.no'")

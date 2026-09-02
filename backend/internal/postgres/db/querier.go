@@ -30,6 +30,9 @@ type Querier interface {
 	CampaignAdoption(ctx context.Context, campaignID int32) (CampaignAdoptionRow, error)
 	// db/query/campaign.sql — sqlc query source (layout: 05-schema.md §10.2).
 	CampaignByUUID(ctx context.Context, uuid pgtype.UUID) (CampaignByUUIDRow, error)
+	// The empty-checkout guard (06 §3.3 step 5 erratum): a sync that parsed no
+	// files is a broken clone, not a repo where every campaign was deleted.
+	CampaignCountEnabled(ctx context.Context) (int64, error)
 	CampaignDisableAbsent(ctx context.Context, dollar_1 []pgtype.UUID) ([]CampaignDisableAbsentRow, error)
 	CampaignHasMember(ctx context.Context, arg CampaignHasMemberParams) (bool, error)
 	CampaignInsert(ctx context.Context, arg CampaignInsertParams) (int32, error)

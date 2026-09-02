@@ -17,6 +17,7 @@ func campaignCmd() *cobra.Command {
 		Short: "Campaign repository sync",
 	}
 
+	var force bool
 	syncCmd := &cobra.Command{
 		Use:   "sync",
 		Short: "Sync the campaign YAML checkout into the database",
@@ -24,6 +25,7 @@ func campaignCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cfg := cfgFromCmd(cmd)
 			ccfg := campaign.ConfigFrom(cfg)
+			ccfg.Force = force
 			if err := ccfg.Validate(); err != nil {
 				return err
 			}
@@ -52,6 +54,11 @@ func campaignCmd() *cobra.Command {
 				fmt.Println("WARNING: curated removals were suspended — a rejected list would " +
 					"otherwise have unlisted its hosts. Fix the rejections above and re-run.")
 			}
+			if n := len(rep.DisableFrozen); n > 0 {
+				fmt.Printf("WARNING: %d campaign(s) were held back from disable/removal because "+
+					"their file was rejected, not deleted: %s. Fix the rejections below and re-run.\n",
+					n, strings.Join(rep.DisableFrozen, ", "))
+			}
 			for f, reason := range rep.RejectedFiles {
 				fmt.Printf("rejected file %s: %s\n", f, reason)
 			}
@@ -65,6 +72,9 @@ func campaignCmd() *cobra.Command {
 			return syncOutcome(rep)
 		},
 	}
+	syncCmd.Flags().BoolVar(&force, "force", false,
+		"sync an empty checkout, disabling every campaign (the guard exists because "+
+			"an empty checkout is usually a broken clone)")
 	cmd.AddCommand(syncCmd)
 	cmd.AddCommand(campaignValidateCmd())
 	return cmd
@@ -90,6 +100,9 @@ func syncOutcome(rep *campaign.Report) error {
 	}
 	if rep.CuratedFrozen {
 		reasons = append(reasons, "curated removals frozen")
+	}
+	if n := len(rep.DisableFrozen); n > 0 {
+		reasons = append(reasons, fmt.Sprintf("%d campaign(s) frozen", n))
 	}
 	if strings.HasPrefix(rep.WriteBack, "failed:") {
 		reasons = append(reasons, "uuid write-back "+rep.WriteBack)

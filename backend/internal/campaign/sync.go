@@ -34,6 +34,11 @@ type Config struct {
 	MaxSubdomainsPerDomain int
 	Pull                   bool // git pull --ff-only before parsing (prod: true)
 	Push                   bool // commit+push the uuid write-back (prod: true)
+	// Force overrides the empty-checkout guard: a run that parsed no files
+	// while the database has enabled campaigns aborts rather than
+	// soft-deleting all of them (06 §3.3 step 5 erratum). Operator-set via
+	// `v6ctl campaign sync --force`, never from config.
+	Force bool
 }
 
 // Report is the §3.3 step-7 sync report.
@@ -53,6 +58,11 @@ type Report struct {
 	CuratedAdds    int  // memberships gained
 	CuratedRemoves int  // memberships dropped
 	CuratedFrozen  bool // a rejected list suspended the removal diff this run
+	// DisableFrozen names the campaigns step 5 was not allowed to disable
+	// this run because their file was rejected or unparseable rather than
+	// deleted (06 §3.3 step 5 erratum, review issue 29). Same shape as
+	// CuratedFrozen: the run completes, the destructive half is held back.
+	DisableFrozen []string
 
 	RejectedFiles map[string]string
 	RejectedHosts map[string]string
@@ -85,10 +95,12 @@ func Sync(ctx context.Context, cfg Config, pool *pgxpool.Pool) (*Report, error) 
 		return nil, fmt.Errorf("campaign sync: list files: %w", err)
 	}
 	var files []*File
+	var rejectedPaths []string
 	for _, p := range paths {
 		f, err := ParseFile(p, cfg.MaxDomainsPerFile)
 		if err != nil {
 			rep.RejectedFiles[filepath.Base(p)] = err.Error()
+			rejectedPaths = append(rejectedPaths, p)
 			continue
 		}
 		for raw, reason := range f.RejectedHosts {
@@ -97,6 +109,23 @@ func Sync(ctx context.Context, cfg Config, pool *pgxpool.Pool) (*Report, error) 
 		files = append(files, f)
 	}
 	files = dedupeUUIDs(ctx, pool, files, rep)
+
+	// A checkout that parsed nothing while the database still has enabled
+	// campaigns is not "every campaign was deleted" — it is a broken clone,
+	// a wrong repo_path, or a bad checkout, and step 5 would soft-delete the
+	// lot (06 §3.3 step 5 erratum, review issue 29). A file genuinely
+	// removed from a healthy checkout still disables its campaign, because
+	// that path leaves other files parsed.
+	if len(files) == 0 && !cfg.Force {
+		enabled, err := db.New(pool).CampaignCountEnabled(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("campaign sync: count enabled: %w", err)
+		}
+		if enabled > 0 {
+			return nil, fmt.Errorf("campaign sync: campaign checkout is empty; "+
+				"refusing to disable %d campaigns (--force overrides)", enabled)
+		}
+	}
 
 	// Steps 3–5 in one import transaction.
 	tx, err := pool.Begin(ctx)
@@ -189,6 +218,30 @@ func Sync(ctx context.Context, cfg Config, pool *pgxpool.Pool) (*Report, error) 
 		}
 	}
 
+	// A rejected file's campaign is not absent, it is unreadable. Adding its
+	// uuid to the seen set keeps step 5 from disabling it over a typo that
+	// the same run already reported (06 §3.3 step 5 erratum, review issue
+	// 29). The uuid comes from the file itself where the YAML is readable
+	// enough to find it, and from source_file otherwise.
+	for _, p := range rejectedPaths {
+		id := rawFileUUID(p)
+		if id == "" {
+			base := filepath.Base(p)
+			if prior, err := q.CampaignUUIDBySourceFile(ctx, &base); err == nil {
+				id = uuidString(prior)
+			}
+		}
+		if id == "" || fileUUIDs[id] {
+			continue
+		}
+		row, err := q.CampaignByUUID(ctx, mustUUID(id))
+		if err != nil {
+			continue // no campaign to protect
+		}
+		seenUUIDs = append(seenUUIDs, mustUUID(id))
+		rep.DisableFrozen = append(rep.DisableFrozen, row.Name)
+	}
+
 	// Step 5: uuid-set soft delete.
 	disabled, err := q.CampaignDisableAbsent(ctx, seenUUIDs)
 	if err != nil {
@@ -218,6 +271,7 @@ func Sync(ctx context.Context, cfg Config, pool *pgxpool.Pool) (*Report, error) 
 		"member_removes", rep.MembershipRemoves,
 		"curated_files", rep.CuratedFiles, "curated_adds", rep.CuratedAdds,
 		"curated_removes", rep.CuratedRemoves, "curated_frozen", rep.CuratedFrozen,
+		"disable_frozen", len(rep.DisableFrozen),
 		"rejected_files", len(rep.RejectedFiles), "rejected_hosts", len(rep.RejectedHosts),
 		"write_back", rep.WriteBack)
 	return rep, nil
@@ -271,6 +325,16 @@ func syncMembers(ctx context.Context, q *db.Queries, ens *entityEnsurer, campaig
 				}
 			}
 		}
+	}
+	// A file that listed hosts and produced none is a rejection, not an
+	// empty campaign: every entry failed canonicalization or the PSL check,
+	// and removing all members over that would unlist the whole campaign on
+	// a bad edit (06 §3.3 step 5 erratum, review issue 29). A genuinely
+	// empty `domains:` list still clears its members — that is a real edit.
+	if len(f.Hosts) > 0 && len(desired) == 0 {
+		rep.RejectedFiles[f.Path] = "every host failed validation — member removal frozen"
+		rep.DisableFrozen = append(rep.DisableFrozen, f.Title)
+		return nil
 	}
 	removed, err := q.CampaignRemoveMembersNotIn(ctx, db.CampaignRemoveMembersNotInParams{
 		CampaignID: campaignID, DomainIds: desired,
