@@ -3,6 +3,7 @@ package notify
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"io"
 	"log/slog"
 	"net/http"
@@ -123,4 +124,32 @@ func TestNotifyDisabled(t *testing.T) {
 	c.HeartbeatOK(ctx)
 	c.HeartbeatFail(ctx)
 	c.PingTick(ctx) // must not panic or dial anything
+}
+
+// TestWebhookBodyContract pins the receiver contract 09-ops §12 records
+// (review issue 40): every producer posting to ops.webhook_url sends a
+// human-readable "text" member, because a Slack incoming webhook rejects a
+// body without one as 400 invalid_payload. The systemd notify unit sends
+// the same key; its body lives in deploy/systemd/whynoipv6-notify@.service.
+func TestWebhookBodyContract(t *testing.T) {
+	var body []byte
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ = io.ReadAll(r.Body)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	New(srv.URL, "", "", time.Minute).Webhook(context.Background(), "crawler preflight failed")
+
+	var got map[string]any
+	if err := json.Unmarshal(body, &got); err != nil {
+		t.Fatalf("body is not JSON: %v (%s)", err, body)
+	}
+	text, ok := got["text"].(string)
+	if !ok {
+		t.Fatalf("body = %s, want a string \"text\" member", body)
+	}
+	if text != "crawler preflight failed" {
+		t.Errorf("text = %q, want the message verbatim", text)
+	}
 }

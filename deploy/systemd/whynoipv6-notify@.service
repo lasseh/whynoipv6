@@ -5,6 +5,9 @@ Description=WhyNoIPv6 ops-webhook failure notice for %i
 Type=oneshot
 User=whynoipv6
 EnvironmentFile=/etc/whynoipv6/env
+# "text" first: the ops webhook's receiver contract is Slack-compatible
+# (09-ops.md §12), so every producer sends it and the structured fields
+# ride alongside for a generic receiver.
 ExecStart=/usr/bin/curl -fsS --max-time 15 -X POST "${OPS_WEBHOOK_URL}" \
   -H "Content-Type: application/json" \
-  -d "{\"level\":\"error\",\"source\":\"systemd\",\"unit\":\"%i\",\"host\":\"%H\"}"
+  -d "{\"text\":\"%i failed on %H\",\"level\":\"error\",\"source\":\"systemd\",\"unit\":\"%i\",\"host\":\"%H\"}"

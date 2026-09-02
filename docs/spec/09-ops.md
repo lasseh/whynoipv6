@@ -1038,6 +1038,16 @@ warnings, the consensus fast-lane/provider breakers, backup/WAL/export failures
 the weekly service-candidate digest, and campaign-sync reports. `ops.webhook_url` empty =
 no webhook (dev).
 
+_Erratum 2026-09-02: "single alert sink" never named a **receiver contract**, and three producers were posting three unrelated JSON shapes at it (review issue 40). The contract is **Slack-compatible**: every producer sends a human-readable **`text`** member, and may add structured fields beside it that a generic receiver can use and a Slack receiver ignores._
+
+| Producer | Body |
+|---|---|
+| `internal/notify.Webhook` (crawler, tick, v6ctl) | `{"text": "<one line>"}` |
+| `whynoipv6-notify@.service` (systemd `OnFailure`) | `{"text": "<unit> failed on <host>", "level": "error", "source": "systemd", "unit": "…", "host": "…"}` |
+| Grafana alert rules A1–A5 | Grafana's own alert schema — **not** Slack-shaped |
+
+_A Slack incoming webhook rejects a body with no `text` as `400 invalid_payload`, and the unit's `curl -fsS` swallows that silently in a oneshot, so before this the operator lost every timer failure notice. Grafana is the remaining exception and cannot be fixed from this repo's payloads: point `OPS_WEBHOOK_URL` at a generic receiver, or give Grafana a **Slack-type contact point** rather than the `type: webhook` one in `deploy/grafana/alerts.yaml`._
+
 ### 12.1 The public dashboard (retired)
 
 There is no public dashboard. `wni6-public` and `snapshot-public.py` were removed once
