@@ -154,6 +154,16 @@ func ComputeCommit(in *CommitInput, cfg *CommitConfig) (*commitUnit, error) {
 			for _, d := range domain.Dimensions {
 				work[d] = &dimWork{}
 			}
+			// A reset row is the "first-ever definitive scan" of 03 §7, and
+			// that always counts. Without this the step-0 gate could be
+			// false — a live check inside min_confirm_spacing of a branch-(a)
+			// dead trigger pulls next_check_at to now (07 §5.1.6), and
+			// last_counted_at is then only an hour old — so step 2 would
+			// skip every dimension and the row would sit at classification
+			// unknown with all six statuses NULL until the next daily scan,
+			// discarding this scan's definitive observations (03 §6
+			// erratum).
+			counting = true
 			// Informational columns and latency reset then re-populate in
 			// step 8 from this scan (nothing extra to do — step 8 always
 			// overwrites verbatim).

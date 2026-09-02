@@ -188,6 +188,8 @@ Executed inside step 1, **before** applying this scan's observations, only for `
 
 `last_counted_at` is deliberately NOT reset: a recovering dead row last counted ≥ `lifecycle.slow_lane_every` (30d) ago, so `counting` is already true and the fresh bootstrap commits this same scan.
 
+_Erratum 2026-09-02: "`counting` is already true" does not hold on every path. A branch-(a) death comes from daily `no_record` scans, each of which counted, so `last_counted_at` **is** the dead-trigger scan; and a `POST /check` on that host pulls `next_check_at` to `now()` (07 §5.1.6), so the recovery scan can land within `anti_flap.min_confirm_spacing` (12h) of it with `counting = false`. Step R had already wiped all six dimensions by that point, so step 2 skipped every one of them: the row committed re-enabled with all six statuses NULL, `classification = unknown`, and this scan's definitive observations discarded — self-healing only at the next daily scan, a day late on `*_since`. Step R therefore now **forces `counting = true`**, which is consistent with §7's "the first-ever definitive scan always counts": a reset row is exactly that. `last_counted_at` still is not reset. `TestCommitStepRInsideConfirmSpacing` in `internal/crawler` pins the cell._
+
 ## 7. Counting gate semantics
 
 `counting = (last_counted_at IS NULL) OR (T − last_counted_at ≥ anti_flap.min_confirm_spacing)` (default 12h).

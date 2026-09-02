@@ -372,6 +372,41 @@ func TestCommitStepR(t *testing.T) {
 	}
 }
 
+// TestCommitStepRInsideConfirmSpacing is review issue 13: the (recovered,
+// !counting) cell. A live check within min_confirm_spacing of a branch-(a)
+// dead trigger pulls next_check_at to now (07 §5.1.6), so the recovery scan
+// arrives while last_counted_at is an hour old and the step-0 gate says
+// "record only". Step R had already wiped all six dimensions by then, so
+// nothing bootstrapped: classification unknown, every status NULL, and this
+// scan's definitive observations discarded until the next daily scan.
+func TestCommitStepRInsideConfirmSpacing(t *testing.T) {
+	m := newMachine(t)
+	// Branch (a): daily no_record scans, each one counted, so
+	// last_counted_at is the dead-trigger scan itself.
+	for i := 1; i <= 7; i++ {
+		m.step(time.Duration(i)*24*time.Hour, stableObs(domain.DimBase, domain.ObsNoRecord), true)
+	}
+	if !m.s.Disabled {
+		t.Fatalf("not dead after 7 unresolvable scans: %+v", m.s)
+	}
+
+	// The owner fixes DNS and posts a live check one hour later — well
+	// inside the 12h min_confirm_spacing.
+	u := m.step(7*24*time.Hour+time.Hour, stableObs(domain.DimBase, domain.ObsSupported), false)
+
+	if m.s.Disabled || m.s.DisabledReason != nil {
+		t.Errorf("recovered row still disabled: %+v", m.s)
+	}
+	m.assertDim(domain.DimBase, ptrStatus(domain.StatusSupported), nil, 0)
+	if u.Domain.Classification == "" || u.Domain.Classification == db.ClassificationUnknown {
+		t.Errorf("classification = %q, want a real class: the reset row must bootstrap "+
+			"from this scan, not sit unknown until tomorrow", u.Domain.Classification)
+	}
+	if len(u.Changelog) != 0 {
+		t.Errorf("step R wrote %d changelog rows, want 0", len(u.Changelog))
+	}
+}
+
 // TestCommitDeadStreak (10-testing §5.8): seven and never fewer; a
 // resolvable scan resets the streak.
 func TestCommitDeadStreak(t *testing.T) {
