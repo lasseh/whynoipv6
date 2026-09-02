@@ -64,6 +64,21 @@ The frontend is cross-origin (whynoipv6.com → api.whynoipv6.com). rs/cors (or 
 
 All JSON responses: `Content-Type: application/json` (overridden by `GET /badge/{host}.svg` → `image/svg+xml`, `GET /badge/{host}.json` → `application/json`, the feeds → `application/atom+xml` / `application/feed+json`, and CSV → `text/csv`; dataset files are served by nginx, not the API), plus `X-Content-Type-Options: nosniff` and `X-Frame-Options: deny`. Parity assertions test the media-type prefix only (`application/json`), never a `charset` parameter — either form is conformant.
 
+_Erratum 2026-09-02 (review issue 45): **`GET /docs` additionally carries a `Content-Security-Policy`.** It is the one third-party-script surface on the api origin, and `deploy/nginx/api.whynoipv6.com.conf` adds only HSTS to proxied responses — the site vhost's strict CSP does not cover `api.whynoipv6.com` — so the policy comes from the handler. `/docs` serves **Scalar** (not Redoc; ebf1f0b), and the origin list was verified by loading the page under the policy in a browser rather than by reading the markup:_
+
+| Directive | Value | Why |
+|---|---|---|
+| `default-src` | `'none'` | anything not listed below is refused |
+| `script-src` | `'nonce-<per-response>' https://cdn.jsdelivr.net` | the SRI-pinned bundle, plus the one inline `Scalar.createApiReference` call. A **nonce**, not a hash: a hash breaks on any edit to that script |
+| `style-src` | `'unsafe-inline' https://cdn.jsdelivr.net` | unavoidable — Scalar injects component styles at runtime, and the palette is inline |
+| `font-src` | `https://fonts.scalar.com https://cdn.jsdelivr.net data:` | the bundle's default Inter and mono faces come from **Scalar's own font host**, not the CDN. The page comment says fonts are "left at their defaults"; the defaults are remote |
+| `img-src` | `'self' data: https:` | spec-referenced images and inline data URIs |
+| `connect-src` | `'self'` | try-it is same-origin. This **deliberately blocks** the bundle's `api.scalar.com/vector/registry` calls — a third-party lookup the reference has no use for. The page renders without them |
+| `worker-src` | `blob:` | the bundle spawns workers from blob URLs |
+| `base-uri`, `object-src`, `frame-ancestors` | `'none'` | `X-Frame-Options: deny` stays as the older-browser equivalent of the last |
+
+_The per-response nonce makes the page uncacheable by shared caches — a cached copy would carry another visitor's nonce and its inline script would be refused — so `/docs` is `Cache-Control: private, no-store` rather than the 1 h `public, max-age` the other meta routes use. `TestDocsCSP` in `internal/api` pins the directives, the nonce/page agreement, and the no-store._
+
 ### 1.5 Cache-Control
 
 The blanket `no-cache, no-store` policy is **deleted**. Cache-Control is set **per endpoint class** — see §6.1 for the full table (cache-first `public` + `s-maxage` for the daily-batch read surface; `no-store` only for `POST /check`, the in-flight poll, `/ip`, and health). nginx applies the matching vhost policy (09-ops.md).

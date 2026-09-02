@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -147,5 +148,83 @@ func TestDiscoverability(t *testing.T) {
 		if resp.StatusCode != 200 || !strings.HasPrefix(resp.Header.Get("Content-Type"), wantType) {
 			t.Errorf("%s: %d %s", path, resp.StatusCode, resp.Header.Get("Content-Type"))
 		}
+	}
+}
+
+// TestDocsCSP (07 §1.4 erratum, review issue 45): /docs is the one
+// third-party-script surface on the api origin, and nginx adds only HSTS to
+// proxied responses, so the policy has to come from the handler. The origin
+// list was verified by loading the page under it in a browser — the
+// remaining CSP blocks are Scalar's own api.scalar.com registry calls,
+// which are refused on purpose.
+func TestDocsCSP(t *testing.T) {
+	srv := httptest.NewServer(NewRouter(nil, Options{}))
+	defer srv.Close()
+
+	resp, err := http.Get(srv.URL + "/docs")
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, err := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	csp := resp.Header.Get("Content-Security-Policy")
+	for _, want := range []string{
+		"default-src 'none'",
+		"https://cdn.jsdelivr.net", // the SRI-pinned bundle
+		"https://fonts.scalar.com", // the bundle's default Inter/mono faces
+		"connect-src 'self'",       // try-it is same-origin; scalar's registry is not
+		"base-uri 'none'",
+		"object-src 'none'",
+		"frame-ancestors 'none'",
+	} {
+		if !strings.Contains(csp, want) {
+			t.Errorf("CSP %q is missing %q", csp, want)
+		}
+	}
+	// style-src needs 'unsafe-inline' (Scalar injects styles at runtime);
+	// script-src must not have it — that is what the nonce is for.
+	_, scriptSrc, ok := strings.Cut(csp, "script-src ")
+	if !ok {
+		t.Fatalf("CSP %q has no script-src", csp)
+	}
+	scriptSrc, _, _ = strings.Cut(scriptSrc, ";")
+	if strings.Contains(scriptSrc, "unsafe-inline") || strings.Contains(scriptSrc, "unsafe-eval") {
+		t.Errorf("script-src %q relaxes inline script: the page uses a nonce", scriptSrc)
+	}
+
+	// The nonce is per-response and must appear in both the header and the
+	// page, or the inline createApiReference call is refused.
+	_, after, ok := strings.Cut(csp, "'nonce-")
+	if !ok {
+		t.Fatalf("CSP %q carries no nonce", csp)
+	}
+	nonce, _, _ := strings.Cut(after, "'")
+	if len(nonce) < 16 {
+		t.Errorf("nonce %q is too short", nonce)
+	}
+	if !strings.Contains(string(body), `<script nonce="`+nonce+`">`) {
+		t.Error("the page's inline script does not carry the header's nonce")
+	}
+	if strings.Contains(string(body), cspNoncePlaceholder) {
+		t.Error("the nonce placeholder survived into the served page")
+	}
+
+	// A shared cache would hand a second visitor the first one's nonce.
+	if cc := resp.Header.Get("Cache-Control"); !strings.Contains(cc, "no-store") {
+		t.Errorf("Cache-Control = %q: a per-response nonce must not be cached", cc)
+	}
+
+	// The nonce is fresh per response.
+	resp2, err := http.Get(srv.URL + "/docs")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp2.Body.Close()
+	if resp2.Header.Get("Content-Security-Policy") == csp {
+		t.Error("two responses shared a nonce")
 	}
 }

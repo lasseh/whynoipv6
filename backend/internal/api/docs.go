@@ -1,8 +1,11 @@
 package api
 
 import (
+	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
+	"strings"
 	"sync"
 
 	"github.com/lasseh/whynoipv6/internal/api/gen"
@@ -77,7 +80,7 @@ const scalarPage = `<!DOCTYPE html>
   <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.67.0/dist/browser/standalone.js"
           integrity="sha384-6c7Vmx+i0yi8gBbltn0x1cavD+zsMGw2xmXXVyacPJLIGBxwaVimW5TW0WiW17Ir"
           crossorigin="anonymous"></script>
-  <script>
+  <script nonce="__CSP_NONCE__">
     Scalar.createApiReference('#app', {
       url: '/openapi.json',
       forceDarkModeState: 'dark',
@@ -88,11 +91,64 @@ const scalarPage = `<!DOCTYPE html>
 </html>
 `
 
-func (s *Server) getDocs(w http.ResponseWriter, _ *http.Request) {
-	w.Header().Set("Cache-Control", "public, max-age=3600")
+// docsCSP is the /docs policy (07 §1.4 erratum, review issue 45). The page
+// is the one third-party-script surface on the api origin, and nginx's
+// vhost adds only HSTS to proxied responses — the site's strict CSP does
+// not cover api.whynoipv6.com — so the policy has to come from the handler.
+//
+// Each directive names what the Scalar page actually loads:
+//
+//	script-src   the SRI-pinned bundle on jsdelivr, plus a per-response
+//	             nonce for the one inline createApiReference call. No
+//	             'unsafe-inline': a nonce survives edits to that script,
+//	             which a hash would not.
+//	style-src    'unsafe-inline' is unavoidable — Scalar injects component
+//	             styles at runtime, and the page carries the palette inline.
+//	font-src     fonts.scalar.com, not the CDN: the bundle's default Inter
+//	             and mono faces are fetched from Scalar's own font host.
+//	             Found by loading the page under this policy, not by
+//	             reading it — the page above says fonts are "left at their
+//	             defaults", and the defaults are remote.
+//	img-src      spec-referenced images and inline data: URIs.
+//	connect-src  'self' only. This deliberately blocks the bundle's calls
+//	             to api.scalar.com/vector/registry — a third-party lookup
+//	             this reference has no use for. The page renders without
+//	             them; only Scalar's own registry search goes dark.
+//	worker-src   the bundle spawns workers from blob: URLs.
+//
+// default-src 'none' means anything not listed is refused, and base-uri /
+// object-src / frame-ancestors close the rest. X-Frame-Options: deny from
+// securityHeaders stays as the older-browser equivalent of frame-ancestors.
+const docsCSP = "default-src 'none'; " +
+	"script-src 'nonce-__CSP_NONCE__' https://cdn.jsdelivr.net; " +
+	"style-src 'unsafe-inline' https://cdn.jsdelivr.net; " +
+	"font-src https://fonts.scalar.com https://cdn.jsdelivr.net data:; " +
+	"img-src 'self' data: https:; " +
+	"connect-src 'self'; " +
+	"worker-src blob:; " +
+	"base-uri 'none'; object-src 'none'; frame-ancestors 'none'"
+
+// cspNoncePlaceholder is substituted in both the page and the header, so
+// they cannot disagree.
+const cspNoncePlaceholder = "__CSP_NONCE__"
+
+func (s *Server) getDocs(w http.ResponseWriter, r *http.Request) {
+	var raw [16]byte
+	if _, err := rand.Read(raw[:]); err != nil {
+		InternalError(w, r, err)
+		return
+	}
+	nonce := base64.RawStdEncoding.EncodeToString(raw[:])
+
+	// A per-response nonce makes the page uncacheable by shared caches:
+	// a cached copy would carry someone else's nonce and its inline script
+	// would be refused. private + no-store, not the 1h public max-age the
+	// other meta routes use.
+	w.Header().Set("Cache-Control", "private, no-store")
+	w.Header().Set("Content-Security-Policy", strings.ReplaceAll(docsCSP, cspNoncePlaceholder, nonce))
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte(scalarPage))
+	_, _ = w.Write([]byte(strings.ReplaceAll(scalarPage, cspNoncePlaceholder, nonce)))
 }
 
 // llmsTxt is the documentation index for LLM consumers.
