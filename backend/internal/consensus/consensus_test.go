@@ -103,8 +103,9 @@ type harness struct {
 
 func newHarness(t *testing.T) *harness {
 	t.Helper()
+	saved := perProviderBudget
 	perProviderBudget = 150 * time.Millisecond // shrink timeout rows
-	t.Cleanup(func() { perProviderBudget = 4 * time.Second })
+	t.Cleanup(func() { perProviderBudget = saved })
 
 	h := &harness{cf: startFake(t), go_: startFake(t), q9: startFake(t), bulk: startFake(t)}
 	var alerts []string
