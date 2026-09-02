@@ -90,6 +90,23 @@ describe('changelogParts', () => {
       message: 'example.com uses some page-resource hosts without IPv6',
       colorClass: 'text-pink-600',
     },
+    // Review issue 02: both not_applicable arms render — the write side
+    // suppresses this flip only when conn left supported, so the surviving
+    // rows always mean "no third-party host left to grade".
+    {
+      field: 'resources',
+      old_value: 'unsupported',
+      new_value: 'not_applicable',
+      message: 'example.com no longer depends on IPv4-only page resources',
+      colorClass: 'text-zinc-600',
+    },
+    {
+      field: 'resources',
+      old_value: 'supported',
+      new_value: 'not_applicable',
+      message: 'example.com no longer loads third-party page resources',
+      colorClass: 'text-zinc-600',
+    },
   ] as const
 
   it.each(goldens)('$field $old_value → $new_value', (g) => {

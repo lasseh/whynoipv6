@@ -104,8 +104,16 @@ func feedItemTitle(it *ChangelogItem) string {
 		default: // not_applicable — reachable since review issue 02: the
 			// shadow rule now suppresses this only when conn left
 			// supported, so a domain that drops its last dependency
-			// renders here (12-frontend §11 erratum).
-			return it.Host + " no longer has its page resources checked"
+			// renders here (12-frontend §11 erratum). The old sentence
+			// ("no longer has its page resources checked") named a reason
+			// that only the suppressed branch has; what survives is a
+			// domain with no third-party hosts left to grade. From
+			// unsupported that clears resources_v4only, so it takes the
+			// wording that says so.
+			if it.OldValue == "unsupported" {
+				return it.Host + " no longer depends on IPv4-only page resources"
+			}
+			return it.Host + " no longer loads third-party page resources"
 		}
 	}
 	label := dimLabel[it.Field]

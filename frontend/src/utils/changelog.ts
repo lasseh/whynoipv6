@@ -60,9 +60,18 @@ export function changelogParts(
         return { phrase: 'now passes the page-resource IPv6 grade', dotClass: dotOf(item) }
       case 'unsupported':
         return { phrase: 'uses some page-resource hosts without IPv6', dotClass: dotOf(item) }
-      default: // not_applicable — suppressed at write (03 §11); defensive only
+      default:
+        // not_applicable — NOT defensive-only (review issue 02). The write
+        // side suppresses this flip only when conn left supported, so what
+        // renders is always "no third-party host left to grade", never
+        // "checking stopped". From unsupported it also clears
+        // resources_v4only; the dot stays zinc either way, because it keys
+        // on the resulting status like every other row.
         return {
-          phrase: 'no longer has its page resources checked',
+          phrase:
+            item.old_value === 'unsupported'
+              ? 'no longer depends on IPv4-only page resources'
+              : 'no longer loads third-party page resources',
           dotClass: statusClass('changelogDot', 'not_applicable'),
         }
     }
