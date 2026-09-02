@@ -33,7 +33,6 @@ func CommitConfigFrom(src ConfigSource) *CommitConfig {
 	return &CommitConfig{
 		MinConfirmSpacing: src.Duration("anti_flap.min_confirm_spacing"),
 		DeadStreak:        int16(src.Int("lifecycle.dead_streak")), //nolint:gosec // small registry int
-		ResourcesEnabled:  src.Bool("crawler.resources.enabled"),
 		Schedule:          ScheduleConfigFrom(src),
 	}
 }

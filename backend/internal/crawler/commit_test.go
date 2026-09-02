@@ -13,11 +13,10 @@ import (
 
 var seqT0 = time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 
-func testCommitCfg(resources bool) *CommitConfig {
+func testCommitCfg() *CommitConfig {
 	return &CommitConfig{
 		MinConfirmSpacing: 12 * time.Hour,
 		DeadStreak:        7,
-		ResourcesEnabled:  resources,
 		Schedule: ScheduleConfig{
 			CadenceDefault:      24 * time.Hour,
 			RecheckInconsistent: 2 * time.Hour,
@@ -31,16 +30,17 @@ func testCommitCfg(resources bool) *CommitConfig {
 // machine drives ComputeCommit as a pure state transition: it holds the
 // domain's evolving snapshot and applies (Δt, observations) steps.
 type machine struct {
-	t   *testing.T
-	cfg *CommitConfig
-	s   ClaimedDomain
+	t         *testing.T
+	cfg       *CommitConfig
+	s         ClaimedDomain
+	resources bool // crawler.resources.enabled, as the mapper would fold it
 }
 
 func newMachine(t *testing.T) *machine {
 	rank := int32(100)
 	return &machine{
 		t:   t,
-		cfg: testCommitCfg(false),
+		cfg: testCommitCfg(),
 		s: ClaimedDomain{
 			ID: 1, Host: "seq.example", Kind: domain.KindApex, Rank: &rank,
 			ClaimedAt: seqT0, AsnID: 1, CountryID: 1,
@@ -82,6 +82,11 @@ func stableObs(dim domain.Dimension, o domain.Observation) observe.Observations 
 // snapshot (what the fenced UPDATE would persist).
 func (m *machine) step(dt time.Duration, obs observe.Observations, unresolvable bool) *commitUnit {
 	m.t.Helper()
+	if !m.resources {
+		// What MapObservations emits with the crawl off.
+		obs.Resources = domain.ObsNotApplicable
+		obs.ResourcesExcluded = true
+	}
 	u, err := ComputeCommit(&CommitInput{
 		Snapshot: m.s, Obs: obs, Unresolvable: unresolvable,
 		Attribution: &Attribution{AsnID: m.s.AsnID, CountryID: m.s.CountryID},

@@ -10,7 +10,7 @@ import (
 // TestSchedule (04 §17.3): the two backoff progressions, lane choice,
 // breaker-open behavior, slow-lane override.
 func TestSchedule(t *testing.T) {
-	cfg := testCommitCfg(false).Schedule
+	cfg := testCommitCfg().Schedule
 
 	errWant := []time.Duration{6, 12, 24, 48, 96, 192, 384, 720, 720, 720}
 	incWant := []time.Duration{2, 4, 8, 16, 32, 64, 128, 256, 512, 720}

@@ -23,7 +23,7 @@ import (
 func TestCommitRejectsNULInDetails(t *testing.T) {
 	pool := pgtest.NewDB(t)
 	ctx := context.Background()
-	c := NewCommitter(pool, testCommitCfg(false))
+	c := NewCommitter(pool, testCommitCfg())
 
 	snap := claimOne(t, pool)
 	obs := stableObs(domain.DimBase, domain.ObsSupported)

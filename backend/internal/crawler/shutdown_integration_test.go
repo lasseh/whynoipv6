@@ -22,7 +22,7 @@ func TestShutdown(t *testing.T) {
 	ctx := context.Background()
 	seedDue(t, pool, 40)
 
-	committer := NewCommitter(pool, testCommitCfg(false))
+	committer := NewCommitter(pool, testCommitCfg())
 	metrics := NewMetrics(pool, uuid.New(), "shutdown-test:1")
 
 	rootCtx := context.Background()

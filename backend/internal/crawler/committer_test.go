@@ -15,7 +15,7 @@ import (
 // result mapping) is unit-testable without Postgres.
 func fakeCommitter(t *testing.T, flush func(context.Context, *postgres.CommitUnit) (bool, error)) *Committer {
 	t.Helper()
-	return &Committer{flush: flush, cfg: testCommitCfg(false)}
+	return &Committer{flush: flush, cfg: testCommitCfg()}
 }
 
 func commitInput(t *testing.T) *CommitInput {

@@ -13,7 +13,7 @@ import (
 func newResourcesMachine(t *testing.T) *machine {
 	t.Helper()
 	m := newMachine(t)
-	m.cfg = testCommitCfg(true)
+	m.resources = true
 	return m
 }
 
@@ -79,5 +79,42 @@ func TestCommitResourcesShadowPinned(t *testing.T) {
 	m.assertDim(domain.DimResources, ptrStatus(domain.StatusNotApplicable), nil, 0)
 	if !u.Domain.Saint {
 		t.Error("resources not_applicable with everything else supported is saint by the ladder (ADR 0003)")
+	}
+}
+
+// TestCommitResourcesKeyedOnTheObservation (02 §7.2, review issue 14): one
+// source of truth. The same commit config yields a resources dimension or
+// not, decided only by the mapper's ResourcesExcluded signal — the commit
+// carries no second copy of crawler.resources.enabled to disagree with it.
+func TestCommitResourcesKeyedOnTheObservation(t *testing.T) {
+	for _, tt := range []struct {
+		name        string
+		excluded    bool
+		wantColumns bool
+	}{
+		{"mapper observed the dimension", false, true},
+		{"mapper excluded the dimension", true, false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			m := newMachine(t)
+			obs := stableObs(domain.DimResources, domain.ObsSupported)
+			if tt.excluded {
+				obs.Resources = domain.ObsNotApplicable
+				obs.ResourcesExcluded = true
+			}
+			u, err := ComputeCommit(&CommitInput{
+				Snapshot: m.s, Obs: obs, Discovered: []string{"cdn.example"}, DiscoveryOK: true,
+				Attribution: &Attribution{AsnID: 1, CountryID: 1}, T: seqT0,
+			}, m.cfg)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := u.Domain.ResourcesStatus != nil; got != tt.wantColumns {
+				t.Errorf("resources columns written = %t, want %t", got, tt.wantColumns)
+			}
+			if got := u.PruneLinks; got != tt.wantColumns {
+				t.Errorf("discovered links consumed = %t, want %t", got, tt.wantColumns)
+			}
+		})
 	}
 }

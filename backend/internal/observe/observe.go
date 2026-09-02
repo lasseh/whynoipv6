@@ -50,7 +50,9 @@ type Observations struct {
 	ConnDetail map[string]any
 
 	// ResourcesExcluded is true when crawler.resources.enabled=false: the
-	// commit must skip the resources dimension in the confirm/pending loop.
+	// commit skips the resources dimension in the confirm/pending loop and
+	// consumes no discovered links. This flag is the only input that
+	// decision has (02 §7.2) — ComputeCommit reads it, never the config.
 	ResourcesExcluded bool
 }
 

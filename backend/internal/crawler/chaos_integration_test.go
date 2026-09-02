@@ -49,7 +49,7 @@ func TestLeaseFenceChaos(t *testing.T) {
 	if err != nil || len(batchB) != n {
 		t.Fatalf("worker B reclaim: n=%d err=%v", len(batchB), err)
 	}
-	committer := NewCommitter(pool, testCommitCfg(false))
+	committer := NewCommitter(pool, testCommitCfg())
 	obs := stableObs(domain.DimBase, domain.ObsUnsupported)
 	for _, d := range batchB {
 		res, err := committer.Commit(ctx, &CommitInput{

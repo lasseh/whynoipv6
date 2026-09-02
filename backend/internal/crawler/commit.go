@@ -20,7 +20,6 @@ import (
 type CommitConfig struct {
 	MinConfirmSpacing time.Duration // anti_flap.min_confirm_spacing, 12h
 	DeadStreak        int16         // lifecycle.dead_streak, 7
-	ResourcesEnabled  bool          // crawler.resources.enabled
 	Schedule          ScheduleConfig
 }
 
@@ -116,9 +115,12 @@ func ComputeCommit(in *CommitInput, cfg *CommitConfig) (*commitUnit, error) {
 	// Step 0 — counting gate (03 §7).
 	counting := s.LastCountedAt == nil || t.Sub(*s.LastCountedAt) >= cfg.MinConfirmSpacing
 
-	// Step 0b — dimension set (fixed order).
+	// Step 0b — dimension set (fixed order). Whether resources is in it is
+	// the mapper's call alone (02 §7.2): it observed the dimension or it
+	// did not, and a second copy of crawler.resources.enabled on the commit
+	// config could only disagree with the observation it is judging.
 	dims := []domain.Dimension{domain.DimBase, domain.DimWWW, domain.DimNS, domain.DimMX, domain.DimConn}
-	if cfg.ResourcesEnabled {
+	if !in.Obs.ResourcesExcluded {
 		dims = append(dims, domain.DimResources)
 	}
 
@@ -327,7 +329,7 @@ func ComputeCommit(in *CommitInput, cfg *CommitConfig) (*commitUnit, error) {
 		bootstraps:  bootstraps,
 		recovered:   recovered,
 	}
-	if cfg.ResourcesEnabled && in.DiscoveryOK {
+	if !in.Obs.ResourcesExcluded && in.DiscoveryOK {
 		u.Resources = in.Discovered
 		u.PruneLinks = true
 	}
