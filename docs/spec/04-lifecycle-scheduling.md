@@ -538,6 +538,12 @@ On SIGTERM or SIGINT (systemd's stop signal; default 90s stop timeout — unit i
 4. No heartbeat `/fail` ping on clean shutdown (a deploy restart must not page); the success-ping simply stops and the healthchecks.io grace window (09-ops.md) absorbs the restart.
 5. Close the pgx pool (releases any advisory locks and leases nothing — leases are timestamps, not sessions), flush slog, exit 0.
 
+_Erratum 2026-09-02 (review issue 38): step 2's "inside systemd's 90s window with margin" was arithmetic that did not hold, and the second signal was swallowed._
+
+_**The numbers.** 80s drain + a 10s final checkpoint (step 3) + the Taillight shipper's own ~5s drain in `flushLogs` (step 5) is ~95s against a `TimeoutStopSec` of 90 — and the unit sets none of its own, so 90 is the wall. SIGKILL could land before the `is_final` row. Everything is now derived from one **`stopBudget = 85s`**: `drainBudget = 70s`, `finalCheckpointBudget = 10s`, and the remaining 5s for the flush. `cmd/crawler` carries a compile-time assertion that the three fit, and `TestStopBudgetFitsSystemd` pins the budget under 90s._
+
+_**The second signal.** The old handler read a buffered channel once and left `signal.Notify` registered, so a second SIGTERM landed in an already-drained channel and did nothing: an operator pressing Ctrl-C twice waited out the full drain. `claimCtx` now comes from `signal.NotifyContext`, and a separate registration watches for a **second** signal — which cancels the root context immediately and logs `second signal: aborting drain`. The final checkpoint runs on its own context either way, so `is_final` is still attempted on the aborted path._
+
 The API binary's shutdown (HTTP server drain) is specified in 07-api.md; v6ctl commands are synchronous and need only context cancellation.
 
 ## 15. Operational metrics — `crawler_metrics` — and heartbeats
@@ -640,7 +646,7 @@ All keys follow the viper uppercase-env convention; the consolidated registry wi
 
 Keys referenced but owned elsewhere: `anti_flap.min_confirm_spacing` (03-state-machine.md), `consensus.*` incl. breakers (02-observation-model.md), `crawler.resources.enabled` (06-ingest.md), `preflight.probe_host` (01-engine.md), `live_check.*` (07-api.md), `tranco.*` and `campaign.*` (06-ingest.md), `ops.webhook_url` / `ops.healthcheck_url` / `ops.healthcheck_tick_url` / `ops.healthcheck_min_interval` (09-ops.md), `LOG_LEVEL`, `DATABASE_URL`, `GEOIP_PATH` (09-ops.md).
 
-Compile-time constants owned by this file (never config): `LeaseReclaim = 30m` (§2), tick time `03:30 UTC` (§9), v6ctl lock wait `5m` (§10), `checkpointEvery = 1000`, `idleCheckpointAfter = 5m`, `drainBudget = 80s`, histogram buckets (§15).
+Compile-time constants owned by this file (never config): `LeaseReclaim = 30m` (§2), tick time `03:30 UTC` (§9), v6ctl lock wait `5m` (§10), `checkpointEvery = 1000`, `idleCheckpointAfter = 5m`, `drainBudget = 80s`, histogram buckets (§15). _(Erratum 2026-09-02: `drainBudget` is **70s**, carved out of `stopBudget = 85s` alongside `finalCheckpointBudget = 10s` — §14 erratum.)_
 
 ## 17. Acceptance criteria
 
@@ -653,5 +659,5 @@ Fixture tables and harness details live in 10-testing.md; an implementation of t
 5. **Sweep:** each of S1–S5 verified in isolation and as a sequence: grace stamping is monotonic, live-check rows skip the grace, disabled campaigns don't pin members, S2 re-enables a delisted member when its campaign is re-enabled, and a second same-day run changes zero rows.
 6. **Re-entry matrix:** every cell of §7's matrix has a test at its owning ingress (06/07 tests reference this section).
 7. **Singleton:** with two pools, exactly one of two simultaneous `TryRun(JobDailyTick)` calls runs `fn`; the other returns `ErrHeld`; killing the winner's connection mid-job frees the lock; `Run` waits and then executes.
-8. **Shutdown:** SIGTERM during a full batch commits all in-flight domains ≤80s, writes an `is_final` row, and leaves no row with a fresh lease; the expired leases are reclaimed by a restarted process.
+8. **Shutdown:** SIGTERM during a full batch commits all in-flight domains ≤80s, writes an `is_final` row, and leaves no row with a fresh lease; the expired leases are reclaimed by a restarted process. _(Erratum 2026-09-02: ≤70s — §14 erratum.)_
 9. **Metrics:** checkpoint rows appear every 1000 domains and within 5 min of idleness; `succeeded + failed = processed` on every row; a forced lease-fence abort shows up in `failed` and `dim_counters.lease_lost`.

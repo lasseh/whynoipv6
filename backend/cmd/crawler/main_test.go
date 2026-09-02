@@ -60,6 +60,22 @@ func TestValidateBounds(t *testing.T) {
 	}
 }
 
+// TestStopBudgetFitsSystemd (review issue 38, 04 §14 erratum): everything
+// after the first signal has to finish inside systemd's TimeoutStopSec, and
+// the unit sets none of its own — so the default 90s is the wall. The old
+// numbers were 80s drain + 10s final checkpoint + a 5s shipper drain, which
+// is ~95s: SIGKILL landed before the is_final row.
+func TestStopBudgetFitsSystemd(t *testing.T) {
+	const systemdDefault = 90 * time.Second
+	if stopBudget >= systemdDefault {
+		t.Errorf("stopBudget %s leaves no margin under systemd's %s", stopBudget, systemdDefault)
+	}
+	if spent := drainBudget + finalCheckpointBudget; spent >= stopBudget {
+		t.Errorf("drain %s + final checkpoint %s = %s, which does not fit stopBudget %s "+
+			"with room for the log flush", drainBudget, finalCheckpointBudget, spent, stopBudget)
+	}
+}
+
 // TestValidatePoolSize (review issue 41): pool sizing is DSN-only, so the
 // floor is only enforceable at startup. pgxpool's own default is 4 — what
 // an operator who omits pool_max_conns gets — and at 4 the daily tick's

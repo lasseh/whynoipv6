@@ -29,8 +29,26 @@ import (
 	db "github.com/lasseh/whynoipv6/internal/postgres/db"
 )
 
-// drainBudget is the graceful-shutdown drain deadline (04 §14 Decision).
-const drainBudget = 80 * time.Second
+// The shutdown budget, derived from one number (04 §14 erratum, review
+// issue 38). systemd's TimeoutStopSec default is 90s and the unit sets none
+// of its own, so everything after the first signal has to fit inside it —
+// and it did not: an 80s drain plus a 10s final checkpoint plus a 5s log
+// flush is ~95s, and SIGKILL landed before the is_final row.
+//
+// stopBudget is what we promise to finish in; drainBudget and the two
+// deadlines below are carved out of it, so raising or lowering the budget
+// moves all of them together.
+const (
+	stopBudget            = 85 * time.Second // < systemd's 90s TimeoutStopSec default
+	drainBudget           = 70 * time.Second // slots finish in-flight scans
+	finalCheckpointBudget = 10 * time.Second // the is_final crawler_metrics row
+)
+
+// The remainder is the Taillight shipper's own drain in flushLogs, which
+// takes no deadline of its own — so the arithmetic has to hold here or the
+// process is still flushing when SIGKILL arrives. The assertion is
+// compile-time: a negative array length does not build.
+var _ = [stopBudget - drainBudget - finalCheckpointBudget]struct{}{}
 
 // atLeastOne are the registry keys whose zero is not a setting but a
 // process that runs and does nothing right: no slots or an empty claim
@@ -223,16 +241,32 @@ func run() error {
 		StaleWarn:     cfg.Duration("tranco.stale_warn_after"),
 	}
 
-	// Claiming contexts cancel immediately on SIGTERM; workers drain under
-	// drainBudget on rootCtx (04 §14).
-	claimCtx, stopClaim := context.WithCancel(rootCtx)
+	// Claiming stops on the first signal; workers then drain under
+	// drainBudget on rootCtx (04 §14). signal.NotifyContext gives claimCtx
+	// the cancellation directly instead of a goroutine reading a channel.
+	claimCtx, stopClaim := signal.NotifyContext(rootCtx, os.Interrupt, syscall.SIGTERM)
+	defer stopClaim()
+
+	// A second signal aborts the drain rather than being swallowed. The old
+	// code read its buffered channel once and left signal.Notify
+	// registered, so a second SIGTERM went nowhere and Ctrl-C twice bought
+	// nothing (review issue 38). Cancelling rootCtx here still runs the
+	// final checkpoint on its own context, so the is_final row is attempted
+	// either way.
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
+	defer signal.Stop(sigCh)
 	go func() {
-		<-sigCh
+		<-claimCtx.Done()
 		slog.Info("shutdown: draining in-flight scans", "drain_budget", drainBudget.String())
-		stopClaim()
-		time.AfterFunc(drainBudget, rootCancel)
+		drainTimer := time.AfterFunc(drainBudget, rootCancel)
+		select {
+		case <-sigCh:
+			drainTimer.Stop()
+			slog.Warn("second signal: aborting drain")
+			rootCancel()
+		case <-rootCtx.Done():
+		}
 	}()
 
 	// The auxiliary loops stop with claimCtx and are joined before the final
@@ -270,7 +304,7 @@ func run() error {
 
 	// Final checkpoint (is_final) with a fresh short context: rootCtx may
 	// already be cancelled by the drain deadline.
-	finalCtx, cancel := context.WithTimeout(context.WithoutCancel(rootCtx), 10*time.Second)
+	finalCtx, cancel := context.WithTimeout(context.WithoutCancel(rootCtx), finalCheckpointBudget)
 	defer cancel()
 	metrics.Checkpoint(finalCtx, true)
 	slog.Info("shutdown complete")
