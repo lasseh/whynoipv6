@@ -3,6 +3,8 @@ package api
 import (
 	"context"
 	"errors"
+	"log/slog"
+	"math"
 	"net/http"
 	"net/url"
 	"sort"
@@ -10,6 +12,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
+
 	db "github.com/lasseh/whynoipv6/internal/postgres/db"
 )
 
@@ -30,6 +34,39 @@ func countryBody(code, name string, tld *string, sites, v6sites int32, percent f
 	return CountryBody{Code: code, Name: name, TLD: tld, Sites: sites, V6Sites: v6sites, Percent: percent}
 }
 
+// percentOf converts the stored share to a float for the wire.
+//
+// `country.percent` is NUMERIC(5,2) NOT NULL DEFAULT 0, so anything this
+// rejects means the column holds what the schema says it cannot — a NaN
+// written by a reworked rollup is the plausible route. Both call sites used
+// to spell this `pct, _ := row.Percent.Float64Value()` (review issue 61).
+//
+// Checking that error would not have been enough: pgtype returns a NaN
+// Numeric as `{Valid: true, Float64: NaN}` with a nil error, so the value
+// flows straight through to the encoder — and encoding/json refuses NaN, so
+// ONE bad row fails the marshal for the whole 251-row leaderboard. The
+// explicit IsNaN/IsInf test, not the error, is what keeps that from being an
+// outage.
+//
+// It serves 0 rather than failing the request. 0.0 on this surface reads as
+// "no IPv6", which is a claim rather than an absence, so it says so in the
+// log. The response shape is unchanged: making the field nullable would mean
+// an OpenAPI change for a value the schema forbids to be null.
+func percentOf(code string, n pgtype.Numeric) float64 {
+	v, err := n.Float64Value()
+	switch {
+	case err != nil || !v.Valid:
+		slog.Warn("country percent is not a usable number; serving 0",
+			"country", strings.TrimSpace(code), "err", err)
+		return 0
+	case math.IsNaN(v.Float64) || math.IsInf(v.Float64, 0):
+		slog.Warn("country percent is not a usable number; serving 0",
+			"country", strings.TrimSpace(code), "value", v.Float64)
+		return 0
+	}
+	return v.Float64
+}
+
 // listCountries is GET /countries — the country leaderboard (07 §4.5): a
 // bounded set (~251 incl. the UN sentinel), served whole with an exact
 // count; ?sort=percent (default) | v6_sites | sites, descending.
@@ -43,9 +80,8 @@ func (s *Server) listCountries(w http.ResponseWriter, r *http.Request) {
 			}
 			items := make([]CountryBody, len(rows))
 			for i := range rows {
-				pct, _ := rows[i].Percent.Float64Value()
 				items[i] = countryBody(strings.TrimSpace(rows[i].Code), rows[i].Name, rows[i].Tld,
-					rows[i].Sites, rows[i].V6sites, pct.Float64)
+					rows[i].Sites, rows[i].V6sites, percentOf(rows[i].Code, rows[i].Percent))
 			}
 			sort.SliceStable(items, func(i, j int) bool {
 				switch sortKey {
@@ -104,8 +140,8 @@ func (s *Server) getCountry(w http.ResponseWriter, r *http.Request) {
 	if CacheList(w, r, generation) {
 		return
 	}
-	pct, _ := row.Percent.Float64Value()
-	body := countryBody(strings.TrimSpace(row.Code), row.Name, row.Tld, row.Sites, row.V6sites, pct.Float64)
+	body := countryBody(strings.TrimSpace(row.Code), row.Name, row.Tld, row.Sites, row.V6sites,
+		percentOf(row.Code, row.Percent))
 	body.Meta = &DetailMeta{AsOf: asOf.UTC(), Generation: generation}
 	WriteJSON(w, http.StatusOK, body)
 }

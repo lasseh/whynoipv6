@@ -609,3 +609,51 @@ func TestMandates(t *testing.T) {
 		t.Errorf("unknown tag: %d with %d items, want 200 empty", resp.StatusCode, len(unknown.Items))
 	}
 }
+
+// TestCountryLeaderboardSurvivesANaN is review issue 61's real stake. The
+// handlers spelled the conversion `pct, _ := row.Percent.Float64Value()`, and
+// pgtype hands a NaN NUMERIC back as {Valid: true, Float64: NaN} with a nil
+// error — so checking that discarded error would not have caught it either.
+// The NaN reached encoding/json, which refuses to marshal it, and one bad row
+// took the whole 251-row leaderboard with it.
+//
+// Postgres accepts 'NaN' in a NUMERIC(5,2) column, so this is reachable from
+// any arithmetic in the daily rollup that divides by a zero site count.
+func TestCountryLeaderboardSurvivesANaN(t *testing.T) {
+	srv, pool := newAPI(t)
+	if _, err := pool.Exec(context.Background(),
+		`UPDATE country SET percent = 'NaN'::numeric WHERE code = 'SE'`); err != nil {
+		t.Fatalf("seed NaN: %v", err)
+	}
+
+	var env struct {
+		Items []struct {
+			Code    string  `json:"code"`
+			Percent float64 `json:"percent"`
+		} `json:"items"`
+	}
+	resp := getJSON(t, srv.URL+"/countries", &env)
+	if resp.StatusCode != 200 {
+		t.Fatalf("/countries with a NaN row = %d, want 200", resp.StatusCode)
+	}
+	var found bool
+	for _, it := range env.Items {
+		if strings.TrimSpace(it.Code) == "SE" {
+			found = true
+			if it.Percent != 0 {
+				t.Errorf("SE percent = %v, want the 0 fallback", it.Percent)
+			}
+		}
+	}
+	if !found {
+		t.Error("SE missing from the leaderboard")
+	}
+
+	// The detail path converts separately and must not 500 either.
+	var detail struct {
+		Percent float64 `json:"percent"`
+	}
+	if resp := getJSON(t, srv.URL+"/countries/se", &detail); resp.StatusCode != 200 {
+		t.Errorf("/countries/se with a NaN row = %d, want 200", resp.StatusCode)
+	}
+}
