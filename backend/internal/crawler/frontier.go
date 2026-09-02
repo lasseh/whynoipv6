@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"runtime/debug"
+	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
@@ -119,20 +121,17 @@ func (f *Frontier) ClaimBatch(ctx context.Context) ([]ClaimedDomain, error) {
 // have left it green.
 func (f *Frontier) Run(claim, work context.Context) {
 	slots := make(chan ClaimedDomain)
-	done := make(chan struct{})
+	var pool sync.WaitGroup
 	for range f.cfg.WorkerSlots {
-		go func() {
-			defer func() { done <- struct{}{} }()
+		pool.Go(func() {
 			for d := range slots {
-				f.Process(work, d)
+				f.process(work, d)
 			}
-		}()
+		})
 	}
 	defer func() {
 		close(slots)
-		for range f.cfg.WorkerSlots {
-			<-done
-		}
+		pool.Wait()
 	}()
 
 	for {
@@ -170,6 +169,20 @@ func (f *Frontier) Run(claim, work context.Context) {
 			}
 		}
 	}
+}
+
+// process runs one slot body under a recover: the engine recovers per
+// check, but a panic in the mapping, enrichment or commit path would
+// otherwise take the slot with it — parked on the join, never logged,
+// shrinking the pool one domain at a time. The domain is left to its lease.
+func (f *Frontier) process(ctx context.Context, d ClaimedDomain) { //nolint:gocritic // the slot contract passes by value
+	defer func() {
+		if rec := recover(); rec != nil {
+			slog.Error("scan panicked; slot kept, domain left to its lease",
+				"domain", d.Host, "panic", rec, "stack", string(debug.Stack()))
+		}
+	}()
+	f.Process(ctx, d)
 }
 
 func sleepCtx(ctx context.Context, d time.Duration) bool {

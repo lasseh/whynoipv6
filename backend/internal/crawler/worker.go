@@ -164,9 +164,14 @@ func (e *GeoEnricher) Attribution(ctx context.Context, d *ClaimedDomain, sr chec
 	countryID := e.Attr.CountryID(d.Host, ip)
 	asnID := e.Countries.SentinelASN
 	if res := e.Attr.ASN(ip); res.Number != 0 {
-		if id, err := e.ensureASN(ctx, int64(res.Number), res.Org); err == nil {
-			asnID = id
+		id, err := e.ensureASN(ctx, int64(res.Number), res.Org)
+		if err != nil {
+			// A write failure must defer attribution, not demote a row that
+			// already carries a real ASN to the sentinel (06 §6.3).
+			slog.Warn("asn ensure failed; keeping the snapshot attribution", "domain", d.Host, "asn", res.Number, "err", err.Error())
+			id = d.AsnID
 		}
+		asnID = id
 	}
 	return &Attribution{AsnID: asnID, CountryID: countryID}
 }

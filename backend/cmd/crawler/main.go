@@ -87,25 +87,6 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	// Re-snapshot the ns_host → provider mapping so curation (v6ctl provider
-	// add/remove) lands without a crawler restart (06-ingest §6.10).
-	if interval := cfg.Duration("dns_provider.refresh_interval"); interval > 0 {
-		go func() {
-			t := time.NewTicker(interval)
-			defer t.Stop()
-			for {
-				select {
-				case <-rootCtx.Done():
-					return
-				case <-t.C:
-					if err := providers.Refresh(rootCtx, q); err != nil {
-						log.Warn("provider mapping refresh failed", "err", err.Error())
-					}
-				}
-			}
-		}()
-	}
-
 	committer := crawler.NewCommitter(pool, crawler.CommitConfigFrom(cfg))
 
 	runID := uuid.New()
@@ -116,7 +97,10 @@ func run() error {
 
 	metrics := crawler.NewMetrics(pool, runID, worker)
 	metrics.GeoIPBuildEpoch = geoReader.BuildEpoch
-	metrics.Heartbeat = func() { notifier.HeartbeatOK(rootCtx) }
+	// Off the worker slot: the ping is throttled to one per interval by its
+	// own CAS, so at most one is in flight, and a slow hc-ping must not hold
+	// a scan slot for the notify client's timeout.
+	metrics.Heartbeat = func() { go notifier.HeartbeatOK(rootCtx) }
 
 	w := &crawler.Worker{
 		Pool: pool, Scanner: runner, Preflight: preflight, Committer: committer,
@@ -135,6 +119,9 @@ func run() error {
 	frontier.Preflight = func(ctx context.Context) bool {
 		if preflight.Run(ctx) {
 			return true
+		}
+		if ctx.Err() != nil {
+			return false // a cancelled probe is shutdown, not an outage (04 §14.4)
 		}
 		slog.Warn("ipv6 preflight failed; claiming nothing")
 		notifier.Webhook(ctx, "crawler preflight failed: no IPv6 egress; claiming paused")
@@ -180,6 +167,11 @@ func run() error {
 	aux.Go(func() { coordinator.Run(claimCtx) })
 	aux.Go(func() { metrics.RunIdleLoop(claimCtx) })
 	aux.Go(func() { geoipReloadLoop(claimCtx, geoReader) })
+	// Re-snapshot the ns_host → provider mapping so curation (v6ctl provider
+	// add/remove) lands without a crawler restart (06-ingest §6.10).
+	if interval := cfg.Duration("dns_provider.refresh_interval"); interval > 0 {
+		aux.Go(func() { providerRefreshLoop(claimCtx, providers, q, interval) })
+	}
 
 	// The §5.1.5 check-job consumer pool + reaper (04 — placement).
 	liveChecker := &crawler.LiveChecker{
@@ -208,6 +200,23 @@ func run() error {
 	metrics.Checkpoint(finalCtx, true)
 	slog.Info("shutdown complete")
 	return nil
+}
+
+// providerRefreshLoop re-reads the DNS-provider mapping every interval; it
+// stops with the other auxiliary loops and is joined before pool.Close().
+func providerRefreshLoop(ctx context.Context, providers *ingest.ProviderMapping, q *db.Queries, interval time.Duration) {
+	t := time.NewTicker(interval)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			if err := providers.Refresh(ctx, q); err != nil {
+				slog.Warn("provider mapping refresh failed", "err", err.Error())
+			}
+		}
+	}
 }
 
 // geoipReloadLoop stats the mmdb files hourly and swaps readers on change
