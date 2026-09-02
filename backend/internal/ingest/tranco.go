@@ -195,7 +195,7 @@ func (ti *TrancoImporter) Import(ctx context.Context, force bool) (*TrancoReport
 }
 
 // applyList runs steps 6–13: stage, count, guard, upsert, delist, provenance.
-func (ti *TrancoImporter) applyList(ctx context.Context, rep *TrancoReport, rows [][]any, force bool) error {
+func (ti *TrancoImporter) applyList(ctx context.Context, rep *TrancoReport, rows []stagedRow, force bool) error {
 	tx, err := ti.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("tranco: begin: %w", err)
@@ -207,7 +207,10 @@ func (ti *TrancoImporter) applyList(ctx context.Context, rep *TrancoReport, rows
 		return fmt.Errorf("tranco: staging: %w", err)
 	}
 	if _, err := tx.CopyFrom(ctx, pgx.Identifier{"tranco_staging"},
-		[]string{"rank", "host", "tld"}, pgx.CopyFromRows(rows)); err != nil {
+		[]string{"rank", "host", "tld"},
+		pgx.CopyFromSlice(len(rows), func(i int) ([]any, error) {
+			return []any{rows[i].rank, rows[i].host, rows[i].tld}, nil
+		})); err != nil {
 		return fmt.Errorf("tranco: copy: %w", err)
 	}
 
@@ -327,10 +330,20 @@ const maxTrancoLines = 2_000_000
 // reason to abort the import.
 const maxTrancoLineBytes = 64 * 1024
 
+// stagedRow is one accepted Tranco line, held between the parse and the
+// COPY. A compact struct rather than the []any pgx.CopyFromRows takes: at
+// ~1M rows the boxed form cost a 72-byte []any plus a heap-boxed int32 per
+// line, and this import runs inside the crawler daemon alongside live scan
+// workers. CopyFromSlice boxes one row at a time instead.
+type stagedRow struct {
+	rank      int32
+	host, tld string
+}
+
 // parseTrancoZip unzips the single inner top-1m.csv and parses rank,domain
 // lines (CRLF, no header), canonicalizing hosts and deriving the ICANN tld
 // (06-ingest.md §2.2 steps 4–5).
-func parseTrancoZip(zipBytes []byte) (rows [][]any, lineCount, rejected int, err error) {
+func parseTrancoZip(zipBytes []byte) (rows []stagedRow, lineCount, rejected int, err error) {
 	zr, err := zip.NewReader(bytes.NewReader(zipBytes), int64(len(zipBytes)))
 	if err != nil {
 		return nil, 0, 0, fmt.Errorf("unzip: %w", err)
@@ -397,7 +410,10 @@ func parseTrancoZip(zipBytes []byte) (rows [][]any, lineCount, rejected int, err
 			slog.Debug("tranco line rejected", "line", line, "err", err.Error())
 			continue
 		}
-		rows = append(rows, []any{int32(rank), host, domain.TLD(host)}) //nolint:gosec // rank ≤ maxTrancoLines, checked above
+		rows = append(rows, stagedRow{
+			rank: int32(rank), //nolint:gosec // rank ≤ maxTrancoLines, checked above
+			host: host, tld: domain.TLD(host),
+		})
 	}
 	return rows, lineCount, rejected, nil
 }
