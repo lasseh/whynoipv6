@@ -189,6 +189,19 @@ type CheckJobRatePrefixRow struct {
 
 // Rate limiting (07 §6.3): /64-prefix and global hourly windows; min_created
 // feeds retry_after = ceil(3600 − (now − min(created_at))).
+//
+// `<<=` IS index-servable here, despite looking like it should not be
+// (review issue 60). Postgres rewrites network containment against a btree
+// inet column into a range condition, so idx_check_job_requester
+// (requester_ip, created_at) serves both halves of this predicate as one
+// Bitmap Index Scan. Measured on PG18 with 50k rows over 500 prefixes:
+//
+//	<<=                              0.37 ms, 76 buffers (Index Cond on both)
+//	set_masklen(requester_ip,64) = $1  13.7 ms, 33391 buffers
+//
+// Do NOT "fix" this to set_masklen equality: an expression cannot use the
+// column index, so it falls back to idx_check_job_created and filters the
+// whole window.
 func (q *Queries) CheckJobRatePrefix(ctx context.Context, prefix netip.Prefix) (CheckJobRatePrefixRow, error) {
 	row := q.db.QueryRow(ctx, CheckJobRatePrefix, prefix)
 	var i CheckJobRatePrefixRow
