@@ -538,6 +538,8 @@ Per host, ONE AAAA lookup via the **bulk resolver** (the two local Unbound insta
 
 The sweep never produces `not_applicable`.
 
+_Erratum 2026-09-02 (review issue 30): the lookup carries a **3-second per-host deadline** (`crawler.sweepLookupBudget`). The sweeper runs on the crawler's root context, which lives for the process, so a resolver that accepts the query and never answers held a sweep goroutine for as long as the bulk client's own retries allowed. Timing out lands in the table's non-definitive row, and the claim has already bumped `next_check_at` two hours out — so the cost is one host's turn, not a stuck worker. The routable filter this table names is now the SSRF blocklist itself (02 §2.5 erratum, review issue 15)._
+
 ### 5.4 Sweep worker — host confirmation machine and next_check_at
 
 Commit per host, mirroring the domain commit machine with N=2 (all writes are single-row UPDATEs on `resource_host`; one implicit transaction per host):

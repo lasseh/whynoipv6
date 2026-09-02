@@ -305,6 +305,41 @@ func TestResourceSweepMachine(t *testing.T) {
 			}
 		})
 	}
+
+	// Review issue 30: a resolver that accepts the query and never answers
+	// must cost one host's turn, not a sweep goroutine for the life of the
+	// process. sweepLookupBudget bounds it; the row is left exactly as a
+	// non-definitive answer leaves it, so the claim's 2h lease still stands
+	// and the host is retried soon.
+	t.Run("a silent resolver is bounded by the lookup budget", func(t *testing.T) {
+		// No per-attempt shortening here: this asserts the budget itself,
+		// so the resolver's own retries have to be the thing it cuts off.
+		slow := &ResourceSweeper{Pool: pool, Bulk: checker.NewResolver([]string{fake.addr})}
+		fake.set("timeout")
+
+		// The subtests above left the row on their claim's 2h lease.
+		if _, err := pool.Exec(ctx,
+			"UPDATE resource_host SET next_check_at = now() - interval '1 minute' WHERE id=$1",
+			hostID); err != nil {
+			t.Fatal(err)
+		}
+		batch, err := slow.claim(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(batch) != 1 {
+			t.Fatalf("claim = %+v, want the one dependent host", batch)
+		}
+
+		start := time.Now()
+		slow.sweepHost(ctx, &batch[0])
+		elapsed := time.Since(start)
+
+		if elapsed > 2*sweepLookupBudget {
+			t.Errorf("a silent resolver held the sweep for %s, budget is %s", elapsed, sweepLookupBudget)
+		}
+		assertHost(t, "supported", "unsupported", 1)
+	})
 }
 
 func deref(s *string) string {

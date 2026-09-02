@@ -75,9 +75,20 @@ func (s *ResourceSweeper) claim(ctx context.Context) ([]sweptHost, error) {
 	return out, nil
 }
 
+// sweepLookupBudget bounds one host's AAAA lookup (review issue 30). The
+// sweeper inherits the crawler's root context, which lives for the process,
+// so a resolver that accepts the query and never answers held a sweep
+// goroutine for as long as the bulk client's own retries allowed. The claim
+// already bumped next_check_at two hours out, so timing out costs one
+// host's turn and nothing else.
+const sweepLookupBudget = 3 * time.Second
+
 // lookup maps one bulk-resolver AAAA answer to a sweep outcome (06 §5.3);
 // ok=false is non-definitive. The sweep never produces not_applicable.
 func (s *ResourceSweeper) lookup(ctx context.Context, host string) (domain.IPv6Status, bool) {
+	ctx, cancel := context.WithTimeout(ctx, sweepLookupBudget)
+	defer cancel()
+
 	ips, _, _, rcode, err := s.Bulk.LookupAAAA(ctx, host)
 	if err != nil {
 		return "", false // timeout / network error → non-definitive

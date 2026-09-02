@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"golang.org/x/net/html"
+	"golang.org/x/net/publicsuffix"
 )
 
 const (
@@ -218,8 +219,7 @@ func extractExternalHosts(body []byte, pageURL *url.URL, domain string) []string
 	tokenizer := html.NewTokenizer(strings.NewReader(string(body)))
 
 	baseURL := pageURL
-	seen := make(map[string]struct{})
-	var hosts []string
+	set := newHostSet()
 
 	for {
 		tt := tokenizer.Next()
@@ -245,33 +245,48 @@ func extractExternalHosts(body []byte, pageURL *url.URL, domain string) []string
 			}
 		case "script", "img", "iframe", "source", "video", "audio", "object", "embed":
 			attrs := tagAttrs(tokenizer)
-			addHost(attrs["src"], baseURL, domain, seen, &hosts)
+			set.add(attrs["src"], baseURL, domain)
 			for _, candidate := range srcsetURLs(attrs["srcset"]) {
-				addHost(candidate, baseURL, domain, seen, &hosts)
+				set.add(candidate, baseURL, domain)
 			}
-			addHost(attrs["poster"], baseURL, domain, seen, &hosts)
+			set.add(attrs["poster"], baseURL, domain)
 		case "link":
 			attrs := tagAttrs(tokenizer)
 			if isFetchRel(attrs["rel"]) {
-				addHost(attrs["href"], baseURL, domain, seen, &hosts)
+				set.add(attrs["href"], baseURL, domain)
 			}
 		}
 	}
 
-	return hosts
+	return set.hosts
 }
 
 // addHost resolves a URL reference against the base, extracts the hostname,
 // and appends it to hosts if it is external and not yet seen.
-func addHost(raw string, base *url.URL, domain string, seen map[string]struct{}, hosts *[]string) {
+// maxHostsPerSite caps how many distinct hosts one registrable domain may
+// contribute to a page's required-host set (review issue 30). A page that
+// shards its assets — img1..imgN.cdn.example, or a tracker minting a
+// per-visit subdomain — otherwise fills the resourceMaxHosts budget with
+// one operator's names, crowding out genuinely distinct dependencies and
+// minting a registry row per sighting. Five is enough for real sharding.
+const maxHostsPerSite = 5
+
+// hostSet accumulates a page's external hosts under both caps: deduped
+// overall, and at most maxHostsPerSite per registrable domain. The
+// resourceMaxHosts ceiling is applied by the caller, on the finished list.
+type hostSet struct {
+	seen    map[string]struct{}
+	perSite map[string]int
+	hosts   []string
+}
+
+func newHostSet() *hostSet {
+	return &hostSet{seen: map[string]struct{}{}, perSite: map[string]int{}}
+}
+
+func (h *hostSet) add(raw string, base *url.URL, domain string) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
-		return
-	}
-
-	// Skip data: and javascript: URIs.
-	lower := strings.ToLower(raw)
-	if strings.HasPrefix(lower, "data:") || strings.HasPrefix(lower, "javascript:") {
 		return
 	}
 
@@ -281,6 +296,14 @@ func addHost(raw string, base *url.URL, domain string, seen map[string]struct{},
 	}
 
 	resolved := base.ResolveReference(ref)
+	// Only what a browser would fetch over the network. This replaces the
+	// data:/javascript: denylist: mailto:, tel:, blob:, ws:, chrome-
+	// extension: and anything else a page can carry are not page resources
+	// either, and an allowlist does not need extending for the next scheme
+	// (review issue 30).
+	if s := strings.ToLower(resolved.Scheme); s != "http" && s != "https" {
+		return
+	}
 	host := strings.ToLower(resolved.Hostname())
 	if host == "" {
 		return
@@ -291,11 +314,19 @@ func addHost(raw string, base *url.URL, domain string, seen map[string]struct{},
 		return
 	}
 
-	if _, ok := seen[host]; ok {
+	if _, ok := h.seen[host]; ok {
 		return
 	}
-	seen[host] = struct{}{}
-	*hosts = append(*hosts, host)
+	site, err := publicsuffix.EffectiveTLDPlusOne(host)
+	if err != nil {
+		site = host // an unrecognised suffix caps on the bare host
+	}
+	if h.perSite[site] >= maxHostsPerSite {
+		return
+	}
+	h.seen[host] = struct{}{}
+	h.perSite[site]++
+	h.hosts = append(h.hosts, host)
 }
 
 // tagAttrs reads every attribute of the current token. TagAttr consumes as

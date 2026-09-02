@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
@@ -16,6 +17,8 @@ import (
 	"time"
 
 	"github.com/miekg/dns"
+
+	"golang.org/x/net/publicsuffix"
 )
 
 // startFakeDNS runs a scripted DNS server on 127.0.0.1:0 (UDP) and returns
@@ -232,6 +235,86 @@ func TestResourceDiscovery(t *testing.T) {
 		if slices.Contains(hosts, excluded) {
 			t.Errorf("%s is not a render-time dependency but was discovered", excluded)
 		}
+	}
+}
+
+// TestResourceDiscoverySchemeFilter (review issue 30): only what a browser
+// fetches over the network counts. The old denylist named data: and
+// javascript: and let everything else through; an allowlist does not need
+// extending for the next scheme.
+func TestResourceDiscoverySchemeFilter(t *testing.T) {
+	page := `<html><head>
+<script src="https://ok-https.example/a.js"></script>
+<script src="http://ok-http.example/b.js"></script>
+<img src="//protocol-relative.example/c.png">
+<img src="data:image/png;base64,AAAA">
+<img src="javascript:alert(1)">
+<a-tag><img src="mailto:someone@mail.example"></a-tag>
+<img src="tel:+4712345678">
+<img src="blob:https://blob.example/1234">
+<iframe src="ws://socket.example/live"></iframe>
+<iframe src="chrome-extension://abcdef/panel.html"></iframe>
+<iframe src="ftp://files.example/x.zip"></iframe>
+</head><body></body></html>`
+
+	pageURL, _ := url.Parse("https://own.example/")
+	hosts := extractExternalHosts([]byte(page), pageURL, "own.example")
+
+	want := []string{"ok-https.example", "ok-http.example", "protocol-relative.example"}
+	if len(hosts) != len(want) {
+		t.Fatalf("hosts = %v, want exactly %v", hosts, want)
+	}
+	for i := range want {
+		if hosts[i] != want[i] {
+			t.Errorf("hosts[%d] = %s, want %s", i, hosts[i], want[i])
+		}
+	}
+}
+
+// TestResourceDiscoveryPerSiteCap (review issue 30): one registrable domain
+// cannot fill the whole required-host budget. A page that shards assets, or
+// a tracker minting a per-visit subdomain, otherwise crowds out genuinely
+// distinct dependencies and mints a registry row per sighting.
+func TestResourceDiscoveryPerSiteCap(t *testing.T) {
+	var b strings.Builder
+	b.WriteString("<html><head>")
+	for i := range 9 {
+		fmt.Fprintf(&b, `<script src="https://shard%d.cdn.example/app.js"></script>`, i)
+	}
+	// A second registrable domain gets its own budget, and co.uk is a
+	// multi-label suffix — the cap must key on example.co.uk, not co.uk.
+	for i := range 9 {
+		fmt.Fprintf(&b, `<script src="https://n%d.other.co.uk/x.js"></script>`, i)
+	}
+	b.WriteString(`<script src="https://only.one.example/z.js"></script>`)
+	b.WriteString("</head></html>")
+
+	pageURL, _ := url.Parse("https://own.example/")
+	hosts := extractExternalHosts([]byte(b.String()), pageURL, "own.example")
+
+	perSite := map[string]int{}
+	for _, h := range hosts {
+		site, err := publicsuffix.EffectiveTLDPlusOne(h)
+		if err != nil {
+			t.Fatalf("%s: %v", h, err)
+		}
+		perSite[site]++
+	}
+	for site, n := range perSite {
+		if n > maxHostsPerSite {
+			t.Errorf("%s contributed %d hosts, cap is %d", site, n, maxHostsPerSite)
+		}
+	}
+	if perSite["cdn.example"] != maxHostsPerSite {
+		t.Errorf("cdn.example = %d hosts, want the full %d", perSite["cdn.example"], maxHostsPerSite)
+	}
+	if perSite["other.co.uk"] != maxHostsPerSite {
+		t.Errorf("other.co.uk = %d hosts, want its own %d — the cap must key on the "+
+			"registrable domain, not the public suffix", perSite["other.co.uk"], maxHostsPerSite)
+	}
+	if perSite["one.example"] != 1 {
+		t.Errorf("one.example = %d, want 1: a small site must not be starved by a shardy one",
+			perSite["one.example"])
 	}
 }
 
