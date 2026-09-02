@@ -11,7 +11,6 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/lasseh/whynoipv6/internal/campaign"
 	"github.com/lasseh/whynoipv6/internal/domain"
 	"github.com/lasseh/whynoipv6/internal/geoip"
 	"github.com/lasseh/whynoipv6/internal/observe"
@@ -175,7 +174,7 @@ func (e *pslEvalError) Unwrap() error { return e.err }
 // created_by='live_check', rank NULL, parent linked only when the
 // registrable parent row ALREADY exists — never auto-ensured.
 func (lc *LiveChecker) ensureDomain(ctx context.Context, host string) (domain.Kind, error) {
-	registrable, tld, err := campaign.PSLParse(host)
+	registrable, tld, err := domain.PSLParse(host)
 	if err != nil {
 		return "", &pslEvalError{err: err}
 	}

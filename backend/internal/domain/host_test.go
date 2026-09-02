@@ -102,6 +102,62 @@ func TestTLD(t *testing.T) {
 	}
 }
 
+// TestTLDAgreesWithPSLParse is review issue 34's invariant: `tld` comes from
+// ONE derivation whatever the ingress. It used to come from
+// x/net/publicsuffix on the Tranco path and weppos everywhere else — two
+// vendored snapshots that could disagree on a second-level rule and split a
+// suffix across two ?tld= facets.
+func TestTLDAgreesWithPSLParse(t *testing.T) {
+	for _, host := range []string{
+		"dnb.no", "example.com", "bbc.co.uk", "www.gov.uk", "usa.gov",
+		"foo.blogspot.com", "xn--mre-qla.no", "a.b.c.example.co.uk",
+	} {
+		t.Run(host, func(t *testing.T) {
+			_, tld, err := PSLParse(host)
+			if err != nil {
+				t.Fatalf("PSLParse(%q): %v", host, err)
+			}
+			if got := TLD(host); got != tld {
+				t.Errorf("TLD = %q but PSLParse = %q: one derivation, two answers", got, tld)
+			}
+		})
+	}
+}
+
+// TestTLDFallsBackToTheFinalLabel: `domain.tld` is NOT NULL and the Tranco
+// import admits its own rows, so a host PSLParse refuses — an unknown or
+// not-yet-listed suffix — still lands in a facet named after its label
+// rather than failing the import (review issue 34).
+func TestTLDFallsBackToTheFinalLabel(t *testing.T) {
+	for host, want := range map[string]string{
+		"example.unknowntld999": "unknowntld999",
+		"deep.example.invalid":  "invalid",
+		"localhost":             "localhost",
+	} {
+		t.Run(host, func(t *testing.T) {
+			if _, _, err := PSLParse(host); err == nil {
+				t.Skipf("%q now parses; the fallback is untested by this vector", host)
+			}
+			if got := TLD(host); got != want {
+				t.Errorf("TLD(%q) = %q, want the final label %q", host, got, want)
+			}
+		})
+	}
+}
+
+// TestPSLParseRejectsUnknownTLD keeps the property campaign validation
+// depends on: no wildcard default rule, so an unknown TLD is an invalid
+// entry rather than a registrable name (06 §4.2).
+func TestPSLParseRejectsUnknownTLD(t *testing.T) {
+	for _, host := range []string{"example.unknowntld999", "no", "co.uk"} {
+		t.Run(host, func(t *testing.T) {
+			if _, _, err := PSLParse(host); err == nil {
+				t.Errorf("PSLParse(%q) succeeded, want an error", host)
+			}
+		})
+	}
+}
+
 // TestNoStrayHostLowercasing is the 06-ingest §9.1 grep gate: strings.ToLower
 // may touch a hostname only inside host.go. Non-hostname uses must be listed
 // here with a justification.

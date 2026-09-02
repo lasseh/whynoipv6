@@ -116,6 +116,7 @@ docker compose run --rm --entrypoint /v6ctl migrate <verb> [args...]
 | `shame add <host> [--reason …]` / `remove` / `list` | curate the editorial top-shame list |
 | `disable <host>` / `disable --service-list <file>` | manually disable hosts (e.g. service/CDN domains); `make service-list` is the dev-stack shortcut for the curated `service_domains.txt` |
 | `enable <host>` | re-enable a manually disabled host |
+| `domain retld [--dry-run]` | recompute `domain.tld` from the single public-suffix derivation; idempotent, safe after a PSL bump |
 | `service-candidates list` / `confirm <host>` / `dismiss <host>` | triage auto-detected service domains |
 | `resource add <domain> <host> [--advisory]` / `remove` | curate manual page-resource links |
 | `stats recalc` | re-run today's stats snapshots and counters |

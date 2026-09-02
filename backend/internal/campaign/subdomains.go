@@ -126,7 +126,7 @@ func apexFromFilename(path string) (string, error) {
 	if apex != name {
 		return "", fmt.Errorf("filename %q must be lowercase punycode: rename it to %s%s", base, apex, filepath.Ext(base))
 	}
-	registrable, _, err := PSLParse(apex)
+	registrable, _, err := domain.PSLParse(apex)
 	if err != nil {
 		return "", fmt.Errorf("filename %q: %w", base, err)
 	}

@@ -23,6 +23,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/lasseh/whynoipv6/internal/domain"
 	db "github.com/lasseh/whynoipv6/internal/postgres/db"
 )
 
@@ -434,7 +435,7 @@ func syncSubdomains(ctx context.Context, q *db.Queries, ens *entityEnsurer, cfg 
 // applySubdomainFile ensures one list's child rows and their membership,
 // returning the domain ids it listed.
 func applySubdomainFile(ctx context.Context, q *db.Queries, ens *entityEnsurer, f *SubdomainFile, parentID int64, rep *Report) ([]int64, error) {
-	_, tld, err := PSLParse(f.Apex)
+	_, tld, err := domain.PSLParse(f.Apex)
 	if err != nil {
 		return nil, fmt.Errorf("campaign sync: psl %s: %w", f.Apex, err)
 	}

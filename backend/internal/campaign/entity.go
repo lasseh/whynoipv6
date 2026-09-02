@@ -9,29 +9,9 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/lasseh/whynoipv6/internal/domain"
 	db "github.com/lasseh/whynoipv6/internal/postgres/db"
-	"github.com/weppos/publicsuffix-go/publicsuffix"
 )
-
-// pslOptions: ICANN section only, NO wildcard default rule — a host under
-// an unknown TLD must fail (06-ingest.md §4.2), so `example.unknowntld999`
-// is rejected instead of parsing as registrable. The single PSL
-// implementation for kind detection, parent derivation, and PR validation
-// (06-ingest.md §3.4).
-var pslOptions = &publicsuffix.FindOptions{IgnorePrivate: true, DefaultRule: nil}
-
-// PSLParse returns (registrable eTLD+1, eTLD) for a canonical host; an error
-// means the host is a public suffix or the TLD is unknown → invalid entry.
-func PSLParse(host string) (registrable, tld string, err error) {
-	dn, err := publicsuffix.ParseFromListWithOptions(publicsuffix.DefaultList, host, pslOptions)
-	if err != nil {
-		return "", "", err
-	}
-	if dn.SLD == "" {
-		return "", "", fmt.Errorf("%q is a public suffix", host)
-	}
-	return dn.SLD + "." + dn.TLD, dn.TLD, nil
-}
 
 // entityEnsurer implements the §3.4 ensure-entity rule against one tx.
 type entityEnsurer struct {
@@ -68,7 +48,7 @@ func (e *entityEnsurer) countryID(ctx context.Context, host string) int32 {
 // (and, for subdomains, the auto-created parent apex) when absent.
 // existed reports whether the host row pre-existed.
 func (e *entityEnsurer) ensure(ctx context.Context, host string) (id int64, existed bool, err error) {
-	registrable, tld, err := PSLParse(host)
+	registrable, tld, err := domain.PSLParse(host)
 	if err != nil {
 		return 0, false, err
 	}

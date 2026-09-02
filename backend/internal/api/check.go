@@ -15,7 +15,6 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/lasseh/whynoipv6/internal/campaign"
 	"github.com/lasseh/whynoipv6/internal/checker"
 	"github.com/lasseh/whynoipv6/internal/domain"
 	"github.com/lasseh/whynoipv6/internal/observe"
@@ -96,7 +95,7 @@ func (s *Server) postCheck(w http.ResponseWriter, r *http.Request) {
 	// The consumer's ensure-domain PSL evaluation (ICANN section, no
 	// wildcard rule) would fail an unknown-TLD host anyway — reject it at
 	// the boundary with a real reason instead of a failed job.
-	if _, _, err := campaign.PSLParse(host); err != nil {
+	if _, _, err := domain.PSLParse(host); err != nil {
 		InvalidParameter(w, r, "the host is not under a known public-suffix TLD")
 		return
 	}

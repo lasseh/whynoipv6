@@ -82,6 +82,7 @@ func main() {
 	root.AddCommand(trancoCmd())
 	root.AddCommand(campaignCmd())
 	root.AddCommand(providerCmd())
+	root.AddCommand(domainCmd())
 	root.AddCommand(serviceCandidatesCmd())
 	root.AddCommand(disableCmd())
 	root.AddCommand(enableCmd())

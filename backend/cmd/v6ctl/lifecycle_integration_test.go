@@ -73,6 +73,68 @@ func TestStatsRecalcTakesTheTickLock(t *testing.T) {
 	}
 }
 
+// TestRetldBackfill is review issue 34's backfill: rows inserted while
+// `tld` came from two different public-suffix snapshots still carry
+// whichever answer their ingress gave. --dry-run reports without writing;
+// the plain run rewrites only the rows that disagree, and re-running it
+// finds nothing.
+func TestRetldBackfill(t *testing.T) {
+	pool := pgtest.NewDB(t)
+	ctx := context.Background()
+
+	// Two rows with a wrong tld, one already correct.
+	for _, f := range []struct{ host, tld string }{
+		{"bbc.co.uk", "uk"},   // the x/net-vs-weppos disagreement shape
+		{"foo.example.com", "example.com"},
+		{"dnb.no", "no"}, // correct already
+	} {
+		if _, err := pool.Exec(ctx,
+			`INSERT INTO domain (host, kind, created_by, asn_id, country_id, tld)
+			 VALUES ($1, 'apex', 'tranco', (SELECT id FROM asn WHERE number = 0),
+			         (SELECT id FROM country WHERE code = 'NO'), $2)`, f.host, f.tld); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	tldOf := func(host string) string {
+		t.Helper()
+		var tld string
+		if err := pool.QueryRow(ctx, "SELECT tld FROM domain WHERE host=$1", host).Scan(&tld); err != nil {
+			t.Fatal(err)
+		}
+		return tld
+	}
+
+	if err := retld(ctx, pool, true); err != nil {
+		t.Fatalf("dry run: %v", err)
+	}
+	if got := tldOf("bbc.co.uk"); got != "uk" {
+		t.Errorf("--dry-run wrote: tld = %q, want the stored uk", got)
+	}
+
+	if err := retld(ctx, pool, false); err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+	for host, want := range map[string]string{
+		"bbc.co.uk":       "co.uk",
+		"foo.example.com": "com",
+		"dnb.no":          "no",
+	} {
+		if got := tldOf(host); got != want {
+			t.Errorf("%s: tld = %q, want %q", host, got, want)
+		}
+	}
+
+	// Idempotent: a second run changes nothing, which is what makes it safe
+	// to re-run after a PSL bump.
+	if err := retld(ctx, pool, false); err != nil {
+		t.Fatalf("re-run: %v", err)
+	}
+	if got := tldOf("bbc.co.uk"); got != "co.uk" {
+		t.Errorf("re-run moved bbc.co.uk to %q", got)
+	}
+}
+
 // runV6ctl executes one command through a root wired like main()'s, minus
 // the logger and signal plumbing.
 func runV6ctl(t *testing.T, ctx context.Context, args ...string) error {

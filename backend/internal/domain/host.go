@@ -8,7 +8,8 @@ import (
 	"unicode"
 
 	"golang.org/x/net/idna"
-	"golang.org/x/net/publicsuffix"
+
+	"github.com/weppos/publicsuffix-go/publicsuffix"
 )
 
 // ErrInvalidHost is wrapped by every Canonicalize failure.
@@ -62,22 +63,45 @@ func Canonicalize(raw string) (string, error) {
 	return ascii, nil
 }
 
+// pslOptions: ICANN section only, NO wildcard default rule — a host under
+// an unknown TLD must fail (06-ingest.md §4.2), so `example.unknowntld999`
+// is rejected instead of parsing as registrable.
+var pslOptions = &publicsuffix.FindOptions{IgnorePrivate: true, DefaultRule: nil}
+
+// PSLParse returns (registrable eTLD+1, eTLD) for a canonical host; an error
+// means the host is a public suffix or the TLD is unknown → invalid entry.
+//
+// This is the ONE public-suffix derivation in the backend (06 §6.9 erratum,
+// review issue 34). It used to live in internal/campaign while Tranco's tld
+// came from x/net/publicsuffix — two vendored PSL snapshots a month apart,
+// which could disagree about a second-level rule and split one suffix into
+// two ?tld= facets by ingress.
+func PSLParse(host string) (registrable, tld string, err error) {
+	dn, err := publicsuffix.ParseFromListWithOptions(publicsuffix.DefaultList, host, pslOptions)
+	if err != nil {
+		return "", "", err
+	}
+	if dn.SLD == "" {
+		return "", "", fmt.Errorf("%q is a public suffix", host)
+	}
+	return dn.SLD + "." + dn.TLD, dn.TLD, nil
+}
+
 // TLD returns the effective TLD (public suffix) of a canonical host —
 // e.g. "com", "no", "co.uk", "gov" — the domain.tld pivot written at ingest
 // (05-schema.md — add pivots + tags; 06-ingest.md §6.9).
+//
+// Where PSLParse refuses, this falls back to the final label. The Tranco
+// path needs that: `tld` is NOT NULL, its rows are already admitted by the
+// import's own validation, and a suffix the PSL snapshot has not caught up
+// with should land in a facet named after its label rather than fail the
+// import.
 func TLD(canonical string) string {
-	s := canonical
-	for {
-		suffix, icann := publicsuffix.PublicSuffix(s)
-		if icann {
-			return suffix
-		}
-		// Private-registry suffix (e.g. blogspot.com): walk up to the
-		// ICANN suffix; a single unlisted label is returned as-is.
-		if i := strings.IndexByte(suffix, '.'); i >= 0 {
-			s = suffix[i+1:]
-			continue
-		}
-		return suffix
+	if _, tld, err := PSLParse(canonical); err == nil {
+		return tld
 	}
+	if i := strings.LastIndexByte(canonical, '.'); i >= 0 {
+		return canonical[i+1:]
+	}
+	return canonical
 }

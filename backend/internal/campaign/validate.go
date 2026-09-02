@@ -152,7 +152,7 @@ func Validate(ctx context.Context, repo, base string, maxDomains, maxSubdomains 
 				fail(e.Line, "%q: %v", e.Raw, err)
 				continue
 			}
-			registrable, _, err := PSLParse(host)
+			registrable, _, err := domain.PSLParse(host)
 			if err != nil {
 				fail(e.Line, "%q: %v", e.Raw, err)
 				continue
