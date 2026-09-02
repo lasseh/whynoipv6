@@ -1,11 +1,15 @@
 package checker
 
 import (
+	"bytes"
 	"context"
 	"crypto/x509"
+	"math"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -121,6 +125,71 @@ func TestResponseParityComparesBothFamilies(t *testing.T) {
 	if res.Status != StatusSupported {
 		t.Fatalf("identical responses reported %s: %+v", res.Status, res.Detail)
 	}
+}
+
+// TestResponseParityMeasuresTheBytesItRead covers review issue 19: the two
+// families must be measured the same way. The same 2 MiB page is served
+// with an explicit Content-Length to v4 and chunked to v6 — a CDN edge on
+// one family and an identity origin on the other. Reading resp.ContentLength
+// when it is set (uncapped, 2 MiB) and len(body) when it is not (capped at
+// 1 MiB) made these identical pages differ by 50% and report partial on the
+// public parity dimension.
+func TestResponseParityMeasuresTheBytesItRead(t *testing.T) {
+	const size = 2 << 20 // twice maxBodySize, so the cap actually bites
+	page := bytes.Repeat([]byte("x"), size)
+	port, roots := dualStackTLSServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		if remoteIsV4(t, r.RemoteAddr) {
+			// Identity origin: the header carries the full, uncapped size.
+			w.Header().Set("Content-Length", strconv.Itoa(size))
+		}
+		// No Content-Length on the v6 leg: Go chunks it and the client
+		// reports ContentLength -1.
+		_, _ = w.Write(page)
+	}))
+	z := newZone(t, "example.com. 3600 IN AAAA ::1", "example.com. 3600 IN A 127.0.0.1")
+	c := &ResponseParity{dialer: loopbackDialer(t, z), port: port, rootCAs: roots}
+
+	res, err := c.Check(context.Background(), "example.com", KindApex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d, ok := res.Detail.(*ParityDetail)
+	if !ok {
+		t.Fatalf("detail type = %T", res.Detail)
+	}
+	if d.IPv4 == nil || d.IPv6 == nil {
+		t.Fatalf("one family did not fetch: %+v", d)
+	}
+	if d.IPv4.ContentLength != maxBodySize || d.IPv6.ContentLength != maxBodySize {
+		t.Errorf("lengths = v4 %d, v6 %d; both must be the %d bytes actually read",
+			d.IPv4.ContentLength, d.IPv6.ContentLength, maxBodySize)
+	}
+	if res.Status != StatusSupported {
+		diff := math.NaN()
+		if d.ContentLengthDiffPct != nil {
+			diff = *d.ContentLengthDiffPct
+		}
+		t.Errorf("status = %s (diff %.1f%%), want supported: the pages are identical",
+			res.Status, diff)
+	}
+}
+
+// remoteIsV4 reports whether a RemoteAddr reached the dual-stack listener
+// over IPv4; a v4 connection can arrive v4-mapped, so unmap before asking.
+func remoteIsV4(t *testing.T, remoteAddr string) bool {
+	t.Helper()
+	host, _, err := net.SplitHostPort(remoteAddr)
+	if err != nil {
+		t.Errorf("remote addr %q: %v", remoteAddr, err)
+		return false
+	}
+	addr, err := netip.ParseAddr(host)
+	if err != nil {
+		t.Errorf("remote host %q: %v", host, err)
+		return false
+	}
+	return addr.Unmap().Is4()
 }
 
 // The probe's redirect policy is exact: sameHostRedirect(domain, n) follows

@@ -174,16 +174,15 @@ func (c *ResponseParity) fetch(ctx context.Context, domain string, ip net.IP, ne
 		return ParityFetch{}, fmt.Errorf("reading body: %w", err)
 	}
 
-	contentLength := resp.ContentLength
-	if contentLength < 0 {
-		contentLength = int64(len(body))
-	}
-
 	return ParityFetch{
-		Address:        ip.String(),
-		StatusCode:     resp.StatusCode,
-		ContentType:    sanitizeText(resp.Header.Get("Content-Type")),
-		ContentLength:  contentLength,
+		Address:     ip.String(),
+		StatusCode:  resp.StatusCode,
+		ContentType: sanitizeText(resp.Header.Get("Content-Type")),
+		// The bytes actually read, never resp.ContentLength: the header is
+		// uncapped and absent on a chunked or gunzipped response, so mixing
+		// the two measures different quantities per family (01 §11.8 —
+		// "body read up to maxBodySize for length measurement").
+		ContentLength:  int64(len(body)),
 		ResponseTimeMS: time.Since(reqStart).Milliseconds(),
 	}, nil
 }
