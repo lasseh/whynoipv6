@@ -200,7 +200,14 @@ func (s *Server) writeJSONFeed(w http.ResponseWriter, r *http.Request, scope *fe
 	WriteJSONBody(w, f)
 }
 
-// Scope loaders — each returns the latest-50 window for its scope.
+// Scope loaders — each returns the recent window for its scope.
+//
+// The global and per-domain scopes are index-backed (idx_changelog_ts, the
+// per-domain PK) and take their size from opts.FeedRecentWindow. The country
+// and campaign scopes deliberately do NOT: their queries carry a literal
+// LIMIT 50 within 90 days, which 07 §3.3 and §4.8 make the guardrail for a
+// scope that has no (scope_id, ts) index. An operator override must not be
+// able to lift it — that lift rides OPEN-15 (09-ops §2 erratum).
 
 func (s *Server) globalFeedScope(r *http.Request) (*feedScope, error) {
 	rows, err := postgres.ListChangelog(r.Context(), s.pool, &postgres.ChangelogFilter{}, nil, s.opts.FeedRecentWindow, false)

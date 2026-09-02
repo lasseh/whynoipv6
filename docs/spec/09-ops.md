@@ -258,6 +258,8 @@ cadence and the report's §6/§7 defaults; behavior is normative in 07-api.md.
 | `export.csv_max_rows` | `EXPORT_CSV_MAX_ROWS` | int | `10000` | api | 07 | Row cap for `?format=csv` list responses; larger "give me everything" pulls are steered to the static datasets (report §6.5). |
 | `api.trusted_proxies` | `API_TRUSTED_PROXIES` | []string CIDR | `["127.0.0.0/8","::1/128"]` | api | 07 §1.2 | CIDRs whose `X-Real-IP`/`X-Forwarded-For` are honored for client-IP derivation; any other peer keeps its socket address (spoofing guard when the API is reachable without nginx in front). |
 
+_Erratum 2026-09-02: `feed.recent_window` says "per Atom/JSON-Feed scope", which overstates its reach. It sizes only the **index-backed** feeds — `/changelog{.atom,.feed.json}` and `/domains/{host}/changelog{.atom,.feed.json}` — which read through `idx_changelog_ts` and the per-domain PK. The **scoped** feeds (per-country, per-campaign, and `/changelog?scope=campaign`) stay at the fixed latest 50 within 90 days and ignore the key: 07 §3.3 and §4.8 make that cap the load-bearing guardrail for a scope with no `(scope_id, ts)` index, so an operator override must not be able to lift it. Lifting it rides OPEN-15. `TestFeedRecentWindowScope` in `internal/api` pins the split._
+
 `DATASETS_DIR` (§2.1) is the snapshot root; `PUBLIC_BASE_URL` (§2.1) supplies the absolute
 origin for the manifest/feed URLs. The `POST /check` rate-limit keys already live in §2.7
 (`live_check.rate_ip_per_hour`, `live_check.rate_global_per_hour`,

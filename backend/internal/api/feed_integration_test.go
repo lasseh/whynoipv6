@@ -8,6 +8,9 @@ import (
 	"encoding/xml"
 	"strings"
 	"testing"
+
+	"github.com/lasseh/whynoipv6/internal/api"
+	"github.com/lasseh/whynoipv6/internal/postgres/pgtest"
 )
 
 // TestFeeds (P4.15 / 07 §5.4): every scope×format feed carries the required
@@ -120,6 +123,45 @@ func TestFeeds(t *testing.T) {
 	_, body := fetch(t, srv.URL+"/domains/d3.example/changelog.feed.json")
 	if !strings.Contains(string(body), "d3.example now supports IPv6 on www") {
 		t.Errorf("rendered title missing from feed: %s", body)
+	}
+}
+
+// TestFeedRecentWindowScope pins which feeds feed.recent_window sizes
+// (review issue 10, 09-ops §2 erratum). The global and per-domain feeds are
+// index-backed and follow the key; the country and campaign feeds hold the
+// fixed 50 that 07 §3.3/§4.8 make the guardrail for a scope with no
+// (scope_id, ts) index, so an operator override cannot widen that walk.
+func TestFeedRecentWindowScope(t *testing.T) {
+	pool := pgtest.NewDB(t)
+	seedLeaderboard(t, pool)
+	seedEntities(t, pool)
+	seedChangelog(t, pool)
+	// One entry is below every scope's seeded row count, so a scope that
+	// honours the key is unmistakable.
+	srv := newServer(t, pool, api.Options{FeedRecentWindow: 1})
+
+	for name, tc := range map[string]struct {
+		path  string
+		items int
+	}{
+		"global_follows_the_key":   {"/changelog.feed.json", 1},
+		"domain_follows_the_key":   {"/domains/d3.example/changelog.feed.json", 1},
+		"country_holds_the_cap":    {"/countries/no/changelog.feed.json", 2},
+		"campaign_holds_the_cap":   {"/campaigns/" + campaignUUID + "/changelog.feed.json", 2},
+		"scope_campaign_holds_cap": {"/changelog?scope=campaign", 2},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var feed struct {
+				Items []json.RawMessage `json:"items"`
+			}
+			resp := getJSON(t, srv.URL+tc.path, &feed)
+			if resp.StatusCode != 200 {
+				t.Fatalf("status = %d", resp.StatusCode)
+			}
+			if len(feed.Items) != tc.items {
+				t.Errorf("items = %d, want %d", len(feed.Items), tc.items)
+			}
+		})
 	}
 }
 
