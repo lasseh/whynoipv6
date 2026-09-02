@@ -153,6 +153,61 @@ func TestTrancoIdempotency(t *testing.T) {
 	}
 }
 
+// TestTrancoRepublishedOlderList is review issue 36: Tranco's id endpoint
+// serving a list that was imported before, but is no longer the newest one.
+// The short-circuit compared only against the latest successful id, so the
+// older list downloaded and applied — every rank reverting to that day's
+// values — while the provenance INSERT's ON CONFLICT DO NOTHING left no
+// record and the newer list kept winning the "latest" query, so the churn
+// repeated every cycle.
+func TestTrancoRepublishedOlderList(t *testing.T) {
+	pool := pgtest.NewDB(t)
+	ctx := context.Background()
+
+	day1 := crlf("1,example.com", "2,dnb.no", "3,bbc.co.uk")
+	day2 := crlf("1,dnb.no", "2,bbc.co.uk", "3,example.com")
+
+	if rep := importList(t, pool, "L020", day1, false); rep.Outcome != TrancoImported {
+		t.Fatalf("day 1: %s", rep.Outcome)
+	}
+	if rep := importList(t, pool, "L021", day2, false); rep.Outcome != TrancoImported {
+		t.Fatalf("day 2: %s", rep.Outcome)
+	}
+
+	rankOf := func(host string) int32 {
+		t.Helper()
+		var rank *int32
+		if err := pool.QueryRow(ctx, `SELECT rank FROM domain WHERE host = $1`, host).Scan(&rank); err != nil {
+			t.Fatal(err)
+		}
+		if rank == nil {
+			t.Fatalf("%s has no rank", host)
+		}
+		return *rank
+	}
+	before := rankOf("example.com")
+	if before != 3 {
+		t.Fatalf("day-2 rank for example.com = %d, want 3", before)
+	}
+
+	// Day 3: the id endpoint regresses to L020.
+	rep := importList(t, pool, "L020", day1, false)
+	if rep.Outcome != TrancoNoNewList {
+		t.Errorf("republished older list = %s, want no_new_list", rep.Outcome)
+	}
+	if after := rankOf("example.com"); after != before {
+		t.Errorf("rank moved %d → %d: the older list was re-applied", before, after)
+	}
+
+	// --force is still the operator's way past it.
+	if rep := importList(t, pool, "L020", day1, true); rep.Outcome != TrancoNoNewList {
+		t.Errorf("forced re-import = %s, want the provenance backstop's no_new_list", rep.Outcome)
+	}
+	if after := rankOf("example.com"); after != before {
+		t.Errorf("forced re-import moved the rank %d → %d: the backstop did not roll back", before, after)
+	}
+}
+
 // TestTrancoSanityGuard covers §9.4: a >2% delist fixture aborts with ranks
 // unchanged; --force applies it.
 func TestTrancoSanityGuard(t *testing.T) {

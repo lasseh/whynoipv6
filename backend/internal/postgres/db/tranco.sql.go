@@ -107,6 +107,17 @@ func (q *Queries) TrancoListWasAborted(ctx context.Context, listID string) (bool
 	return exists, err
 }
 
+const TrancoListWasImported = `-- name: TrancoListWasImported :one
+SELECT EXISTS(SELECT 1 FROM tranco_import WHERE list_id = $1 AND NOT aborted)
+`
+
+func (q *Queries) TrancoListWasImported(ctx context.Context, listID string) (bool, error) {
+	row := q.db.QueryRow(ctx, TrancoListWasImported, listID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const TrancoRecentImports = `-- name: TrancoRecentImports :many
 SELECT id, list_id, list_date, line_count, imported_count, delisted,
        rejected_count, duplicate_count, aborted, note, imported_at

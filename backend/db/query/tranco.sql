@@ -6,6 +6,9 @@ SELECT list_id FROM tranco_import WHERE NOT aborted ORDER BY imported_at DESC LI
 -- name: TrancoListWasAborted :one
 SELECT EXISTS(SELECT 1 FROM tranco_import WHERE list_id = $1 AND aborted);
 
+-- name: TrancoListWasImported :one
+SELECT EXISTS(SELECT 1 FROM tranco_import WHERE list_id = $1 AND NOT aborted);
+
 -- name: TrancoLastSuccessAt :one
 SELECT max(imported_at)::timestamptz FROM tranco_import WHERE aborted = false;
 

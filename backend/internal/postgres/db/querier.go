@@ -342,6 +342,7 @@ type Querier interface {
 	// db/query/tranco.sql — sqlc query source (layout: 05-schema.md §10.2).
 	TrancoLatestSuccessListID(ctx context.Context) (string, error)
 	TrancoListWasAborted(ctx context.Context, listID string) (bool, error)
+	TrancoListWasImported(ctx context.Context, listID string) (bool, error)
 	TrancoRecentImports(ctx context.Context) ([]TrancoImport, error)
 }
 

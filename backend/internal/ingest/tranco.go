@@ -142,15 +142,23 @@ func (ti *TrancoImporter) Import(ctx context.Context, force bool) (*TrancoReport
 	}
 	rep := &TrancoReport{ListID: listID}
 
-	latest, err := q.TrancoLatestSuccessListID(ctx)
-	switch {
-	case err == nil && latest == listID:
-		rep.Outcome = TrancoNoNewList
-		return rep, nil
-	case err != nil && !errors.Is(err, pgx.ErrNoRows):
-		return nil, fmt.Errorf("tranco: latest list id: %w", err)
-	}
+	// Any list id that already has a non-aborted row is done, not just the
+	// newest one (06 §2.2 step 2 erratum, review issue 36). Comparing
+	// against TrancoLatestSuccessListID alone let a republished older id —
+	// a Tranco rollback — download and apply, regressing every rank to that
+	// day's values. The provenance INSERT's ON CONFLICT DO NOTHING made the
+	// re-run a no-op for the tranco_import row and nothing else, and since
+	// the old row's imported_at stayed older, the newer list kept winning
+	// the "latest" query and the churn repeated every cycle.
 	if !force {
+		imported, err := q.TrancoListWasImported(ctx, listID)
+		if err != nil {
+			return nil, fmt.Errorf("tranco: imported check: %w", err)
+		}
+		if imported {
+			rep.Outcome = TrancoNoNewList
+			return rep, nil
+		}
 		aborted, err := q.TrancoListWasAborted(ctx, listID)
 		if err != nil {
 			return nil, fmt.Errorf("tranco: aborted check: %w", err)
@@ -285,7 +293,7 @@ func (ti *TrancoImporter) applyList(ctx context.Context, rep *TrancoReport, rows
 	}
 	rep.Delisted = int(tag.RowsAffected())
 
-	if _, err := q.TrancoInsertProvenance(ctx, db.TrancoInsertProvenanceParams{
+	n, err := q.TrancoInsertProvenance(ctx, db.TrancoInsertProvenanceParams{
 		ListID:         rep.ListID,
 		ListDate:       postgres.Date(rep.ListDate),
 		LineCount:      count32(rep.LineCount),
@@ -293,8 +301,19 @@ func (ti *TrancoImporter) applyList(ctx context.Context, rep *TrancoReport, rows
 		Delisted:       count32(rep.Delisted),
 		RejectedCount:  count32(rep.RejectedCount),
 		DuplicateCount: count32(rep.DuplicateCount),
-	}); err != nil {
+	})
+	if err != nil {
 		return fmt.Errorf("tranco: provenance: %w", err)
+	}
+	// The ON CONFLICT DO NOTHING fired: this list was already imported, and
+	// the Import short-circuit above should have caught it. Roll back
+	// rather than commit a rank rewrite whose provenance row says nothing
+	// happened (review issue 36's backstop). The deferred Rollback runs on
+	// the way out.
+	if n == 0 {
+		rep.Outcome = TrancoNoNewList
+		rep.ImportedCount, rep.Delisted = 0, 0
+		return nil
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("tranco: commit: %w", err)
