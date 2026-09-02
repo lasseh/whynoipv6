@@ -153,6 +153,38 @@ const (
 	orderIDAsc  = "d.id ASC"
 )
 
+// nullFlagOrder and nullFlagSeekExpr are the two halves of the
+// null-flag-first keyset walk (07 §3.2), spelled once: the ?q= search sort
+// and ListDependents are one shape with two cursor keys, and both halves
+// must keep matching idx_domain_dependents_order's expression list
+// ((rank IS NULL), COALESCE(rank, 0), id) or the walk falls back to a sort.
+//
+// The spec's literal `(rank IS NULL, rank, id) > ($1,$2,$3)` would drop the
+// whole rank-NULL tail (NULL inside a row comparison → UNKNOWN), so the rank
+// component rides COALESCE(rank, 0) on both sides — equal within the null
+// partition, where the id tiebreaker takes over. backward flips both halves
+// (the §3.2 prev_cursor walk); the caller re-reverses the rows for display.
+func nullFlagOrder(backward bool) []string {
+	if backward {
+		return []string{"(d.rank IS NULL) DESC", "COALESCE(d.rank, 0) DESC", orderIDDesc}
+	}
+	return []string{"(d.rank IS NULL)", "COALESCE(d.rank, 0)", orderIDAsc}
+}
+
+func nullFlagSeekExpr(rankNull bool, rank *int32, id int64, backward bool) sq.Sqlizer {
+	cmp := ">"
+	if backward {
+		cmp = "<"
+	}
+	r := int32(0)
+	if rank != nil {
+		r = *rank
+	}
+	return sq.Expr(fmt.Sprintf(
+		"((d.rank IS NULL), COALESCE(d.rank, 0), d.id) %s (%t, %d, %d)",
+		cmp, rankNull, r, id))
+}
+
 // baseDomainSelect is the shared §4.2-row select over the five-way join —
 // the one base both the leaderboard and the dependents list build on.
 func baseDomainSelect(extraColumns ...string) sq.SelectBuilder {
@@ -247,25 +279,11 @@ func buildDomainList(f *DomainListFilter, sortKey ListSort, seek *DomainSeek, af
 	case ListSortSearch:
 		// ?q= orders by rank NULLS LAST on the null-flag-first key, the
 		// same shape ListDependents walks: the rank-NULL rows the search
-		// scope pulls in cannot anchor a plain (rank, id) seek, and a
-		// literal (rank, ...) row comparison would drop the whole NULL
-		// tail (NULL inside a row comparison → UNKNOWN). The rank
-		// component therefore rides COALESCE(rank, 0) on both sides —
-		// equal within the null partition, where d.id takes over.
-		cmp, order := ">", []string{"(d.rank IS NULL)", "COALESCE(d.rank, 0)", orderIDAsc}
-		if backward {
-			cmp, order = "<", []string{"(d.rank IS NULL) DESC", "COALESCE(d.rank, 0) DESC", orderIDDesc}
-		}
+		// scope pulls in cannot anchor a plain (rank, id) seek.
 		if seek != nil {
-			rank := int32(0)
-			if seek.Rank != nil {
-				rank = *seek.Rank
-			}
-			q = q.Where(sq.Expr(fmt.Sprintf(
-				"((d.rank IS NULL), COALESCE(d.rank, 0), d.id) %s (%t, %d, %d)",
-				cmp, seek.RankNull, rank, seek.ID)))
+			q = q.Where(nullFlagSeekExpr(seek.RankNull, seek.Rank, seek.ID, backward))
 		}
-		q = q.OrderBy(order...)
+		q = q.OrderBy(nullFlagOrder(backward)...)
 	case ListSortHost:
 		if seek != nil && seek.Host != "" {
 			if backward {
@@ -401,34 +419,19 @@ type DependentSeek struct {
 }
 
 // ListDependents serves GET /resources/{host}/dependents: domains linked to
-// one resource host, ordered rank NULLS LAST via the null-flag-first key.
-// The spec's literal `(rank IS NULL, rank, id) > ($1,$2,$3)` drops the whole
-// rank-NULL tail (NULL inside a row comparison → UNKNOWN), so the rank
-// component rides COALESCE(rank, 0) on both sides — equal within the null
-// partition, where the id tiebreaker takes over.
+// one resource host, ordered rank NULLS LAST via the null-flag-first key —
+// the same walk the ?q= search sort takes (nullFlagOrder/nullFlagSeekExpr).
 func ListDependents(ctx context.Context, pool *pgxpool.Pool, resourceHostID int64,
 	seek *DependentSeek, limit int, backward bool,
 ) ([]DependentRow, error) {
 	q := baseDomainSelect("dr.source::text AS source", "dr.required").
 		Join(fmt.Sprintf("domain_resource dr ON dr.domain_id = d.id AND dr.resource_host_id = %d", resourceHostID)).
 		Where(sq.Expr("NOT d.disabled"))
-	cmp := ">"
-	order := []string{"(d.rank IS NULL)", "COALESCE(d.rank, 0)", "d.id"}
-	if backward {
-		cmp = "<"
-		order = []string{"(d.rank IS NULL) DESC", "COALESCE(d.rank, 0) DESC", orderIDDesc}
-	}
 	if seek != nil {
-		rank := int32(0)
-		if seek.Rank != nil {
-			rank = *seek.Rank
-		}
-		q = q.Where(sq.Expr(fmt.Sprintf(
-			"((d.rank IS NULL), COALESCE(d.rank, 0), d.id) %s (%t, %d, %d)",
-			cmp, seek.RankNull, rank, seek.ID)))
+		q = q.Where(nullFlagSeekExpr(seek.RankNull, seek.Rank, seek.ID, backward))
 	}
 	return collectKeysetRows[DependentRow](ctx, pool,
-		q.OrderBy(order...).Limit(fetchLimit(limit)), backward, "dependents")
+		q.OrderBy(nullFlagOrder(backward)...).Limit(fetchLimit(limit)), backward, "dependents")
 }
 
 // MaxRank is the O(1) global-list count estimate (07 §3.4).
