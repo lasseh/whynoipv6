@@ -188,7 +188,7 @@ func TestProcessRecoveryMetric(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			w := testWorker(&fakeSink{res: tc.res}, nil, scanOK())
 			w.Process(context.Background(), claimed())
-			if got := w.Metrics.recovered; got != tc.want {
+			if got := w.Metrics.c.recovered; got != tc.want {
 				t.Errorf("recovered = %d, want %d", got, tc.want)
 			}
 		})

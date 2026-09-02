@@ -26,6 +26,54 @@ var idleCheckpointAfter = 5 * time.Minute
 // histBuckets: powers of two from 1 ms to 2^19 ms plus overflow (21 counters).
 const histBuckets = 21
 
+// counters is one interval's tallies. Checkpoint swaps a fresh set in under
+// the mutex and then works entirely from the snapshot, which keeps the
+// QueueDepth probe and the INSERT off the lock and makes a failed write
+// recoverable: the snapshot folds back into the live set instead of being
+// dropped.
+type counters struct {
+	processed, succeeded, failed                     int32
+	dims                                             map[domain.Dimension]map[domain.Observation]int
+	leaseLost, commitErrors, unresolvable, recovered int
+	bootstraps, confirmedTrans                       int
+	skips                                            map[string]int
+	hist                                             [histBuckets]int
+}
+
+func newCounters() counters {
+	return counters{
+		dims:  map[domain.Dimension]map[domain.Observation]int{},
+		skips: map[string]int{},
+	}
+}
+
+// add merges o into c — the fold-back after a checkpoint INSERT failed.
+func (c *counters) add(o *counters) {
+	c.processed += o.processed
+	c.succeeded += o.succeeded
+	c.failed += o.failed
+	c.leaseLost += o.leaseLost
+	c.commitErrors += o.commitErrors
+	c.unresolvable += o.unresolvable
+	c.recovered += o.recovered
+	c.bootstraps += o.bootstraps
+	c.confirmedTrans += o.confirmedTrans
+	for d, counts := range o.dims {
+		if c.dims[d] == nil {
+			c.dims[d] = map[domain.Observation]int{}
+		}
+		for obs, n := range counts {
+			c.dims[d][obs] += n
+		}
+	}
+	for job, n := range o.skips {
+		c.skips[job] += n
+	}
+	for i, n := range o.hist {
+		c.hist[i] += n
+	}
+}
+
 // Metrics is the per-process checkpointed crawler_metrics writer
 // (04 §15). All counters are per-interval deltas, reset at every checkpoint.
 type Metrics struct {
@@ -39,19 +87,13 @@ type Metrics struct {
 	// the notify client throttles it.
 	Heartbeat func()
 
+	// due carries the per-1000 signal to Run. Capacity 1 and a
+	// non-blocking send: a scan never waits on the checkpointer, and a
+	// signal raised while one is already pending simply joins it.
+	due chan struct{}
+
 	mu             sync.Mutex
-	processed      int32
-	succeeded      int32
-	failed         int32
-	dims           map[domain.Dimension]map[domain.Observation]int
-	leaseLost      int
-	commitErrors   int
-	unresolvable   int
-	recovered      int
-	bootstraps     int
-	confirmedTrans int
-	skips          map[string]int
-	hist           [histBuckets]int
+	c              counters
 	lastCheckpoint time.Time
 }
 
@@ -59,32 +101,32 @@ type Metrics struct {
 func NewMetrics(pool *pgxpool.Pool, runID uuid.UUID, worker string) *Metrics {
 	return &Metrics{
 		pool: pool, runID: runID, worker: worker,
-		dims:           map[domain.Dimension]map[domain.Observation]int{},
-		skips:          map[string]int{},
+		due:            make(chan struct{}, 1),
+		c:              newCounters(),
 		lastCheckpoint: time.Now(),
 	}
 }
 
 // RecordScan tallies one processed domain (04 §15.1/§15.2). commitErr is a
 // non-lease failure; res carries lease-lost and transitions.
-func (m *Metrics) RecordScan(ctx context.Context, obs *observe.Observations, unresolvable bool,
+func (m *Metrics) RecordScan(obs *observe.Observations, unresolvable bool,
 	res CommitResult, commitErr error, dur time.Duration,
 ) {
 	m.mu.Lock()
-	m.processed++
+	m.c.processed++
 	switch {
 	case commitErr != nil:
-		m.failed++
-		m.commitErrors++
+		m.c.failed++
+		m.c.commitErrors++
 	case res.LeaseLost:
-		m.failed++
-		m.leaseLost++
+		m.c.failed++
+		m.c.leaseLost++
 	default:
-		m.succeeded++
-		m.bootstraps += res.Bootstraps
+		m.c.succeeded++
+		m.c.bootstraps += res.Bootstraps
 		for _, tr := range res.Transitions {
 			if !shadowTransition(tr.Dim, tr.New) { // shadows write no changelog row (03 §11)
-				m.confirmedTrans++
+				m.c.confirmedTrans++
 			}
 		}
 	}
@@ -93,38 +135,45 @@ func (m *Metrics) RecordScan(ctx context.Context, obs *observe.Observations, unr
 			domain.DimBase: obs.Base, domain.DimWWW: obs.WWW, domain.DimNS: obs.NS,
 			domain.DimMX: obs.MX, domain.DimConn: obs.Conn, domain.DimResources: obs.Resources,
 		} {
-			if m.dims[d] == nil {
-				m.dims[d] = map[domain.Observation]int{}
+			if m.c.dims[d] == nil {
+				m.c.dims[d] = map[domain.Observation]int{}
 			}
-			m.dims[d][o]++
+			m.c.dims[d][o]++
 		}
 	}
 	if unresolvable {
-		m.unresolvable++
+		m.c.unresolvable++
 	}
-	m.recordLatencyLocked(dur)
-	due := m.processed%checkpointEvery == 0
+	m.c.recordLatency(dur)
+	due := m.c.processed%checkpointEvery == 0
 	m.mu.Unlock()
 
 	if commitErr == nil && !res.LeaseLost && m.Heartbeat != nil {
 		m.Heartbeat()
 	}
 	if due {
-		m.Checkpoint(ctx, false)
+		// Signal the checkpointer instead of writing here: the INSERT and
+		// its O(due-set) QueueDepth probe would otherwise run inside one of
+		// the worker slots, and two writers for one interval could each
+		// record a near-empty one (04 §13 row 7 — one checkpointer).
+		select {
+		case m.due <- struct{}{}:
+		default:
+		}
 	}
 }
 
 // RecordRecovered counts step-R executions.
-func (m *Metrics) RecordRecovered() { m.mu.Lock(); m.recovered++; m.mu.Unlock() }
+func (m *Metrics) RecordRecovered() { m.mu.Lock(); m.c.recovered++; m.mu.Unlock() }
 
 // RecordSingletonSkip counts a TryRun ErrHeld skip by job name.
 func (m *Metrics) RecordSingletonSkip(job string) {
 	m.mu.Lock()
-	m.skips[job]++
+	m.c.skips[job]++
 	m.mu.Unlock()
 }
 
-func (m *Metrics) recordLatencyLocked(dur time.Duration) {
+func (c *counters) recordLatency(dur time.Duration) {
 	ms := dur.Milliseconds()
 	idx := 0
 	if ms > 0 {
@@ -133,14 +182,14 @@ func (m *Metrics) recordLatencyLocked(dur time.Duration) {
 	if idx >= histBuckets {
 		idx = histBuckets - 1
 	}
-	m.hist[idx]++
+	c.hist[idx]++
 }
 
-// percentileLocked estimates a percentile by linear interpolation within the
+// percentile estimates a percentile by linear interpolation within the
 // log-scale bucket (04 §15.1 Decision).
-func (m *Metrics) percentileLocked(p float64) int32 {
+func (c *counters) percentile(p float64) int32 {
 	total := 0
-	for _, n := range m.hist {
+	for _, n := range c.hist {
 		total += n
 	}
 	if total == 0 {
@@ -148,7 +197,7 @@ func (m *Metrics) percentileLocked(p float64) int32 {
 	}
 	target := p * float64(total)
 	cum := 0.0
-	for i, n := range m.hist {
+	for i, n := range c.hist {
 		if n == 0 {
 			continue
 		}
@@ -162,15 +211,21 @@ func (m *Metrics) percentileLocked(p float64) int32 {
 	return int32(int64(1) << (histBuckets - 1))
 }
 
-// RunIdleLoop writes an idle checkpoint whenever none has been written for
-// idleCheckpointAfter (keeps alert A1 valid on a drained frontier).
-func (m *Metrics) RunIdleLoop(ctx context.Context) {
+// Run is the checkpointer goroutine 04 §13 row 7 names: the single writer of
+// every crawler_metrics row except the final one. It serves the per-1000
+// signal RecordScan raises and writes an idle row whenever none has been
+// written for idleCheckpointAfter (which keeps alert A1 valid on a drained
+// frontier). Stops with ctx; whatever is still tallied then goes into the
+// final checkpoint the caller writes.
+func (m *Metrics) Run(ctx context.Context) {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return
+		case <-m.due:
+			m.Checkpoint(ctx, false)
 		case <-ticker.C:
 			m.mu.Lock()
 			stale := time.Since(m.lastCheckpoint) >= idleCheckpointAfter
@@ -185,26 +240,24 @@ func (m *Metrics) RunIdleLoop(ctx context.Context) {
 // Checkpoint flushes the current interval as one crawler_metrics row and
 // resets the counters. final=true writes the shutdown row (is_final).
 func (m *Metrics) Checkpoint(ctx context.Context, final bool) {
+	// Swap a fresh set in and work from the snapshot: everything below —
+	// the marshal, the queue-depth probe, the INSERT — runs off the lock.
 	m.mu.Lock()
 	now := time.Now()
-	interval := now.Sub(m.lastCheckpoint).Seconds()
-	processed, succeeded, failed := m.processed, m.succeeded, m.failed
-	var qps float32
-	if interval > 0 {
-		qps = float32(float64(processed) / interval)
-	}
-	p50, p99 := m.percentileLocked(0.50), m.percentileLocked(0.99)
-	counters := m.dimCountersLocked()
-	m.processed, m.succeeded, m.failed = 0, 0, 0
-	m.dims = map[domain.Dimension]map[domain.Observation]int{}
-	m.leaseLost, m.commitErrors, m.unresolvable, m.recovered = 0, 0, 0, 0
-	m.bootstraps, m.confirmedTrans = 0, 0
-	m.skips = map[string]int{}
-	m.hist = [histBuckets]int{}
+	since := m.lastCheckpoint
+	snap := m.c
+	m.c = newCounters()
 	m.lastCheckpoint = now
 	m.mu.Unlock()
 
-	raw, err := json.Marshal(counters)
+	processed, succeeded, failed := snap.processed, snap.succeeded, snap.failed
+	var qps float32
+	if interval := now.Sub(since).Seconds(); interval > 0 {
+		qps = float32(float64(processed) / interval)
+	}
+	p50, p99 := snap.percentile(0.50), snap.percentile(0.99)
+
+	raw, err := json.Marshal(snap.dimCounters())
 	if err != nil {
 		raw = []byte("{}")
 	}
@@ -235,15 +288,32 @@ func (m *Metrics) Checkpoint(ctx context.Context, final bool) {
 		}
 	}
 	if err := q.InsertCrawlerMetrics(ctx, params); err != nil {
-		slog.Error("metrics checkpoint failed", "err", err.Error())
+		// The interval is not lost: fold it back so the next row carries the
+		// merged delta. /stats/crawler sums processed, so dropping a failed
+		// interval would silently under-report up to checkpointEvery scans.
+		slog.Error("metrics checkpoint failed, folding the interval back",
+			"err", err.Error(), "processed", processed)
+		m.foldBack(&snap, since)
 	}
 }
 
-// dimCountersLocked builds the §15.2 JSONB payload; zero-count keys
-// omitted. Checkpoint marshals it.
-func (m *Metrics) dimCountersLocked() map[string]any {
+// foldBack merges a failed checkpoint's snapshot into the live counters and
+// rewinds lastCheckpoint, so the next row's qps still spans the whole range
+// the tallies came from.
+func (m *Metrics) foldBack(snap *counters, since time.Time) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.c.add(snap)
+	if since.Before(m.lastCheckpoint) {
+		m.lastCheckpoint = since
+	}
+}
+
+// dimCounters builds the §15.2 JSONB payload; zero-count keys omitted.
+// Checkpoint marshals it from the snapshot.
+func (c *counters) dimCounters() map[string]any {
 	out := map[string]any{}
-	for d, counts := range m.dims {
+	for d, counts := range c.dims {
 		if len(counts) == 0 {
 			continue
 		}
@@ -257,26 +327,26 @@ func (m *Metrics) dimCountersLocked() map[string]any {
 			out[string(d)] = obj
 		}
 	}
-	if m.leaseLost > 0 {
-		out["lease_lost"] = m.leaseLost
+	if c.leaseLost > 0 {
+		out["lease_lost"] = c.leaseLost
 	}
-	if m.commitErrors > 0 {
-		out["commit_error"] = m.commitErrors
+	if c.commitErrors > 0 {
+		out["commit_error"] = c.commitErrors
 	}
-	if m.unresolvable > 0 {
-		out["unresolvable"] = m.unresolvable
+	if c.unresolvable > 0 {
+		out["unresolvable"] = c.unresolvable
 	}
-	if m.recovered > 0 {
-		out["recovered"] = m.recovered
+	if c.recovered > 0 {
+		out["recovered"] = c.recovered
 	}
-	if m.bootstraps > 0 {
-		out["bootstrap_commits"] = m.bootstraps
+	if c.bootstraps > 0 {
+		out["bootstrap_commits"] = c.bootstraps
 	}
-	if m.confirmedTrans > 0 {
-		out["confirmed_transitions"] = m.confirmedTrans
+	if c.confirmedTrans > 0 {
+		out["confirmed_transitions"] = c.confirmedTrans
 	}
-	if len(m.skips) > 0 {
-		out["singleton_skipped"] = m.skips
+	if len(c.skips) > 0 {
+		out["singleton_skipped"] = c.skips
 	}
 	return out
 }

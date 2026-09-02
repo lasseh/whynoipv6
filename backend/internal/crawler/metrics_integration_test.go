@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/lasseh/whynoipv6/internal/domain"
 	"github.com/lasseh/whynoipv6/internal/postgres/pgtest"
@@ -21,6 +22,11 @@ func TestMetrics(t *testing.T) {
 	pool := pgtest.NewDB(t)
 	ctx := context.Background()
 	m := NewMetrics(pool, uuid.New(), "test:1")
+
+	// The per-1000 row is written by the checkpointer, not by the scan that
+	// crosses the boundary (04 §13 row 7), so the loop has to be running.
+	runCtx, stopRun := context.WithCancel(ctx)
+	go m.Run(runCtx)
 
 	obs := stableObs(domain.DimBase, domain.ObsSupported)
 
@@ -37,14 +43,17 @@ func TestMetrics(t *testing.T) {
 		},
 	}
 	for range checkpointEvery - 21 {
-		m.RecordScan(ctx, &obs, false, CommitResult{}, nil, 50*time.Millisecond)
+		m.RecordScan(&obs, false, CommitResult{}, nil, 50*time.Millisecond)
 	}
 	for range 20 {
-		m.RecordScan(ctx, &obs, false, committed, nil, 700*time.Millisecond)
+		m.RecordScan(&obs, false, committed, nil, 700*time.Millisecond)
 	}
 	lost := committed
 	lost.LeaseLost = true
-	m.RecordScan(ctx, &obs, false, lost, nil, 700*time.Millisecond)
+	m.RecordScan(&obs, false, lost, nil, 700*time.Millisecond)
+
+	waitForRows(t, pool, 1)
+	stopRun()
 
 	var processed, succeeded, failed int32
 	var counters []byte
@@ -101,7 +110,7 @@ func TestMetrics(t *testing.T) {
 	}
 
 	// Final shutdown row.
-	m.RecordScan(ctx, &obs, true, CommitResult{}, nil, 10*time.Millisecond)
+	m.RecordScan(&obs, true, CommitResult{}, nil, 10*time.Millisecond)
 	m.Checkpoint(ctx, true)
 	var finalProcessed int32
 	var unresolvable []byte
@@ -116,5 +125,82 @@ func TestMetrics(t *testing.T) {
 	_ = json.Unmarshal(unresolvable, &fin)
 	if got, _ := fin["unresolvable"].(float64); got != 1 {
 		t.Errorf("final dim_counters.unresolvable = %v, want 1", fin["unresolvable"])
+	}
+}
+
+// waitForRows blocks until crawler_metrics holds at least n rows.
+func waitForRows(t *testing.T, pool *pgxpool.Pool, n int) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		var got int
+		if err := pool.QueryRow(context.Background(),
+			"SELECT count(*) FROM crawler_metrics").Scan(&got); err != nil {
+			t.Fatal(err)
+		}
+		if got >= n {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("crawler_metrics has %d rows, want %d", got, n)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
+
+// TestMetricsCheckpointFoldsBack: a checkpoint whose INSERT fails must not
+// drop the interval. /stats/crawler sums processed across rows, so a dropped
+// interval under-reports by up to checkpointEvery scans — and the write is
+// most likely to fail exactly when the database is already in trouble.
+func TestMetricsCheckpointFoldsBack(t *testing.T) {
+	pool := pgtest.NewDB(t)
+	ctx := context.Background()
+	m := NewMetrics(pool, uuid.New(), "test:1")
+	obs := stableObs(domain.DimBase, domain.ObsSupported)
+
+	for range 5 {
+		m.RecordScan(&obs, false, CommitResult{}, nil, 10*time.Millisecond)
+	}
+
+	// Reject every INSERT for the duration of one checkpoint.
+	if _, err := pool.Exec(ctx,
+		"ALTER TABLE crawler_metrics ADD CONSTRAINT reject_writes CHECK (false) NOT VALID"); err != nil {
+		t.Fatal(err)
+	}
+	m.Checkpoint(ctx, false)
+	if _, err := pool.Exec(ctx,
+		"ALTER TABLE crawler_metrics DROP CONSTRAINT reject_writes"); err != nil {
+		t.Fatal(err)
+	}
+
+	var rows int
+	if err := pool.QueryRow(ctx, "SELECT count(*) FROM crawler_metrics").Scan(&rows); err != nil {
+		t.Fatal(err)
+	}
+	if rows != 0 {
+		t.Fatalf("crawler_metrics has %d rows, want 0 — the INSERT was supposed to fail", rows)
+	}
+
+	for range 3 {
+		m.RecordScan(&obs, false, CommitResult{}, nil, 10*time.Millisecond)
+	}
+	m.Checkpoint(ctx, true)
+
+	var processed int32
+	var counters []byte
+	if err := pool.QueryRow(ctx,
+		"SELECT processed, dim_counters FROM crawler_metrics ORDER BY ts DESC LIMIT 1").
+		Scan(&processed, &counters); err != nil {
+		t.Fatal(err)
+	}
+	if processed != 8 {
+		t.Errorf("processed = %d, want 8 (5 folded back + 3 new)", processed)
+	}
+	var dim map[string]any
+	if err := json.Unmarshal(counters, &dim); err != nil {
+		t.Fatal(err)
+	}
+	if base, _ := dim["base"].(map[string]any); base["supported"] != float64(8) {
+		t.Errorf("dim_counters.base = %v, want 8 supported", dim["base"])
 	}
 }

@@ -203,7 +203,7 @@ func run() error {
 	// live-check jobs drain under rootCtx like frontier scans (04 §14).
 	var aux sync.WaitGroup
 	aux.Go(func() { coordinator.Run(claimCtx) })
-	aux.Go(func() { metrics.RunIdleLoop(claimCtx) })
+	aux.Go(func() { metrics.Run(claimCtx) })
 	aux.Go(func() { geoipReloadLoop(claimCtx, geoReader) })
 	// Re-snapshot the ns_host → provider mapping so curation (v6ctl provider
 	// add/remove) lands without a crawler restart (06-ingest §6.10).

@@ -40,7 +40,7 @@ func TestShutdown(t *testing.T) {
 			Attribution: &Attribution{AsnID: d.AsnID, CountryID: d.CountryID},
 			Details:     []byte(`{}`), DurationMS: 120, T: time.Now().UTC(),
 		})
-		metrics.RecordScan(work, &obs, false, res, err, 120*time.Millisecond)
+		metrics.RecordScan(&obs, false, res, err, 120*time.Millisecond)
 	}
 
 	claimCtx, stopClaim := context.WithCancel(ctx)

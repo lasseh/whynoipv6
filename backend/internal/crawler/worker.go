@@ -131,7 +131,7 @@ func (w *Worker) Process(ctx context.Context, d ClaimedDomain) { //nolint:gocrit
 	if err == nil && !res.LeaseLost && res.Recovered {
 		w.Metrics.RecordRecovered()
 	}
-	w.Metrics.RecordScan(ctx, &obs, unresolvable, res, err, time.Since(start))
+	w.Metrics.RecordScan(&obs, unresolvable, res, err, time.Since(start))
 	slog.Debug("domain processed", "domain", d.Host,
 		"duration_ms", time.Since(start).Milliseconds(),
 		"lease_lost", res.LeaseLost, "transitions", len(res.Transitions))
