@@ -78,6 +78,41 @@ func TestNotifyRedaction(t *testing.T) {
 	if !strings.Contains(buf.String(), "delivery failed") {
 		t.Errorf("delivery failure not logged: %s", buf.String())
 	}
+
+	// A URL the request builder rejects comes back inside *url.Error with
+	// the URL quoted — the build-failure log must not echo it either.
+	buf.Reset()
+	c = New("http://127.0.0.1:1/hook/supersecret\n", "", "", time.Minute)
+	c.Webhook(context.Background(), "boom")
+	if strings.Contains(buf.String(), "supersecret") {
+		t.Errorf("log leaked the webhook URL on build failure: %s", buf.String())
+	}
+	if !strings.Contains(buf.String(), "request build failed") {
+		t.Errorf("build failure not logged: %s", buf.String())
+	}
+}
+
+// TestHeartbeatFailKeepsQuery: /fail goes on the path, ahead of the query
+// string a slug-style check URL carries.
+func TestHeartbeatFailKeepsQuery(t *testing.T) {
+	var mu sync.Mutex
+	var uris []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		defer mu.Unlock()
+		uris = append(uris, r.URL.RequestURI())
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	c := New("", srv.URL+"/ping/crawler?create=1", "", time.Minute)
+	c.HeartbeatFail(context.Background())
+
+	mu.Lock()
+	defer mu.Unlock()
+	if len(uris) != 1 || uris[0] != "/ping/crawler/fail?create=1" {
+		t.Errorf("fail ping hit %q, want [/ping/crawler/fail?create=1]", uris)
+	}
 }
 
 // TestNotifyDisabled: empty URLs are no-ops.

@@ -6,8 +6,10 @@ package notify
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -44,7 +46,7 @@ func (c *Client) Webhook(ctx context.Context, msg string) {
 	body := strings.NewReader(`{"text":` + jsonString(msg) + `}`)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.WebhookURL, body)
 	if err != nil {
-		slog.Warn("notify request build failed", "channel", "ops webhook", "err", err.Error())
+		slog.Warn("notify request build failed", "channel", "ops webhook", "err", logErr(err, c.WebhookURL))
 		return
 	}
 	req.Header.Set("Content-Type", "application/json")
@@ -74,7 +76,15 @@ func (c *Client) HeartbeatFail(ctx context.Context) {
 	if c.HealthcheckURL == "" {
 		return
 	}
-	c.ping(ctx, strings.TrimSuffix(c.HealthcheckURL, "/")+"/fail", "heartbeat fail")
+	// /fail belongs on the path, before any query string (slug-style
+	// healthchecks URLs carry ?create=1).
+	u, err := url.Parse(c.HealthcheckURL)
+	if err != nil {
+		slog.Warn("notify request build failed", "channel", "heartbeat fail", "err", logErr(err, c.HealthcheckURL))
+		return
+	}
+	u.Path = strings.TrimSuffix(u.Path, "/") + "/fail"
+	c.ping(ctx, u.String(), "heartbeat fail")
 }
 
 // PingTick pings the daily-tick check (step 7, only on core success).
@@ -85,10 +95,10 @@ func (c *Client) PingTick(ctx context.Context) {
 	c.ping(ctx, c.TickURL, "tick heartbeat")
 }
 
-func (c *Client) ping(ctx context.Context, url, what string) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, http.NoBody)
+func (c *Client) ping(ctx context.Context, target, what string) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, http.NoBody)
 	if err != nil {
-		slog.Warn("notify request build failed", "channel", what, "err", err.Error())
+		slog.Warn("notify request build failed", "channel", what, "err", logErr(err, target))
 		return
 	}
 	c.deliver(req, what)
@@ -99,7 +109,7 @@ func (c *Client) ping(ctx context.Context, url, what string) {
 func (c *Client) deliver(req *http.Request, what string) {
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
-		slog.Warn("notify delivery failed", "channel", what, "err", redactURLs(err.Error(), req.URL.String()))
+		slog.Warn("notify delivery failed", "channel", what, "err", logErr(err, req.URL.String()))
 		return
 	}
 	_ = resp.Body.Close()
@@ -108,9 +118,21 @@ func (c *Client) deliver(req *http.Request, what string) {
 	}
 }
 
+// logErr renders a client error without the URL. net/url and net/http wrap
+// the URL into *url.Error — as typed for a parse failure, password-stripped
+// or redirected for a transport failure — so a string replace of the
+// configured URL cannot be relied on; the inner error carries no URL.
+func logErr(err error, rawURL string) string {
+	var ue *url.Error
+	if errors.As(err, &ue) {
+		return ue.Op + ": " + redactURLs(ue.Err.Error(), rawURL)
+	}
+	return redactURLs(err.Error(), rawURL)
+}
+
 // redactURLs strips the secret URL from an error string.
-func redactURLs(msg, url string) string {
-	return strings.ReplaceAll(msg, url, "<redacted>")
+func redactURLs(msg, secret string) string {
+	return strings.ReplaceAll(msg, secret, "<redacted>")
 }
 
 // jsonString minimally JSON-encodes a string (no deps, no error path).
