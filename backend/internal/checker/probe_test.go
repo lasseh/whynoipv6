@@ -3,15 +3,23 @@ package checker
 import (
 	"bytes"
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/tls"
 	"crypto/x509"
+	"crypto/x509/pkix"
 	"math"
+	"math/big"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 // These three checks could not be pointed at the loopback harness before:
@@ -91,6 +99,164 @@ func TestResourceDiscoveryFindsExternalHosts(t *testing.T) {
 	if strings.Contains(got, "example.com") {
 		t.Errorf("hosts %q includes the page's own domain", got)
 	}
+}
+
+// siteTLSServer is newV6TLSServer with a certificate valid for every name
+// given, not just example.com. The shared httptest certificate carries only
+// example.com, so an apex→www hop — which pins SNI to www.example.com —
+// cannot verify against it.
+func siteTLSServer(t *testing.T, handler http.Handler, names ...string) (port string, roots *x509.CertPool) {
+	t.Helper()
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tmpl := &x509.Certificate{
+		SerialNumber:          big.NewInt(1),
+		Subject:               pkix.Name{CommonName: names[0]},
+		NotBefore:             time.Now().Add(-time.Hour),
+		NotAfter:              time.Now().Add(time.Hour),
+		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		BasicConstraintsValid: true,
+		IsCA:                  true,
+		DNSNames:              names,
+		IPAddresses:           []net.IP{net.ParseIP("::1")},
+	}
+	der, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &key.PublicKey, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ln := v6Listener(t)
+	srv := &httptest.Server{
+		Listener: ln,
+		Config:   &http.Server{Handler: handler},
+		TLS:      &tls.Config{Certificates: []tls.Certificate{{Certificate: [][]byte{der}, PrivateKey: key}}},
+	}
+	srv.StartTLS()
+	t.Cleanup(srv.Close)
+	roots = x509.NewCertPool()
+	roots.AddCert(srv.Certificate())
+	return lnPort(t, ln), roots
+}
+
+// TestResourceDiscoveryFollowsApexToWWW is review issue 01's finding 09-0.
+// An apex that 301s to www is the dominant apex configuration; refusing to
+// follow it left discovery parsing the 3xx boilerplate, reporting zero
+// hosts, and folding a vacuous not_applicable that unlocked saint and
+// ipv6_only over a page never read.
+func TestResourceDiscoveryFollowsApexToWWW(t *testing.T) {
+	const page = `<html><head>
+	  <link rel="stylesheet" href="https://cdn.example.net/app.css">
+	  <script src="https://static.example.org/app.js"></script>
+	</head><body></body></html>`
+	port, roots := siteTLSServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.EqualFold(hostOnly(r.Host), "example.com") {
+			http.Redirect(w, r, "https://www.example.com/", http.StatusMovedPermanently)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html")
+		_, _ = w.Write([]byte(page))
+	}), "example.com", "www.example.com")
+
+	z := newZone(t,
+		"example.com. 3600 IN AAAA ::1",
+		"www.example.com. 3600 IN AAAA ::1",
+	)
+	c := &ResourceDiscovery{dialer: loopbackDialer(t, z), port: port, rootCAs: roots}
+
+	res, err := c.Check(context.Background(), "example.com", KindApex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Status != StatusSupported {
+		t.Fatalf("status = %s, want supported: %+v", res.Status, res.Detail)
+	}
+	d, ok := res.Detail.(*ResourceDiscoveryDetail)
+	if !ok {
+		t.Fatalf("detail type = %T", res.Detail)
+	}
+	got := strings.Join(d.Hosts, ",")
+	for _, want := range []string{"cdn.example.net", "static.example.org"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("hosts %q missing %s — the www body was never parsed", got, want)
+		}
+	}
+}
+
+// TestResourceDiscoveryKeepsCrossSiteRedirects: the in-scope rule is the
+// apex and its subdomains, not "any redirect". A hop to another site would
+// be fetched on the wrong vhost, so the last response stands and discovery
+// reports what the apex itself served.
+func TestResourceDiscoveryKeepsCrossSiteRedirects(t *testing.T) {
+	port, roots := siteTLSServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.EqualFold(hostOnly(r.Host), "example.com") {
+			http.Redirect(w, r, "https://elsewhere.example/", http.StatusFound)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html")
+		_, _ = w.Write([]byte(`<html><head><script src="https://leaked.example/x.js"></script></head></html>`))
+	}), "example.com", "elsewhere.example")
+
+	z := newZone(t,
+		"example.com. 3600 IN AAAA ::1",
+		"elsewhere.example. 3600 IN AAAA ::1",
+	)
+	c := &ResourceDiscovery{dialer: loopbackDialer(t, z), port: port, rootCAs: roots}
+
+	res, err := c.Check(context.Background(), "example.com", KindApex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d, ok := res.Detail.(*ResourceDiscoveryDetail)
+	if !ok {
+		t.Fatalf("detail type = %T", res.Detail)
+	}
+	if slices.Contains(d.Hosts, "leaked.example") {
+		t.Errorf("hosts = %v: followed a redirect off the site", d.Hosts)
+	}
+}
+
+// TestResourceDiscoveryNeedsAAAAOnTheHop pins the rule the decision on
+// review issue 01 calls out: every hop is over IPv6 or not at all. A
+// v4-only www is not fetched over v4 to make up for it — the last response
+// stands, and the www dimension tells that story instead.
+func TestResourceDiscoveryNeedsAAAAOnTheHop(t *testing.T) {
+	port, roots := siteTLSServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.EqualFold(hostOnly(r.Host), "example.com") {
+			http.Redirect(w, r, "https://www.example.com/", http.StatusMovedPermanently)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html")
+		_, _ = w.Write([]byte(`<html><head><script src="https://v4only.example/x.js"></script></head></html>`))
+	}), "example.com", "www.example.com")
+
+	// www has an A record only — no AAAA to hop to.
+	z := newZone(t,
+		"example.com. 3600 IN AAAA ::1",
+		"www.example.com. 3600 IN A 127.0.0.1",
+	)
+	c := &ResourceDiscovery{dialer: loopbackDialer(t, z), port: port, rootCAs: roots}
+
+	res, err := c.Check(context.Background(), "example.com", KindApex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d, ok := res.Detail.(*ResourceDiscoveryDetail)
+	if !ok {
+		t.Fatalf("detail type = %T", res.Detail)
+	}
+	if slices.Contains(d.Hosts, "v4only.example") {
+		t.Errorf("hosts = %v: fetched the www page over IPv4", d.Hosts)
+	}
+}
+
+// hostOnly strips any :port from a Host header.
+func hostOnly(host string) string {
+	if h, _, err := net.SplitHostPort(host); err == nil {
+		return h
+	}
+	return host
 }
 
 // dualStackTLSServer binds both loopback families, so a check that dials

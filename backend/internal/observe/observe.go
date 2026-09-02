@@ -86,7 +86,7 @@ func MapObservations(
 		o.Resources = domain.ObsNotApplicable
 		o.ResourcesExcluded = true
 	} else {
-		o.Resources = rollupResources(o.Conn, links)
+		o.Resources = rollupResources(o.Conn, links, discoverySucceeded(sr))
 	}
 
 	// Informational dimensions (02 §7.4).
@@ -230,8 +230,23 @@ func composeConn(hSt checker.CheckStatus, errType string, pSt checker.CheckStatu
 	return obs, detail
 }
 
+// discoverySucceeded reports whether this scan actually parsed the page.
+// Only StatusSupported means "discovery succeeded"; error (transport
+// failure, timeout, blocked address) and not_applicable (no AAAA on the
+// entity host) both mean the host set is unknown for this scan.
+func discoverySucceeded(sr checker.ScanResult) bool {
+	st, _, ok := sr.ResourceDiscovery()
+	return ok && st == checker.StatusSupported
+}
+
 // rollupResources is the §6 registry roll-up (all branches normative).
-func rollupResources(conn domain.Observation, links []LinkedResource) domain.Observation {
+//
+// discoveryOK is the §6 erratum (review issue 01): the roll-up used to see
+// only the folded link set, so a scan whose discovery errored — and whose
+// domain had no persisted links — hit `remaining == 0` and confirmed a
+// definitive not_applicable over a page it never read. §6's own principle
+// is that an unknown host set "can only defer, never falsely advance".
+func rollupResources(conn domain.Observation, links []LinkedResource, discoveryOK bool) domain.Observation {
 	switch conn {
 	case domain.ObsError, domain.ObsInconsistent:
 		return domain.ObsError // defer with conn
@@ -239,6 +254,9 @@ func rollupResources(conn domain.Observation, links []LinkedResource) domain.Obs
 		// fall through to the host fold below
 	default:
 		return domain.ObsNotApplicable // v6-unreachable site: deps moot
+	}
+	if !discoveryOK {
+		return domain.ObsError // host set unknown this scan: defer
 	}
 
 	remaining := 0

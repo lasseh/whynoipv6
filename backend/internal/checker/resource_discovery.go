@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/http"
 	"net/url"
 	"strings"
 	"time"
@@ -75,8 +76,8 @@ func (c *ResourceDiscovery) Check(ctx context.Context, domain string, _ Kind) (R
 		}, nil
 	}
 
-	// Fetch the page HTML over IPv6.
-	body, err := c.fetchHTML(ctx, domain, ip)
+	// Fetch the page HTML over IPv6, following same-site redirects.
+	body, pageURL, err := c.fetchHTML(ctx, domain, ip)
 	if err != nil {
 		return Result{
 			Status:  StatusError,
@@ -87,8 +88,9 @@ func (c *ResourceDiscovery) Check(ctx context.Context, domain string, _ Kind) (R
 
 	// Parse external hostnames from HTML. The FULL deduped list (≤50,
 	// first-seen order) is the result; an empty list is a valid supported
-	// outcome (discovery succeeded, no external dependencies).
-	pageURL := &url.URL{Scheme: "https", Host: domain, Path: "/"}
+	// outcome (discovery succeeded, no external dependencies). References
+	// resolve against the URL the body actually came from — after an
+	// apex→www hop that is the www URL, not the apex.
 	hosts := extractExternalHosts(body, pageURL, domain)
 	if len(hosts) > resourceMaxHosts {
 		hosts = hosts[:resourceMaxHosts]
@@ -105,23 +107,109 @@ func (c *ResourceDiscovery) Check(ctx context.Context, domain string, _ Kind) (R
 	}, nil
 }
 
-// fetchHTML fetches the page body over IPv6 and returns the raw bytes.
-func (c *ResourceDiscovery) fetchHTML(ctx context.Context, domain string, ip net.IP) ([]byte, error) {
-	resp, err := c.probe().get(ctx, ip, domain, "https", probeOptions{
-		TLS:      true,
-		Redirect: sameHostRedirect(domain, discoveryMaxRedirects),
-	})
-	if err != nil {
-		return nil, fmt.Errorf("http request: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
+// fetchHTML fetches the page body over IPv6 and returns it with the URL it
+// finally came from.
+//
+// Redirects within a host are followed by the pinned client. A redirect to
+// a *different* host cannot be: the transport dials one fixed IP with one
+// fixed SNI, which is why cross-host following was removed. But an apex
+// that 301s to www is the dominant apex configuration, and refusing it left
+// discovery parsing the 3xx boilerplate, reporting zero hosts, and folding
+// a vacuous not_applicable that unlocked saint (01 §11.9 erratum, review
+// issue 01).
+//
+// So a redirect that stays *in scope* — the apex itself or a subdomain of
+// it, over the same scheme and port — gets its own hop: its own AAAA from
+// the bulk resolver, its own ValidateIP, its own pin and SNI. Arbitrary
+// cross-site redirects stay unfollowed; those really would fetch the wrong
+// vhost.
+//
+// Every hop is over IPv6 or not at all. Phase 2 gates discovery on the apex
+// having AAAA, and a hop target with no AAAA is not fetched over v4 to make
+// up for it — the last response stands. A v4-only www is the www
+// dimension's story to tell, and telling it here would let a v4-only page
+// hide behind an apex with AAAA.
+func (c *ResourceDiscovery) fetchHTML(ctx context.Context, apex string, ip net.IP) ([]byte, *url.URL, error) {
+	host, addr := apex, ip
+	remaining := discoveryMaxRedirects
 
-	body, err := io.ReadAll(io.LimitReader(resp.Body, resourceMaxBodySize))
-	if err != nil {
-		return nil, fmt.Errorf("reading body: %w", err)
-	}
+	for {
+		hops := 0
+		sameHost := sameHostRedirect(host, remaining)
+		resp, err := c.probe().get(ctx, addr, host, "https", probeOptions{
+			TLS: true,
+			Redirect: func(req *http.Request, via []*http.Request) error {
+				if err := sameHost(req, via); err != nil {
+					return err
+				}
+				hops = len(via)
+				return nil
+			},
+		})
+		if err != nil {
+			return nil, nil, fmt.Errorf("http request: %w", err)
+		}
+		body, readErr := io.ReadAll(io.LimitReader(resp.Body, resourceMaxBodySize))
+		_ = resp.Body.Close()
+		if readErr != nil {
+			return nil, nil, fmt.Errorf("reading body: %w", readErr)
+		}
+		final := resp.Request.URL
+		remaining -= hops
 
-	return body, nil
+		next := inScopeRedirect(resp, apex)
+		if next == "" || remaining == 0 {
+			return body, final, nil
+		}
+		nextIP, ok := c.resolveHop(ctx, next)
+		if !ok {
+			return body, final, nil // no usable AAAA on the target
+		}
+		remaining--
+		host, addr = next, nextIP
+	}
+}
+
+// inScopeRedirect reports the host of a redirect the pinned client could
+// not follow but discovery should: a 3xx whose Location names a different
+// host that is still the apex or a subdomain of it, over the same scheme
+// and port. Everything else — another site, a scheme downgrade, a port
+// change — returns "".
+func inScopeRedirect(resp *http.Response, apex string) string {
+	if resp.StatusCode < 300 || resp.StatusCode >= 400 {
+		return ""
+	}
+	loc, err := resp.Location()
+	if err != nil {
+		return ""
+	}
+	host := strings.ToLower(loc.Hostname())
+	current := strings.ToLower(resp.Request.URL.Hostname())
+	if host == "" || host == current {
+		return "" // same host: the pinned client already had its chance
+	}
+	if host != apex && !strings.HasSuffix(host, "."+apex) {
+		return ""
+	}
+	if loc.Scheme != resp.Request.URL.Scheme || loc.Port() != resp.Request.URL.Port() {
+		return ""
+	}
+	return host
+}
+
+// resolveHop resolves a redirect target's own AAAA and clears it with the
+// SSRF blocklist. Failure is not an error: the caller keeps the last
+// response, so a hop we cannot reach over IPv6 costs the redirect, not the
+// scan.
+func (c *ResourceDiscovery) resolveHop(ctx context.Context, host string) (net.IP, bool) {
+	ips, _, _, _, err := c.dialer.Resolver().LookupAAAA(ctx, host)
+	if err != nil || len(ips) == 0 {
+		return nil, false
+	}
+	if err := c.dialer.ValidateIP(ips[0]); err != nil {
+		return nil, false
+	}
+	return ips[0], true
 }
 
 // extractExternalHosts parses HTML to find external resource URLs and returns

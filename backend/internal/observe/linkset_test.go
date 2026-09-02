@@ -128,7 +128,7 @@ func TestLiveLinksRegistryMissDefers(t *testing.T) {
 	if len(links) != 1 || links[0].AAAAStatus != nil {
 		t.Fatalf("links = %+v, want one entry with a nil status", links)
 	}
-	if got := rollupResources(domain.ObsSupported, links); got != domain.ObsError {
+	if got := rollupResources(domain.ObsSupported, links, true); got != domain.ObsError {
 		t.Errorf("rollup = %s, want error (deferred)", got)
 	}
 }
@@ -150,7 +150,7 @@ func TestPersistedLinksReadErrorDefers(t *testing.T) {
 	if len(links) != 1 || links[0].AAAAStatus != nil {
 		t.Fatalf("links = %+v, want a deferred entry", links)
 	}
-	if got := rollupResources(domain.ObsSupported, links); got != domain.ObsError {
+	if got := rollupResources(domain.ObsSupported, links, true); got != domain.ObsError {
 		t.Errorf("rollup = %s, want error (deferred)", got)
 	}
 }

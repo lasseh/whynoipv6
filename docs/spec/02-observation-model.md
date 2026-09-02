@@ -527,6 +527,14 @@ else:
   else:                                        resources_obs = supported
 ```
 
+_Erratum 2026-09-02: the algorithm never consults **D's own status**, and it must (review issue 01, finding 07-3). `resource_discovery` returns `error` on a transport failure, a 15s timeout, a blocked address or an unreadable body, and `not_applicable` when the entity host has no AAAA. In both cases the host set for this scan is **unknown** — but with no persisted links the fold added nothing, `hosts is empty` fired, and the roll-up confirmed a definitive `not_applicable` over a page it never read. Three counted scans of that turned into `saint = true` and `ipv6_only = supported`. The `else` branch now opens with:_
+
+```
+  if discovery status != supported:            resources_obs = error          # host set unknown: defer
+```
+
+_which is §6's own "can only defer, never falsely advance" principle applied to the input the algorithm was missing. The `conn` branches above it are unchanged and still decide first: a v6-unreachable site's dependencies are moot whether or not discovery ran. `MapObservations` derives the flag from the `ScanResult` it already holds, so the live path (`MapLiveResult`) gets the same rule for free. `TestResourcesRollup` rows `res_discovery_error_defers`, `res_discovery_error_defers_with_links` and `res_discovery_error_under_unsupported_conn` pin it._
+
 The observation then enters the commit machinery unchanged (N=3; 03-state-machine.md). **Deliberate double hysteresis:** host-level N=2 (in the sweep) stacked under domain-level N=3 gives a worst-case ~5 days for a saint transition; this is intentional — the domain level also absorbs link-set churn (rotating ad/CDN hosts across fetches), which host-level confirmation cannot. `error` never advances `resources_pending`, so the NULL window on discovery day costs one deferred day, not a false transition: a host newly discovered this scan enters the roll-up via the D-fold as a NULL-status entry (Inputs above), yielding `error` (defer) even though its link is not persisted until this same commit's upsert — the read-only fold is precisely what preserves this defer without depending on the upsert having run.
 
 **Phase gate — config key `crawler.resources.enabled`** (bool, default `true` — an emergency ops brake only, per ADR 0002; **registry: 09-ops.md**). While `false`, the crawler: skips `resource_discovery` entirely, the mapper emits `resources = not_applicable` on every scan (satisfying the NOT NULL `scan.resources` column), and the commit **excludes the resources dimension from the confirm/pending loop** — the domain's `resources_status/observed/pending/pending_count/since` columns stay NULL (mechanism in 03-state-machine.md; the mapper signals this with `ResourcesExcluded = true`, §7.2). Consequently `saint = hero AND resources ∈ {supported, not_applicable}` evaluates false for all domains until phase 5 — correct: no saint badges before the feature ships.

@@ -251,25 +251,34 @@ func TestResourcesRollup(t *testing.T) {
 	p := func(s domain.IPv6Status) *domain.IPv6Status { return &s }
 
 	rows := []struct {
-		name  string
-		conn  domain.Observation
-		links []LinkedResource
-		want  domain.Observation
+		name        string
+		conn        domain.Observation
+		links       []LinkedResource
+		discoveryOK bool
+		want        domain.Observation
 	}{
-		{"res_conn_error_defer", domain.ObsError, []LinkedResource{link(p(sup))}, domain.ObsError},
-		{"res_conn_inconsistent_defer", domain.ObsInconsistent, []LinkedResource{link(p(sup))}, domain.ObsError},
-		{"res_conn_unsupported_na", domain.ObsUnsupported, []LinkedResource{link(p(sup))}, domain.ObsNotApplicable},
-		{"res_conn_notapplicable_na", domain.ObsNotApplicable, []LinkedResource{link(p(sup))}, domain.ObsNotApplicable},
-		{"res_null_host_defer", domain.ObsSupported, []LinkedResource{link(p(sup)), link(nil)}, domain.ObsError},
-		{"res_empty_after_prune_na", domain.ObsSupported, []LinkedResource{link(p(nr)), link(p(na))}, domain.ObsNotApplicable},
-		{"res_no_links_na", domain.ObsSupported, nil, domain.ObsNotApplicable},
-		{"res_any_unsupported", domain.ObsSupported, []LinkedResource{link(p(sup)), link(p(uns))}, domain.ObsUnsupported},
-		{"res_all_supported", domain.ObsSupported, []LinkedResource{link(p(sup)), link(p(sup))}, domain.ObsSupported},
-		{"res_dead_ref_excluded", domain.ObsSupported, []LinkedResource{link(p(sup)), link(p(nr))}, domain.ObsSupported},
+		{"res_conn_error_defer", domain.ObsError, []LinkedResource{link(p(sup))}, true, domain.ObsError},
+		{"res_conn_inconsistent_defer", domain.ObsInconsistent, []LinkedResource{link(p(sup))}, true, domain.ObsError},
+		{"res_conn_unsupported_na", domain.ObsUnsupported, []LinkedResource{link(p(sup))}, true, domain.ObsNotApplicable},
+		{"res_conn_notapplicable_na", domain.ObsNotApplicable, []LinkedResource{link(p(sup))}, true, domain.ObsNotApplicable},
+		{"res_null_host_defer", domain.ObsSupported, []LinkedResource{link(p(sup)), link(nil)}, true, domain.ObsError},
+		{"res_empty_after_prune_na", domain.ObsSupported, []LinkedResource{link(p(nr)), link(p(na))}, true, domain.ObsNotApplicable},
+		{"res_no_links_na", domain.ObsSupported, nil, true, domain.ObsNotApplicable},
+		{"res_any_unsupported", domain.ObsSupported, []LinkedResource{link(p(sup)), link(p(uns))}, true, domain.ObsUnsupported},
+		{"res_all_supported", domain.ObsSupported, []LinkedResource{link(p(sup)), link(p(sup))}, true, domain.ObsSupported},
+		{"res_dead_ref_excluded", domain.ObsSupported, []LinkedResource{link(p(sup)), link(p(nr))}, true, domain.ObsSupported},
+		// §6 erratum (review issue 01): an unknown host set defers. A
+		// discovery error over a link-less domain used to confirm
+		// not_applicable — a definitive verdict on a page never read.
+		{"res_discovery_error_defers", domain.ObsSupported, nil, false, domain.ObsError},
+		{"res_discovery_error_defers_with_links", domain.ObsSupported, []LinkedResource{link(p(sup))}, false, domain.ObsError},
+		// conn decides first: a v6-unreachable site's deps are moot
+		// whether or not discovery ran.
+		{"res_discovery_error_under_unsupported_conn", domain.ObsUnsupported, nil, false, domain.ObsNotApplicable},
 	}
 	for _, tc := range rows {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := rollupResources(tc.conn, tc.links); got != tc.want {
+			if got := rollupResources(tc.conn, tc.links, tc.discoveryOK); got != tc.want {
 				t.Errorf("rollup = %s, want %s", got, tc.want)
 			}
 		})
@@ -309,8 +318,8 @@ func TestLinkSetConstructorsAgree(t *testing.T) {
 	}
 	for _, tc := range rows {
 		t.Run(tc.name, func(t *testing.T) {
-			p := rollupResources(domain.ObsSupported, linksFromRows(tc.persisted))
-			l := rollupResources(domain.ObsSupported, linksForHosts(tc.hosts, tc.byHost))
+			p := rollupResources(domain.ObsSupported, linksFromRows(tc.persisted), true)
+			l := rollupResources(domain.ObsSupported, linksForHosts(tc.hosts, tc.byHost), true)
 			if p != l || p != tc.want {
 				t.Errorf("persisted=%s live=%s, want both %s", p, l, tc.want)
 			}
@@ -330,7 +339,7 @@ func TestFoldDiscovered(t *testing.T) {
 		if len(folded) != 2 || folded[1].Host != "b" || folded[1].AAAAStatus != nil {
 			t.Fatalf("folded = %+v, want persisted a + NULL b", folded)
 		}
-		if got := rollupResources(domain.ObsSupported, folded); got != domain.ObsError {
+		if got := rollupResources(domain.ObsSupported, folded, true); got != domain.ObsError {
 			t.Errorf("rollup = %s, want error (defer)", got)
 		}
 	})
@@ -342,7 +351,7 @@ func TestFoldDiscovered(t *testing.T) {
 	})
 	t.Run("first_scan_all_null", func(t *testing.T) {
 		folded := FoldDiscovered(nil, []string{"a", "b"})
-		if got := rollupResources(domain.ObsSupported, folded); got != domain.ObsError {
+		if got := rollupResources(domain.ObsSupported, folded, true); got != domain.ObsError {
 			t.Errorf("rollup = %s, want error (defer), not a vacuous not_applicable", got)
 		}
 	})
