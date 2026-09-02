@@ -431,5 +431,5 @@ func nsZoneFound(sr checker.ScanResult) bool {
 	if st != checker.StatusError {
 		return true // NS found at the input host itself
 	}
-	return ns.Error != "no NS records found"
+	return ns.Error != checker.NoNSRecordsMessage
 }

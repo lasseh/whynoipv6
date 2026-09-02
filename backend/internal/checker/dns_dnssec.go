@@ -111,6 +111,12 @@ func (c *DNSSEC) queryDS(ctx context.Context, resolver *Resolver, fqdn string) (
 	if err != nil {
 		return nil, err
 	}
+	// QueryWithRetry hands SERVFAIL/REFUSED back as a response; an empty
+	// Answer on such a reply is not "no DS" (01 §11.5: DS lookup error →
+	// error). NXDOMAIN is a real empty answer.
+	if resp.Rcode != dns.RcodeSuccess && resp.Rcode != dns.RcodeNameError {
+		return nil, fmt.Errorf("DS query for %s returned %s", fqdn, dns.RcodeToString[resp.Rcode])
+	}
 
 	var records []*dns.DS
 	for _, rr := range resp.Answer {
