@@ -151,13 +151,28 @@ func (s *Server) badgeVariantFor(r *http.Request, host string) (string, error) {
 	return pickBadgeVariant(true, string(row.Classification), row.Saint, row.Disabled), nil
 }
 
-func (s *Server) badgeCache(w http.ResponseWriter, r *http.Request) bool {
+// badgeCache sets the badge class (07 §6.1) and seeds the ETag from the
+// rendered variant, not only the daily generation (review issue 62).
+//
+// The variant IS the response body's identity — both formats render from
+// nothing else — so an ETag over it changes exactly when the badge changes.
+// Seeding from `generation` alone froze a badge until the next stats tick: a
+// domain that turned hero at 09:00 kept serving its old badge to every client
+// holding the morning's ETag, for up to a day. That is the same defect
+// CacheDetail fixed for the domain detail by folding in the entity's last
+// transition; badges are the surface that lives in other people's READMEs,
+// so a stale one is the most visible thing this API can get wrong.
+//
+// The generation stays in the seed so a stats tick still invalidates: the
+// variant is derived from confirmed state, but the CDN copy should not
+// outlive a generation regardless.
+func (s *Server) badgeCache(w http.ResponseWriter, r *http.Request, variant string) bool {
 	generation, _, err := s.generation(r.Context())
 	if err != nil {
 		return false // serve uncached rather than fail the embed
 	}
 	w.Header().Set("Cache-Control", fmt.Sprintf("public, max-age=%d", int(s.opts.BadgeCacheTTL.Seconds())))
-	return applyETag(w, r, fmt.Sprintf(`W/"b%d-%s"`, generation, queryFingerprint(r)))
+	return applyETag(w, r, fmt.Sprintf(`W/"b%d-%s-%s"`, generation, variant, queryFingerprint(r)))
 }
 
 // getBadgeSVG is GET /badge/{host}.svg.
@@ -171,7 +186,7 @@ func (s *Server) getBadgeSVG(w http.ResponseWriter, r *http.Request, raw string)
 		InternalError(w, r, err)
 		return
 	}
-	if s.badgeCache(w, r) {
+	if s.badgeCache(w, r, variant) {
 		return
 	}
 	w.Header().Set("Content-Type", "image/svg+xml; charset=utf-8")
@@ -201,7 +216,7 @@ func (s *Server) getBadgeJSON(w http.ResponseWriter, r *http.Request, raw string
 		InternalError(w, r, err)
 		return
 	}
-	if s.badgeCache(w, r) {
+	if s.badgeCache(w, r, variant) {
 		return
 	}
 	v := badgeVariants[variant]

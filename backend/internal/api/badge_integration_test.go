@@ -102,3 +102,51 @@ func TestBadgeHandlers(t *testing.T) {
 		t.Errorf("unknown shields json = %+v", shields)
 	}
 }
+
+// TestBadgeETagFollowsTheVariant is review issue 62: the badge ETag was
+// seeded from the daily generation and the query string alone, so a
+// classification change inside one generation left every client holding the
+// old validator on a 304 — a stale badge in someone's README for up to a day.
+//
+// The test takes a badge's ETag, flips the domain underneath it, and
+// revalidates. Before the fix the second request is a 304 with the old bytes;
+// after it, a 200 carrying the new variant. The generation never moves, which
+// is the point: it was not the thing that changed.
+func TestBadgeETagFollowsTheVariant(t *testing.T) {
+	srv, pool := newAPI(t)
+	ctx := context.Background()
+
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO domain (host, kind, rank, created_by, asn_id, country_id, tld, classification, saint)
+		 VALUES ('badge-flip.no', 'apex', 903, 'tranco', (SELECT id FROM asn WHERE number = 0),
+		         (SELECT id FROM country WHERE code = 'NO'), 'no', 'sinner', false)`); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	url := srv.URL + "/badge/badge-flip.no.svg"
+	resp, body := fetch(t, url)
+	etag := resp.Header.Get("ETag")
+	if etag == "" || !strings.Contains(string(body), "no IPv6") {
+		t.Fatalf("first fetch: etag %q, body %q", etag, body)
+	}
+	// An unchanged badge must still revalidate cheaply.
+	if code := conditionalGet(t, url, etag); code != 304 {
+		t.Errorf("unchanged badge revalidated %d, want 304", code)
+	}
+
+	if _, err := pool.Exec(ctx,
+		`UPDATE domain SET classification = 'hero', saint = true WHERE host = 'badge-flip.no'`); err != nil {
+		t.Fatalf("flip: %v", err)
+	}
+
+	if code := conditionalGet(t, url, etag); code != 200 {
+		t.Errorf("badge revalidated %d after the classification changed, want 200", code)
+	}
+	resp2, body2 := fetch(t, url)
+	if resp2.Header.Get("ETag") == etag {
+		t.Errorf("ETag %q unchanged across sinner → hero+saint", etag)
+	}
+	if !strings.Contains(string(body2), "full") {
+		t.Errorf("badge body after the flip = %q, want the saint variant", body2)
+	}
+}
