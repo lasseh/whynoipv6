@@ -227,14 +227,20 @@ func (m *Metrics) Run(ctx context.Context) {
 		case <-m.due:
 			m.Checkpoint(ctx, false)
 		case <-ticker.C:
-			m.mu.Lock()
-			stale := time.Since(m.lastCheckpoint) >= idleCheckpointAfter
-			m.mu.Unlock()
-			if stale {
+			if m.idleDue() {
 				m.Checkpoint(ctx, false)
 			}
 		}
 	}
+}
+
+// idleDue reports whether the idle window has elapsed with no checkpoint
+// written — the rule Run's ticker consults, named so a test can assert it
+// without waiting out a real window.
+func (m *Metrics) idleDue() bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return time.Since(m.lastCheckpoint) >= idleCheckpointAfter
 }
 
 // Checkpoint flushes the current interval as one crawler_metrics row and

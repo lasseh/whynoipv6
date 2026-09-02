@@ -90,13 +90,19 @@ func TestMetrics(t *testing.T) {
 		t.Errorf("p99 = %d ms, want ≥512-bucket (one 700 ms outlier)", p99)
 	}
 
-	// Idle checkpoint rule: with a shrunken idle window, a row lands with
-	// processed=0 while nothing is scanned.
-	old := idleCheckpointAfter
-	idleCheckpointAfter = 100 * time.Millisecond
-	defer func() { idleCheckpointAfter = old }()
-	// The idle loop ticks every 30s; call the check directly like it would.
-	time.Sleep(150 * time.Millisecond)
+	// Idle checkpoint rule: once the window has elapsed with nothing
+	// scanned, a row lands with processed=0. Driven by rewinding the last
+	// checkpoint rather than waiting out a window (10-testing §1.2: no test
+	// sleeps).
+	if m.idleDue() {
+		t.Error("idle checkpoint is due immediately after one was written")
+	}
+	m.mu.Lock()
+	m.lastCheckpoint = time.Now().Add(-idleCheckpointAfter - time.Second)
+	m.mu.Unlock()
+	if !m.idleDue() {
+		t.Fatalf("idle checkpoint not due %s after the last row", idleCheckpointAfter)
+	}
 	m.Checkpoint(ctx, false)
 
 	var idleProcessed int32

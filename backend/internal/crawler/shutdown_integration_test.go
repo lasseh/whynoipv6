@@ -4,6 +4,7 @@ package crawler
 
 import (
 	"context"
+	"sync"
 	"testing"
 	"time"
 
@@ -29,11 +30,16 @@ func TestShutdown(t *testing.T) {
 	f := NewFrontier(pool, FrontierConfig{
 		BatchSize: 40, Order: "rank", EmptyPoll: 50 * time.Millisecond, WorkerSlots: 4,
 	})
-	// The slot body uses the context Run hands it. That context is the
-	// work context, not the claim context — a fact the signature now
-	// carries, so this test can no longer pass while the wiring is wrong.
+	// The scans are held mid-flight by `release` instead of a wall-clock
+	// sleep: `entered` fires as soon as a slot has a domain in hand, and
+	// nothing commits until the test lets it. So every commit below happens
+	// strictly after claiming stopped — which is the §14 guarantee under
+	// test — with no timing assumption to lose on a loaded runner.
+	entered, release := make(chan struct{}), make(chan struct{})
+	var once sync.Once
 	f.Process = func(work context.Context, d ClaimedDomain) {
-		time.Sleep(120 * time.Millisecond) // simulate scan wall time
+		once.Do(func() { close(entered) })
+		<-release
 		obs := stableObs(domain.DimBase, domain.ObsSupported)
 		res, err := committer.Commit(work, &CommitInput{
 			Snapshot: d, Obs: obs,
@@ -47,9 +53,10 @@ func TestShutdown(t *testing.T) {
 	done := make(chan struct{})
 	go func() { f.Run(claimCtx, rootCtx); close(done) }()
 
-	// SIGTERM analog mid-batch: stop claiming while workers are busy.
-	time.Sleep(400 * time.Millisecond)
+	// SIGTERM analog mid-batch: stop claiming while workers hold domains.
+	<-entered
 	stopClaim()
+	close(release)
 	select {
 	case <-done:
 	case <-time.After(drainDeadline()):
@@ -70,7 +77,7 @@ func TestShutdown(t *testing.T) {
 		t.Errorf("%d rows committed but still leased (half-written state)", halfWritten)
 	}
 	if committedFresh == 0 {
-		t.Error("no rows committed before the drain — test did not exercise in-flight work")
+		t.Error("no rows committed during the drain — test did not exercise in-flight work")
 	}
 	var scans int
 	if err := pool.QueryRow(ctx, "SELECT count(*) FROM scan").Scan(&scans); err != nil {
