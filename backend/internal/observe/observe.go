@@ -486,8 +486,12 @@ func PersistedLinks(ctx context.Context, r ResourceReader, domainID int64, enabl
 	}
 	rows, err := r.DomainRequiredLinks(ctx, domainID)
 	if err != nil {
+		// The LinkSet convention (CONTEXT.md, and LiveLinks): a read that
+		// failed is an unknown set, never an empty one — an empty set
+		// would roll up to a definitive not_applicable. One nil-status
+		// entry defers the dimension for this scan.
 		slog.Warn("resource link read failed", "err", err.Error())
-		return nil
+		return []LinkedResource{{}}
 	}
 	return linksFromRows(rows)
 }
