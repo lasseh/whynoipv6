@@ -103,9 +103,10 @@ type dimTrack struct {
 // valueAt reconstructs the confirmed value at end-of-day d.
 func (t *dimTrack) valueAt(d time.Time) *string {
 	dayEnd := d.AddDate(0, 0, 1)
+	seeded := t.current != nil && t.hasSince && t.since.Before(dayEnd)
 	if len(t.events) == 0 {
 		// Never transitioned: the current value has held since bootstrap.
-		if t.current != nil && t.hasSince && t.since.Before(dayEnd) {
+		if seeded {
 			v := string(*t.current)
 			return &v
 		}
@@ -116,12 +117,23 @@ func (t *dimTrack) valueAt(d time.Time) *string {
 	// bootstrap; the window is clamped to created_at, bounding the reach).
 	v0 := string(t.events[0].OldValue)
 	val = &v0
+	var last time.Time
 	for i := range t.events {
 		if !t.events[i].Ts.Time.Before(dayEnd) {
 			break
 		}
 		v := string(t.events[i].NewValue)
 		val = &v
+		last = t.events[i].Ts.Time
+	}
+	// A confirmed flip that wrote no row — a shadow transition (03 §11) or
+	// the bootstrap after a Step R reset (03 §6) — leaves the row's
+	// (value, since) newer than the last replayed event. From that day on
+	// the confirmed value wins, so this trajectory agrees with the status
+	// block GET /domains/{host} serves.
+	if seeded && t.since.After(last) {
+		v := string(*t.current)
+		return &v
 	}
 	return val
 }
