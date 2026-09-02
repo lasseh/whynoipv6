@@ -276,3 +276,12 @@ healthchecks.io (`ops.healthcheck_url`), failures to the ops webhook
 Workflows staged for the separate `whynoipv6-campaign` repo: PRs are validated with
 `v6ctl campaign validate` (bot comment, no DB), and a push to `main` dispatches a
 `campaign-sync` event so the backend can run `v6ctl campaign sync`.
+
+Campaign files live in that repo's `campaigns/` directory (06-ingest.md §3.2). If
+its layout ever changes again, **deploy the backend first**: a sync that cannot find
+the directory aborts before any DB write, while a sync that finds it empty
+soft-disables every campaign. The checkout is a volume `campaign-init` refreshes on
+stack (re)start, not by the crawler, so the layout lands in three steps: deploy the
+image, merge the campaign repo, then `up` again to pull the new tree. Between the
+first and last step the daily tick logs a `campaign_sync` failure and changes
+nothing.
