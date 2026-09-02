@@ -45,7 +45,7 @@ func ListASNLeaderboard(ctx context.Context, pool *pgxpool.Pool, nameQuery strin
 		From("asn").
 		PlaceholderFormat(sq.Dollar)
 	if nameQuery != "" {
-		q = q.Where("name ILIKE ?", "%"+nameQuery+"%")
+		q = q.Where("name ILIKE ?", likeSubstring(nameQuery))
 	}
 	if seek != nil {
 		q = q.Where(fmt.Sprintf("(%s, number) %s (?, ?)", col, cmp), seek.Count, seek.Number)

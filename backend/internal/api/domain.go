@@ -302,7 +302,11 @@ func parseDomainFilter(q url.Values) (domainFilterSpec, error) {
 		m := int32(n)
 		f.RankMax = &m
 	}
-	f.Query = q.Get("q")
+	// Hosts are stored as lowercase punycode (domain.Canonicalize); the
+	// builder matches the term case-insensitively and escapes LIKE
+	// metacharacters, so only surrounding whitespace is dropped here. A
+	// blank term is no filter.
+	f.Query = strings.TrimSpace(q.Get("q"))
 	return f, nil
 }
 

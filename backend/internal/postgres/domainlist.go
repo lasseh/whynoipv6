@@ -236,7 +236,9 @@ func buildDomainList(f *DomainListFilter, sortKey ListSort, seek *DomainSeek, af
 		q = q.Where(sq.Expr(fmt.Sprintf("d.rank <= %d", *f.RankMax)))
 	}
 	if f.Query != "" {
-		q = q.Where(sq.Expr("d.host LIKE '%' || ? || '%'", f.Query)) // trigram-backed
+		// ILIKE, like the ASN search: hosts are stored lowercase but the
+		// caller's term is not, and the trigram GIN serves ~~* as well.
+		q = q.Where(sq.Expr("d.host ILIKE ?", likeSubstring(f.Query)))
 	}
 
 	// backward flips the seek comparison and the ORDER BY (the §3.2

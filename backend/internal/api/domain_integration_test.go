@@ -371,6 +371,18 @@ func TestSearchOrdersByRank(t *testing.T) {
 	if h := hosts(t, env.Items); !slices.Equal(h, want) {
 		t.Errorf("q=example = %v, want rank-ordered %v", h, want)
 	}
+	// Hosts are stored lowercase; the term is normalised, not the caller.
+	getJSON(t, srv.URL+"/domains?q=+Example+", &env)
+	if h := hosts(t, env.Items); !slices.Equal(h, want) {
+		t.Errorf("q=Example = %v, want the lowercase result %v", h, want)
+	}
+	// LIKE metacharacters are literal substrings: no host contains % or _.
+	for _, raw := range []string{"%25", "d_.example"} {
+		getJSON(t, srv.URL+"/domains?q="+raw, &env)
+		if n := len(env.Items); n != 0 {
+			t.Errorf("q=%s matched %d rows, want 0 (metacharacters must be literal)", raw, n)
+		}
+	}
 	// An explicit sort loses to the search ordering, and the rank deep links
 	// stay rejected on it. The ordering is overridden, not the cursor scope:
 	// sort= is part of the filter fingerprint, so the two spellings still
