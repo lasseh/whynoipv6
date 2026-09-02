@@ -1,8 +1,11 @@
 package campaign
 
 import (
+	"context"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -71,5 +74,99 @@ func TestGitRemoteShape(t *testing.T) {
 		if gitRemoteRe.MatchString(bad) {
 			t.Errorf("%q accepted", bad)
 		}
+	}
+}
+
+// gitRepoPair builds a bare "remote" and a clone of it holding one campaign
+// file with no uuid, and returns the clone's path plus a function that
+// breaks the remote.
+func gitRepoPair(t *testing.T) (work string, breakRemote func()) {
+	t.Helper()
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not on PATH")
+	}
+	root := t.TempDir()
+	remote := filepath.Join(root, "remote.git")
+	work = filepath.Join(root, "work")
+
+	run := func(dir string, args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0", "GIT_CONFIG_GLOBAL=/dev/null")
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %s: %v\n%s", strings.Join(args, " "), err, out)
+		}
+	}
+	run(root, "init", "--bare", "--initial-branch=main", remote)
+	run(root, "clone", remote, work)
+	run(work, "config", "user.email", "bot@example.invalid")
+	run(work, "config", "user.name", "bot")
+
+	if err := os.WriteFile(filepath.Join(work, "c.yml"),
+		[]byte("title: A\ndescription: x\ndomains:\n  - example.no\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	run(work, "add", "c.yml")
+	run(work, "commit", "-m", "seed")
+	run(work, "push", "-u", "origin", "main")
+
+	return work, func() {
+		if err := os.RemoveAll(remote); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+// TestWriteBackRollsBackOnPushFailure (issue 28): once insertUUIDLine has
+// run, §3.3 step 6's "step 4's reuse rule recovers on the next run" no
+// longer holds — the file carries its uuid, so the next run finds nothing
+// pending and never retries, while the stranded local commit makes every
+// later `pull --ff-only` abort the whole sync. A failed push must therefore
+// leave the checkout level with the remote.
+func TestWriteBackRollsBackOnPushFailure(t *testing.T) {
+	const id = "3b3b3b3b-4444-4444-4444-444444444444"
+	work, breakRemote := gitRepoPair(t)
+	breakRemote()
+
+	cfg := Config{RepoPath: work, GitRemote: "origin", Push: true}
+	got := writeBackUUIDs(context.Background(), cfg, map[string]string{
+		filepath.Join(work, "c.yml"): id,
+	})
+	if !strings.Contains(got, "failed: push") {
+		t.Fatalf("write-back = %q, want a push failure", got)
+	}
+	if strings.Contains(got, "rollback failed") {
+		t.Fatalf("write-back = %q, want a clean rollback", got)
+	}
+
+	// The file is uuid-less again, so the next run mints the same uuid from
+	// the database and retries the write-back.
+	f, err := ParseFile(filepath.Join(work, "c.yml"), 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f.UUID != "" {
+		t.Errorf("uuid %q survived the rollback; the next run will find nothing pending", f.UUID)
+	}
+
+	gitOut := func(args ...string) string {
+		t.Helper()
+		cmd := exec.Command("git", args...)
+		cmd.Dir = work
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %s: %v\n%s", strings.Join(args, " "), err, out)
+		}
+		return strings.TrimSpace(string(out))
+	}
+	if ahead := gitOut("rev-list", "@{u}..HEAD"); ahead != "" {
+		t.Errorf("checkout is ahead of the remote by %q; the next pull --ff-only aborts", ahead)
+	}
+	if dirty := gitOut("status", "--porcelain"); dirty != "" {
+		t.Errorf("checkout left dirty: %q", dirty)
+	}
+	if rebaseInProgress(work) {
+		t.Error("a rebase was left in progress")
 	}
 }

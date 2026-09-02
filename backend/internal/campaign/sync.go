@@ -494,17 +494,62 @@ func writeBackUUIDs(ctx context.Context, cfg Config, pending map[string]string) 
 	if out, err := git(ctx, cfg.RepoPath, "commit", "-am", "chore: assign campaign uuids [skip ci]"); err != nil {
 		return report("failed: commit: " + strings.TrimSpace(out))
 	}
-	if out, err := git(ctx, cfg.RepoPath, "push", cfg.GitRemote); err != nil {
-		// Non-fast-forward: rebase and retry once.
-		if _, err := git(ctx, cfg.RepoPath, "pull", "--rebase", cfg.GitRemote); err == nil {
-			if _, err := git(ctx, cfg.RepoPath, "push", cfg.GitRemote); err == nil {
-				return report("pushed")
-			}
-		}
-		slog.Warn("uuid write-back push failed", "err", strings.TrimSpace(out))
-		return report("failed: push: " + strings.TrimSpace(out))
+	out, err := git(ctx, cfg.RepoPath, "push", cfg.GitRemote)
+	if err == nil {
+		return report("pushed")
 	}
-	return report("pushed")
+	// Non-fast-forward: rebase and retry once. The retry's own output is
+	// what the operator needs, not the first attempt's.
+	if _, rebaseErr := git(ctx, cfg.RepoPath, "pull", "--rebase", cfg.GitRemote); rebaseErr == nil {
+		retryOut, retryErr := git(ctx, cfg.RepoPath, "push", cfg.GitRemote)
+		if retryErr == nil {
+			return report("pushed")
+		}
+		out = retryOut
+	}
+
+	// §3.3 step 6 says step 4's source_file reuse recovers on the next run,
+	// but that assumes the file still lacks its uuid — false once
+	// insertUUIDLine ran. Left alone, the local commit strands: the next run
+	// finds nothing pending and never retries the push, and every later
+	// `pull --ff-only` aborts the whole sync once origin moves. Roll back to
+	// the remote instead; the uuid rows are already committed to the
+	// database, so the next run re-derives the same write-back from a clean
+	// tree.
+	rollback := rollbackToRemote(ctx, cfg.RepoPath)
+	slog.Warn("uuid write-back push failed", "err", strings.TrimSpace(out), "rollback", rollback)
+	msg := "failed: push: " + strings.TrimSpace(out)
+	if rollback != "" {
+		msg += "; rollback failed: " + rollback
+	}
+	return report(msg)
+}
+
+// rebaseInProgress reports whether the retry left a rebase half-applied.
+// Either state directory means git considers a rebase live; both are how
+// git itself decides (wt_status).
+func rebaseInProgress(repo string) bool {
+	for _, d := range []string{"rebase-merge", "rebase-apply"} {
+		if _, err := os.Stat(filepath.Join(repo, ".git", d)); err == nil {
+			return true
+		}
+	}
+	return false
+}
+
+// rollbackToRemote returns the checkout to its tracked remote branch after a
+// failed write-back push. Empty result = the tree is clean and level with
+// the remote; anything else is a reason the operator has to repair by hand.
+func rollbackToRemote(ctx context.Context, repo string) string {
+	if rebaseInProgress(repo) {
+		if out, err := git(ctx, repo, "rebase", "--abort"); err != nil {
+			return "rebase --abort: " + strings.TrimSpace(out)
+		}
+	}
+	if out, err := git(ctx, repo, "reset", "--hard", "@{u}"); err != nil {
+		return "reset --hard @{u}: " + strings.TrimSpace(out)
+	}
+	return ""
 }
 
 // yamlIndented reports a continuation line of a block scalar or wrapped value.
