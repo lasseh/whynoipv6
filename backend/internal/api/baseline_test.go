@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 // TestBaseline (P4.1; 07 §1.8, §2.5, §2.7): problem+json on every error with
@@ -15,6 +16,16 @@ import (
 func TestBaseline(t *testing.T) {
 	// A nil service is fine for the routes under test except /readyz.
 	router := NewRouter(nil, Options{})
+
+	// Review issue 39: the drain, WriteTimeout and the middleware timeout
+	// are the same number by construction. A drain shorter than the
+	// request timeout truncates long responses on every deploy and leaves
+	// the unit failed; cmd/api reads this constant for both.
+	t.Run("request_timeout_is_one_constant", func(t *testing.T) {
+		if RequestTimeout != 30*time.Second {
+			t.Errorf("RequestTimeout = %s, want 30s (07 §1.6)", RequestTimeout)
+		}
+	})
 
 	t.Run("livez_no_store", func(t *testing.T) {
 		rec := httptest.NewRecorder()

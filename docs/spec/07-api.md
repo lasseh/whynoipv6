@@ -72,6 +72,8 @@ The blanket `no-cache, no-store` policy is **deleted**. Cache-Control is set **p
 
 `http.Server{ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 120 * time.Second}`; per-request `middleware.Timeout(30 * time.Second)`. Graceful shutdown on SIGINT/SIGTERM: `server.Shutdown(ctx)` with a 15 s drain budget. `POST /check` is async job+poll (§5.1), so no handler legitimately exceeds 30 s.
 
+_Erratum 2026-09-02 (review issue 39): the drain is **30 s**, not 15 s — it waits out the longest request the middleware allows. At 15 s a request legitimately running 15–30 s, such as a 10,000-row `?format=csv` list, was severed mid-body on every deploy: the client keeps a truncated body under an already-sent 200, `Shutdown` returns `context.DeadlineExceeded`, `run()` returns an error, and a routine `systemctl restart` leaves the unit **failed**. nginx sets no `proxy_read_timeout`, so the truncation reaches the client unchanged. The three values that must agree — the middleware timeout, `WriteTimeout`, and the drain — are now one exported constant, `api.RequestTimeout`. systemd's 90 s `TimeoutStopSec` default still covers the drain; the api unit sets none of its own._
+
 ### 1.7 Middleware order (outermost first)
 
 RealIP → RequestID → slog request logger → Recoverer → Timeout(30 s) → CORS → security/content-type headers → per-route Cache-Control (§6.1). No trailing-slash redirection middleware; routes match exactly as written. Logging follows the shared slog conventions (design §11.5; registry of log keys in 09-ops.md).

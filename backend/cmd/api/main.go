@@ -1,5 +1,6 @@
 // Command api serves the public HTTP surface (07-api.md §1): loopback bind
-// behind nginx, per-request timeouts, 15s graceful drain.
+// behind nginx, per-request timeouts, and a graceful drain as long as the
+// longest request the middleware allows.
 package main
 
 import (
@@ -56,7 +57,7 @@ func run() error {
 		Handler:           api.NewRouter(pool, apiOpts),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
-		WriteTimeout:      30 * time.Second,
+		WriteTimeout:      api.RequestTimeout,
 		IdleTimeout:       120 * time.Second,
 	}
 
@@ -74,8 +75,14 @@ func run() error {
 	case <-ctx.Done():
 	}
 
-	// Graceful shutdown: 15s drain budget (07 §1.6).
-	drainCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	// Graceful shutdown: the drain waits out the longest request the
+	// middleware allows (07 §1.6 erratum, review issue 39). At the old 15s
+	// a request legitimately running 15–30s — a 10k-row ?format=csv list —
+	// was severed mid-body on every deploy, Shutdown returned
+	// context.DeadlineExceeded, and a routine restart left the unit failed.
+	// systemd's 90s TimeoutStopSec default still covers this comfortably;
+	// the api unit sets none of its own.
+	drainCtx, cancel := context.WithTimeout(context.Background(), api.RequestTimeout)
 	defer cancel()
 	if err := srv.Shutdown(drainCtx); err != nil {
 		return fmt.Errorf("shutdown: %w", err)

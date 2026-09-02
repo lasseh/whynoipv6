@@ -17,6 +17,13 @@ import (
 	db "github.com/lasseh/whynoipv6/internal/postgres/db"
 )
 
+// RequestTimeout is the longest a request may run (07 §1.6). Three things
+// have to agree on it: the chi middleware that enforces it, the server's
+// WriteTimeout, and cmd/api's shutdown drain — a drain shorter than this
+// severs a legitimately-long request mid-body on every deploy (review
+// issue 39), so it is one constant rather than three literals.
+const RequestTimeout = 30 * time.Second
+
 // Options are the serving knobs plumbed from the config registry (09-ops).
 type Options struct {
 	PublicBaseURL string // feed ids/links; default https://api.whynoipv6.com
@@ -103,7 +110,7 @@ func NewRouter(pool *pgxpool.Pool, opts Options) http.Handler { //nolint:gocriti
 	r.Use(middleware.RequestID)
 	r.Use(accessLog)
 	r.Use(recoverer)
-	r.Use(middleware.Timeout(30 * time.Second))
+	r.Use(middleware.Timeout(RequestTimeout))
 	r.Use(cors.New(cors.Options{
 		AllowedOrigins:   []string{"https://*", "http://*"},
 		AllowedMethods:   []string{http.MethodGet, http.MethodHead, http.MethodOptions, http.MethodPost},
