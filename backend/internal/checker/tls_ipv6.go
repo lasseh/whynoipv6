@@ -68,9 +68,11 @@ func (c *TLSIPv6) Check(ctx context.Context, domain string, kind Kind) (Result, 
 
 	d.Address = ip.String()
 
-	// Open TCP connection to the IPv6 address on port 443.
+	// Open TCP connection to the IPv6 address on port 443 through the
+	// SafeDialer (an IP literal is validated and dialled, never re-resolved),
+	// so the blocklist holds by construction, not by the ValidateIP above.
 	addr := net.JoinHostPort(ip.String(), c.port)
-	conn, err := c.dialer.dialer.DialContext(ctx, "tcp6", addr)
+	conn, err := c.dialer.DialContext(ctx, "tcp6", addr)
 	if err != nil {
 		if isConnRefused(err) {
 			d.Error = errConnRefused
@@ -103,6 +105,16 @@ func (c *TLSIPv6) Check(ctx context.Context, domain string, kind Kind) (Result, 
 	if err != nil {
 		_ = conn.Close()
 		d.Error = fmt.Sprintf("TLS handshake failed: %v", err)
+		// A handshake that ran out of time (including the scan deadline)
+		// says nothing about the certificate: transient, like the dial
+		// path's timeout branch. Valid stays unset.
+		if isTimeout(err) || ctx.Err() != nil {
+			return Result{
+				Status:  StatusError,
+				Detail:  d,
+				Latency: time.Since(start),
+			}, nil
+		}
 		setValid(false)
 		return Result{
 			Status:  StatusUnsupported,

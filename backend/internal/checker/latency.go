@@ -32,7 +32,15 @@ func (c *LatencyIPv4) Check(ctx context.Context, domain string, kind Kind) (Resu
 	defer cancel()
 
 	ips, err := c.dialer.Resolver().LookupA(ctx, domain)
-	if err != nil || len(ips) == 0 {
+	if err != nil {
+		// Resolver trouble is transient (error), not "no A record".
+		return Result{
+			Status:  StatusError,
+			Detail:  &LatencyDetail{CommonDetail: CommonDetail{Error: err.Error()}},
+			Latency: time.Since(start),
+		}, nil
+	}
+	if len(ips) == 0 {
 		return Result{
 			Status:  StatusNotApplicable,
 			Detail:  &LatencyDetail{CommonDetail: CommonDetail{Reason: "no A record"}},
@@ -71,7 +79,14 @@ func (c *LatencyIPv6) Check(ctx context.Context, domain string, kind Kind) (Resu
 	defer cancel()
 
 	ips, _, _, _, err := c.dialer.Resolver().LookupAAAA(ctx, domain)
-	if err != nil || len(ips) == 0 {
+	if err != nil {
+		return Result{
+			Status:  StatusError,
+			Detail:  &LatencyDetail{CommonDetail: CommonDetail{Error: err.Error()}},
+			Latency: time.Since(start),
+		}, nil
+	}
+	if len(ips) == 0 {
 		return Result{
 			Status:  StatusNotApplicable,
 			Detail:  &LatencyDetail{CommonDetail: CommonDetail{Reason: errNoAAAARecord}},
