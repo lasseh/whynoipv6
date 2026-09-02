@@ -134,7 +134,14 @@ func TestSameHostRedirectPolicy(t *testing.T) {
 		}
 		return r
 	}
-	via := func(n int) []*http.Request { return make([]*http.Request, n) }
+	// via[0] is the original request; the chain grows by one per hop.
+	via := func(n int) []*http.Request {
+		v := make([]*http.Request, n)
+		for i := range v {
+			v[i] = req("example.com")
+		}
+		return v
+	}
 
 	if err := policy(req("example.com"), via(1)); err != nil {
 		t.Errorf("first hop refused: %v", err)
@@ -147,6 +154,16 @@ func TestSameHostRedirectPolicy(t *testing.T) {
 	}
 	if err := policy(req("evil.example.net"), via(1)); err == nil {
 		t.Error("followed a redirect off the original domain")
+	}
+	// Same host but another origin: the transport is pinned to ip:443 with
+	// TLS, so a scheme or port change cannot be honoured.
+	plain, _ := http.NewRequest(http.MethodGet, "http://example.com/", http.NoBody)
+	if err := policy(plain, via(1)); err == nil {
+		t.Error("followed an https→http redirect onto the pinned TLS port")
+	}
+	other, _ := http.NewRequest(http.MethodGet, "https://example.com:8443/", http.NoBody)
+	if err := policy(other, via(1)); err == nil {
+		t.Error("followed a redirect to another port on the pinned transport")
 	}
 }
 
