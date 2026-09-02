@@ -116,10 +116,21 @@ type Resolver struct {
 	wg       sync.WaitGroup
 }
 
-// New builds the consensus resolver. bulk is the shared bulk
-// checker.Resolver (Unbound upstreams) used ONLY for the conditional A and
-// CD=1 lookups. alert posts one-line messages to the ops webhook.
+// New builds the consensus resolver over the pinned provider table. bulk is
+// the shared bulk checker.Resolver (Unbound upstreams) used ONLY for the
+// conditional A and CD=1 lookups. alert posts one-line messages to the ops
+// webhook.
 func New(cfg Config, bulk *checker.Resolver, alert func(ctx context.Context, msg string), logger *slog.Logger) *Resolver {
+	return newWithProviders(cfg, providerDefs, bulk, alert, logger)
+}
+
+// newWithProviders is New with the provider table injected — the seam the
+// package tests point at loopback fakes. Substituting providerState.res
+// after the fact instead would skip the SetAttemptTimeout below, so the
+// attempt/retry split inside perProviderBudget would never be exercised.
+func newWithProviders(cfg Config, defs []providerDef, bulk *checker.Resolver,
+	alert func(ctx context.Context, msg string), logger *slog.Logger,
+) *Resolver {
 	r := &Resolver{
 		cfg:        cfg,
 		bulk:       bulk,
@@ -128,7 +139,7 @@ func New(cfg Config, bulk *checker.Resolver, alert func(ctx context.Context, msg
 		fastWindow: newWindow(cfg.FastLane.Window),
 	}
 	r.life, r.stopLife = context.WithCancel(context.Background())
-	for _, def := range providerDefs {
+	for _, def := range defs {
 		res := checker.NewResolver(def.upstreams)
 		// Cap each attempt at perAttemptTimeout so perProviderBudget (2×)
 		// genuinely covers one attempt plus one retry (§2.3): without it a

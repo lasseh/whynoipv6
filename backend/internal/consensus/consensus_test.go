@@ -21,6 +21,12 @@ type fakeProvider struct {
 	mu       sync.Mutex
 	behavior string
 	addr     string
+
+	// Wire-query counters, per 10-testing §3.2/§3.2b's "issued?" column.
+	// They count what reaches the socket, so a QueryWithRetry that retries
+	// on SERVFAIL or a timeout shows as 2 — which is the behaviour worth
+	// pinning as well.
+	aQueries, cdQueries, aaaaQueries int
 }
 
 func (f *fakeProvider) set(b string) {
@@ -29,14 +35,35 @@ func (f *fakeProvider) set(b string) {
 	f.behavior = b
 }
 
+// resetCounts zeroes the wire counters before a scripted row.
+func (f *fakeProvider) resetCounts() {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.aQueries, f.cdQueries, f.aaaaQueries = 0, 0, 0
+}
+
+func (f *fakeProvider) counts() (a, cd, aaaa int) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.aQueries, f.cdQueries, f.aaaaQueries
+}
+
 func (f *fakeProvider) handle(w dns.ResponseWriter, r *dns.Msg) {
+	q := r.Question[0]
 	f.mu.Lock()
 	b := f.behavior
+	switch {
+	case q.Qtype == dns.TypeA:
+		f.aQueries++
+	case q.Qtype == dns.TypeAAAA && r.CheckingDisabled:
+		f.cdQueries++
+	case q.Qtype == dns.TypeAAAA:
+		f.aaaaQueries++
+	}
 	f.mu.Unlock()
 
 	m := new(dns.Msg)
 	m.SetReply(r)
-	q := r.Question[0]
 	aaaa := func(ip string) *dns.AAAA {
 		return &dns.AAAA{
 			Hdr:  dns.RR_Header{Name: q.Name, Rrtype: dns.TypeAAAA, Class: dns.ClassINET, Ttl: 300},
@@ -107,23 +134,37 @@ func newHarness(t *testing.T) *harness {
 	perProviderBudget = 150 * time.Millisecond // shrink timeout rows
 	t.Cleanup(func() { perProviderBudget = saved })
 
+	return newHarnessQPS(t, 1000)
+}
+
+// newHarnessQPS is newHarness with the per-provider token bucket set.
+func newHarnessQPS(t *testing.T, qps int) *harness {
+	t.Helper()
 	h := &harness{cf: startFake(t), go_: startFake(t), q9: startFake(t), bulk: startFake(t)}
 	var alerts []string
 	var mu sync.Mutex
 	h.alerts = &alerts
-	h.r = New(Config{
-		PerProviderQPS: 1000,
+
+	// The bulk resolver has no per-attempt cap in production; shrink it
+	// here so the scripted timeout rows do not cost 2 × dnsTimeout.
+	bulk := checker.NewResolver([]string{h.bulk.addr})
+	bulk.SetAttemptTimeout(150 * time.Millisecond)
+
+	// Through the production constructor with the provider table injected,
+	// so the providers keep New's SetAttemptTimeout(perAttemptTimeout);
+	// replacing providerState.res afterwards silently dropped it.
+	h.r = newWithProviders(Config{
+		PerProviderQPS: qps,
 		FastLane:       FastLaneConfig{NondefinitiveRate: 0.05, Window: 15 * time.Minute, MinSamples: 40, RecoverBelow: 0.02},
 		Provider:       ProviderConfig{FailureRate: 0.50, Window: 15 * time.Minute, MinSamples: 20, RecoveryProbes: 3},
-	}, checker.NewResolver([]string{h.bulk.addr}),
+	}, []providerDef{
+		{name: providerCloudflare, upstreams: []string{h.cf.addr}},
+		{name: providerGoogle, upstreams: []string{h.go_.addr}},
+		{name: providerQuad9, upstreams: []string{h.q9.addr}},
+	}, bulk,
 		func(_ context.Context, msg string) { mu.Lock(); alerts = append(alerts, msg); mu.Unlock() },
 		slog.Default())
 	t.Cleanup(h.r.Close)
-
-	// Point the pinned providers at the fakes (in-package test override).
-	h.r.providers[0].res = checker.NewResolver([]string{h.cf.addr})
-	h.r.providers[1].res = checker.NewResolver([]string{h.go_.addr})
-	h.r.providers[2].res = checker.NewResolver([]string{h.q9.addr})
 	return h
 }
 
@@ -271,93 +312,115 @@ func TestQuorumByteIdentical(t *testing.T) {
 	}
 }
 
-// TestConditionalALookup (10-testing §3.2): the A lookup fires only on a
-// NOERROR-empty quorum, classifying via the bulk resolver.
+// TestConditionalALookup is 10-testing §3.2's table. The "A query issued?"
+// column is the point: the bulk A lookup runs iff the AAAA quorum symbol is
+// `empty`, so every non-empty quorum asserts a zero counter. Without that,
+// moving the guard so classifyA also runs on nxdomain quorums costs an
+// extra bulk query per dead domain and no test notices.
 func TestConditionalALookup(t *testing.T) {
 	h := newHarness(t)
 
-	// The a_present case: bulk answers an A record.
-	h.bulk.set("a_present")
-	h.script("empty", "empty", "empty")
-	ans, err := h.r.LookupAAAA(context.Background(), "probe.example")
-	if err != nil {
-		t.Fatal(err)
+	rows := []struct {
+		name        string
+		cf, go_, q9 string // the AAAA quorum
+		a           string // the scripted bulk A answer
+		wantOutcome string
+		wantACalls  int // wire queries; 2 where QueryWithRetry retries
+	}{
+		{"a_present", "empty", "empty", "empty", "a_present", "a_present", 1},
+		{"a_absent_noerror", "empty", "empty", "empty", "empty", "a_absent", 1},
+		{"a_absent_nxdomain", "empty", "empty", "empty", "nxdomain", "a_absent", 1},
+		{"a_error_servfail", "empty", "empty", "empty", "servfail", "a_error", 2},
+		{"a_error_timeout", "empty", "empty", "empty", "timeout", "a_error", 2},
+		{"no_a_on_exists", "exists", "exists", "exists", "a_present", "", 0},
+		{"no_a_on_nxdomain", "nxdomain", "nxdomain", "nxdomain", "a_present", "", 0},
+		{"no_a_on_error", "timeout", "timeout", "timeout", "a_present", "", 0},
+		{"no_a_on_inconsistent", "exists", "empty", "nxdomain", "a_present", "", 0},
 	}
-	if ans.AOutcome != "a_present" {
-		t.Errorf("AOutcome = %q, want a_present", ans.AOutcome)
-	}
-
-	h.bulk.set("empty")
-	ans, _ = h.r.LookupAAAA(context.Background(), "probe.example")
-	if ans.AOutcome != "a_absent" {
-		t.Errorf("AOutcome = %q, want a_absent", ans.AOutcome)
-	}
-
-	h.bulk.set("nxdomain")
-	ans, _ = h.r.LookupAAAA(context.Background(), "probe.example")
-	if ans.AOutcome != "a_absent" {
-		t.Errorf("A-NXDOMAIN AOutcome = %q, want a_absent (domain's favor)", ans.AOutcome)
-	}
-
-	h.bulk.set("servfail")
-	ans, _ = h.r.LookupAAAA(context.Background(), "probe.example")
-	if ans.AOutcome != "a_error" {
-		t.Errorf("A-SERVFAIL AOutcome = %q, want a_error", ans.AOutcome)
-	}
-
-	// No A lookup on an exists quorum.
-	h.script("exists", "exists", "exists")
-	ans, _ = h.r.LookupAAAA(context.Background(), "probe.example")
-	if ans.AOutcome != "" {
-		t.Errorf("AOutcome = %q on exists quorum, want empty", ans.AOutcome)
+	for _, tc := range rows {
+		t.Run(tc.name, func(t *testing.T) {
+			h.script(tc.cf, tc.go_, tc.q9)
+			h.bulk.set(tc.a)
+			h.bulk.resetCounts()
+			ans, _ := h.r.LookupAAAA(context.Background(), "probe.example")
+			if ans.AOutcome != tc.wantOutcome {
+				t.Errorf("AOutcome = %q, want %q", ans.AOutcome, tc.wantOutcome)
+			}
+			if a, cd, _ := h.bulk.counts(); a != tc.wantACalls || cd != 0 {
+				t.Errorf("bulk calls = %d A / %d CD, want %d A / 0 CD", a, cd, tc.wantACalls)
+			}
+		})
 	}
 }
 
-// TestConditionalCDLookup (10-testing / 02 §2.7b): all-SERVFAIL triggers the
-// CD=1 rescue with cd_present / cd_empty / cd_fail shapes.
+// TestConditionalCDLookup is 10-testing §3.2b's table (02 §2.7b). The CD=1
+// re-query runs iff no quorum was reached AND every answering provider
+// returned SERVFAIL/REFUSED — one timeout in the set disqualifies it, and a
+// reached quorum never gets there. Counters assert the "CD=1 issued?"
+// column, including the +1 A on the cd_empty rows.
 func TestConditionalCDLookup(t *testing.T) {
 	h := newHarness(t)
-	h.script("servfail", "servfail", "servfail")
 
-	// cd_present: bulk (CD=1) answers routable AAAA.
-	h.bulk.set("exists")
-	ans, err := h.r.LookupAAAA(context.Background(), "broken-dnssec.example")
-	if err != nil {
-		t.Fatalf("cd_present must return nil error, got %v", err)
+	rows := []struct {
+		name        string
+		cf, go_, q9 string
+		cd          string // the scripted bulk answer, used for both CD=1 and A
+		wantCD      string
+		wantA       string
+		wantErr     string // "", "plain", "inconsistent"
+		wantCDCalls int
+		wantACalls  int
+	}{
+		{"cd_present", "servfail", "servfail", "servfail", "exists", "cd_present", "", "", 1, 0},
+		{"cd_present_refused", "refused", "servfail", "refused", "exists", "cd_present", "", "", 1, 0},
+		{"cd_empty_apresent", "servfail", "servfail", "servfail", "a_present", "cd_empty", "a_present", "", 1, 1},
+		{"cd_empty_aabsent", "servfail", "servfail", "servfail", "empty", "cd_empty", "a_absent", "", 1, 1},
+		{"cd_fail_servfail", "servfail", "servfail", "servfail", "servfail", "cd_fail", "", "plain", 2, 0},
+		// 10-testing §3.2b calls this row cd_notrun_timeout — "a timeout
+		// present → not the all-SERVFAIL signature". The shipped
+		// allServfailOrRefused skips empty rcodes instead, so the rescue
+		// DOES run and can credit a supported base off one provider's
+		// SERVFAIL. Pinned as shipped; review issue 16 owns the decision,
+		// and flipping it flips this row.
+		{"cd_runs_on_one_servfail_plus_timeouts", "timeout", "timeout", "servfail", "exists", "cd_present", "", "", 1, 0},
+		{"cd_notrun_exists", "exists", "exists", "servfail", "exists", "", "", "", 0, 0},
+		{"cd_notrun_empty", "empty", "empty", "empty", "a_present", "", "a_present", "", 0, 1},
 	}
-	if ans.CDOutcome != "cd_present" || len(ans.IPs) == 0 || ans.Rcode != "NOERROR" {
-		t.Errorf("cd_present shape = %+v", ans)
-	}
+	for _, tc := range rows {
+		t.Run(tc.name, func(t *testing.T) {
+			h.script(tc.cf, tc.go_, tc.q9)
+			h.bulk.set(tc.cd)
+			h.bulk.resetCounts()
+			ans, err := h.r.LookupAAAA(context.Background(), "probe.example")
 
-	// cd_empty: NOERROR no AAAA → conditional A lookup runs.
-	h.bulk.set("empty")
-	ans, err = h.r.LookupAAAA(context.Background(), "broken-dnssec.example")
-	if err != nil {
-		t.Fatalf("cd_empty must return nil error, got %v", err)
-	}
-	if ans.CDOutcome != "cd_empty" || ans.AOutcome != "a_absent" {
-		t.Errorf("cd_empty shape = %+v", ans)
-	}
-
-	// cd_fail: bulk also SERVFAILs → plain error survives.
-	h.bulk.set("servfail")
-	ans, err = h.r.LookupAAAA(context.Background(), "broken-dnssec.example")
-	if err == nil || errors.Is(err, checker.ErrQuorumInconsistent) {
-		t.Fatalf("cd_fail must keep the plain error, got %v", err)
-	}
-	if ans.CDOutcome != "cd_fail" {
-		t.Errorf("CDOutcome = %q, want cd_fail", ans.CDOutcome)
-	}
-
-	// Timeouts do NOT qualify for the rescue.
-	h.script("timeout", "timeout", "timeout")
-	h.bulk.set("exists")
-	ans, err = h.r.LookupAAAA(context.Background(), "dark.example")
-	if err == nil {
-		t.Fatal("all-timeout must stay a plain error (no CD rescue)")
-	}
-	if ans.CDOutcome != "" {
-		t.Errorf("CDOutcome = %q on all-timeout, want empty", ans.CDOutcome)
+			switch tc.wantErr {
+			case "":
+				if err != nil {
+					t.Fatalf("err = %v, want nil", err)
+				}
+			case "plain":
+				if err == nil || errors.Is(err, checker.ErrQuorumInconsistent) {
+					t.Fatalf("err = %v, want a plain error", err)
+				}
+			case "inconsistent":
+				if !errors.Is(err, checker.ErrQuorumInconsistent) {
+					t.Fatalf("err = %v, want ErrQuorumInconsistent", err)
+				}
+			}
+			if ans.CDOutcome != tc.wantCD {
+				t.Errorf("CDOutcome = %q, want %q", ans.CDOutcome, tc.wantCD)
+			}
+			if ans.AOutcome != tc.wantA {
+				t.Errorf("AOutcome = %q, want %q", ans.AOutcome, tc.wantA)
+			}
+			if a, cd, _ := h.bulk.counts(); cd != tc.wantCDCalls || a != tc.wantACalls {
+				t.Errorf("bulk calls = %d CD / %d A, want %d CD / %d A",
+					cd, a, tc.wantCDCalls, tc.wantACalls)
+			}
+			if tc.wantCD == "cd_present" && (len(ans.IPs) == 0 || ans.Rcode != "NOERROR") {
+				t.Errorf("cd_present must credit a supported base: %+v", ans)
+			}
+		})
 	}
 }
 
@@ -411,16 +474,44 @@ func TestBreakers(t *testing.T) {
 		t.Errorf("dropped = %q after second failure, want quad9 only (never a 2nd)", got)
 	}
 
-	// 2-of-2 degraded mode: agreement string is 2of2.
+	// 2-of-2 degraded mode scores all three §3.3 shapes. With one provider
+	// out the quorum cannot degrade further, so a disagreement is
+	// inconsistent and a single non-answer is a plain error — the two rows
+	// that make dropping a provider safe rather than silently lossy.
 	h2.go_.set("exists")
+	degraded := []struct {
+		name    string
+		cf, go_ string
+		want    string // "exists"|"inconsistent"|"error"
+	}{
+		{"both agree", "exists", "exists", "exists"},
+		{"disagreement has no majority left", "exists", "empty", "inconsistent"},
+		{"one non-answer leaves one vote", "exists", "timeout", "error"},
+	}
+	for _, tc := range degraded {
+		t.Run("degraded/"+tc.name, func(t *testing.T) {
+			h2.script(tc.cf, tc.go_, "exists") // quad9 is dropped; its script is ignored
+			ans, err := h2.r.LookupAAAA(context.Background(), "degraded.example")
+			switch tc.want {
+			case "exists":
+				if err != nil || len(ans.IPs) == 0 {
+					t.Fatalf("ans=%+v err=%v, want exists", ans, err)
+				}
+				if ans.Quorum.Agreement != "2of2" {
+					t.Errorf("degraded agreement = %s, want 2of2", ans.Quorum.Agreement)
+				}
+			case "inconsistent":
+				if !errors.Is(err, checker.ErrQuorumInconsistent) {
+					t.Fatalf("err = %v, want ErrQuorumInconsistent", err)
+				}
+			case "error":
+				if err == nil || errors.Is(err, checker.ErrQuorumInconsistent) {
+					t.Fatalf("err = %v, want a plain error", err)
+				}
+			}
+		})
+	}
 	h2.script("exists", "exists", "exists")
-	ans, err := h2.r.LookupAAAA(context.Background(), "degraded.example")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if ans.Quorum.Agreement != "2of2" {
-		t.Errorf("degraded agreement = %s, want 2of2", ans.Quorum.Agreement)
-	}
 
 	// Canary: three consecutive valid probes restore the provider.
 	h2.q9.set("exists")
@@ -487,4 +578,68 @@ func TestCloseCancelsInFlightMaintenance(t *testing.T) {
 
 	// The harness Cleanup calls Close again: cancelling twice is fine, where
 	// closing the old stop channel twice would have panicked.
+}
+
+// TestFastLaneCloses covers the other half of the fast-lane breaker (02
+// §2.9): it reopens the fast lane once the rate holds below recover_below.
+// breaker.go's close arm had no test at all, so a lane that opened stayed
+// open for the life of the process as far as the suite was concerned.
+func TestFastLaneCloses(t *testing.T) {
+	t.Run("an idle window counts as recovered", func(t *testing.T) {
+		h := newHarness(t)
+		h.r.mu.Lock()
+		h.r.fastOpen = true
+		h.r.mu.Unlock()
+		h.r.evaluateBreakers() // no samples at all in the window
+		if h.r.FastLaneSuppressed() {
+			t.Error("fast lane still open over an empty window")
+		}
+	})
+
+	t.Run("closes once the rate falls below recover_below", func(t *testing.T) {
+		h := newHarness(t)
+		// Open it: 36 clean + 4 non-definitive is 10% over min_samples 40.
+		h.script("exists", "exists", "exists")
+		for range 36 {
+			_, _ = h.r.LookupAAAA(context.Background(), "ok.example")
+		}
+		h.script("exists", "empty", "nxdomain")
+		for range 4 {
+			_, _ = h.r.LookupAAAA(context.Background(), "flappy.example")
+		}
+		if !h.r.FastLaneSuppressed() {
+			t.Fatal("fast lane should be open at 10% non-definitive")
+		}
+
+		// The same 4 bad samples are still in the 15-minute window, so the
+		// lane only closes once enough clean traffic drags the rate under
+		// recover_below (0.02): 4/250 = 1.6%.
+		h.script("exists", "exists", "exists")
+		for range 210 {
+			_, _ = h.r.LookupAAAA(context.Background(), "ok.example")
+		}
+		h.r.evaluateBreakers()
+		if h.r.FastLaneSuppressed() {
+			t.Error("fast lane still open at 1.6% non-definitive, below recover_below")
+		}
+	})
+}
+
+// TestPerProviderRateLimit (10-testing §3.3): the token bucket blocks rather
+// than erroring. At 1 qps the bucket starts full, so the first fan-out is
+// free and the second waits ~1s for a refill — nothing is dropped and no
+// lookup fails.
+func TestPerProviderRateLimit(t *testing.T) {
+	h := newHarnessQPS(t, 1)
+	h.script("exists", "exists", "exists")
+
+	start := time.Now()
+	for range 2 {
+		if _, err := h.r.LookupAAAA(context.Background(), "slow.example"); err != nil {
+			t.Fatalf("the limiter must block, never fail the lookup: %v", err)
+		}
+	}
+	if elapsed := time.Since(start); elapsed < 500*time.Millisecond {
+		t.Errorf("two lookups at 1 qps took %s; the second did not wait for a token", elapsed)
+	}
 }
