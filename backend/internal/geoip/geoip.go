@@ -114,7 +114,9 @@ func (r *Reader) ASN(addr netip.Addr) (number uint, org string) {
 	if !res.Found() || res.Decode(&rec) != nil {
 		return 0, ""
 	}
-	n, err := strconv.ParseUint(strings.TrimPrefix(rec.ASN, "AS"), 10, 64)
+	// 32-bit width: AS numbers are 32-bit (RFC 6793), and a wider parse would
+	// truncate silently on a 32-bit build.
+	n, err := strconv.ParseUint(strings.TrimPrefix(rec.ASN, "AS"), 10, 32)
 	if err != nil {
 		return 0, ""
 	}

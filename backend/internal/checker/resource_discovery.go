@@ -177,18 +177,19 @@ func addHost(raw string, base *url.URL, domain string, seen map[string]struct{},
 		return
 	}
 
-	// Skip data: and javascript: URIs.
-	lower := strings.ToLower(raw)
-	if strings.HasPrefix(lower, "data:") || strings.HasPrefix(lower, "javascript:") {
-		return
-	}
-
 	ref, err := url.Parse(raw)
 	if err != nil {
 		return
 	}
 
+	// Allowlist the two schemes that can carry a resource, rather than denying
+	// data:/javascript:/vbscript:/... one at a time. Relative and
+	// protocol-relative refs inherit the base scheme through ResolveReference,
+	// so they still pass.
 	resolved := base.ResolveReference(ref)
+	if resolved.Scheme != "http" && resolved.Scheme != "https" {
+		return
+	}
 	host := strings.ToLower(resolved.Hostname())
 	if host == "" {
 		return
