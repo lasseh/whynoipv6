@@ -214,7 +214,7 @@ func run() error {
 	// The §5.1.5 check-job consumer pool + reaper (04 — placement).
 	liveChecker := &crawler.LiveChecker{
 		Pool: pool, Q: q, Runner: runner, Preflight: preflight,
-		Cfg: crawler.LiveCheckConfigFrom(cfg),
+		Cfg: crawler.LiveCheckConfigFrom(cfg), Countries: countries,
 	}
 	aux.Go(func() { liveChecker.Run(claimCtx, rootCtx) })
 

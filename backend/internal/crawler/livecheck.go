@@ -4,9 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"log/slog"
-	"strings"
 	"sync"
 	"time"
 
@@ -15,6 +13,7 @@ import (
 
 	"github.com/lasseh/whynoipv6/internal/campaign"
 	"github.com/lasseh/whynoipv6/internal/domain"
+	"github.com/lasseh/whynoipv6/internal/geoip"
 	"github.com/lasseh/whynoipv6/internal/observe"
 	db "github.com/lasseh/whynoipv6/internal/postgres/db"
 )
@@ -43,6 +42,10 @@ type LiveChecker struct {
 	Runner    Scanner
 	Preflight PreflightState
 	Cfg       LiveCheckConfig
+
+	// Countries is the run's in-memory country map — the insert-time
+	// attribution helper 06 §6.5 names, loaded once by cmd wiring. Required.
+	Countries *geoip.CountryMap
 }
 
 // Run blocks until ctx is done and every in-flight job has finished,
@@ -176,6 +179,14 @@ func (lc *LiveChecker) ensureDomain(ctx context.Context, host string) (domain.Ki
 	if err != nil {
 		return "", &pslEvalError{err: err}
 	}
+	// The host-existence check first: for a host we already know, its own
+	// row carries the kind and nothing else here applies.
+	if existing, err := lc.Q.DomainByHost(ctx, host); err == nil {
+		return domain.Kind(existing.Kind), nil
+	} else if !errors.Is(err, pgx.ErrNoRows) {
+		return "", err
+	}
+
 	kind := domain.KindApex
 	var parentID *int64
 	if host != registrable {
@@ -185,30 +196,14 @@ func (lc *LiveChecker) ensureDomain(ctx context.Context, host string) (domain.Ki
 		}
 	}
 
-	if existing, err := lc.Q.DomainByHost(ctx, host); err == nil {
-		return domain.Kind(existing.Kind), nil
-	} else if !errors.Is(err, pgx.ErrNoRows) {
-		return "", err
-	}
-
-	asnID, err := lc.Q.ASNSentinelID(ctx)
-	if err != nil {
-		return "", fmt.Errorf("sentinel asn: %w", err)
-	}
-	countryID, err := lc.Q.CountrySentinelID(ctx)
-	if err != nil {
-		return "", fmt.Errorf("sentinel country: %w", err)
-	}
-	// Insert-time country attribution: final-label ccTLD probe (06 §6.5).
-	label := host[strings.LastIndexByte(host, '.')+1:]
-	probe := "." + strings.ToUpper(label)
-	if id, err := lc.Q.CountryIDByTLD(ctx, &probe); err == nil {
-		countryID = id
-	}
-
+	// Insert-time attribution through the in-memory helper 06 §6.5 names:
+	// sentinel ASN, ccTLD-or-sentinel country. Re-querying the sentinels and
+	// re-implementing the ccTLD probe here gave the rule two homes.
 	_, err = lc.Q.DomainInsertLiveCheck(ctx, db.DomainInsertLiveCheckParams{
 		Host: host, Kind: db.DomainKind(kind), ParentID: parentID,
-		AsnID: asnID, CountryID: countryID, Tld: &tld,
+		AsnID:     lc.Countries.SentinelASN,
+		CountryID: lc.Countries.InsertCountryID(host),
+		Tld:       &tld,
 	})
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) { // ErrNoRows = conflict race, fine
 		return "", err

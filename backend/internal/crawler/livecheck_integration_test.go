@@ -6,6 +6,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/lasseh/whynoipv6/internal/geoip"
 	db "github.com/lasseh/whynoipv6/internal/postgres/db"
 	"github.com/lasseh/whynoipv6/internal/postgres/pgtest"
 )
@@ -16,7 +17,12 @@ import (
 func TestLiveCheckEnsureDomain(t *testing.T) {
 	pool := pgtest.NewDB(t)
 	ctx := context.Background()
-	lc := &LiveChecker{Pool: pool, Q: db.New(pool)}
+	q := db.New(pool)
+	countries, err := geoip.LoadCountryMap(ctx, q)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lc := &LiveChecker{Pool: pool, Q: q, Countries: countries}
 
 	// Unknown apex: inserted with sentinel attribution + ccTLD probe.
 	kind, err := lc.ensureDomain(ctx, "nyapex.no")
@@ -71,6 +77,27 @@ func TestLiveCheckEnsureDomain(t *testing.T) {
 	}
 	if linked == nil {
 		t.Error("existing parent must be linked")
+	}
+
+	// Insert-time attribution is the 06 §6.5 helper's, not a second copy of
+	// the rule: sentinel ASN, and the country the in-memory map derives —
+	// ccTLD where there is one, sentinel otherwise.
+	for _, host := range []string{"nyapex.no", "attr.example.com"} {
+		if _, err := lc.ensureDomain(ctx, host); err != nil {
+			t.Fatalf("%s: %v", host, err)
+		}
+		var asnID, countryID int32
+		if err := pool.QueryRow(ctx,
+			"SELECT asn_id, country_id FROM domain WHERE host = $1", host).
+			Scan(&asnID, &countryID); err != nil {
+			t.Fatal(err)
+		}
+		if asnID != countries.SentinelASN {
+			t.Errorf("%s asn_id = %d, want the sentinel %d", host, asnID, countries.SentinelASN)
+		}
+		if want := countries.InsertCountryID(host); countryID != want {
+			t.Errorf("%s country_id = %d, want %d from the country map", host, countryID, want)
+		}
 	}
 
 	// An unknown TLD is rejected — no wildcard PSL rule (06 §4.2).
