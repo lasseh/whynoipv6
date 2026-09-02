@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/lasseh/whynoipv6/internal/postgres"
 
 	"github.com/lasseh/whynoipv6/internal/campaign"
 	"github.com/lasseh/whynoipv6/internal/checker"
@@ -29,6 +29,39 @@ import (
 
 // drainBudget is the graceful-shutdown drain deadline (04 §14 Decision).
 const drainBudget = 80 * time.Second
+
+// atLeastOne are the registry keys whose zero is not a setting but a
+// process that runs and does nothing right: no slots or an empty claim
+// batch idles forever, a zero lookup cap turns every NS/MX check into an
+// error, a zero QPS limiter blocks every consensus lookup, and zero
+// breaker samples or probes trip and restore on nothing.
+var atLeastOne = []string{
+	"worker_slots",
+	"claim.batch_size",
+	"checks.max_ns_lookups",
+	"checks.max_mx_lookups",
+	"consensus.per_provider_qps",
+	"consensus.fastlane_breaker.min_samples",
+	"consensus.provider_breaker.min_samples",
+	"consensus.provider_breaker.recovery_probes",
+}
+
+// validateBounds is the fail-fast gate for the values above (04 §13): the
+// registry types them but does not bound them, and each consumer would
+// otherwise start and misbehave quietly. An empty resolver.bulk_upstreams
+// is rejected too: the resolver's fallback is the public resolvers, which
+// must never carry the bulk load.
+func validateBounds(cfg *config.Config) error {
+	for _, key := range atLeastOne {
+		if v := cfg.Int(key); v < 1 {
+			return fmt.Errorf("config: %s must be at least 1, got %d", key, v)
+		}
+	}
+	if len(cfg.StringSlice("resolver.bulk_upstreams")) == 0 {
+		return fmt.Errorf("config: resolver.bulk_upstreams must name at least one upstream")
+	}
+	return nil
+}
 
 func main() {
 	if err := run(); err != nil {
@@ -51,13 +84,16 @@ func run() error {
 	}
 	defer flushLogs()
 	cfg.LogSummary(log, slog.LevelInfo)
+	if err := validateBounds(cfg); err != nil {
+		return err
+	}
 
 	rootCtx, rootCancel := context.WithCancel(context.Background())
 	defer rootCancel()
 
-	pool, err := pgxpool.New(rootCtx, cfg.DatabaseURL)
+	pool, err := postgres.NewPool(rootCtx, cfg.DatabaseURL)
 	if err != nil {
-		return fmt.Errorf("open pool: %w", err)
+		return err
 	}
 	defer pool.Close()
 	q := db.New(pool)
@@ -87,25 +123,6 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	// Re-snapshot the ns_host → provider mapping so curation (v6ctl provider
-	// add/remove) lands without a crawler restart (06-ingest §6.10).
-	if interval := cfg.Duration("dns_provider.refresh_interval"); interval > 0 {
-		go func() {
-			t := time.NewTicker(interval)
-			defer t.Stop()
-			for {
-				select {
-				case <-rootCtx.Done():
-					return
-				case <-t.C:
-					if err := providers.Refresh(rootCtx, q); err != nil {
-						log.Warn("provider mapping refresh failed", "err", err.Error())
-					}
-				}
-			}
-		}()
-	}
-
 	committer := crawler.NewCommitter(pool, crawler.CommitConfigFrom(cfg))
 
 	runID := uuid.New()
@@ -116,7 +133,10 @@ func run() error {
 
 	metrics := crawler.NewMetrics(pool, runID, worker)
 	metrics.GeoIPBuildEpoch = geoReader.BuildEpoch
-	metrics.Heartbeat = func() { notifier.HeartbeatOK(rootCtx) }
+	// Off the worker slot: the ping is throttled to one per interval by its
+	// own CAS, so at most one is in flight, and a slow hc-ping must not hold
+	// a scan slot for the notify client's timeout.
+	metrics.Heartbeat = func() { go notifier.HeartbeatOK(rootCtx) }
 
 	w := &crawler.Worker{
 		Pool: pool, Scanner: runner, Preflight: preflight, Committer: committer,
@@ -135,6 +155,9 @@ func run() error {
 	frontier.Preflight = func(ctx context.Context) bool {
 		if preflight.Run(ctx) {
 			return true
+		}
+		if ctx.Err() != nil {
+			return false // a cancelled probe is shutdown, not an outage (04 §14.4)
 		}
 		slog.Warn("ipv6 preflight failed; claiming nothing")
 		notifier.Webhook(ctx, "crawler preflight failed: no IPv6 egress; claiming paused")
@@ -180,6 +203,11 @@ func run() error {
 	aux.Go(func() { coordinator.Run(claimCtx) })
 	aux.Go(func() { metrics.RunIdleLoop(claimCtx) })
 	aux.Go(func() { geoipReloadLoop(claimCtx, geoReader) })
+	// Re-snapshot the ns_host → provider mapping so curation (v6ctl provider
+	// add/remove) lands without a crawler restart (06-ingest §6.10).
+	if interval := cfg.Duration("dns_provider.refresh_interval"); interval > 0 {
+		aux.Go(func() { providerRefreshLoop(claimCtx, providers, q, interval) })
+	}
 
 	// The §5.1.5 check-job consumer pool + reaper (04 — placement).
 	liveChecker := &crawler.LiveChecker{
@@ -208,6 +236,23 @@ func run() error {
 	metrics.Checkpoint(finalCtx, true)
 	slog.Info("shutdown complete")
 	return nil
+}
+
+// providerRefreshLoop re-reads the DNS-provider mapping every interval; it
+// stops with the other auxiliary loops and is joined before pool.Close().
+func providerRefreshLoop(ctx context.Context, providers *ingest.ProviderMapping, q *db.Queries, interval time.Duration) {
+	t := time.NewTicker(interval)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			if err := providers.Refresh(ctx, q); err != nil {
+				slog.Warn("provider mapping refresh failed", "err", err.Error())
+			}
+		}
+	}
 }
 
 // geoipReloadLoop stats the mmdb files hourly and swaps readers on change

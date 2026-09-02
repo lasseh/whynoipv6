@@ -2,6 +2,7 @@ package export
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"iter"
 
@@ -26,9 +27,10 @@ type Source interface {
 	Rows(ctx context.Context, rankedOnly bool, maxRank int32) iter.Seq2[Row, error]
 
 	// ListID is the newest successful Tranco import's list ID, or "" when
-	// no import has succeeded yet. A missing import degrades attribution
-	// rather than failing the export, so this returns no error.
-	ListID(ctx context.Context) string
+	// no import has succeeded yet. Only that case degrades attribution; a
+	// failed read is an error, because the snapshot it would stamp is
+	// immutable once published (07 §5.3: cite the specific list ID).
+	ListID(ctx context.Context) (string, error)
 }
 
 // pgSource is the production adapter at the Source seam.
@@ -58,12 +60,15 @@ func (s pgSource) Rows(ctx context.Context, rankedOnly bool, maxRank int32) iter
 	}
 }
 
-func (s pgSource) ListID(ctx context.Context) string {
+func (s pgSource) ListID(ctx context.Context) (string, error) {
 	listID, err := db.New(s.pool).TrancoLatestSuccessListID(ctx)
-	if err != nil {
-		return ""
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", nil
 	}
-	return listID
+	if err != nil {
+		return "", fmt.Errorf("tranco list id: %w", err)
+	}
+	return listID, nil
 }
 
 // src resolves the seam: an injected Source wins, otherwise the pool is

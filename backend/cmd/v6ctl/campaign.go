@@ -1,12 +1,14 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/lasseh/whynoipv6/internal/campaign"
+	"github.com/lasseh/whynoipv6/internal/lock"
 )
 
 func campaignCmd() *cobra.Command {
@@ -26,7 +28,14 @@ func campaignCmd() *cobra.Command {
 				return err
 			}
 			defer pool.Close()
-			rep, err := campaign.Sync(cmd.Context(), campaign.ConfigFrom(cfg), pool)
+			// Serialized against tick step 5 and any concurrent operator run
+			// by the JobCampaignSync lock; the wait is normative (04 §10).
+			var rep *campaign.Report
+			err = lock.Run(cmd.Context(), pool, lock.JobCampaignSync, singletonWait, func(ctx context.Context) error {
+				r, err := campaign.Sync(ctx, campaign.ConfigFrom(cfg), pool)
+				rep = r
+				return err
+			})
 			if err != nil {
 				return err
 			}

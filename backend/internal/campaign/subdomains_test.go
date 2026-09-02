@@ -267,6 +267,25 @@ func TestValidateSubdomains(t *testing.T) {
 		}
 	})
 
+	// The other direction: the existing list is the one that sorts LAST, so
+	// the new spelling is the lexicographically first claimant. An
+	// order-dependent check missed exactly this case.
+	t.Run("two files for one domain fail whichever sorts first", func(t *testing.T) {
+		r := setup(t)
+		r.write("subdomains/bank.no.yml", "subdomains:\n  - login\n")
+		r.commitAll("first list")
+		r.run("checkout", "-b", "pr3")
+		r.write("subdomains/bank.no.yaml", "subdomains:\n  - api\n") // ".yaml" < ".yml"
+		r.commitAll("second list, sorting before the first")
+		res, err := Validate(ctx, r.dir, "main", 1000, 20)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if res.OK() || !strings.Contains(strings.Join(res.Failures, "\n"), "one file per domain") {
+			t.Errorf("failures = %v, want a duplicate-domain failure", res.Failures)
+		}
+	})
+
 	t.Run("deleting a list is allowed", func(t *testing.T) {
 		r := setup(t)
 		r.write("subdomains/bank.no.yml", "subdomains:\n  - login\n")

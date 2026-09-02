@@ -98,15 +98,21 @@ func neverRedirect(*http.Request, []*http.Request) error {
 }
 
 // sameHostRedirect follows at most maxHops redirects, and only while they
-// stay on the original domain. The transport dials the pinned original IP
-// with the original SNI, so a cross-host redirect would fetch the wrong
-// vhost's content.
+// stay on the original origin: same host, same scheme, same (or default)
+// port. The transport dials the pinned original IP:port with the original
+// SNI, so a cross-host redirect would fetch the wrong vhost's content, and
+// an https→http or :8443 redirect would put plaintext or the wrong Host on
+// the pinned TLS port.
 //
 // via holds the requests already made, so on the Nth redirect len(via) is
 // N: following while len(via) <= maxHops permits exactly maxHops hops.
 func sameHostRedirect(domain string, maxHops int) func(*http.Request, []*http.Request) error {
 	return func(req *http.Request, via []*http.Request) error {
-		if len(via) > maxHops || req.URL.Hostname() != domain {
+		if len(via) > maxHops || req.URL.Hostname() != domain || len(via) == 0 {
+			return http.ErrUseLastResponse
+		}
+		first := via[0].URL
+		if req.URL.Scheme != first.Scheme || req.URL.Port() != first.Port() {
 			return http.ErrUseLastResponse
 		}
 		return nil

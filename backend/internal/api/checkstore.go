@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"net/netip"
 	"time"
 
@@ -90,33 +91,33 @@ func (p pgCheckStore) EnqueueLocked(ctx context.Context, host string, requester 
 ) (enqueueResult, error) {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
-		return enqueueResult{}, err
+		return enqueueResult{}, fmt.Errorf("enqueue begin: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }() // no-op after a successful Commit
 	if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock($1)", checkJobEnqueueLockID); err != nil {
-		return enqueueResult{}, err
+		return enqueueResult{}, fmt.Errorf("enqueue lock: %w", err)
 	}
 	qtx := p.q.WithTx(tx)
 	ipWin, err := qtx.CheckJobRatePrefix(ctx, prefix)
 	if err != nil {
-		return enqueueResult{}, err
+		return enqueueResult{}, fmt.Errorf("prefix window: %w", err)
 	}
 	if int(ipWin.N) >= ipCap {
 		return enqueueResult{OverIP: true, IPWindow: ipWin}, nil
 	}
 	globalWin, err := qtx.CheckJobRateGlobal(ctx)
 	if err != nil {
-		return enqueueResult{}, err
+		return enqueueResult{}, fmt.Errorf("global window: %w", err)
 	}
 	if int(globalWin.N) >= globalCap {
 		return enqueueResult{OverGlobal: true, IPWindow: ipWin, GlobalWindow: globalWin}, nil
 	}
 	ins, err := qtx.CheckJobInsert(ctx, db.CheckJobInsertParams{Host: host, RequesterIp: requester})
 	if err != nil {
-		return enqueueResult{}, err
+		return enqueueResult{}, fmt.Errorf("insert check_job: %w", err)
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return enqueueResult{}, err
+		return enqueueResult{}, fmt.Errorf("enqueue commit: %w", err)
 	}
 	return enqueueResult{ID: ins.ID, CreatedAt: ins.CreatedAt.Time, IPWindow: ipWin}, nil
 }

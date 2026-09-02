@@ -27,9 +27,20 @@ func (c *DNSMXIPv6) Check(ctx context.Context, domain string, kind Kind) (Result
 
 	d := &MXDetail{}
 
-	mxRecords, _, err := c.dialer.Resolver().LookupMX(ctx, domain)
+	mxRecords, rcode, err := c.dialer.Resolver().LookupMX(ctx, domain)
 	if err != nil {
 		d.Error = err.Error()
+		return Result{
+			Status:  StatusError,
+			Detail:  d,
+			Latency: time.Since(start),
+		}, nil
+	}
+	// A SERVFAIL/REFUSED answer is resolver trouble, not "no MX": read as
+	// empty it would run the implicit-MX fallback and land on a definitive
+	// not_applicable (02 §4). NXDOMAIN is a real empty answer.
+	if rcode != RcodeNoError && rcode != RcodeNXDomain {
+		d.Error = "mx lookup for " + domain + " returned " + rcode
 		return Result{
 			Status:  StatusError,
 			Detail:  d,
@@ -51,7 +62,15 @@ func (c *DNSMXIPv6) Check(ctx context.Context, domain string, kind Kind) (Result
 		// RFC 5321 §5.1: when no MX records exist, fall back to the domain
 		// itself as an implicit MX. Check if the domain has AAAA records.
 		ips, _, _, _, lookupErr := c.dialer.Resolver().LookupAAAA(ctx, domain)
-		if lookupErr != nil || len(ips) == 0 {
+		if lookupErr != nil {
+			d.Error = lookupErr.Error()
+			return Result{
+				Status:  StatusError,
+				Detail:  d,
+				Latency: time.Since(start),
+			}, nil
+		}
+		if len(ips) == 0 {
 			d.Reason = "no MX records and no implicit AAAA fallback"
 			return Result{
 				Status:  StatusNotApplicable,
@@ -93,6 +112,8 @@ func (c *DNSMXIPv6) Check(ctx context.Context, domain string, kind Kind) (Result
 	mxResults := map[string]MXHost{}
 	ipv6Count := 0
 	total := len(mxRecords)
+	looked, answered := 0, 0 // hosts looked up; hosts whose lookup answered
+	var lastLookupErr error
 
 	for _, mx := range mxRecords {
 		hostname := mx.Mx
@@ -104,7 +125,13 @@ func (c *DNSMXIPv6) Check(ctx context.Context, domain string, kind Kind) (Result
 			continue
 		}
 
+		looked++
 		ips, _, _, _, lookupErr := c.dialer.Resolver().LookupAAAA(ctx, hostname)
+		if lookupErr == nil {
+			answered++
+		} else {
+			lastLookupErr = lookupErr
+		}
 		if lookupErr == nil && len(ips) > 0 {
 			mxInfo.HasIPv6 = true
 			addrs := make([]string, len(ips))
@@ -120,6 +147,20 @@ func (c *DNSMXIPv6) Check(ctx context.Context, domain string, kind Kind) (Result
 	d.MXRecords = mxResults
 	d.Total = total
 	d.IPv6Count = &ipv6Count
+
+	// Same rule as dns_ns_ipv6: no answering host means no verdict, and a
+	// zero lookup cap cannot read as "every MX has AAAA".
+	if total == 0 || (looked > 0 && answered == 0) {
+		d.Error = "no MX host AAAA lookup answered"
+		if lastLookupErr != nil {
+			d.Error = lastLookupErr.Error()
+		}
+		return Result{
+			Status:  StatusError,
+			Detail:  d,
+			Latency: time.Since(start),
+		}, nil
+	}
 
 	var status CheckStatus
 	switch {

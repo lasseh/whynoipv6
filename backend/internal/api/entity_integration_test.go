@@ -439,6 +439,31 @@ func TestCampaigns(t *testing.T) {
 	if resp := getJSON(t, srv.URL+"/campaigns/not-a-uuid", &problem); resp.StatusCode != 404 {
 		t.Errorf("malformed campaign uuid: %d", resp.StatusCode)
 	}
+
+	// A disabled member (dead, delisted, operator-disabled) leaves the
+	// walkable set and the adoption denominator; domain_count and
+	// meta.count follow, so the exact count never exceeds the walk.
+	if _, err := pool.Exec(context.Background(),
+		`UPDATE domain SET disabled = true, disabled_reason = 'dead', disabled_at = now() WHERE host = 'd3.example'`); err != nil {
+		t.Fatalf("disable member: %v", err)
+	}
+	getJSON(t, srv.URL+"/campaigns/"+campaignUUID, &detail)
+	if detail.Meta.Count == nil || *detail.Meta.Count != 1 || len(detail.Domains.Items) != 1 {
+		t.Errorf("after disabling a member: count = %v with %d members, want 1 and 1",
+			detail.Meta.Count, len(detail.Domains.Items))
+	}
+	var rows struct {
+		Items []struct {
+			UUID        string `json:"uuid"`
+			DomainCount int64  `json:"domain_count"`
+		} `json:"items"`
+	}
+	getJSON(t, srv.URL+"/campaigns", &rows)
+	for _, it := range rows.Items {
+		if it.UUID == campaignUUID && it.DomainCount != 1 {
+			t.Errorf("list domain_count after disabling a member = %d, want 1", it.DomainCount)
+		}
+	}
 }
 
 // TestSubdomains: the native sub-collection resolves rank-NULL children.

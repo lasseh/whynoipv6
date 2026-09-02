@@ -2,6 +2,7 @@ package checker
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"strings"
@@ -181,9 +182,16 @@ func (r *Resolver) LookupAAAA(ctx context.Context, name string) (retIPs []net.IP
 			msg2.RecursionDesired = true
 			setEDNS0(msg2)
 
+			// A chase that fails is a failed lookup, not an empty answer:
+			// returned as NOERROR-empty it would be a valid `empty` vote in
+			// the consensus reduce (02 §2.3) and a definitive no-AAAA to the
+			// bulk callers.
 			resp2, err2 := r.QueryWithRetry(ctx, msg2)
 			if err2 != nil {
-				break
+				return nil, cnameChain, 0, "", fmt.Errorf("aaaa lookup for %s (cname %s): %w", name, target, err2)
+			}
+			if resp2.Rcode == dns.RcodeServerFailure {
+				return nil, cnameChain, 0, dns.RcodeToString[resp2.Rcode], fmt.Errorf("SERVFAIL for %s (cname %s)", name, target)
 			}
 			var nextTarget string
 			for _, rr := range resp2.Answer {
@@ -235,7 +243,12 @@ func (r *Resolver) LookupA(ctx context.Context, name string) ([]net.IP, error) {
 	return ips, nil
 }
 
-// LookupNS resolves NS records for the given name.
+// errNXDomain marks an NXDOMAIN answer: a definitive "no such name", which
+// the NS walk-up treats like an empty answer rather than resolver trouble.
+var errNXDomain = errors.New("NXDOMAIN")
+
+// LookupNS resolves NS records for the given name. NXDOMAIN wraps
+// errNXDomain; every other non-NOERROR rcode is reported as an error too.
 func (r *Resolver) LookupNS(ctx context.Context, name string) ([]string, error) {
 	fqdn := dns.Fqdn(name)
 
@@ -249,6 +262,9 @@ func (r *Resolver) LookupNS(ctx context.Context, name string) ([]string, error) 
 		return nil, fmt.Errorf("ns lookup for %s: %w", name, err)
 	}
 
+	if resp.Rcode == dns.RcodeNameError {
+		return nil, fmt.Errorf("ns lookup for %s: %w", name, errNXDomain)
+	}
 	if resp.Rcode != dns.RcodeSuccess {
 		return nil, fmt.Errorf("ns lookup for %s returned %s", name, dns.RcodeToString[resp.Rcode])
 	}

@@ -3,8 +3,11 @@
 -- name: CampaignByUUID :one
 SELECT id, uuid, name, source_file, disabled FROM campaign WHERE uuid = $1;
 
+-- source_file is not unique (a fork leaves the disabled old row beside the
+-- new one), so the reuse rule prefers the enabled, most recently touched row.
 -- name: CampaignUUIDBySourceFile :one
-SELECT uuid FROM campaign WHERE source_file = $1;
+SELECT uuid FROM campaign WHERE source_file = $1
+ORDER BY disabled, updated_at DESC LIMIT 1;
 
 -- name: CampaignUpdateFromFile :one
 UPDATE campaign
@@ -38,9 +41,12 @@ RETURNING uuid, name;
 -- ?tag= via the GIN-indexed tags array. Each row carries the same adoption
 -- pair as the detail via a lateral read of the latest stats_campaign_daily
 -- row (the set is tens of rows, so the per-row join is trivially cheap).
+-- domain_count counts the members the members page walks and the adoption
+-- snapshot counts: disabled rows are excluded on all three surfaces.
 -- name: CampaignPublicList :many
 SELECT c.uuid, c.name, c.description, c.source_file, c.tags,
-       (SELECT count(*) FROM campaign_domain cd WHERE cd.campaign_id = c.id) AS domain_count,
+       (SELECT count(*) FROM campaign_domain cd JOIN domain d ON d.id = cd.domain_id
+          WHERE cd.campaign_id = c.id AND NOT d.disabled) AS domain_count,
        s.day AS adoption_day, s.domains AS adoption_domains, s.v6_ready AS adoption_v6_ready
 FROM campaign c
 LEFT JOIN LATERAL (
@@ -52,7 +58,8 @@ ORDER BY c.name, c.id;
 
 -- name: CampaignPublicDetail :one
 SELECT c.id, c.uuid, c.name, c.description, c.source_file, c.tags, c.disabled,
-       (SELECT count(*) FROM campaign_domain cd WHERE cd.campaign_id = c.id) AS domain_count
+       (SELECT count(*) FROM campaign_domain cd JOIN domain d ON d.id = cd.domain_id
+          WHERE cd.campaign_id = c.id AND NOT d.disabled) AS domain_count
 FROM campaign c WHERE c.uuid = @uuid;
 
 -- name: CampaignAdoption :one

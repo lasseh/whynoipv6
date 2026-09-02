@@ -87,9 +87,29 @@ func (lc *LiveChecker) workerLoop(ctx, work context.Context) {
 			if ctx.Err() == nil {
 				slog.Error("check-job claim failed", "err", err.Error())
 			}
+			// Back off like the empty-queue branch (and the frontier and
+			// sweep loops on the same condition): a refused connection
+			// fails in a millisecond and would otherwise spin.
+			if !sleepCtx(ctx, livePollIdle) {
+				return
+			}
 			continue
 		}
 		lc.process(work, job.ID, job.Host)
+	}
+}
+
+// liveWriteTimeout bounds the job's terminal write (done/failed). The
+// write runs on a context detached from the drain so a scan that finished
+// at the deadline still records its result instead of waiting for the
+// reaper (04 §14: an in-flight job completes rather than being cancelled).
+const liveWriteTimeout = 10 * time.Second
+
+func (lc *LiveChecker) fail(ctx context.Context, id int64, reason string) {
+	wctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), liveWriteTimeout)
+	defer cancel()
+	if err := lc.Q.CheckJobFail(wctx, db.CheckJobFailParams{ID: id, Error: ptr(reason)}); err != nil {
+		slog.Error("check-job fail write failed", "id", id, "err", err.Error())
 	}
 }
 
@@ -99,9 +119,7 @@ func (lc *LiveChecker) process(ctx context.Context, id int64, host string) {
 	defer func() {
 		if rec := recover(); rec != nil {
 			slog.Error("live check panicked", "domain", host, "panic", rec)
-			if err := lc.Q.CheckJobFail(ctx, db.CheckJobFailParams{ID: id, Error: ptr("internal error")}); err != nil {
-				slog.Error("check-job fail write failed", "err", err.Error())
-			}
+			lc.fail(ctx, id, "internal error")
 		}
 	}()
 
@@ -111,13 +129,11 @@ func (lc *LiveChecker) process(ctx context.Context, id int64, host string) {
 		// client error, not an internal fault — surface the real reason.
 		var pslErr *pslEvalError
 		if errors.As(err, &pslErr) {
-			_ = lc.Q.CheckJobFail(ctx, db.CheckJobFailParams{
-				ID: id, Error: ptr("the host is not under a known public-suffix TLD"),
-			})
+			lc.fail(ctx, id, "the host is not under a known public-suffix TLD")
 			return
 		}
 		slog.Error("live check ensure-domain failed", "domain", host, "err", err.Error())
-		_ = lc.Q.CheckJobFail(ctx, db.CheckJobFailParams{ID: id, Error: ptr("internal error")})
+		lc.fail(ctx, id, "internal error")
 		return
 	}
 
@@ -127,9 +143,7 @@ func (lc *LiveChecker) process(ctx context.Context, id int64, host string) {
 	cancel()
 	if budgetBlown {
 		// §5.1.5 step 4: a timed-out run fails — never a partial `done`.
-		if err := lc.Q.CheckJobFail(ctx, db.CheckJobFailParams{ID: id, Error: ptr("timed out")}); err != nil && ctx.Err() == nil {
-			slog.Error("check-job fail write failed", "err", err.Error())
-		}
+		lc.fail(ctx, id, "timed out")
 		return
 	}
 
@@ -137,11 +151,13 @@ func (lc *LiveChecker) process(ctx context.Context, id int64, host string) {
 	res := observe.MapLiveResult(kind, sr, lc.Preflight.LastPass(), time.Now().UTC(), links, lc.Cfg.ResourcesEnabled)
 	raw, err := json.Marshal(res)
 	if err != nil {
-		_ = lc.Q.CheckJobFail(ctx, db.CheckJobFailParams{ID: id, Error: ptr("result encode failed")})
+		lc.fail(ctx, id, "result encode failed")
 		return
 	}
-	if err := lc.Q.CheckJobComplete(ctx, db.CheckJobCompleteParams{ID: id, Result: raw}); err != nil && ctx.Err() == nil {
-		slog.Error("check-job complete write failed", "err", err.Error())
+	wctx, cancelWrite := context.WithTimeout(context.WithoutCancel(ctx), liveWriteTimeout)
+	defer cancelWrite()
+	if err := lc.Q.CheckJobComplete(wctx, db.CheckJobCompleteParams{ID: id, Result: raw}); err != nil {
+		slog.Error("check-job complete write failed", "id", id, "err", err.Error())
 	}
 }
 

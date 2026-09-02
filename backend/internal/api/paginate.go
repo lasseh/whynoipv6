@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"net/url"
 	"sort"
 	"strconv"
@@ -44,6 +45,8 @@ const (
 	paramLimit      = "limit"
 	paramAfterRank  = "after_rank"
 	paramAroundRank = "around_rank"
+	paramFormat     = "format" // presentation, not a filter (07 §5.5)
+	paramFields     = "fields" // presentation, not a filter (07 §3.3)
 	paramFlag       = "flag"
 	paramTLD        = "tld"
 	paramClass      = "class"
@@ -124,7 +127,7 @@ func DecodeCursor(token, wantSort, wantFingerprint string, currentG int32) (*Cur
 }
 
 // SeekTuple converts the raw K payload into the typed seek for the sort.
-// Re-anchored cursors zero the id tiebreaker (rank-based orderings).
+// Re-anchored cursors zero the id tiebreaker on the rank orderings only.
 func (c *Cursor) SeekTuple() (Seek, error) {
 	var s Seek
 	switch c.S {
@@ -180,8 +183,15 @@ func (c *Cursor) SeekTuple() (Seek, error) {
 	default:
 		return s, fmt.Errorf("%w: unknown sort %q", ErrCursorInvalid, c.S)
 	}
-	if c.ReAnchored {
-		s.ID = 0 // seek to the same rank/host boundary in the new generation
+	// A re-anchored cursor drops the id tiebreaker on the rank orderings
+	// only: a re-ranked generation makes the old (rank, id) pair
+	// meaningless, and "the same rank boundary" is the best-effort seek
+	// 07 §3.2 allows. The count orderings key on asn.number and the
+	// null-flag orderings on domain.id — stable across generations — so
+	// zeroing those would skip every row sharing the boundary count (or
+	// restart the null tail) instead of re-anchoring.
+	if c.ReAnchored && (c.S == SortRank || c.S == SortRankDesc) {
+		s.ID = 0 // seek to the same rank boundary in the new generation
 	}
 	return s, nil
 }
@@ -202,6 +212,8 @@ func ScopedFingerprint(scope string, q url.Values) string {
 		switch k {
 		case paramCursor, paramLimit, paramAfterRank, paramAroundRank:
 			continue // paging params are not filters
+		case paramFormat, paramFields:
+			continue // presentation params: a JSON page's cursor replays under ?format=csv (07 §5.5)
 		}
 		keys = append(keys, k)
 	}
@@ -353,23 +365,27 @@ func trimWindow[T any](rows []T, limit int, backward, positioned bool) (trimmed 
 	return rows, overflow, positioned
 }
 
+// jsonInt32 narrows a decoded seek component; an out-of-range value is a
+// malformed token, never a silently wrapped rank.
 func jsonInt32(v any) (int32, bool) {
 	switch n := v.(type) {
 	case json.Number:
 		i, err := n.Int64()
-		return int32(i), err == nil
+		return int32(i), err == nil && fitsInt32(i) //nolint:gosec // the ok flag carries the range check
 	case float64:
-		return int32(n), true
+		return int32(n), n >= math.MinInt32 && n <= math.MaxInt32
 	case int32:
 		return n, true
 	case int:
-		return int32(n), true
+		return int32(n), fitsInt32(int64(n)) //nolint:gosec // the ok flag carries the range check
 	case int64:
-		return int32(n), true
+		return int32(n), fitsInt32(n) //nolint:gosec // the ok flag carries the range check
 	default:
 		return 0, false
 	}
 }
+
+func fitsInt32(i int64) bool { return i >= math.MinInt32 && i <= math.MaxInt32 }
 
 func jsonInt64(v any) (int64, bool) {
 	switch n := v.(type) {

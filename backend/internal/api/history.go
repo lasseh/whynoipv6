@@ -14,9 +14,9 @@ import (
 	db "github.com/lasseh/whynoipv6/internal/postgres/db"
 )
 
-// changelogRetentionDays mirrors the changelog hypertable retention policy
+// historyWindowDays mirrors the changelog hypertable retention policy
 // (05-schema.md — 730 days), surfaced in the history meta block.
-const changelogRetentionDays = 730
+const historyWindowDays = 730
 
 // HistoryPoint is one §4.9 trajectory sample: confirmed per-dimension state
 // reconstructed from the changelog + the ladder classification + the scan
@@ -82,9 +82,9 @@ func parseHistoryWindow(q url.Values) (from, to time.Time, weekly bool, err erro
 // capHistoryWindow bounds the synthesized window at the documented
 // changelog retention (history-only — the stats endpoints share the parser
 // but read real rollup rows): a wide `from` cannot make the day loop
-// allocate more than changelogRetentionDays points.
+// allocate more than historyWindowDays points.
 func capHistoryWindow(from, to time.Time) time.Time {
-	if oldest := to.AddDate(0, 0, -changelogRetentionDays); from.Before(oldest) {
+	if oldest := to.AddDate(0, 0, -historyWindowDays); from.Before(oldest) {
 		return oldest
 	}
 	return from
@@ -103,9 +103,10 @@ type dimTrack struct {
 // valueAt reconstructs the confirmed value at end-of-day d.
 func (t *dimTrack) valueAt(d time.Time) *string {
 	dayEnd := d.AddDate(0, 0, 1)
+	seeded := t.current != nil && t.hasSince && t.since.Before(dayEnd)
 	if len(t.events) == 0 {
 		// Never transitioned: the current value has held since bootstrap.
-		if t.current != nil && t.hasSince && t.since.Before(dayEnd) {
+		if seeded {
 			v := string(*t.current)
 			return &v
 		}
@@ -116,12 +117,23 @@ func (t *dimTrack) valueAt(d time.Time) *string {
 	// bootstrap; the window is clamped to created_at, bounding the reach).
 	v0 := string(t.events[0].OldValue)
 	val = &v0
+	var last time.Time
 	for i := range t.events {
 		if !t.events[i].Ts.Time.Before(dayEnd) {
 			break
 		}
 		v := string(t.events[i].NewValue)
 		val = &v
+		last = t.events[i].Ts.Time
+	}
+	// A confirmed flip that wrote no row — a shadow transition (03 §11) or
+	// the bootstrap after a Step R reset (03 §6) — leaves the row's
+	// (value, since) newer than the last replayed event. From that day on
+	// the confirmed value wins, so this trajectory agrees with the status
+	// block GET /domains/{host} serves.
+	if seeded && t.since.After(last) {
+		v := string(*t.current)
+		return &v
 	}
 	return val
 }
@@ -160,7 +172,7 @@ func (s *Server) getDomainHistory(w http.ResponseWriter, r *http.Request) {
 	}
 
 	out := HistoryEnvelope{Host: row.Host, Points: []HistoryPoint{}}
-	out.Meta.RetentionDays = changelogRetentionDays
+	out.Meta.RetentionDays = historyWindowDays
 	out.Meta.AsOf = asOf.UTC()
 
 	replay, err := s.q.ChangelogReplay(r.Context(), row.ID)

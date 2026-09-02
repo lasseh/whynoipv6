@@ -48,9 +48,17 @@ func (c *ResourceDiscovery) Check(ctx context.Context, domain string, _ Kind) (R
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 
-	// Resolve AAAA records for the domain itself.
+	// Resolve AAAA records for the domain itself. Resolver trouble is
+	// transient (error); only an empty answer is "no AAAA" (01 §11.9).
 	ips, _, _, _, err := c.dialer.Resolver().LookupAAAA(ctx, domain)
-	if err != nil || len(ips) == 0 {
+	if err != nil {
+		return Result{
+			Status:  StatusError,
+			Detail:  &ResourceDiscoveryDetail{CommonDetail: CommonDetail{Error: err.Error()}},
+			Latency: time.Since(start),
+		}, nil
+	}
+	if len(ips) == 0 {
 		return Result{
 			Status:  StatusNotApplicable,
 			Detail:  &ResourceDiscoveryDetail{CommonDetail: CommonDetail{Reason: errNoAAAARecord}},

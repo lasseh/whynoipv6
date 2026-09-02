@@ -1,12 +1,14 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/lasseh/whynoipv6/internal/ingest"
+	"github.com/lasseh/whynoipv6/internal/lock"
 	db "github.com/lasseh/whynoipv6/internal/postgres/db"
 )
 
@@ -29,7 +31,14 @@ func trancoCmd() *cobra.Command {
 			}
 			defer pool.Close()
 			imp := ingest.NewTrancoImporter(pool, ingest.NewHTTPTrancoSource(), ingest.TrancoConfigFrom(cfg))
-			rep, err := imp.Import(cmd.Context(), force)
+			// Serialized against the coordinator's 23:15 cycle by the
+			// JobTrancoImport lock; the wait is normative (04 §10).
+			var rep *ingest.TrancoReport
+			err = lock.Run(cmd.Context(), pool, lock.JobTrancoImport, singletonWait, func(ctx context.Context) error {
+				r, err := imp.Import(ctx, force)
+				rep = r
+				return err
+			})
 			if err != nil {
 				return err
 			}
@@ -75,7 +84,10 @@ func trancoCmd() *cobra.Command {
 					fmtPtr(r.RejectedCount), fmtPtr(r.DuplicateCount), note)
 			}
 			last, err := q.TrancoLastSuccessAt(cmd.Context())
-			if err == nil && last.Valid {
+			if err != nil {
+				return err
+			}
+			if last.Valid {
 				age := time.Since(last.Time)
 				fmt.Printf("hours since last successful import: %.1f (warn threshold %s)\n",
 					age.Hours(), cfg.Duration("tranco.stale_warn_after"))

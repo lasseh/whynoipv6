@@ -389,6 +389,21 @@ func TestBridgeTotality(t *testing.T) {
 		checker.StatusUnsupported:   domain.ObsUnsupported,
 		checker.StatusNotApplicable: domain.ObsNoRecord,
 	})
+	pin("mapAAAA(www)", func(st checker.CheckStatus) domain.Observation {
+		return mapAAAA(st, &checker.AAAADetail{AOutcome: checker.AOutcomePresent}, true)
+	}, map[checker.CheckStatus]domain.Observation{
+		checker.StatusSupported:     domain.ObsSupported,
+		checker.StatusUnsupported:   domain.ObsUnsupported,
+		checker.StatusNotApplicable: domain.ObsNotApplicable, // www never yields no_record
+	})
+	pin("composeConn", func(st checker.CheckStatus) domain.Observation {
+		obs, _ := composeConn(st, "", checker.StatusError, t0.Add(-time.Minute), t0)
+		return obs
+	}, map[checker.CheckStatus]domain.Observation{
+		checker.StatusSupported:     domain.ObsSupported,
+		checker.StatusUnsupported:   domain.ObsUnsupported,
+		checker.StatusNotApplicable: domain.ObsNotApplicable,
+	})
 	pin("mapNS", mapNS, map[checker.CheckStatus]domain.Observation{
 		checker.StatusSupported:   domain.ObsSupported,
 		checker.StatusPartial:     domain.ObsSupported,

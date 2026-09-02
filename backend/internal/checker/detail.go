@@ -239,6 +239,15 @@ type ResourceDiscoveryDetail struct {
 	TotalHosts *int     `json:"total_hosts,omitempty"`
 }
 
+// CheckNames is every check the engine emits, in registration order. The
+// runner's registration, newDetail's dispatch and the accessors below are
+// held to this one list by the detail round-trip test.
+var CheckNames = []string{
+	NameDNSAAAABase, NameDNSAAAAWWW, NameDNSNS, NameDNSMX, NameDNSSEC,
+	NameHTTP, NameHTTPS, NameTLS, NameParity, NameResourceDiscovery,
+	NameSMTP, NameSPF, NamePTR, NameLatencyV4, NameLatencyV6,
+}
+
 // newDetail returns the empty detail struct for a check name — the
 // UnmarshalJSON re-typing dispatch. Unknown names fall back to the bare
 // CommonDetail. The name↔type pairing lives here AND in each accessor's

@@ -142,6 +142,19 @@ func TestLiveLinksReadErrorDefers(t *testing.T) {
 	}
 }
 
+// The commit path follows the same convention: a failed link read is an
+// unknown set, not an empty one (which would roll up to not_applicable).
+func TestPersistedLinksReadErrorDefers(t *testing.T) {
+	f := &fakeResources{err: errors.New("pool exhausted")}
+	links := PersistedLinks(context.Background(), f, 1, true)
+	if len(links) != 1 || links[0].AAAAStatus != nil {
+		t.Fatalf("links = %+v, want a deferred entry", links)
+	}
+	if got := rollupResources(domain.ObsSupported, links); got != domain.ObsError {
+		t.Errorf("rollup = %s, want error (deferred)", got)
+	}
+}
+
 // The resources crawl being off means no LinkSet at all, on both paths.
 func TestLinkSetDisabled(t *testing.T) {
 	f := &fakeResources{registry: map[string]db.Ipv6Status{"cdn.example.net": "supported"}}

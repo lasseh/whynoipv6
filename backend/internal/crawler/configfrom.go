@@ -32,7 +32,7 @@ func ScheduleConfigFrom(src ConfigSource) ScheduleConfig {
 func CommitConfigFrom(src ConfigSource) *CommitConfig {
 	return &CommitConfig{
 		MinConfirmSpacing: src.Duration("anti_flap.min_confirm_spacing"),
-		DeadStreak:        int16(src.Int("lifecycle.dead_streak")),
+		DeadStreak:        int16(src.Int("lifecycle.dead_streak")), //nolint:gosec // small registry int
 		ResourcesEnabled:  src.Bool("crawler.resources.enabled"),
 		Schedule:          ScheduleConfigFrom(src),
 	}
@@ -58,7 +58,7 @@ func TickConfigFrom(src ConfigSource) TickConfig {
 			DelistGrace:      src.Duration("lifecycle.delist_grace"),
 			SlowLaneEvery:    src.Duration("lifecycle.slow_lane_every"),
 		},
-		IndegreeThreshold:  int32(src.Int("service_detect.indegree_threshold")),
+		IndegreeThreshold:  int32(src.Int("service_detect.indegree_threshold")), //nolint:gosec // small registry int
 		LiveCheckRetention: src.Duration("live_check.retention"),
 	}
 }

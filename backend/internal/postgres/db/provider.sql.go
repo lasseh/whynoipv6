@@ -44,7 +44,7 @@ func (q *Queries) ProviderByName(ctx context.Context, name string) (ProviderByNa
 }
 
 const ProviderClearDomains = `-- name: ProviderClearDomains :execrows
-UPDATE domain SET dns_provider_id = NULL
+UPDATE domain SET dns_provider_id = NULL, updated_at = now()
 WHERE dns_provider_id = (SELECT id FROM dns_provider WHERE name = $1)
 `
 
@@ -95,15 +95,39 @@ func (q *Queries) ProviderDetail(ctx context.Context, id int64) (ProviderDetailR
 	return i, err
 }
 
-const ProviderDomainCount = `-- name: ProviderDomainCount :one
-SELECT count(*) FROM domain WHERE dns_provider_id = $1
+const ProviderDomainCounts = `-- name: ProviderDomainCounts :many
+SELECT dns_provider_id, count(*) AS domains
+FROM domain
+WHERE dns_provider_id IS NOT NULL
+GROUP BY dns_provider_id
 `
 
-func (q *Queries) ProviderDomainCount(ctx context.Context, dnsProviderID *int64) (int64, error) {
-	row := q.db.QueryRow(ctx, ProviderDomainCount, dnsProviderID)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
+type ProviderDomainCountsRow struct {
+	DnsProviderID *int64 `json:"dns_provider_id"`
+	Domains       int64  `json:"domains"`
+}
+
+// `provider list`: one grouped pass over domain rather than a count per
+// provider (only the partial idx_domain_dns_provider exists, so each of
+// those was a scan).
+func (q *Queries) ProviderDomainCounts(ctx context.Context) ([]ProviderDomainCountsRow, error) {
+	rows, err := q.db.Query(ctx, ProviderDomainCounts)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ProviderDomainCountsRow{}
+	for rows.Next() {
+		var i ProviderDomainCountsRow
+		if err := rows.Scan(&i.DnsProviderID, &i.Domains); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const ProviderInsert = `-- name: ProviderInsert :one

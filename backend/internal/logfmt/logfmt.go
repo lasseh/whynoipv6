@@ -160,8 +160,10 @@ func (f *Formatter) Append(dst, raw []byte) ([]byte, bool) {
 	}
 	rec, ok := f.decode(line)
 	if !ok {
-		// Passthrough skips the level filter: it has no level to test.
-		dst = f.appendColored(dst, ansiDim, string(line))
+		// Passthrough skips the level filter: it has no level to test. It
+		// is still escaped: a panic message or a unit line can carry bytes
+		// the terminal would obey.
+		dst = f.appendColored(dst, ansiDim, escape(string(line)))
 		return append(dst, '\n'), true
 	}
 	if rec.level < f.minLevel {
@@ -378,9 +380,10 @@ func display(raw json.RawMessage) string {
 	return escape(s)
 }
 
-// escape replaces the control characters that would break the line.
+// escape replaces the control characters that would break the line or
+// steer the terminal.
 func escape(s string) string {
-	if strings.IndexFunc(s, func(r rune) bool { return r < ' ' || r == 0x7f }) < 0 {
+	if strings.IndexFunc(s, isControl) < 0 {
 		return s
 	}
 	var b strings.Builder
@@ -393,13 +396,19 @@ func escape(s string) string {
 			b.WriteString(`\r`)
 		case r == '\t':
 			b.WriteString(`\t`)
-		case r < ' ' || r == 0x7f:
+		case isControl(r):
 			fmt.Fprintf(&b, `\x%02x`, r)
 		default:
 			b.WriteRune(r)
 		}
 	}
 	return b.String()
+}
+
+// isControl covers C0 and DEL, and the C1 range too: U+009B is a CSI on
+// its own, so a UTF-8 payload can open an escape sequence without ESC.
+func isControl(r rune) bool {
+	return r < ' ' || r == 0x7f || (r >= 0x80 && r <= 0x9f)
 }
 
 // pad right-pads s to at least n display columns.

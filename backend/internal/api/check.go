@@ -105,8 +105,9 @@ func (s *Server) postCheck(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if int(ipWin.N) >= s.opts.RateIPPerHour {
-		rateLimitHeaders(w, s.opts.RateIPPerHour, 0)
-		RateLimited(w, r, retryAfter(ipWin.MinCreated))
+		ra := retryAfter(ipWin.MinCreated)
+		rateLimitHeaders(w, s.opts.RateIPPerHour, 0, ra)
+		RateLimited(w, r, ra)
 		return
 	}
 	globalWin, err := s.checks.RateGlobal(r.Context())
@@ -115,11 +116,15 @@ func (s *Server) postCheck(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if int(globalWin.N) >= s.opts.RateGlobalPerHour {
-		rateLimitHeaders(w, s.opts.RateGlobalPerHour, 0)
-		RateLimited(w, r, retryAfter(globalWin.MinCreated))
+		ra := retryAfter(globalWin.MinCreated)
+		rateLimitHeaders(w, s.opts.RateGlobalPerHour, 0, ra)
+		RateLimited(w, r, ra)
 		return
 	}
-	rateLimitHeaders(w, s.opts.RateIPPerHour, s.opts.RateIPPerHour-int(ipWin.N)-1)
+	// A dedupe hit inserts nothing, so its headers report the window as
+	// read; the 202 below re-emits them with the locked count minus the
+	// inserted job.
+	rateLimitHeaders(w, s.opts.RateIPPerHour, s.opts.RateIPPerHour-int(ipWin.N), rateWindowSeconds)
 
 	// 3. Lifecycle re-entry — every POST whose host already has a row,
 	// including dedupe hits (§5.1.6).
@@ -131,24 +136,38 @@ func (s *Server) postCheck(w http.ResponseWriter, r *http.Request) {
 	// 4. Dedupe, domain-side: a fresh crawl within the window serves a
 	// synthetic done envelope from the latest scan_detail. No job row.
 	confirmedRow, confErr := s.checks.Confirmed(r.Context(), host)
-	if confErr == nil && confirmedRow.LastCheckedAt.Valid &&
-		time.Since(confirmedRow.LastCheckedAt.Time) < s.opts.DedupeWindow {
-		if env, ok := s.dedupeEnvelope(r, &confirmedRow, host); ok {
-			WriteJSON(w, http.StatusOK, env)
-			return
-		}
-	}
 	if confErr != nil && !errors.Is(confErr, pgx.ErrNoRows) {
 		InternalError(w, r, confErr)
 		return
 	}
+	if confErr == nil && confirmedRow.LastCheckedAt.Valid &&
+		time.Since(confirmedRow.LastCheckedAt.Time) < s.opts.DedupeWindow {
+		env, ok, err := s.dedupeEnvelope(r, &confirmedRow, host)
+		if err != nil {
+			InternalError(w, r, err)
+			return
+		}
+		if ok {
+			WriteJSON(w, http.StatusOK, env)
+			return
+		}
+	}
 
 	// 5. Dedupe, job-side: a done job within the window replays, cached.
-	if job, err := s.checks.JobDedupe(r.Context(), host, s.opts.DedupeWindow); err == nil {
-		env := s.jobEnvelope(r, &jobFields{
+	job, err := s.checks.JobDedupe(r.Context(), host, s.opts.DedupeWindow)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		InternalError(w, r, err)
+		return
+	}
+	if err == nil {
+		env, err := s.jobEnvelope(r, &jobFields{
 			ID: job.ID, Host: job.Host, Status: string(job.Status), Result: job.Result,
 			Error: job.Error, CreatedAt: job.CreatedAt, CompletedAt: job.CompletedAt,
 		})
+		if err != nil {
+			InternalError(w, r, err)
+			return
+		}
 		env.Cached = true
 		WriteJSON(w, http.StatusOK, env)
 		return
@@ -163,6 +182,9 @@ func (s *Server) postCheck(w http.ResponseWriter, r *http.Request) {
 		InvalidParameter(w, r, "client address unavailable")
 		return
 	}
+	// Unmap like ratePrefix does: a ::ffff:a.b.c.d requester would be stored
+	// as an AF_INET6 inet and never match its own a.b.c.d/32 window.
+	requester = requester.Unmap()
 	out, err := s.checks.EnqueueLocked(r.Context(), host, requester, prefix,
 		s.opts.RateIPPerHour, s.opts.RateGlobalPerHour)
 	if err != nil {
@@ -170,17 +192,20 @@ func (s *Server) postCheck(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if out.OverIP {
-		rateLimitHeaders(w, s.opts.RateIPPerHour, 0)
-		RateLimited(w, r, retryAfter(out.IPWindow.MinCreated))
+		ra := retryAfter(out.IPWindow.MinCreated)
+		rateLimitHeaders(w, s.opts.RateIPPerHour, 0, ra)
+		RateLimited(w, r, ra)
 		return
 	}
 	if out.OverGlobal {
-		rateLimitHeaders(w, s.opts.RateGlobalPerHour, 0)
-		RateLimited(w, r, retryAfter(out.GlobalWindow.MinCreated))
+		ra := retryAfter(out.GlobalWindow.MinCreated)
+		rateLimitHeaders(w, s.opts.RateGlobalPerHour, 0, ra)
+		RateLimited(w, r, ra)
 		return
 	}
-	// Refresh the headers with the locked count — the step-2 read may be stale.
-	rateLimitHeaders(w, s.opts.RateIPPerHour, s.opts.RateIPPerHour-int(out.IPWindow.N)-1)
+	// Refresh the headers with the locked count — the step-2 read may be
+	// stale — minus the job just inserted.
+	rateLimitHeaders(w, s.opts.RateIPPerHour, s.opts.RateIPPerHour-int(out.IPWindow.N)-1, rateWindowSeconds)
 	w.Header().Set("Location", "/check/"+strconv.FormatInt(out.ID, 10))
 	WriteJSON(w, http.StatusAccepted, map[string]any{
 		"id": out.ID, "host": host, "status": "pending",
@@ -205,10 +230,14 @@ func (s *Server) getCheck(w http.ResponseWriter, r *http.Request) {
 		InternalError(w, r, err)
 		return
 	}
-	env := s.jobEnvelope(r, &jobFields{
+	env, err := s.jobEnvelope(r, &jobFields{
 		ID: job.ID, Host: job.Host, Status: string(job.Status), Result: job.Result,
 		Error: job.Error, CreatedAt: job.CreatedAt, CompletedAt: job.CompletedAt,
 	})
+	if err != nil {
+		InternalError(w, r, err)
+		return
+	}
 	if env.Status == "done" || env.Status == "failed" {
 		w.Header().Set("Cache-Control", "public, max-age=60")
 	} else {
@@ -233,25 +262,39 @@ func (s *Server) getLatestCheck(w http.ResponseWriter, r *http.Request) {
 	// Source 1 — tracked domain with a crawl inside the TTL (daily cadence
 	// means every active tracked domain hits this branch).
 	confirmedRow, confErr := s.checks.Confirmed(r.Context(), host)
+	if confErr != nil && !errors.Is(confErr, pgx.ErrNoRows) {
+		InternalError(w, r, confErr)
+		return
+	}
 	if confErr == nil && confirmedRow.LastCheckedAt.Valid &&
 		time.Since(confirmedRow.LastCheckedAt.Time) < s.opts.LinkTTL {
-		if env, ok := s.dedupeEnvelope(r, &confirmedRow, host); ok {
+		env, ok, err := s.dedupeEnvelope(r, &confirmedRow, host)
+		if err != nil {
+			InternalError(w, r, err)
+			return
+		}
+		if ok {
 			w.Header().Set("Cache-Control", "public, max-age=60")
 			WriteJSON(w, http.StatusOK, env)
 			return
 		}
 	}
-	if confErr != nil && !errors.Is(confErr, pgx.ErrNoRows) {
-		InternalError(w, r, confErr)
-		return
-	}
 
 	// Source 2 — the newest done live-check job inside the TTL.
-	if job, err := s.checks.JobDedupe(r.Context(), host, s.opts.LinkTTL); err == nil {
-		env := s.jobEnvelope(r, &jobFields{
+	job, err := s.checks.JobDedupe(r.Context(), host, s.opts.LinkTTL)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		InternalError(w, r, err)
+		return
+	}
+	if err == nil {
+		env, err := s.jobEnvelope(r, &jobFields{
 			ID: job.ID, Host: job.Host, Status: string(job.Status), Result: job.Result,
 			Error: job.Error, CreatedAt: job.CreatedAt, CompletedAt: job.CompletedAt,
 		})
+		if err != nil {
+			InternalError(w, r, err)
+			return
+		}
 		env.Cached = true
 		w.Header().Set("Cache-Control", "public, max-age=60")
 		WriteJSON(w, http.StatusOK, env)
@@ -272,7 +315,9 @@ type jobFields struct {
 }
 
 // jobEnvelope assembles the §5.1.2 body; confirmed is computed at read time.
-func (s *Server) jobEnvelope(r *http.Request, j *jobFields) CheckEnvelope {
+// Only "no domain row" leaves confirmed null — any other read failure is
+// the caller's 500, never a cacheable body claiming nothing is confirmed.
+func (s *Server) jobEnvelope(r *http.Request, j *jobFields) (CheckEnvelope, error) {
 	id := j.ID
 	env := CheckEnvelope{
 		ID: &id, Host: j.Host, Status: j.Status,
@@ -283,10 +328,14 @@ func (s *Server) jobEnvelope(r *http.Request, j *jobFields) CheckEnvelope {
 	if j.Result != nil {
 		env.Result = json.RawMessage(j.Result)
 	}
-	if row, err := s.checks.Confirmed(r.Context(), j.Host); err == nil {
+	row, err := s.checks.Confirmed(r.Context(), j.Host)
+	switch {
+	case err == nil:
 		env.Confirmed = confirmedBlock(&row)
+	case !errors.Is(err, pgx.ErrNoRows):
+		return CheckEnvelope{}, fmt.Errorf("confirmed state for %s: %w", j.Host, err)
 	}
-	return env
+	return env, nil
 }
 
 // storedEvidence renders the latest stored scan_detail through the shared
@@ -317,25 +366,30 @@ func (s *Server) storedEvidence(r *http.Request, domainID int64, host string,
 	result := observe.MapLiveResult(domain.Kind(kind), sr, scanTS, scanTS, links, s.opts.ResourcesEnabled)
 	resultRaw, err := json.Marshal(result)
 	if err != nil {
-		return nil, nil
+		return nil, fmt.Errorf("marshal evidence: %w", err)
 	}
 	return resultRaw, nil
 }
 
 // dedupeEnvelope builds the §5.1.1 step-4 synthetic done envelope from the
-// latest scan_detail via the shared mapper.
-func (s *Server) dedupeEnvelope(r *http.Request, row *db.DomainConfirmedRow, host string) (CheckEnvelope, bool) {
+// latest scan_detail via the shared mapper. ok=false means there is no
+// usable stored detail (the caller falls through); an error is a failed
+// read, which must not fall through into a fresh enqueue.
+func (s *Server) dedupeEnvelope(r *http.Request, row *db.DomainConfirmedRow, host string) (CheckEnvelope, bool, error) {
 	scanTS := row.LastCheckedAt.Time.UTC()
 	ev, err := s.storedEvidence(r, row.ID, host, row.Kind, scanTS)
-	if err != nil || ev == nil {
-		return CheckEnvelope{}, false
+	if err != nil {
+		return CheckEnvelope{}, false, fmt.Errorf("stored evidence for %s: %w", host, err)
+	}
+	if ev == nil {
+		return CheckEnvelope{}, false, nil
 	}
 	return CheckEnvelope{
 		ID: nil, Host: host, Status: "done", Cached: true,
 		CreatedAt: scanTS, CompletedAt: &scanTS,
 		Result:    ev,
 		Confirmed: confirmedBlock(row),
-	}, true
+	}, true, nil
 }
 
 // confirmedBlock maps the domain row to the §5.1.3 confirmed object; nil
@@ -383,22 +437,27 @@ func ratePrefix(ip string) (netip.Prefix, bool) {
 func retryAfter(minCreated any) int {
 	t, ok := minCreated.(time.Time)
 	if !ok {
-		return 3600
+		return rateWindowSeconds
 	}
-	secs := 3600 - time.Since(t).Seconds()
+	secs := rateWindowSeconds - time.Since(t).Seconds()
 	if secs < 1 {
 		return 1
 	}
 	return int(math.Ceil(secs))
 }
 
-// rateLimitHeaders emits the structured-field rate-limit headers.
-func rateLimitHeaders(w http.ResponseWriter, limit, remaining int) {
+// rateWindowSeconds is the §6.3 sliding window, as advertised in the headers.
+const rateWindowSeconds = 3600
+
+// rateLimitHeaders emits the structured-field rate-limit headers; reset is
+// the seconds until the window admits another request (the full window on
+// a pass, the computed Retry-After on a 429).
+func rateLimitHeaders(w http.ResponseWriter, limit, remaining, reset int) {
 	if remaining < 0 {
 		remaining = 0
 	}
-	w.Header().Set("RateLimit", fmt.Sprintf("limit=%d, remaining=%d, reset=3600", limit, remaining))
-	w.Header().Set("RateLimit-Policy", fmt.Sprintf("%d;w=3600", limit))
+	w.Header().Set("RateLimit", fmt.Sprintf("limit=%d, remaining=%d, reset=%d", limit, remaining, reset))
+	w.Header().Set("RateLimit-Policy", fmt.Sprintf("%d;w=%d", limit, rateWindowSeconds))
 }
 
 func pgInterval(d time.Duration) pgtype.Interval {

@@ -42,6 +42,39 @@ func TestBaseline(t *testing.T) {
 		}
 	})
 
+	t.Run("method_not_allowed_problem", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, httptest.NewRequest(http.MethodDelete, "/ip", nil))
+		if rec.Code != http.StatusMethodNotAllowed {
+			t.Fatalf("status = %d", rec.Code)
+		}
+		if ct := rec.Header().Get("Content-Type"); !strings.HasPrefix(ct, "application/problem+json") {
+			t.Errorf("content-type = %q", ct)
+		}
+		if allow := rec.Header().Get("Allow"); allow != "GET, HEAD, OPTIONS" {
+			t.Errorf("Allow = %q", allow)
+		}
+		var p Problem
+		if err := json.Unmarshal(rec.Body.Bytes(), &p); err != nil || p.Status != http.StatusMethodNotAllowed {
+			t.Errorf("problem = %+v err=%v", p, err)
+		}
+		rec = httptest.NewRecorder()
+		router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/check", nil))
+		if rec.Code != http.StatusMethodNotAllowed || rec.Header().Get("Allow") != "POST, OPTIONS" {
+			t.Errorf("GET /check = %d Allow=%q", rec.Code, rec.Header().Get("Allow"))
+		}
+	})
+
+	t.Run("head_serves_get", func(t *testing.T) {
+		// §2.6: HEAD is implicit on every GET route. (The recorder keeps the
+		// body the handler wrote; a real net/http server drops it for HEAD.)
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, httptest.NewRequest(http.MethodHead, "/livez", nil))
+		if rec.Code != http.StatusOK {
+			t.Errorf("HEAD /livez = %d, want 200", rec.Code)
+		}
+	})
+
 	t.Run("ip_echo_real_ip", func(t *testing.T) {
 		// §1.8.1: X-Real-IP wins; bracketless; family derived server-side.
 		// Proxy headers are honored only from a trusted (loopback) peer.

@@ -2,6 +2,7 @@ package checker
 
 import (
 	"context"
+	"errors"
 	"sort"
 	"strings"
 	"time"
@@ -44,14 +45,24 @@ func (c *DNSNSIPv6) Check(ctx context.Context, domain string, kind Kind) (Result
 		// registrable-domain boundary (01-engine.md §11.3): never query the
 		// public suffix itself (com, co.uk, ...) — answering registry
 		// nameservers would fabricate a "zone" for nonexistent domains and
-		// break dead-detection branch (a) (03-state-machine.md §4).
+		// break dead-detection branch (a) (03-state-machine.md §4). Only
+		// the ICANN section is a registry boundary: a private-section
+		// suffix (github.io, blogspot.com) is a real zone whose NS answer
+		// is the delegated zone for the hosts under it.
 		idx := strings.Index(qname, ".")
 		if idx < 0 || idx == len(qname)-1 {
 			break // bare name or trailing dot
 		}
+		// Only an empty answer (NODATA or NXDOMAIN) at this level counts as
+		// "no zone here"; resolver trouble stays an error so the boundary
+		// cannot turn it into the no-zone evidence branch (a) reads.
+		lastEmpty := nsErr == nil || errors.Is(nsErr, errNXDomain)
 		qname = qname[idx+1:]
-		if suffix, _ := publicsuffix.PublicSuffix(qname); suffix == qname {
-			nameservers, nsErr = nil, nil
+		if suffix, icann := publicsuffix.PublicSuffix(qname); icann && suffix == qname {
+			nameservers = nil
+			if lastEmpty {
+				nsErr = nil
+			}
 			break // reached the public suffix
 		}
 	}
@@ -66,7 +77,7 @@ func (c *DNSNSIPv6) Check(ctx context.Context, domain string, kind Kind) (Result
 	}
 
 	if len(nameservers) == 0 {
-		d.Error = "no NS records found"
+		d.Error = NoNSRecordsMessage
 		return Result{
 			Status:  StatusError,
 			Detail:  d,
@@ -90,10 +101,17 @@ func (c *DNSNSIPv6) Check(ctx context.Context, domain string, kind Kind) (Result
 
 	nsResults := map[string]NSHost{}
 	ipv6Count := 0
+	answered := 0 // hosts whose AAAA lookup returned an answer, empty or not
+	var lastLookupErr error
 
 	for _, ns := range checked {
 		ips, _, _, _, lookupErr := c.dialer.Resolver().LookupAAAA(ctx, ns)
 		nsInfo := NSHost{Addresses: []string{}}
+		if lookupErr == nil {
+			answered++
+		} else {
+			lastLookupErr = lookupErr
+		}
 		if lookupErr == nil && len(ips) > 0 {
 			nsInfo.HasIPv6 = true
 			addrs := make([]string, len(ips))
@@ -110,6 +128,22 @@ func (c *DNSNSIPv6) Check(ctx context.Context, domain string, kind Kind) (Result
 	d.Total = total
 	d.Checked = len(checked)
 	d.IPv6Count = &ipv6Count
+
+	// A definitive verdict needs at least one nameserver that actually
+	// answered: an all-errors sample (resolver trouble, a SERVFAILing
+	// nameserver zone) is `error`, never `unsupported` (02 §4), and a zero
+	// lookup cap cannot read as "every checked host has AAAA".
+	if len(checked) == 0 || (ipv6Count == 0 && answered == 0) {
+		d.Error = "no nameserver AAAA lookup answered"
+		if lastLookupErr != nil {
+			d.Error = lastLookupErr.Error()
+		}
+		return Result{
+			Status:  StatusError,
+			Detail:  d,
+			Latency: time.Since(start),
+		}, nil
+	}
 
 	var status CheckStatus
 	switch {

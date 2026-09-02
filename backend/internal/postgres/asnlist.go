@@ -45,13 +45,13 @@ func ListASNLeaderboard(ctx context.Context, pool *pgxpool.Pool, nameQuery strin
 		From("asn").
 		PlaceholderFormat(sq.Dollar)
 	if nameQuery != "" {
-		q = q.Where("name ILIKE ?", "%"+nameQuery+"%")
+		q = q.Where("name ILIKE ?", likeSubstring(nameQuery))
 	}
 	if seek != nil {
 		q = q.Where(fmt.Sprintf("(%s, number) %s (?, ?)", col, cmp), seek.Count, seek.Number)
 	}
 
 	return collectKeysetRows[ASNRow](ctx, pool,
-		q.OrderBy(fmt.Sprintf("%s %s, number %s", col, dir, dir)).Limit(uint64(limit+1)),
+		q.OrderBy(fmt.Sprintf("%s %s, number %s", col, dir, dir)).Limit(fetchLimit(limit)),
 		backward, "asn leaderboard")
 }

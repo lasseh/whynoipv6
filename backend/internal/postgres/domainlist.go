@@ -236,7 +236,9 @@ func buildDomainList(f *DomainListFilter, sortKey ListSort, seek *DomainSeek, af
 		q = q.Where(sq.Expr(fmt.Sprintf("d.rank <= %d", *f.RankMax)))
 	}
 	if f.Query != "" {
-		q = q.Where(sq.Expr("d.host LIKE '%' || ? || '%'", f.Query)) // trigram-backed
+		// ILIKE, like the ASN search: hosts are stored lowercase but the
+		// caller's term is not, and the trigram GIN serves ~~* as well.
+		q = q.Where(sq.Expr("d.host ILIKE ?", likeSubstring(f.Query)))
 	}
 
 	// backward flips the seek comparison and the ORDER BY (the §3.2
@@ -313,7 +315,7 @@ func ListDomains(ctx context.Context, pool *pgxpool.Pool, f *DomainListFilter,
 	}
 	q := buildDomainList(f, sortKey, seek, afterRank, backward)
 	return collectKeysetRows[DomainRow](ctx, pool,
-		q.Limit(uint64(limit+1)), backward, "domain list") // N+1 fetch
+		q.Limit(fetchLimit(limit)), backward, "domain list") // N+1 fetch
 }
 
 // ListDomainsAround is the §3.2 centered-window deep link: the ⌈limit/2⌉
@@ -426,7 +428,7 @@ func ListDependents(ctx context.Context, pool *pgxpool.Pool, resourceHostID int6
 			cmp, seek.RankNull, rank, seek.ID)))
 	}
 	return collectKeysetRows[DependentRow](ctx, pool,
-		q.OrderBy(order...).Limit(uint64(limit+1)), backward, "dependents")
+		q.OrderBy(order...).Limit(fetchLimit(limit)), backward, "dependents")
 }
 
 // MaxRank is the O(1) global-list count estimate (07 §3.4).

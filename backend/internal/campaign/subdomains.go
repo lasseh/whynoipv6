@@ -160,13 +160,11 @@ func validateSubdomainFiles(repo string, files []changedFile, maxSubdomains int,
 	// Every list in the repo head, so a PR adding nrk.no.yaml next to an
 	// existing nrk.no.yml is caught even though only one of them is in the
 	// diff. One parent, one file (06 §3.7).
-	claimedBy := map[string]string{}
+	claimants := map[string][]string{}
 	if all, err := ListSubdomainFiles(repo); err == nil {
 		for _, p := range all {
 			if f, err := ParseSubdomainFile(p, maxSubdomains); err == nil {
-				if first, dup := claimedBy[f.Apex]; !dup || f.Path < first {
-					claimedBy[f.Apex] = f.Path
-				}
+				claimants[f.Apex] = append(claimants[f.Apex], f.Path)
 			}
 		}
 	}
@@ -190,10 +188,18 @@ func validateSubdomainFiles(repo string, files []changedFile, maxSubdomains int,
 			continue
 		}
 
-		if first, dup := claimedBy[parsed.Apex]; dup && first != parsed.Path {
+		// Any other claimant fails the changed file, whichever spelling sorts
+		// first — the sync rejects both claimants and freezes curated removals.
+		var others []string
+		for _, p := range claimants[parsed.Apex] {
+			if p != parsed.Path {
+				others = append(others, p)
+			}
+		}
+		if len(others) > 0 {
 			res.Failures = append(res.Failures, fmt.Sprintf(
 				"%s:1: `%s` is already listed by `%s` — one file per domain, merge them",
-				ch.name, parsed.Apex, first))
+				ch.name, parsed.Apex, strings.Join(others, "`, `")))
 			continue
 		}
 

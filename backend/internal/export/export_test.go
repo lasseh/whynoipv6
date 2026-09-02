@@ -48,7 +48,7 @@ func (s *fakeSource) Rows(_ context.Context, rankedOnly bool, maxRank int32) ite
 	}
 }
 
-func (s *fakeSource) ListID(context.Context) string { return s.listID }
+func (s *fakeSource) ListID(context.Context) (string, error) { return s.listID, nil }
 
 // rankedRows builds n ranked apex rows, ranks 1..n.
 func rankedRows(n int) []Row {

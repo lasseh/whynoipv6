@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/http"
 	"time"
 )
 
@@ -60,7 +61,13 @@ func isTLSError(err error) bool {
 	if _, ok := errors.AsType[*tls.CertificateVerificationError](err); ok {
 		return true
 	}
-	if _, ok := errors.AsType[*tls.RecordHeaderError](err); ok {
+	// crypto/tls surfaces RecordHeaderError by value, and net/http replaces
+	// a record that looks like HTTP with the bare ErrSchemeMismatch: both
+	// mean a plaintext listener on the TLS port (01 §11.7: TLS error).
+	if _, ok := errors.AsType[tls.RecordHeaderError](err); ok {
+		return true
+	}
+	if errors.Is(err, http.ErrSchemeMismatch) {
 		return true
 	}
 	// Check for generic TLS alert errors via the error string as a fallback.

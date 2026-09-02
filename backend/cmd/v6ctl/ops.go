@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -40,10 +42,17 @@ func opsCmd() *cobra.Command {
 			// Port selection is `-s ip@port` — unbound-control has no -p
 			// flag, so the old `-p <port>` form exited 1 on every real
 			// host and only ever worked through the dev-compose shim.
+			inserted := 0
 			for _, port := range []string{"8953", "8954"} {
-				out, err := exec.CommandContext(cmd.Context(),
-					control, "-s", "127.0.0.1@"+port, "stats").Output() //nolint:gosec // operator-config command path
+				//nolint:gosec // operator-config command path
+				out, err := exec.CommandContext(cmd.Context(), control, "-s", "127.0.0.1@"+port, "stats").Output()
 				if err != nil {
+					// Output keeps the child's stderr on the ExitError;
+					// without it every failure reads "exit status 1".
+					var ee *exec.ExitError
+					if errors.As(err, &ee) && len(ee.Stderr) > 0 {
+						err = fmt.Errorf("%w: %s", err, bytes.TrimSpace(ee.Stderr))
+					}
 					fmt.Fprintf(os.Stderr, "instance %s: %v\n", port, err)
 					continue
 				}
@@ -69,6 +78,12 @@ func opsCmd() *cobra.Command {
 				if err := q.InsertUnboundStats(cmd.Context(), params); err != nil {
 					return err
 				}
+				inserted++
+			}
+			// The timer unit must go red, not green, when no instance
+			// answered — the per-instance lines above are only diagnostics.
+			if inserted == 0 {
+				return errors.New("unbound-stats: no instance answered")
 			}
 			return nil
 		},

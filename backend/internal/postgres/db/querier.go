@@ -39,8 +39,12 @@ type Querier interface {
 	// ?tag= via the GIN-indexed tags array. Each row carries the same adoption
 	// pair as the detail via a lateral read of the latest stats_campaign_daily
 	// row (the set is tens of rows, so the per-row join is trivially cheap).
+	// domain_count counts the members the members page walks and the adoption
+	// snapshot counts: disabled rows are excluded on all three surfaces.
 	CampaignPublicList(ctx context.Context, tag string) ([]CampaignPublicListRow, error)
 	CampaignRemoveMembersNotIn(ctx context.Context, arg CampaignRemoveMembersNotInParams) (int64, error)
+	// source_file is not unique (a fork leaves the disabled old row beside the
+	// new one), so the reuse rule prefers the enabled, most recently touched row.
 	CampaignUUIDBySourceFile(ctx context.Context, sourceFile *string) (pgtype.UUID, error)
 	CampaignUpdateFromFile(ctx context.Context, arg CampaignUpdateFromFileParams) (int32, error)
 	// The ?scope=campaign global feed (07 §4.8): transitions of domains in ANY
@@ -197,7 +201,10 @@ type Querier interface {
 	// The API DNS-provider league table (07 §4.6): exact stored counters,
 	// count_v4 synthesized server-side.
 	ProviderDetail(ctx context.Context, id int64) (ProviderDetailRow, error)
-	ProviderDomainCount(ctx context.Context, dnsProviderID *int64) (int64, error)
+	// `provider list`: one grouped pass over domain rather than a count per
+	// provider (only the partial idx_domain_dns_provider exists, so each of
+	// those was a scan).
+	ProviderDomainCounts(ctx context.Context) ([]ProviderDomainCountsRow, error)
 	ProviderInsert(ctx context.Context, arg ProviderInsertParams) (int64, error)
 	ProviderLeaderboard(ctx context.Context) ([]ProviderLeaderboardRow, error)
 	// db/query/provider.sql — dns_provider reference data + attribution stamp

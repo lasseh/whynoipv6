@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
-	"strings"
 
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/pgx/v5" // pgx5:// database driver
@@ -16,19 +15,17 @@ import (
 )
 
 // newMigrator builds a golang-migrate instance over the embedded SQL files.
-// The DATABASE_URL scheme is rewritten postgres:// -> pgx5:// (the
-// golang-migrate pgx/v5 driver's URL scheme) — no second config key
+// The DATABASE_URL is rewritten to the golang-migrate pgx/v5 driver URL
+// (pgx5://, pgxpool-only pool_* keys dropped) — no second config key
 // (05-schema.md §2.1).
 func newMigrator(cfg *config.Config) (*migrate.Migrate, error) {
 	src, err := iofs.New(migrations.Files, ".")
 	if err != nil {
 		return nil, fmt.Errorf("migrations source: %w", err)
 	}
-	url := cfg.DatabaseURL
-	if rest, ok := strings.CutPrefix(url, "postgres://"); ok {
-		url = "pgx5://" + rest
-	} else if rest, ok := strings.CutPrefix(url, "postgresql://"); ok {
-		url = "pgx5://" + rest
+	url, err := migrations.DriverURL(cfg.DatabaseURL)
+	if err != nil {
+		return nil, fmt.Errorf("migrate init: %w", err)
 	}
 	m, err := migrate.NewWithSourceInstance("iofs", src, url)
 	if err != nil {
@@ -60,8 +57,11 @@ func migrateCmd() *cobra.Command {
 				}
 				return fmt.Errorf("migrate up: %w", err)
 			}
-			v, _, _ := m.Version()
-			fmt.Printf("migrated to version %d\n", v)
+			v, dirty, err := m.Version()
+			if err != nil {
+				return fmt.Errorf("migrate up: version: %w", err)
+			}
+			fmt.Printf("migrated to version %d dirty: %t\n", v, dirty)
 			return nil
 		},
 	})

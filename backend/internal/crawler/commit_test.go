@@ -229,6 +229,22 @@ func TestCommitCountingGate(t *testing.T) {
 	m.assertDim(domain.DimBase, ptrStatus(domain.StatusUnsupported), nil, 0)
 }
 
+// TestCommitCountingGateBoundary pins the gate's edge (03 §7): an
+// observation exactly min_confirm_spacing after the last counted one counts
+// — the comparison is >=, so the 12h cadence itself is never "too close".
+func TestCommitCountingGateBoundary(t *testing.T) {
+	m := newMachine(t)
+	m.step(0, stableObs(domain.DimBase, domain.ObsSupported), false)
+	m.step(24*time.Hour, stableObs(domain.DimBase, domain.ObsUnsupported), false) // counts
+	m.assertDim(domain.DimBase, ptrStatus(domain.StatusSupported), ptrStatus(domain.StatusUnsupported), 1)
+
+	u := m.step(36*time.Hour, stableObs(domain.DimBase, domain.ObsUnsupported), false) // exactly +12h: counts
+	if len(u.Changelog) != 1 {
+		t.Fatalf("changelog rows = %d, want 1 (an observation at exactly +12h counts)", len(u.Changelog))
+	}
+	m.assertDim(domain.DimBase, ptrStatus(domain.StatusUnsupported), nil, 0)
+}
+
 // TestCommitN3Flip (10-testing §5.4): conn (and resources) need three spaced
 // counted observations.
 func TestCommitN3Flip(t *testing.T) {

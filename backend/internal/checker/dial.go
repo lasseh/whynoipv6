@@ -25,7 +25,7 @@ func dialOverAAAA(ctx context.Context, dialer *SafeDialer, domain string, start 
 	ips, _, _, _, err := dialer.Resolver().LookupAAAA(ctx, domain)
 	if err != nil {
 		d.Error = err.Error()
-		return Result{
+		return Result{ //nolint:nilerr // the error is the Result
 			Status:  StatusError,
 			Detail:  d,
 			Latency: time.Since(start),
@@ -48,7 +48,7 @@ func dialOverAAAA(ctx context.Context, dialer *SafeDialer, domain string, start 
 		ip := ips[i]
 		if err := dialer.ValidateIP(ip); err != nil {
 			d.Error = errAddrBlocked
-			return Result{
+			return Result{ //nolint:nilerr // the error is the Result
 				Status:  StatusError,
 				Detail:  d,
 				Latency: time.Since(start),

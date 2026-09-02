@@ -29,4 +29,25 @@ func TestConfigBinding(t *testing.T) {
 	_ = crawler.LiveCheckConfigFrom(cfg)
 	_ = campaign.ConfigFrom(cfg)
 	_ = ingest.TrancoConfigFrom(cfg)
+	if err := validateBounds(cfg); err != nil {
+		t.Errorf("the defaults fail the startup bounds: %v", err)
+	}
+}
+
+// TestValidateBounds: a zero for one of the counted keys is a startup
+// error, not a crawler that runs and does nothing.
+func TestValidateBounds(t *testing.T) {
+	for _, env := range []string{"WORKER_SLOTS", "CLAIM_BATCH_SIZE", "CHECKS_MAX_NS_LOOKUPS", "CONSENSUS_PER_PROVIDER_QPS"} {
+		t.Run(env, func(t *testing.T) {
+			t.Setenv("DATABASE_URL", "postgres://u@localhost/whynoipv6")
+			t.Setenv(env, "0")
+			cfg, err := config.Load("crawler")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := validateBounds(cfg); err == nil {
+				t.Errorf("%s=0 passed the startup bounds", env)
+			}
+		})
+	}
 }

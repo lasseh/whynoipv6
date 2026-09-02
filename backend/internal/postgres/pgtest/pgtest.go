@@ -18,7 +18,6 @@ import (
 	"log"
 	"net/url"
 	"os"
-	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -181,13 +180,17 @@ func MigrateUp(dsn string) error {
 	return nil
 }
 
-// NewMigrator builds a golang-migrate instance over the embedded SQL files.
+// NewMigrator builds a golang-migrate instance over the embedded SQL files,
+// through the same DSN rewrite v6ctl uses.
 func NewMigrator(dsn string) (*migrate.Migrate, error) {
 	src, err := iofs.New(migrations.Files, ".")
 	if err != nil {
 		return nil, err
 	}
-	pgx5 := "pgx5://" + strings.TrimPrefix(dsn, "postgres://")
+	pgx5, err := migrations.DriverURL(dsn)
+	if err != nil {
+		return nil, err
+	}
 	return migrate.NewWithSourceInstance("iofs", src, pgx5)
 }
 

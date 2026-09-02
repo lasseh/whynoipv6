@@ -144,9 +144,14 @@ func (t *Tick) summary(ctx context.Context, failed []string) {
 	if t.Notify == nil {
 		return
 	}
-	counts, _ := db.New(t.Pool).TickSummaryCounts(ctx)
+	counts, err := db.New(t.Pool).TickSummaryCounts(ctx)
 	msg := fmt.Sprintf("daily tick: scanned=%d transitions=%d queue_depth=%d",
 		counts.Scanned, counts.Transitions, counts.QueueDepth)
+	if err != nil {
+		// Zeros would read as an idle crawler; say the counts are missing.
+		slog.Error("tick summary counts failed", "err", err.Error())
+		msg = "daily tick: counts unavailable (" + err.Error() + ")"
+	}
 	if len(failed) > 0 {
 		msg += " FAILED_STEPS=" + strings.Join(failed, ",")
 	}

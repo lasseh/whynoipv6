@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 
 	"github.com/lasseh/whynoipv6/internal/postgres"
 )
@@ -274,9 +274,12 @@ func (s *Server) campaignFeedScope(w http.ResponseWriter, r *http.Request) (*fee
 		InternalError(w, r, err)
 		return nil, false
 	}
+	// The canonical lowercase form, not the path segment as typed:
+	// uuid.Parse accepts braces, urn: and uppercase, and the feed <id> and
+	// self link must not vary with the spelling (07 §5.4).
 	return &feedScope{
 		Title:   "WhyNoIPv6 — " + row.Name,
-		ListURL: s.opts.PublicBaseURL + "/campaigns/" + chi.URLParam(r, "uuid") + "/changelog",
+		ListURL: s.opts.PublicBaseURL + "/campaigns/" + uuid.UUID(row.Uuid.Bytes).String() + "/changelog",
 		Items:   scopedFeedItems(rows),
 	}, true
 }

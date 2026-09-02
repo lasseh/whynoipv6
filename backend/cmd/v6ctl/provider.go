@@ -9,6 +9,7 @@ import (
 
 	"github.com/lasseh/whynoipv6/db/seed"
 	"github.com/lasseh/whynoipv6/internal/ingest"
+	"github.com/lasseh/whynoipv6/internal/postgres"
 	db "github.com/lasseh/whynoipv6/internal/postgres/db"
 )
 
@@ -82,13 +83,17 @@ func providerCmd() *cobra.Command {
 				return err
 			}
 			defer pool.Close()
-			q := db.New(pool)
-			_, err = q.ProviderClearDomains(cmd.Context(), args[0])
-			if err != nil {
+			// One transaction: a clear that commits without its delete
+			// would leave the provider in place with its domains unstamped.
+			var n int64
+			if err := postgres.InTx(cmd.Context(), pool, func(q *db.Queries) error {
+				if _, err := q.ProviderClearDomains(cmd.Context(), args[0]); err != nil {
+					return err
+				}
+				var err error
+				n, err = q.ProviderDelete(cmd.Context(), args[0])
 				return err
-			}
-			n, err := q.ProviderDelete(cmd.Context(), args[0])
-			if err != nil {
+			}); err != nil {
 				return err
 			}
 			if n == 0 {
@@ -115,14 +120,19 @@ func providerCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			grouped, err := q.ProviderDomainCounts(cmd.Context())
+			if err != nil {
+				return err
+			}
+			counts := make(map[int64]int64, len(grouped))
+			for i := range grouped {
+				if id := grouped[i].DnsProviderID; id != nil {
+					counts[*id] = grouped[i].Domains
+				}
+			}
 			for i := range rows {
 				r := &rows[i]
-				id := r.ID
-				n, err := q.ProviderDomainCount(cmd.Context(), &id)
-				if err != nil {
-					return err
-				}
-				fmt.Printf("%s\t%d domains\t%s\n", r.Name, n, strings.Join(r.NsSuffixes, ","))
+				fmt.Printf("%s\t%d domains\t%s\n", r.Name, counts[r.ID], strings.Join(r.NsSuffixes, ","))
 			}
 			return nil
 		},

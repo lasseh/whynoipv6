@@ -8,11 +8,13 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/spf13/cobra"
 
 	"github.com/lasseh/whynoipv6/internal/config"
+	"github.com/lasseh/whynoipv6/internal/postgres"
 )
 
 type ctxKey struct{}
@@ -24,12 +26,17 @@ func cfgFromCmd(cmd *cobra.Command) *config.Config {
 
 // newPool opens the pgx pool from the config loaded by the root PersistentPreRunE.
 func newPool(cmd *cobra.Command) (*pgxpool.Pool, error) {
-	pool, err := pgxpool.New(cmd.Context(), cfgFromCmd(cmd).DatabaseURL)
+	pool, err := postgres.NewPool(cmd.Context(), cfgFromCmd(cmd).DatabaseURL)
 	if err != nil {
 		return nil, fmt.Errorf("connect: %w", err)
 	}
 	return pool, nil
 }
+
+// singletonWait is the blocking advisory-lock wait for operator-triggered
+// singleton runs (`tranco import`, `campaign sync`): hardcoded, no config
+// key (04-lifecycle-scheduling.md §10).
+const singletonWait = 5 * time.Minute
 
 // underOps reports whether cmd sits in the `ops` command subtree. Those are
 // timer-driven scrapes (unbound-stats fires every minute), so their config

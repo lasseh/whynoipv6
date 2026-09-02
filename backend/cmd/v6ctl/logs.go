@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
+	"os/signal"
 	"strconv"
 	"syscall"
 
@@ -93,7 +94,17 @@ func runLogs(cmd *cobra.Command, f *logsFlags, args []string) error {
 	}
 	stdin, extra := splitStdinArg(args)
 
+	// A reader that goes away mid-stream (`v6ctl logs | head`) must reach
+	// render as EPIPE on the write, which it treats as a normal end; without
+	// this the runtime exits the process on SIGPIPE for a stdout write.
+	signal.Ignore(syscall.SIGPIPE)
+
 	if records, finite := stdinRecords(); stdin || records {
+		if !stdin && !finite {
+			// The invocation read like a journal query; say why it is not
+			// one, or a `--unit` given under a piped stdin looks ignored.
+			fmt.Fprintln(os.Stderr, "reading records from stdin (a pipe), not the journal; pass `-` to make that explicit")
+		}
 		// Only a regular file is finite; a pipe is somebody streaming into
 		// us and must not sit in a buffer.
 		_, err := render(logfmt.New(opts), os.Stdin, finite)
@@ -138,7 +149,7 @@ func runJournalctl(cmd *cobra.Command, formatter *logfmt.Formatter, f *logsFlags
 		return fmt.Errorf("%s not found; pipe the records in instead, e.g. "+
 			"`docker compose logs -f --no-log-prefix crawler | v6ctl logs -`", journalctl)
 	}
-	jc := exec.CommandContext(cmd.Context(), journalctl, journalctlArgs(f, extra)...)
+	jc := exec.CommandContext(cmd.Context(), journalctl, journalctlArgs(f, extra)...) //nolint:gosec // the operator's own journalctl flags
 	// journalctl's own diagnostics stay on stderr: merged into stdout they
 	// would reach the formatter and read like log content.
 	jc.Stderr = os.Stderr
@@ -149,14 +160,14 @@ func runJournalctl(cmd *cobra.Command, formatter *logfmt.Formatter, f *logsFlags
 	if err := jc.Start(); err != nil {
 		return fmt.Errorf("%s: %w", journalctl, err)
 	}
-	written, renderErr := render(formatter, pipe, !f.follow)
+	read, renderErr := render(formatter, pipe, !f.follow)
 	waitErr := jc.Wait()
 
 	// Ctrl-C reaches journalctl directly as a member of the terminal's
 	// process group, so a signalled exit under a cancelled context is the
 	// normal way --follow ends, not a failure.
 	if cmd.Context().Err() != nil {
-		return nil
+		return nil //nolint:nilerr // Ctrl-C reached journalctl too: a signalled exit is the normal end of --follow
 	}
 	if renderErr != nil {
 		return renderErr
@@ -164,7 +175,7 @@ func runJournalctl(cmd *cobra.Command, formatter *logfmt.Formatter, f *logsFlags
 	if waitErr != nil {
 		return fmt.Errorf("%s: %w", journalctl, waitErr)
 	}
-	if written == 0 && !f.follow {
+	if read == 0 && !f.follow {
 		fmt.Fprintf(os.Stderr, "no records matched %v; `systemctl list-units 'whynoipv6-*'` "+
 			"lists what this host actually runs\n", resolveUnits(f.units))
 	}
@@ -213,13 +224,13 @@ func resolveUnits(names []string) []string {
 // `docker compose logs -f … | v6ctl logs -` pipe goes silent for whole 4 KB
 // chunks and reads as a hang.
 func render(formatter *logfmt.Formatter, src io.Reader, finite bool) (int64, error) {
-	counter := &countingWriter{w: os.Stdout}
+	counter := &countingReader{r: src}
 	err := func() error {
 		if !finite {
-			return formatter.Copy(counter, src)
+			return formatter.Copy(os.Stdout, counter)
 		}
-		buffered := bufio.NewWriter(counter)
-		copyErr := formatter.Copy(buffered, src)
+		buffered := bufio.NewWriter(os.Stdout)
+		copyErr := formatter.Copy(buffered, counter)
 		// Flush on the error path too, or an interrupted bulk read drops
 		// the records already rendered.
 		if flushErr := buffered.Flush(); copyErr == nil {
@@ -233,14 +244,15 @@ func render(formatter *logfmt.Formatter, src io.Reader, finite bool) (int64, err
 	return counter.n, err
 }
 
-// countingWriter counts the bytes written, for the zero-match hint.
-type countingWriter struct {
-	w io.Writer
+// countingReader counts the bytes read, for the zero-match hint: a record
+// that --level dropped was still a match, so the output side cannot tell.
+type countingReader struct {
+	r io.Reader
 	n int64
 }
 
-func (c *countingWriter) Write(p []byte) (int, error) {
-	n, err := c.w.Write(p)
+func (c *countingReader) Read(p []byte) (int, error) {
+	n, err := c.r.Read(p)
 	c.n += int64(n)
 	return n, err
 }

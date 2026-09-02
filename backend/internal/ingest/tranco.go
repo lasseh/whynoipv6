@@ -253,9 +253,9 @@ func (ti *TrancoImporter) applyList(ctx context.Context, rep *TrancoReport, rows
 			return db.New(ti.pool).TrancoInsertAborted(ctx, db.TrancoInsertAbortedParams{
 				ListID:         rep.ListID,
 				ListDate:       postgres.Date(rep.ListDate),
-				LineCount:      ptr(int32(rep.LineCount)),
-				RejectedCount:  ptr(int32(rep.RejectedCount)),
-				DuplicateCount: ptr(int32(rep.DuplicateCount)),
+				LineCount:      count32(rep.LineCount),
+				RejectedCount:  count32(rep.RejectedCount),
+				DuplicateCount: count32(rep.DuplicateCount),
 				Note:           &note,
 			})
 		}
@@ -285,11 +285,11 @@ func (ti *TrancoImporter) applyList(ctx context.Context, rep *TrancoReport, rows
 	if _, err := q.TrancoInsertProvenance(ctx, db.TrancoInsertProvenanceParams{
 		ListID:         rep.ListID,
 		ListDate:       postgres.Date(rep.ListDate),
-		LineCount:      ptr(int32(rep.LineCount)),
-		ImportedCount:  ptr(int32(rep.ImportedCount)),
-		Delisted:       ptr(int32(rep.Delisted)),
-		RejectedCount:  ptr(int32(rep.RejectedCount)),
-		DuplicateCount: ptr(int32(rep.DuplicateCount)),
+		LineCount:      count32(rep.LineCount),
+		ImportedCount:  count32(rep.ImportedCount),
+		Delisted:       count32(rep.Delisted),
+		RejectedCount:  count32(rep.RejectedCount),
+		DuplicateCount: count32(rep.DuplicateCount),
 	}); err != nil {
 		return fmt.Errorf("tranco: provenance: %w", err)
 	}
@@ -316,9 +316,16 @@ func delistBudget(perDay, days float64) float64 {
 	return min(perDay*max(days, 1), maxDelistCeilingPct)
 }
 
-// maxTrancoLines bounds the decompressed line count (the list is ~1M rows)
-// so a high-ratio zip cannot exhaust memory.
-const maxTrancoLines = 10_000_000
+// maxTrancoLines bounds the decompressed line count and, since every parsed
+// line is staged in memory before COPY, the parse's memory: 2× the ~1M-row
+// list (tranco.min_rows already rejects anything below 950k). It also bounds
+// the rank value, which narrows to the INT staging column.
+const maxTrancoLines = 2_000_000
+
+// maxTrancoLineBytes is the longest CSV line the parser reads whole; a host
+// is at most 253 octets, so anything longer is a rejected line, not a
+// reason to abort the import.
+const maxTrancoLineBytes = 64 * 1024
 
 // parseTrancoZip unzips the single inner top-1m.csv and parses rank,domain
 // lines (CRLF, no header), canonicalizing hosts and deriving the ICANN tld
@@ -344,10 +351,29 @@ func parseTrancoZip(zipBytes []byte) (rows [][]any, lineCount, rejected int, err
 	}
 	defer func() { _ = rc.Close() }()
 
-	sc := bufio.NewScanner(rc)
-	sc.Buffer(make([]byte, 0, 64*1024), 1024*1024)
-	for sc.Scan() {
-		line := strings.TrimSuffix(sc.Text(), "\r")
+	// One bounded line at a time: a line longer than the buffer is skipped
+	// and counted as rejected (06 §2.2 step 5), not a fatal ErrTooLong that
+	// aborts the whole list and retries the same artifact every cycle.
+	br := bufio.NewReaderSize(rc, maxTrancoLineBytes)
+	for {
+		raw, isPrefix, err := br.ReadLine()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return nil, 0, 0, fmt.Errorf("read csv: %w", err)
+		}
+		if isPrefix {
+			for isPrefix {
+				if _, isPrefix, err = br.ReadLine(); err != nil {
+					break
+				}
+			}
+			lineCount++
+			rejected++
+			continue
+		}
+		line := strings.TrimSuffix(string(raw), "\r")
 		if line == "" {
 			continue
 		}
@@ -361,7 +387,7 @@ func parseTrancoZip(zipBytes []byte) (rows [][]any, lineCount, rejected int, err
 			continue
 		}
 		rank, err := strconv.Atoi(rankStr)
-		if err != nil || rank <= 0 {
+		if err != nil || rank <= 0 || rank > maxTrancoLines {
 			rejected++
 			continue
 		}
@@ -371,12 +397,14 @@ func parseTrancoZip(zipBytes []byte) (rows [][]any, lineCount, rejected int, err
 			slog.Debug("tranco line rejected", "line", line, "err", err.Error())
 			continue
 		}
-		rows = append(rows, []any{int32(rank), host, domain.TLD(host)})
-	}
-	if err := sc.Err(); err != nil && !errors.Is(err, io.EOF) {
-		return nil, 0, 0, fmt.Errorf("scan csv: %w", err)
+		rows = append(rows, []any{int32(rank), host, domain.TLD(host)}) //nolint:gosec // rank ≤ maxTrancoLines, checked above
 	}
 	return rows, lineCount, rejected, nil
 }
 
-func ptr[T any](v T) *T { return &v }
+// count32 narrows a report counter for the int32 provenance columns; every
+// counter is bounded by maxTrancoLines.
+func count32(n int) *int32 {
+	v := int32(n) //nolint:gosec // ≤ maxTrancoLines
+	return &v
+}

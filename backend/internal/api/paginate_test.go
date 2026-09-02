@@ -92,6 +92,51 @@ func TestCursor(t *testing.T) {
 			t.Errorf("garbage: %v", err)
 		}
 	})
+
+	// The count and null-flag orderings key on stable identifiers
+	// (asn.number, domain.id), so a stale generation keeps their tiebreaker:
+	// zeroing it would skip every network sharing the boundary count.
+	t.Run("stale_generation_keeps_stable_tiebreakers", func(t *testing.T) {
+		tok := EncodeCursor(20260706, SortCountV6, fp, []any{int32(1), int64(103)})
+		c, err := DecodeCursor(tok, SortCountV6, fp, g)
+		if err != nil {
+			t.Fatal(err)
+		}
+		s, _ := c.SeekTuple()
+		if !c.ReAnchored || s.Rank == nil || *s.Rank != 1 || s.ID != 103 {
+			t.Errorf("count_v6 re-anchored seek = %+v, want count 1 with number 103 kept", s)
+		}
+		tok = EncodeCursor(20260706, SortDependents, fp, []any{true, nil, int64(9001)})
+		c, _ = DecodeCursor(tok, SortDependents, fp, g)
+		s, _ = c.SeekTuple()
+		if !c.ReAnchored || !s.RankNull || s.ID != 9001 {
+			t.Errorf("dependents re-anchored seek = %+v, want the null-tail id kept", s)
+		}
+	})
+
+	t.Run("out_of_range_seek_rejected", func(t *testing.T) {
+		tok := EncodeCursor(g, SortRank, fp, []any{int64(4294967297), int64(1)})
+		c, err := DecodeCursor(tok, SortRank, fp, g)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := c.SeekTuple(); !errors.Is(err, ErrCursorInvalid) {
+			t.Errorf("rank 2^32+1: err = %v, want ErrCursorInvalid (not a wrapped rank 1)", err)
+		}
+	})
+}
+
+// TestFingerprintIgnoresPresentation (07 §5.5): format= and fields= change
+// the rendering, not the filtered set, so a cursor minted on the JSON view
+// replays under ?format=csv; sort= stays in the fingerprint.
+func TestFingerprintIgnoresPresentation(t *testing.T) {
+	base := FilterFingerprint(url.Values{"class": {"hero"}})
+	if got := FilterFingerprint(url.Values{"class": {"hero"}, "format": {"csv"}, "fields": {"host,rank"}}); got != base {
+		t.Error("format=/fields= changed the fingerprint")
+	}
+	if got := FilterFingerprint(url.Values{"class": {"hero"}, "sort": {"host"}}); got == base {
+		t.Error("sort= must stay in the fingerprint")
+	}
 }
 
 // TestScopeGuardrail (07 §3.3): bare residuals and stacked residuals return

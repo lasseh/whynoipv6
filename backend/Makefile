@@ -1,6 +1,8 @@
 GO      ?= go
 GOFLAGS ?=
 BINARIES := api crawler v6ctl
+# Everything `make generate` writes; the drift gate checks exactly this set.
+GENERATED := internal/postgres/db internal/api/gen ../openapi/schema.ts
 
 # Integration tests run against one container for the whole `go test ./...`
 # run: eight per-binary servers overwhelmed the CI runner and killed Postgres
@@ -83,7 +85,11 @@ generate: ## Regenerate sqlc + OpenAPI codegen; fail if the tree is stale (the C
 	sqlc generate
 	$(GO) tool oapi-codegen -config ../openapi/oapi-codegen.yaml ../openapi/openapi.yaml
 	npx -y openapi-typescript@7 ../openapi/openapi.yaml -o ../openapi/schema.ts
-	@git diff --exit-code || (echo "generated code is out of date — run codegen and commit" && exit 1)
+	@# status --porcelain, not diff: a generator that emits a NEW file leaves
+	@# it untracked, which diff does not see. Scoped so unrelated local edits
+	@# cannot fail the gate.
+	@test -z "$$(git status --porcelain -- $(GENERATED))" || \
+	  (git status --porcelain -- $(GENERATED); echo "generated code is out of date — run codegen and commit" && exit 1)
 
 spec-lint: ## Lint openapi.yaml with Spectral (snake_case, envelopes, problem+json)
 	npx -y @stoplight/spectral-cli@6 lint ../openapi/openapi.yaml \

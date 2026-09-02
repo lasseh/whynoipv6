@@ -6,6 +6,7 @@ import (
 	"errors"
 	"log/slog"
 	"net"
+	"net/http"
 	"net/url"
 	"os"
 	"strings"
@@ -158,6 +159,17 @@ func TestHTTPErrorTypes(t *testing.T) {
 	certErr := &tls.CertificateVerificationError{Err: errors.New("x509: certificate signed by unknown authority")}
 	if !isTLSError(certErr) {
 		t.Error("CertificateVerificationError not classified certificate_error")
+	}
+	// A plaintext listener on the TLS port: crypto/tls returns the
+	// RecordHeaderError by value, and net/http substitutes ErrSchemeMismatch
+	// when the record starts with "HTTP/". Both arrive wrapped in *url.Error.
+	plain := &url.Error{Op: "Get", URL: "https://example.com/", Err: tls.RecordHeaderError{Msg: "first record does not look like a TLS handshake"}}
+	if !isTLSError(plain) {
+		t.Error("tls.RecordHeaderError (value) not classified certificate_error")
+	}
+	mismatch := &url.Error{Op: "Get", URL: "https://example.com/", Err: http.ErrSchemeMismatch}
+	if !isTLSError(mismatch) {
+		t.Error("http.ErrSchemeMismatch not classified certificate_error")
 	}
 	if isConnRefused(errors.New("other")) || isTimeout(errors.New("other")) || isTLSError(errors.New("other")) {
 		t.Error("generic error must classify as unknown")

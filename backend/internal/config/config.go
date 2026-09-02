@@ -25,6 +25,7 @@ var secretKeys = map[string]bool{
 	"ops.healthcheck_url":      true,
 	"ops.healthcheck_tick_url": true,
 	"taillight.api_key":        true,
+	"campaign.git_remote":      true, // a remote name by contract, but a token URL would work
 }
 
 // Config is the resolved configuration of one binary. Global deployment keys
@@ -225,11 +226,17 @@ func (c *Config) LogSummary(log *slog.Logger, level slog.Level) {
 	log.Log(context.Background(), level, "configuration", attrs...)
 }
 
-// redactDSN reduces a pgx DSN to user@host/db — no password, no params.
+// redactDSN reduces a pgx URL DSN to user@host/db — no password, no params.
+// pgx also accepts the libpq keyword form (`host=… password=…`), which
+// url.Parse swallows whole into Path; anything that is not a URL with a
+// host is therefore reported as "set" rather than echoed.
 func redactDSN(dsn string) string {
 	u, err := url.Parse(dsn)
 	if err != nil {
 		return "invalid"
+	}
+	if u.Scheme == "" || u.Host == "" {
+		return "set"
 	}
 	redacted := url.URL{Scheme: u.Scheme, Host: u.Host, Path: u.Path}
 	if u.User != nil {

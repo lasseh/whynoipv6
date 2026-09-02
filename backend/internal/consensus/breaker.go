@@ -73,9 +73,15 @@ func (r *Resolver) recordFastLane(ctx context.Context, definitive bool) {
 	}
 	total, bad := r.fastWindow.counts()
 	if total >= r.cfg.FastLane.MinSamples && float64(bad)/float64(total) > r.cfg.FastLane.NondefinitiveRate {
+		// Re-check under the lock: many lookups cross the threshold in the
+		// same instant, and only the one that flips the breaker alerts.
 		r.mu.Lock()
+		flipped := !r.fastOpen
 		r.fastOpen = true
 		r.mu.Unlock()
+		if !flipped {
+			return
+		}
 		msg := fmt.Sprintf("consensus fast-lane breaker OPEN: nondefinitive rate %.3f over %s (n=%d)",
 			float64(bad)/float64(total), r.cfg.FastLane.Window, total)
 		r.logger.Warn("fastlane breaker open", "rate", float64(bad)/float64(total), "n", total)
@@ -179,17 +185,23 @@ func (r *Resolver) runCanary() {
 	o := r.queryProvider(ctx, p, canaryName)
 
 	r.mu.Lock()
-	defer r.mu.Unlock()
-	if !validSymbol(o.symbol) {
+	restored := false
+	if validSymbol(o.symbol) {
+		r.canaryOK++
+		if r.canaryOK >= r.cfg.Provider.RecoveryProbes {
+			r.dropped = ""
+			r.canaryOK = 0
+			p.window.reset()
+			restored = true
+		}
+	} else {
 		r.canaryOK = 0
-		return
 	}
-	r.canaryOK++
-	if r.canaryOK >= r.cfg.Provider.RecoveryProbes {
-		r.dropped = ""
-		r.canaryOK = 0
-		p.window.reset()
+	r.mu.Unlock()
+	if restored {
+		// Alert from the maintenance goroutine itself, outside the lock and
+		// under the probe's deadline, so Close never leaves a sender behind.
 		r.logger.Info("provider restored", "provider", p.name)
-		go r.alert(context.Background(), "consensus provider restored: "+p.name)
+		r.alert(ctx, "consensus provider restored: "+p.name)
 	}
 }

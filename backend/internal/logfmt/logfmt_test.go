@@ -77,6 +77,11 @@ func TestAppend(t *testing.T) {
 			want: []string{`err=constraint "pkey"\n  (SQLSTATE 23505)`},
 		},
 		{
+			name: "a passthrough line is escaped, C1 included",
+			raw:  "panic: \x1b[2Jboom \u009b31mred",
+			want: []string{`panic: \x1b[2Jboom \x9b31mred`},
+		},
+		{
 			name: "non-string values render as JSON",
 			raw:  `{` + stamp + `,"level":"INFO","msg":"m","up":["1.1.1.1","9.9.9.9"],"n":null,"ok":true}`,
 			want: []string{`up=["1.1.1.1","9.9.9.9"]`, "n=null", "ok=true"},

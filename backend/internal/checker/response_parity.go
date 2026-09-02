@@ -43,9 +43,18 @@ func (c *ResponseParity) Check(ctx context.Context, domain string, kind Kind) (R
 
 	d := &ParityDetail{}
 
-	// Resolve both A and AAAA records.
+	// Resolve both A and AAAA records. Resolver trouble is transient
+	// (error); only an empty answer is "no record" (not_applicable).
 	v4IPs, err := c.dialer.Resolver().LookupA(ctx, domain)
-	if err != nil || len(v4IPs) == 0 {
+	if err != nil {
+		d.Error = err.Error()
+		return Result{
+			Status:  StatusError,
+			Detail:  d,
+			Latency: time.Since(start),
+		}, nil
+	}
+	if len(v4IPs) == 0 {
 		d.Reason = "no A record"
 		return Result{
 			Status:  StatusNotApplicable,
@@ -55,7 +64,15 @@ func (c *ResponseParity) Check(ctx context.Context, domain string, kind Kind) (R
 	}
 
 	v6IPs, _, _, _, err := c.dialer.Resolver().LookupAAAA(ctx, domain)
-	if err != nil || len(v6IPs) == 0 {
+	if err != nil {
+		d.Error = err.Error()
+		return Result{
+			Status:  StatusError,
+			Detail:  d,
+			Latency: time.Since(start),
+		}, nil
+	}
+	if len(v6IPs) == 0 {
 		d.Reason = errNoAAAARecord
 		return Result{
 			Status:  StatusNotApplicable,

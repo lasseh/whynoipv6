@@ -59,4 +59,5 @@ SELECT
      WHERE ts >= now() - interval '24 hours') AS scanned,
   (SELECT count(*) FROM changelog WHERE ts >= now() - interval '24 hours') AS transitions,
   (SELECT count(*) FROM domain WHERE (NOT disabled OR disabled_reason IN ('dead', 'delisted'))
-     AND next_check_at <= now()) AS queue_depth;
+     AND next_check_at <= now()
+     AND (claimed_at IS NULL OR claimed_at < now() - interval '30 minutes')) AS queue_depth;

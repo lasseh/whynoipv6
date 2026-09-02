@@ -111,6 +111,7 @@ func TestNoStrayHostLowercasing(t *testing.T) {
 		"internal/config/config.go":   "LOG_LEVEL parsing, not a hostname",
 		"internal/campaign/parse.go":  "tag/uuid normalization, not a hostname",
 		"internal/ingest/provider.go": "operator-entered NS suffixes normalized at the single write path",
+		"internal/ingest/hosting.go":  "CNAME targets folded for the CDN-suffix match; never a hostname write",
 		// Lifted engine files (01-engine.md): behavior-identical lift; their
 		// lowercasing predates Canonicalize and never reaches a DB write.
 		"internal/checker/resource_discovery.go": "lifted tokenizer hostname folding (01 §11.9)",

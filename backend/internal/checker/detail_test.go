@@ -2,7 +2,9 @@ package checker
 
 import (
 	"encoding/json"
+	"log/slog"
 	"reflect"
+	"slices"
 	"testing"
 )
 
@@ -201,11 +203,11 @@ func TestDetailJSONRoundTrip(t *testing.T) {
 		},
 	}
 
-	// Guard against a new check name appearing in newDetail without a
+	// Guard against a new check name appearing in CheckNames without a
 	// round-trip case here.
-	for _, name := range dispatchNames() {
+	for _, name := range CheckNames {
 		if _, ok := table[name]; !ok {
-			t.Errorf("newDetail dispatches %q but the round-trip table has no case for it", name)
+			t.Errorf("CheckNames lists %q but the round-trip table has no case for it", name)
 		}
 	}
 
@@ -242,13 +244,25 @@ func TestDetailJSONRoundTrip(t *testing.T) {
 	}
 }
 
-// dispatchNames returns every check name newDetail maps to a concrete type
-// (i.e. all names except the CommonDetail fallback). Kept beside the test so a
-// new case added to newDetail forces a matching round-trip entry above.
-func dispatchNames() []string {
-	return []string{
-		NameDNSAAAABase, NameDNSAAAAWWW, NameDNSNS, NameDNSMX, NameDNSSEC,
-		NameHTTP, NameHTTPS, NameTLS, NameParity, NameSMTP, NameSPF, NamePTR,
-		NameLatencyV4, NameLatencyV6, NameResourceDiscovery,
+// TestCheckNamesComplete holds the three name lists to each other: what the
+// runner registers, what CheckNames declares, and what newDetail types. A
+// check added to one without the others fails here rather than surfacing
+// as a CommonDetail fallback in a stored scan.
+func TestCheckNamesComplete(t *testing.T) {
+	r := NewRunner(Config{EnableResourceDiscovery: true, MaxNSLookups: 1, MaxMXLookups: 1}, nil, nil, slog.Default())
+	registered := make([]string, 0, len(r.checkers))
+	for _, c := range r.checkers {
+		registered = append(registered, c.Name())
+	}
+	if !slices.Equal(registered, CheckNames) {
+		t.Errorf("runner registers %v\nCheckNames lists %v", registered, CheckNames)
+	}
+	for _, name := range CheckNames {
+		if _, common := newDetail(name).(*CommonDetail); common {
+			t.Errorf("newDetail(%q) falls back to CommonDetail", name)
+		}
+	}
+	if _, common := newDetail("bogus").(*CommonDetail); !common {
+		t.Error("an unknown name must fall back to CommonDetail")
 	}
 }

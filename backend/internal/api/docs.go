@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"sync"
 
 	"github.com/lasseh/whynoipv6/internal/api/gen"
 )
@@ -11,14 +12,20 @@ import (
 // path, a Scalar reference, and an llms.txt index. All meta routes — outside
 // the OpenAPI document itself, like the health endpoints.
 
-// getOpenAPIJSON serves the embedded contract as JSON.
-func (s *Server) getOpenAPIJSON(w http.ResponseWriter, r *http.Request) {
+// openAPIJSON renders the embedded contract once per process: the document
+// is static, and the kin-openapi load + marshal is not worth repeating for
+// every cache-busting query-string variant.
+var openAPIJSON = sync.OnceValues(func() ([]byte, error) {
 	swagger, err := gen.GetSpec()
 	if err != nil {
-		InternalError(w, r, err)
-		return
+		return nil, err
 	}
-	raw, err := json.Marshal(swagger)
+	return json.Marshal(swagger)
+})
+
+// getOpenAPIJSON serves the embedded contract as JSON.
+func (s *Server) getOpenAPIJSON(w http.ResponseWriter, r *http.Request) {
+	raw, err := openAPIJSON()
 	if err != nil {
 		InternalError(w, r, err)
 		return

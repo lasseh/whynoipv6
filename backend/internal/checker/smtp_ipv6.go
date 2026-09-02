@@ -103,9 +103,11 @@ func (c *SMTPIPv6) tryMX(ctx context.Context, mxHost string, preference uint16) 
 		return Result{}, fmt.Errorf("MX host %s address blocked: %w", mxHost, err)
 	}
 
-	// Connect via TCP6 to port 25.
+	// Connect via TCP6 to port 25 through the SafeDialer (an IP literal is
+	// validated and dialled, never re-resolved), so the blocklist holds by
+	// construction, not only by the ValidateIP above.
 	addr := net.JoinHostPort(ip.String(), c.port)
-	conn, err := c.dialer.dialer.DialContext(ctx, "tcp6", addr)
+	conn, err := c.dialer.DialContext(ctx, "tcp6", addr)
 	if err != nil {
 		return Result{}, err
 	}

@@ -28,9 +28,7 @@ import (
 // Cache-Control; the latest/ tree gets the mutable TTL; exact =/datasets
 // proxies to the API upstream. Skips when docker is unavailable.
 func TestNginxDatasetsSplit(t *testing.T) {
-	if _, err := exec.LookPath("docker"); err != nil {
-		t.Skip("docker unavailable")
-	}
+	requireDocker(t)
 
 	dir := t.TempDir()
 	// Self-signed stand-in at the Cloudflare Origin CA path the vhost expects
@@ -68,7 +66,7 @@ func TestNginxDatasetsSplit(t *testing.T) {
 		"-v", filepath.Join(dir, "whynoipv6")+":/var/lib/whynoipv6:ro",
 		"nginx:alpine")
 	if out, err := run.CombinedOutput(); err != nil {
-		t.Skipf("docker run failed (offline?): %v\n%s", err, out)
+		skipOrFail(t, "docker run failed (offline?): %v\n%s", err, out)
 	}
 	t.Cleanup(func() { _ = exec.Command("docker", "rm", "-f", name).Run() })
 
@@ -171,9 +169,7 @@ func writeSelfSigned(t *testing.T, dir string) {
 // canonicalisation rule written against $uri instead of $request_uri turns
 // every route into a 301 to /. Skips when docker is unavailable.
 func TestNginxSiteCanonicalRedirects(t *testing.T) {
-	if _, err := exec.LookPath("docker"); err != nil {
-		t.Skip("docker unavailable")
-	}
+	requireDocker(t)
 
 	dir := t.TempDir()
 	certDir := filepath.Join(dir, "cloudflare")
@@ -214,7 +210,7 @@ func TestNginxSiteCanonicalRedirects(t *testing.T) {
 		"-v", root+":/var/www/whynoipv6.com:ro",
 		"nginx:alpine")
 	if out, err := run.CombinedOutput(); err != nil {
-		t.Skipf("docker run failed (offline?): %v\n%s", err, out)
+		skipOrFail(t, "docker run failed (offline?): %v\n%s", err, out)
 	}
 	t.Cleanup(func() { _ = exec.Command("docker", "rm", "-f", name).Run() })
 
@@ -502,9 +498,7 @@ const browserUA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/5
 // the headers. Asserting the body is therefore load-bearing. Skips when docker
 // is unavailable.
 func TestNginxIPv4OutageDrill(t *testing.T) {
-	if _, err := exec.LookPath("docker"); err != nil {
-		t.Skip("docker unavailable")
-	}
+	requireDocker(t)
 
 	dir := t.TempDir()
 	certDir := filepath.Join(dir, "cloudflare")
@@ -554,7 +548,7 @@ func TestNginxIPv4OutageDrill(t *testing.T) {
 		"-v", root+":/var/www/whynoipv6.com:ro",
 		"nginx:alpine")
 	if out, err := run.CombinedOutput(); err != nil {
-		t.Skipf("docker run failed (offline?): %v\n%s", err, out)
+		skipOrFail(t, "docker run failed (offline?): %v\n%s", err, out)
 	}
 	t.Cleanup(func() { _ = exec.Command("docker", "rm", "-f", name).Run() })
 
@@ -746,9 +740,7 @@ func TestNginxIPv4OutageDrill(t *testing.T) {
 // about the vhost changes for an IPv4 visitor. This is the rollback assertion —
 // the drill has to be one line away from gone.
 func TestNginxIPv4OutageOff(t *testing.T) {
-	if _, err := exec.LookPath("docker"); err != nil {
-		t.Skip("docker unavailable")
-	}
+	requireDocker(t)
 
 	dir := t.TempDir()
 	certDir := filepath.Join(dir, "cloudflare")
@@ -773,7 +765,7 @@ func TestNginxIPv4OutageOff(t *testing.T) {
 		"-v", root+":/var/www/whynoipv6.com:ro",
 		"nginx:alpine")
 	if out, err := run.CombinedOutput(); err != nil {
-		t.Skipf("docker run failed (offline?): %v\n%s", err, out)
+		skipOrFail(t, "docker run failed (offline?): %v\n%s", err, out)
 	}
 	t.Cleanup(func() { _ = exec.Command("docker", "rm", "-f", name).Run() })
 
@@ -809,4 +801,23 @@ func TestNginxIPv4OutageOff(t *testing.T) {
 	if got := resp.Header.Get("Retry-Over-IPv6"); got != "" {
 		t.Errorf("Retry-Over-IPv6 = %q with the drill off, want it absent", got)
 	}
+}
+
+// requireDocker gates the nginx tests on a docker daemon. Locally that is a
+// skip; in CI (GitHub sets CI=true) a missing daemon or a failed `docker run`
+// is a failure, or the vhost gate can stop running without anyone noticing.
+func requireDocker(t *testing.T) {
+	t.Helper()
+	if _, err := exec.LookPath("docker"); err != nil {
+		skipOrFail(t, "docker unavailable: %v", err)
+	}
+}
+
+// skipOrFail skips outside CI and fails inside it.
+func skipOrFail(t *testing.T, format string, args ...any) {
+	t.Helper()
+	if os.Getenv("CI") != "" {
+		t.Fatalf(format, args...)
+	}
+	t.Skipf(format, args...)
 }

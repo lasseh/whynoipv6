@@ -11,7 +11,12 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
+	"syscall"
+	"time"
+
+	"gopkg.in/yaml.v3"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -61,6 +66,13 @@ type Report struct {
 func Sync(ctx context.Context, cfg Config, pool *pgxpool.Pool) (*Report, error) {
 	rep := &Report{RejectedFiles: map[string]string{}, RejectedHosts: map[string]string{}}
 
+	// The remote is an argv position git parses: a value starting with "-"
+	// is an option, a URL may carry a token that the startup summary and
+	// git's own error output would print. Credentials belong in the git
+	// config or deploy key, never in the registry value.
+	if (cfg.Pull || cfg.Push) && !gitRemoteRe.MatchString(cfg.GitRemote) {
+		return nil, fmt.Errorf("campaign sync: campaign.git_remote %q must be a remote name, not a URL or an option", cfg.GitRemote)
+	}
 	if cfg.Pull {
 		if out, err := git(ctx, cfg.RepoPath, "pull", "--ff-only", cfg.GitRemote); err != nil {
 			return nil, fmt.Errorf("campaign sync: git pull: %w: %s", err, out)
@@ -371,18 +383,28 @@ func applySubdomainFile(ctx context.Context, q *db.Queries, ens *entityEnsurer, 
 		if err != nil {
 			return nil, fmt.Errorf("campaign sync: ensure %s: %w", host, err)
 		}
-		ids = append(ids, id)
 		if existed {
 			// ensureRow leaves an existing row's shape alone, so a host the
 			// live check created before its apex was tracked still has
 			// parent_id NULL — which would keep it off the very page this
-			// feature exists to fill.
+			// feature exists to fill. An existing apex row (a Tranco-ranked
+			// host under a private-section suffix) keeps its kind (06 §3.4
+			// step 3b): relinking would flip it to a subdomain.
+			row, err := q.DomainByHost(ctx, host)
+			if err != nil {
+				return nil, fmt.Errorf("campaign sync: re-read %s: %w", host, err)
+			}
+			if row.Kind == db.DomainKindApex {
+				rep.RejectedHosts[f.Path+": "+host] = "already tracked as an apex; not listed as a subdomain"
+				continue
+			}
 			if _, err := q.DomainLinkParent(ctx, db.DomainLinkParentParams{
 				ID: id, ParentID: &parentID,
 			}); err != nil {
 				return nil, fmt.Errorf("campaign sync: link %s to parent: %w", host, err)
 			}
 		}
+		ids = append(ids, id)
 
 		added, err := q.CuratedSubdomainAdd(ctx, id)
 		if err != nil {
@@ -440,74 +462,134 @@ func dedupeUUIDs(ctx context.Context, pool *pgxpool.Pool, files []*File, rep *Re
 }
 
 // writeBackUUIDs inserts generated uuid lines and makes the single bot
-// commit (§3.3 step 6).
+// commit (§3.3 step 6). A file that could not be written is reported, not
+// folded into "nothing to push".
 func writeBackUUIDs(ctx context.Context, cfg Config, pending map[string]string) string {
 	if len(pending) == 0 {
 		return "nothing to push"
 	}
 	changed := false
+	var failures []string
 	for path, id := range pending {
 		ok, err := insertUUIDLine(path, id)
 		if err != nil {
 			slog.Warn("uuid write-back failed", "file", path, "err", err.Error())
+			failures = append(failures, filepath.Base(path)+": "+err.Error())
 			continue
 		}
 		changed = changed || ok
 	}
+	report := func(s string) string {
+		if len(failures) > 0 {
+			return "failed: write " + strings.Join(failures, "; ") + "; " + s
+		}
+		return s
+	}
 	if !changed {
-		return "nothing to push"
+		return report("nothing to push")
 	}
 	if !cfg.Push {
-		return "written (push disabled)"
+		return report("written (push disabled)")
 	}
 	if out, err := git(ctx, cfg.RepoPath, "commit", "-am", "chore: assign campaign uuids [skip ci]"); err != nil {
-		return "failed: commit: " + strings.TrimSpace(out)
+		return report("failed: commit: " + strings.TrimSpace(out))
 	}
 	if out, err := git(ctx, cfg.RepoPath, "push", cfg.GitRemote); err != nil {
 		// Non-fast-forward: rebase and retry once.
 		if _, err := git(ctx, cfg.RepoPath, "pull", "--rebase", cfg.GitRemote); err == nil {
 			if _, err := git(ctx, cfg.RepoPath, "push", cfg.GitRemote); err == nil {
-				return "pushed"
+				return report("pushed")
 			}
 		}
 		slog.Warn("uuid write-back push failed", "err", strings.TrimSpace(out))
-		return "failed: push: " + strings.TrimSpace(out)
+		return report("failed: push: " + strings.TrimSpace(out))
 	}
-	return "pushed"
+	return report("pushed")
 }
 
+// yamlIndented reports a continuation line of a block scalar or wrapped value.
+func yamlIndented(l string) bool { return strings.HasPrefix(l, " ") || strings.HasPrefix(l, "\t") }
+
 // insertUUIDLine adds `uuid: <id>` after the description key (and its block
-// continuation lines), preserving the rest of the file byte-for-byte.
+// continuation lines, blank lines inside a block scalar included), or fills
+// an empty `uuid:` key in place, preserving the rest of the file
+// byte-for-byte. The result is parsed before it is written: a splice that
+// would not read back as the uuid is an error, never a committed file.
 func insertUUIDLine(path, id string) (bool, error) {
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		return false, err
 	}
-	if strings.Contains(string(raw), "\nuuid:") || strings.HasPrefix(string(raw), "uuid:") {
-		return false, nil
-	}
 	lines := strings.SplitAfter(string(raw), "\n")
 	insertAt := -1
 	for i, l := range lines {
-		if strings.HasPrefix(l, "description:") {
-			insertAt = i + 1
-			// Skip block-scalar/wrapped continuation lines (indented).
-			for insertAt < len(lines) &&
-				(strings.HasPrefix(lines[insertAt], " ") || strings.HasPrefix(lines[insertAt], "\t")) {
-				insertAt++
+		if strings.HasPrefix(l, "uuid:") {
+			if strings.TrimSpace(strings.TrimPrefix(l, "uuid:")) != "" {
+				return false, nil // already assigned
 			}
-			break
+			// `uuid:` with no value (the make fix-uuids placeholder): fill it.
+			lines[i] = "uuid: " + id + "\n"
+			return true, writeCheckedYAML(path, strings.Join(lines, ""), id)
+		}
+		if insertAt < 0 && strings.HasPrefix(l, "description:") {
+			insertAt = i + 1
+			for insertAt < len(lines) {
+				if yamlIndented(lines[insertAt]) {
+					insertAt++
+					continue
+				}
+				if strings.TrimSpace(lines[insertAt]) == "" {
+					// A blank line is part of a block scalar when an indented
+					// line follows it; otherwise the value ended here.
+					j := insertAt + 1
+					for j < len(lines) && strings.TrimSpace(lines[j]) == "" {
+						j++
+					}
+					if j < len(lines) && yamlIndented(lines[j]) {
+						insertAt = j
+						continue
+					}
+				}
+				break
+			}
 		}
 	}
 	if insertAt < 0 {
 		return false, fmt.Errorf("no description: line in %s", path)
 	}
 	out := strings.Join(lines[:insertAt], "") + "uuid: " + id + "\n" + strings.Join(lines[insertAt:], "")
-	return true, os.WriteFile(path, []byte(out), 0o644)
+	return true, writeCheckedYAML(path, out, id)
 }
 
+// writeCheckedYAML writes the spliced file only if it decodes with the uuid
+// the splice meant to add.
+func writeCheckedYAML(path, content, id string) error {
+	var probe struct {
+		UUID string `yaml:"uuid"`
+	}
+	if err := yaml.Unmarshal([]byte(content), &probe); err != nil || probe.UUID != id {
+		return fmt.Errorf("uuid splice would corrupt %s (got uuid %q): file left unchanged", filepath.Base(path), probe.UUID)
+	}
+	return os.WriteFile(path, []byte(content), 0o644) //nolint:gosec // a campaign file the sync itself listed under repo_path
+}
+
+// gitTimeout bounds every git call the sync makes; the tick runs them under
+// a context with no deadline while holding two advisory locks.
+const gitTimeout = 2 * time.Minute
+
+// gitRemoteRe is the shape of a remote name: never a leading "-", never a
+// URL with userinfo.
+var gitRemoteRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._/-]*$`)
+
 func git(ctx context.Context, repo string, args ...string) (string, error) {
-	cmd := exec.CommandContext(ctx, "git", append([]string{"-C", repo}, args...)...)
+	ctx, cancel := context.WithTimeout(ctx, gitTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "git", append([]string{"-C", repo}, args...)...) //nolint:gosec // fixed argv; the remote is validated by gitRemoteRe
+	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+	// SIGTERM lets git release its index lock; the default Kill can leave
+	// .git/index.lock behind and wedge every later pull.
+	cmd.Cancel = func() error { return cmd.Process.Signal(syscall.SIGTERM) }
+	cmd.WaitDelay = 5 * time.Second
 	out, err := cmd.CombinedOutput()
 	return string(out), err
 }

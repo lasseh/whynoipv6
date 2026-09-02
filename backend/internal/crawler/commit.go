@@ -132,7 +132,7 @@ func ComputeCommit(in *CommitInput, cfg *CommitConfig) (*commitUnit, error) {
 	disabled := s.Disabled
 	disabledReason := s.DisabledReason
 	disabledAt := s.DisabledAt
-	info := in.Obs // informational values written in step 8 (may be nulled by step R first)
+	info := in.Obs // informational values written verbatim in step 8 (step R needs no reset)
 
 	// Step 1 — lifecycle: dead detection & recovery.
 	var deadStreak int16
@@ -431,5 +431,5 @@ func nsZoneFound(sr checker.ScanResult) bool {
 	if st != checker.StatusError {
 		return true // NS found at the input host itself
 	}
-	return ns.Error != "no NS records found"
+	return ns.Error != checker.NoNSRecordsMessage
 }

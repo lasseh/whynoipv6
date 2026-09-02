@@ -225,3 +225,21 @@ func TestConfigRedaction(t *testing.T) {
 		t.Errorf("summary should log unset ping URL as unset: %s", out)
 	}
 }
+
+// TestRedactDSN: the libpq keyword form is a valid pgx DSN that url.Parse
+// accepts whole as a path — it must not be echoed with its password.
+func TestRedactDSN(t *testing.T) {
+	cases := []struct{ name, in, want string }{
+		{"url", "postgres://whynoipv6:s3cretpw@dbhost:5432/whynoipv6?sslmode=disable", "postgres://whynoipv6@dbhost:5432/whynoipv6"},
+		{"keyword form", "host=dbhost user=whynoipv6 password=s3cretpw dbname=whynoipv6", "set"},
+		{"bare host", "dbhost", "set"},
+		{"unparseable", "postgres://u:p%zz@dbhost/db", "invalid"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := redactDSN(tc.in); got != tc.want {
+				t.Errorf("redactDSN(%q) = %q, want %q", tc.in, got, tc.want)
+			}
+		})
+	}
+}

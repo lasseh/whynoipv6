@@ -12,6 +12,8 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
+	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -151,6 +153,15 @@ func (e *Exporter) Run(ctx context.Context, generation int32) error {
 	if err := os.MkdirAll(e.Dir, 0o755); err != nil {
 		return fmt.Errorf("datasets dir: %w", err)
 	}
+	// A staging dir left by a hard kill is never a snapshot (prune and the
+	// manifest ignore it) and would accumulate forever; this run holds the
+	// dataset-export lock, so no other export can own one.
+	if stale, _ := filepath.Glob(filepath.Join(e.Dir, ".export-*")); len(stale) > 0 {
+		for _, p := range stale {
+			slog.Warn("removing orphaned export staging dir", "path", p)
+			_ = os.RemoveAll(p)
+		}
+	}
 	tmp, err := os.MkdirTemp(e.Dir, ".export-*")
 	if err != nil {
 		return fmt.Errorf("export tmp: %w", err)
@@ -193,7 +204,10 @@ func (e *Exporter) Run(ctx context.Context, generation int32) error {
 
 	// The Tranco list ID rides in all three attribution surfaces —
 	// datapackage sources, DICTIONARY.md, and the manifest (07 §5.3).
-	listID := e.trancoListID(ctx)
+	listID, err := e.trancoListID(ctx)
+	if err != nil {
+		return err
+	}
 	dp := datapackage{
 		Name: "whynoipv6-" + date, Title: "WhyNoIPv6 daily snapshot " + date,
 		Licenses:  []dpLicense{{Name: license, Path: "https://creativecommons.org/licenses/by-nc/4.0/"}},
@@ -208,6 +222,17 @@ func (e *Exporter) Run(ctx context.Context, generation int32) error {
 		return err
 	}
 
+	// Every snapshot carries its own dictionary (the package contract and
+	// 07 §5.3's self-describing bullet); the root copy below is the mutable,
+	// short-TTL one nginx serves at /datasets/DICTIONARY.md.
+	dictionary := []byte(dictionaryText(listID))
+	if err := writeFileAtomic(filepath.Join(tmp, "DICTIONARY.md"), dictionary, 0o644); err != nil {
+		return err
+	}
+	if err := syncDir(tmp); err != nil {
+		return fmt.Errorf("fsync staging dir: %w", err)
+	}
+
 	// Publish to a path that does not exist yet, so rename(2) is the whole
 	// operation and a published snapshot is never unlinked. A same-day
 	// re-export lands on the next revision rather than replacing the bytes
@@ -219,8 +244,13 @@ func (e *Exporter) Run(ctx context.Context, generation int32) error {
 	if err := os.Rename(tmp, filepath.Join(e.Dir, name)); err != nil {
 		return fmt.Errorf("publish: %w", err)
 	}
+	if err := syncDir(e.Dir); err != nil {
+		return fmt.Errorf("fsync datasets dir: %w", err)
+	}
 
-	if err := os.WriteFile(filepath.Join(e.Dir, "DICTIONARY.md"), []byte(dictionaryText(listID)), 0o644); err != nil {
+	// The served root copy is rewritten in place on every export: through a
+	// temp file and rename, never truncate-then-write under a live reader.
+	if err := writeFileAtomic(filepath.Join(e.Dir, "DICTIONARY.md"), dictionary, 0o644); err != nil {
 		return err
 	}
 	if err := e.updateLatest(name); err != nil {
@@ -351,21 +381,77 @@ func (e *Exporter) writeTier(ctx context.Context, csvPath, parquetPath string,
 	if err := gz.Close(); err != nil {
 		return err
 	}
+	if err := cf.Sync(); err != nil {
+		return err
+	}
 	if err := cf.Close(); err != nil {
 		return err
 	}
 	if err := pw.Close(); err != nil {
 		return err
 	}
+	if err := pf.Sync(); err != nil {
+		return err
+	}
 	return pf.Close()
 }
 
+// fileDigest streams the artifact through SHA-256 — the tiers were written
+// without materializing a row set, and hashing must not undo that.
 func fileDigest(path string) (size int64, digest string, err error) {
-	b, err := os.ReadFile(path)
+	f, err := os.Open(path)
 	if err != nil {
 		return 0, "", fmt.Errorf("digest %s: %w", filepath.Base(path), err)
 	}
-	return int64(len(b)), fmt.Sprintf("%x", sha256.Sum256(b)), nil
+	defer func() { _ = f.Close() }()
+	h := sha256.New()
+	n, err := io.Copy(h, f)
+	if err != nil {
+		return 0, "", fmt.Errorf("digest %s: %w", filepath.Base(path), err)
+	}
+	return n, fmt.Sprintf("%x", h.Sum(nil)), nil
+}
+
+// writeFileAtomic writes data through a same-directory temp file, fsync
+// and rename, so a concurrent reader (nginx) never sees a truncated file.
+func writeFileAtomic(path string, data []byte, mode os.FileMode) error {
+	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".*")
+	if err != nil {
+		return err
+	}
+	name := tmp.Name()
+	fail := func(err error) error {
+		_ = tmp.Close()
+		_ = os.Remove(name)
+		return fmt.Errorf("write %s: %w", filepath.Base(path), err)
+	}
+	if _, err := tmp.Write(data); err != nil {
+		return fail(err)
+	}
+	if err := tmp.Sync(); err != nil {
+		return fail(err)
+	}
+	if err := tmp.Close(); err != nil {
+		return fail(err)
+	}
+	if err := os.Chmod(name, mode); err != nil {
+		return fail(err)
+	}
+	if err := os.Rename(name, path); err != nil {
+		return fail(err)
+	}
+	return nil
+}
+
+// syncDir fsyncs a directory so the entries created or renamed into it are
+// durable (07 §5.3 "fsync, rename").
+func syncDir(path string) error {
+	d, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = d.Close() }()
+	return d.Sync()
 }
 
 // snapshotName parses a published snapshot directory name into its calendar
@@ -532,7 +618,11 @@ func (e *Exporter) writeManifest(ctx context.Context, now time.Time, generation 
 	// Cite the specific Tranco list ID (07 §5.3); the generic string only
 	// when no import has succeeded yet.
 	attribution := "Data: whynoipv6.com (CC-BY-NC-4.0). Ranks: Tranco list."
-	if listID := e.trancoListID(ctx); listID != "" {
+	listID, err := e.trancoListID(ctx)
+	if err != nil {
+		return err
+	}
+	if listID != "" {
 		attribution = "Data: whynoipv6.com (CC-BY-NC-4.0). Ranks: Tranco list " + listID + "."
 	}
 	m := Manifest{
@@ -583,7 +673,7 @@ func dpSources(listID string) []dpSource {
 
 // trancoListID returns the newest successful import's list ID ("" pre-first
 // import).
-func (e *Exporter) trancoListID(ctx context.Context) string {
+func (e *Exporter) trancoListID(ctx context.Context) (string, error) {
 	return e.src().ListID(ctx)
 }
 

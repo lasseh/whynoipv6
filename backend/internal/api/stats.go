@@ -282,9 +282,9 @@ type ChangePoint struct {
 func (s *Server) getChangeStats(w http.ResponseWriter, r *http.Request) {
 	ServeSeries(s, w, r, SeriesSpec[db.StatsChangesRangeRow, ChangePoint]{
 		Live: true,
-		// Same server-side floor the per-domain history uses: a wide
-		// `from` must not walk past the columnstore boundary of a
-		// forever-retained hypertable.
+		// Same server-side floor the per-domain history uses: it bounds
+		// the point count (≤ 731 days). The read is served from the
+		// changelog_daily materialization, not the raw hypertable.
 		Window: func(from, to time.Time) (time.Time, time.Time) {
 			return capHistoryWindow(from, to), to
 		},
@@ -361,7 +361,7 @@ func (s *Server) getNetworkStats(w http.ResponseWriter, r *http.Request) {
 	}
 	limit, err := parseNetworkLimit(r)
 	if err != nil {
-		InvalidParameter(w, r, err.Error())
+		invalidParam(w, r, err) // strips the ErrCursorInvalid prefix, as the list rims do
 		return
 	}
 	generation, asOf, ok := s.enterCache(w, r, false)
@@ -371,7 +371,7 @@ func (s *Server) getNetworkStats(w http.ResponseWriter, r *http.Request) {
 	meta := NewMeta(asOf, generation)
 	meta.Source = sourceConfirmedState
 	rows, err := s.q.StatsTopNetworks(r.Context(), db.StatsTopNetworksParams{
-		FromDay: postgres.TS(from), ToDay: postgres.TS(to), TopN: int32(limit),
+		FromDay: postgres.TS(from), ToDay: postgres.TS(to), TopN: int32(limit), //nolint:gosec // parseNetworkLimit clamps limit to 10
 	})
 	if err != nil {
 		InternalError(w, r, err)

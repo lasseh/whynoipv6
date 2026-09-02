@@ -113,6 +113,9 @@ func NewRouter(pool *pgxpool.Pool, opts Options) http.Handler { //nolint:gocriti
 		MaxAge:           300,
 	}).Handler)
 	r.Use(securityHeaders)
+	// HEAD is implicit on every GET (§2.6): chi routes only the registered
+	// method, so without this a HEAD lands on the 405 handler below.
+	r.Use(middleware.GetHead)
 
 	// Health endpoints: root, outside the OpenAPI document, no-store (§2.7).
 	r.Get("/livez", s.livez)
@@ -205,6 +208,13 @@ func NewRouter(pool *pgxpool.Pool, opts Options) http.Handler { //nolint:gocriti
 		NotFound(w, r, "Not found", "No such resource.")
 	})
 	r.MethodNotAllowed(func(w http.ResponseWriter, r *http.Request) {
+		// RFC 9110 §15.5.6: a 405 carries Allow. POST /check is the only
+		// write route; every other path is GET with implicit HEAD/OPTIONS.
+		allow := "GET, HEAD, OPTIONS"
+		if r.URL.Path == "/check" {
+			allow = "POST, OPTIONS"
+		}
+		w.Header().Set("Allow", allow)
 		WriteProblem(w, r, Problem{Type: problemBase + "invalid-parameter",
 			Title: "Method not allowed", Status: http.StatusMethodNotAllowed})
 	})

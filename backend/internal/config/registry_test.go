@@ -25,7 +25,7 @@ func specRegistryKeys(t *testing.T) map[string]string {
 	path := filepath.Join("..", "..", "..", "docs", "spec", "09-ops.md")
 	f, err := os.Open(path)
 	if err != nil {
-		t.Skipf("spec registry unavailable: %v", err)
+		t.Fatalf("spec registry unavailable: %v", err)
 	}
 	defer func() { _ = f.Close() }()
 
