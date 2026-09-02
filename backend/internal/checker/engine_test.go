@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"slices"
 	"strings"
 	"syscall"
 	"testing"
@@ -179,11 +180,23 @@ func TestHTTPErrorTypes(t *testing.T) {
 // TestResourceDiscovery (01 §14.7): full deduped external-host list,
 // first-seen order, <base href> honored, own host + subdomains excluded,
 // data:/javascript: ignored.
+//
+// Review issue 21 (01 §11.9 erratum) adds the rel filter and the two
+// sources that were being missed: only fetched <link> rels count, and
+// srcset/poster targets do.
 func TestResourceDiscovery(t *testing.T) {
 	page := `<!doctype html><html><head>
 <base href="https://cdn.base.example/assets/">
 <link href="style.css" rel="stylesheet">
 <link href="https://fonts.example/font.woff2" rel="preload">
+<link rel="canonical" href="https://canonical.example/">
+<link rel="alternate" hreflang="sv" href="https://sibling.example/">
+<link rel="alternate" type="application/rss+xml" href="https://feeds.example/rss">
+<link rel="dns-prefetch" href="https://dnshint.example/">
+<link rel="preconnect" href="https://preconnect.example/">
+<link rel="me" href="https://social.example/@me">
+<link href="https://norel.example/x.css">
+<link rel="shortcut icon" href="https://icons.example/favicon.ico">
 <script src="https://js.example/app.js"></script>
 <script src="https://js.example/app2.js"></script>
 <script src="data:text/javascript,void(0)"></script>
@@ -191,18 +204,33 @@ func TestResourceDiscovery(t *testing.T) {
 <img src="//img.example/logo.png">
 <img src="https://own.example/self.png">
 <img src="https://static.own.example/sub.png">
+<img srcset="https://srcset.example/a.png 1x, https://srcset2.example/b.png 2x">
+<video poster="https://poster.example/still.jpg"></video>
 </head><body></body></html>`
 
 	pageURL, _ := url.Parse("https://own.example/")
 	hosts := extractExternalHosts([]byte(page), pageURL, "own.example")
 
-	want := []string{"cdn.base.example", "fonts.example", "js.example", "img.example"}
+	want := []string{
+		"cdn.base.example", "fonts.example", "icons.example", "js.example",
+		"img.example", "srcset.example", "srcset2.example", "poster.example",
+	}
 	if len(hosts) != len(want) {
 		t.Fatalf("hosts = %v, want %v", hosts, want)
 	}
 	for i := range want {
 		if hosts[i] != want[i] {
 			t.Errorf("hosts[%d] = %s, want %s (first-seen order)", i, hosts[i], want[i])
+		}
+	}
+	// Named explicitly: each of these once made a domain resources_v4only
+	// for a host the rendered page never fetches.
+	for _, excluded := range []string{
+		"canonical.example", "sibling.example", "feeds.example",
+		"dnshint.example", "preconnect.example", "social.example", "norel.example",
+	} {
+		if slices.Contains(hosts, excluded) {
+			t.Errorf("%s is not a render-time dependency but was discovered", excluded)
 		}
 	}
 }

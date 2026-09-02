@@ -495,6 +495,8 @@ Source: `v6audit/internal/checker/resource_ipv6.go`, renamed file and check. Tim
 - External-host filter: skip the page's own host and its subdomains (`host == domain || strings.HasSuffix(host, "."+domain)`).
 - Dedup (first-seen order preserved) and the `resourceMaxHosts = 50` cap.
 
+_Erratum 2026-09-02: the tokenizer bullet's source list is amended — a second deliberate deviation from the verbatim port, alongside §11.8's. (a) **`href` of `link` is filtered by `rel`.** Only fetched relations count: `stylesheet`, `preload`, `modulepreload`, `icon`, `apple-touch-icon`, `manifest`, `prefetch` (`rel` is a token list, so `shortcut icon` matches). `canonical`, `alternate` (hreflang and RSS/Atom), `dns-prefetch`, `preconnect`, `me`, `license`, `author` and a `<link>` with no `rel` are **not** counted. The unfiltered list made a v4-only sibling site or feed host a required resource: swept `unsupported`, it rolled up to `resources=unsupported`, raised `resources_v4only` and denied saint over a host the rendered page never fetches. (b) **`srcset` on `img`/`source` and `poster` on `video` are now read** — the URL of each srcset candidate, descriptor dropped. They are genuine render-time fetches that the `src`-only list missed. Expect churn on the `resources` dimension in both directions on the first crawl after this ships. `TestResourceDiscovery` in `internal/checker` pins both halves._
+
 **Delete** (v6audit `resource_ipv6.go` lines 88–147): the inline concurrent AAAA checks over the discovered hosts, the `ipv6_hosts`/`ipv4_only_hosts` tally, the 20-item `resourceMaxList` truncation, and the supported/partial/unsupported derivation.
 
 **New result contract.** The check returns the FULL deduped host list (≤50, no truncation) and a discovery status:

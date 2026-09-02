@@ -150,18 +150,22 @@ func extractExternalHosts(body []byte, pageURL *url.URL, domain string) []string
 
 		switch tag {
 		case "base":
-			if href := getAttr(tokenizer, "href"); href != "" {
+			if href := tagAttrs(tokenizer)["href"]; href != "" {
 				if parsed, err := url.Parse(href); err == nil && parsed.IsAbs() {
 					baseURL = parsed
 				}
 			}
 		case "script", "img", "iframe", "source", "video", "audio", "object", "embed":
-			if src := getAttr(tokenizer, "src"); src != "" {
-				addHost(src, baseURL, domain, seen, &hosts)
+			attrs := tagAttrs(tokenizer)
+			addHost(attrs["src"], baseURL, domain, seen, &hosts)
+			for _, candidate := range srcsetURLs(attrs["srcset"]) {
+				addHost(candidate, baseURL, domain, seen, &hosts)
 			}
+			addHost(attrs["poster"], baseURL, domain, seen, &hosts)
 		case "link":
-			if href := getAttr(tokenizer, "href"); href != "" {
-				addHost(href, baseURL, domain, seen, &hosts)
+			attrs := tagAttrs(tokenizer)
+			if isFetchRel(attrs["rel"]) {
+				addHost(attrs["href"], baseURL, domain, seen, &hosts)
 			}
 		}
 	}
@@ -206,15 +210,58 @@ func addHost(raw string, base *url.URL, domain string, seen map[string]struct{},
 	*hosts = append(*hosts, host)
 }
 
-// getAttr returns the value of the named attribute from the current token.
-func getAttr(z *html.Tokenizer, name string) string {
+// tagAttrs reads every attribute of the current token. TagAttr consumes as
+// it walks, so a tag whose decision needs two attributes — <link>'s rel and
+// href — has to take them in one pass.
+func tagAttrs(z *html.Tokenizer) map[string]string {
+	attrs := map[string]string{}
 	for {
 		key, val, more := z.TagAttr()
-		if string(key) == name {
-			return string(val)
-		}
+		attrs[string(key)] = string(val)
 		if !more {
-			return ""
+			return attrs
 		}
 	}
+}
+
+// fetchRels are the <link> relations whose target a browser fetches to
+// render the page. Everything else — canonical, alternate (hreflang and
+// RSS/Atom), dns-prefetch, preconnect, me, license, author — is metadata or
+// a connection hint, so a v4-only sibling site or feed host behind one is
+// not a resource the page depends on (01 §11.9 erratum).
+var fetchRels = map[string]bool{
+	"stylesheet":       true,
+	"preload":          true,
+	"modulepreload":    true,
+	"icon":             true,
+	"apple-touch-icon": true,
+	"manifest":         true,
+	"prefetch":         true,
+}
+
+// isFetchRel reports whether a rel attribute names a fetched relation. rel
+// is a space-separated token list ("shortcut icon"), and a <link> with no
+// rel at all fetches nothing.
+func isFetchRel(rel string) bool {
+	for _, token := range strings.Fields(strings.ToLower(rel)) {
+		if fetchRels[token] {
+			return true
+		}
+	}
+	return false
+}
+
+// srcsetURLs pulls the URL out of each srcset candidate. The grammar is
+// comma-separated "url [descriptor]"; the descriptor (2x, 640w) is dropped.
+func srcsetURLs(srcset string) []string {
+	if srcset == "" {
+		return nil
+	}
+	var out []string
+	for _, candidate := range strings.Split(srcset, ",") {
+		if fields := strings.Fields(candidate); len(fields) > 0 {
+			out = append(out, fields[0])
+		}
+	}
+	return out
 }
