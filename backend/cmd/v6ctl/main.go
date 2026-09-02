@@ -34,8 +34,8 @@ func newPool(cmd *cobra.Command) (*pgxpool.Pool, error) {
 }
 
 // singletonWait is the blocking advisory-lock wait for operator-triggered
-// singleton runs (`tranco import`, `campaign sync`): hardcoded, no config
-// key (04-lifecycle-scheduling.md §10).
+// singleton runs (`tranco import`, `campaign sync`, `stats recalc`):
+// hardcoded, no config key (04-lifecycle-scheduling.md §10).
 const singletonWait = 5 * time.Minute
 
 // underOps reports whether cmd sits in the `ops` command subtree. Those are

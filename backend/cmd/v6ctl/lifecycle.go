@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"os"
 	"strings"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/lasseh/whynoipv6/internal/crawler"
 	"github.com/lasseh/whynoipv6/internal/domain"
+	"github.com/lasseh/whynoipv6/internal/lock"
 	"github.com/lasseh/whynoipv6/internal/postgres"
 	db "github.com/lasseh/whynoipv6/internal/postgres/db"
 )
@@ -213,8 +215,7 @@ func enableCmd() *cobra.Command {
 	}
 }
 
-// statsCmd re-runs the daily stats rollup on demand (06-ingest.md §10.7):
-// idempotent, and deliberately without JobDailyTick.
+// statsCmd re-runs the daily stats rollup on demand (06-ingest.md §10.7).
 func statsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "stats",
@@ -222,7 +223,7 @@ func statsCmd() *cobra.Command {
 	}
 	cmd.AddCommand(&cobra.Command{
 		Use:   "recalc",
-		Short: "Re-run today's stats snapshots + counter recomputes (idempotent; no tick lock)",
+		Short: "Re-run today's stats snapshots + counter recomputes (idempotent; waits for the daily tick)",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			pool, err := newPool(cmd)
@@ -230,11 +231,18 @@ func statsCmd() *cobra.Command {
 				return err
 			}
 			defer pool.Close()
-			if err := crawler.RunStatsRollup(cmd.Context(), pool); err != nil {
-				return err
-			}
-			fmt.Println("stats recalculated for today")
-			return nil
+			// Serialized against the daily tick's own RunStatsRollup by
+			// JobDailyTick; the 5-minute wait is normative (04 §10). The
+			// rollup is idempotent, but two copies of its 12-statement
+			// transaction racing is not something to rely on — a recalc
+			// that waits out a running tick is the intended behaviour.
+			return lock.Run(cmd.Context(), pool, lock.JobDailyTick, singletonWait, func(ctx context.Context) error {
+				if err := crawler.RunStatsRollup(ctx, pool); err != nil {
+					return err
+				}
+				fmt.Println("stats recalculated for today")
+				return nil
+			})
 		},
 	})
 	return cmd
