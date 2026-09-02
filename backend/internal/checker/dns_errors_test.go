@@ -4,6 +4,8 @@ import (
 	"context"
 	"strings"
 	"testing"
+
+	"github.com/miekg/dns"
 )
 
 // TestDNSChecksKeepResolverTroubleNonDefinitive (02 §4): a per-host AAAA
@@ -94,6 +96,57 @@ func TestDNSChecksKeepResolverTroubleNonDefinitive(t *testing.T) {
 			t.Errorf("status = %s, want error (01 §11.5: DS lookup error → error)", res.Status)
 		}
 	})
+}
+
+// TestDNSNSWalkUpKeepsResolverErrors (03 §4): the boundary turns only empty
+// answers (NODATA, NXDOMAIN) into the no-zone evidence; a SERVFAIL at every
+// level stays an error so dead-detection branch (a) treats it as unknown.
+func TestDNSNSWalkUpKeepsResolverErrors(t *testing.T) {
+	z := newZone(t)
+	z.servfail["deadsite.co.uk."] = true
+	res, _ := NewDNSNSIPv6(zoneDialer(t, z), 4).Check(context.Background(), "deadsite.co.uk", KindApex)
+	d := res.Detail.(*NSDetail)
+	if res.Status != StatusError || d.Error == NoNSRecordsMessage || !strings.Contains(d.Error, "SERVFAIL") {
+		t.Errorf("servfail walk: status=%s error=%q, want error carrying the SERVFAIL text", res.Status, d.Error)
+	}
+
+	z = newZone(t)
+	z.nx["deadsite.co.uk."] = true
+	res, _ = NewDNSNSIPv6(zoneDialer(t, z), 4).Check(context.Background(), "deadsite.co.uk", KindApex)
+	d = res.Detail.(*NSDetail)
+	if res.Status != StatusError || d.Error != NoNSRecordsMessage {
+		t.Errorf("nxdomain walk: status=%s error=%q, want %q", res.Status, d.Error, NoNSRecordsMessage)
+	}
+}
+
+// TestLookupAAAAChaseFailureIsAnError: a CNAME whose target lookup fails is
+// a failed lookup, not a NOERROR-empty answer (which would be a valid
+// `empty` vote in the consensus reduce).
+func TestLookupAAAAChaseFailureIsAnError(t *testing.T) {
+	// The scripted zone answers exact (name, type) matches only, so the
+	// CNAME-then-chase shape needs its own handler: the alias answers with
+	// the CNAME alone, the target SERVFAILs.
+	cname, err := dns.NewRR("alias.example.org. 3600 IN CNAME target.example.org.")
+	if err != nil {
+		t.Fatal(err)
+	}
+	addr := startFakeDNS(t, func(w dns.ResponseWriter, r *dns.Msg) {
+		m := new(dns.Msg)
+		m.SetReply(r)
+		if strings.EqualFold(r.Question[0].Name, "alias.example.org.") {
+			m.Answer = append(m.Answer, cname)
+		} else {
+			m.Rcode = dns.RcodeServerFailure
+		}
+		_ = w.WriteMsg(m)
+	})
+	_, chain, _, _, err := NewResolver([]string{addr}).LookupAAAA(context.Background(), "alias.example.org")
+	if err == nil {
+		t.Fatal("chase into a SERVFAIL target returned no error")
+	}
+	if len(chain) != 1 || chain[0] != "target.example.org." {
+		t.Errorf("cname chain = %v", chain)
+	}
 }
 
 // TestDNSNSWalkUpStopsAtICANNSuffixOnly (01 §11.3, 06 §3.4): a private-section

@@ -2,6 +2,7 @@ package checker
 
 import (
 	"context"
+	"errors"
 	"sort"
 	"strings"
 	"time"
@@ -52,9 +53,16 @@ func (c *DNSNSIPv6) Check(ctx context.Context, domain string, kind Kind) (Result
 		if idx < 0 || idx == len(qname)-1 {
 			break // bare name or trailing dot
 		}
+		// Only an empty answer (NODATA or NXDOMAIN) at this level counts as
+		// "no zone here"; resolver trouble stays an error so the boundary
+		// cannot turn it into the no-zone evidence branch (a) reads.
+		lastEmpty := nsErr == nil || errors.Is(nsErr, errNXDomain)
 		qname = qname[idx+1:]
 		if suffix, icann := publicsuffix.PublicSuffix(qname); icann && suffix == qname {
-			nameservers, nsErr = nil, nil
+			nameservers = nil
+			if lastEmpty {
+				nsErr = nil
+			}
 			break // reached the public suffix
 		}
 	}
