@@ -5,12 +5,15 @@ package crawler
 import (
 	"context"
 	"fmt"
+	"net"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/miekg/dns"
 
-	"github.com/lasseh/whynoipv6/internal/domain"
+	"github.com/lasseh/whynoipv6/internal/checker"
 	"github.com/lasseh/whynoipv6/internal/postgres"
 	"github.com/lasseh/whynoipv6/internal/postgres/pgtest"
 )
@@ -121,9 +124,73 @@ func TestResourceDiscovery(t *testing.T) {
 	}
 }
 
+// sweepDNS is a scripted loopback resolver for the sweep: one behaviour at
+// a time, answering whatever name it is asked. It is what lets the test
+// drive sweepHost — and with it ResourceSweeper.lookup, the 06 §5.3 answer
+// table — instead of re-implementing the confirmation machine beside it.
+type sweepDNS struct {
+	mu       sync.Mutex
+	behavior string
+	addr     string
+}
+
+func (f *sweepDNS) set(b string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.behavior = b
+}
+
+func (f *sweepDNS) handle(w dns.ResponseWriter, r *dns.Msg) {
+	f.mu.Lock()
+	b := f.behavior
+	f.mu.Unlock()
+
+	m := new(dns.Msg)
+	m.SetReply(r)
+	q := r.Question[0]
+	aaaa := func(ip string) *dns.AAAA {
+		return &dns.AAAA{
+			Hdr:  dns.RR_Header{Name: q.Name, Rrtype: dns.TypeAAAA, Class: dns.ClassINET, Ttl: 300},
+			AAAA: net.ParseIP(ip),
+		}
+	}
+	switch b {
+	case "routable":
+		m.Answer = append(m.Answer, aaaa("2001:db8::1"))
+	case "loopback": // NOERROR with a non-routable address only
+		m.Answer = append(m.Answer, aaaa("::1"))
+	case "empty": // NOERROR, no AAAA
+	case "nxdomain":
+		m.SetRcode(r, dns.RcodeNameError)
+	case "servfail":
+		m.SetRcode(r, dns.RcodeServerFailure)
+	case "timeout":
+		return // no reply at all
+	}
+	_ = w.WriteMsg(m)
+}
+
+func startSweepDNS(t *testing.T) *sweepDNS {
+	t.Helper()
+	f := &sweepDNS{behavior: "empty"}
+	lc := &net.ListenConfig{}
+	pc, err := lc.ListenPacket(context.Background(), "udp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := &dns.Server{PacketConn: pc, Handler: dns.HandlerFunc(f.handle)}
+	go func() { _ = srv.ActivateAndServe() }()
+	t.Cleanup(func() { _ = srv.Shutdown() })
+	f.addr = pc.LocalAddr().String()
+	return f
+}
+
 // TestResourceSweepMachine (P5.1 / 06 §5.4): claim bumps the schedule (the
 // lease), the N=2 confirmation machine holds, non-definitive touches
-// nothing.
+// nothing. Driven through sweepHost against a scripted resolver, so the
+// §5.3 answer table (NXDOMAIN → no_record, NOERROR-nonroutable →
+// unsupported, SERVFAIL/timeout → non-definitive) is executed rather than
+// mirrored: a test that copies the machine passes every mutation of it.
 func TestResourceSweepMachine(t *testing.T) {
 	pool := pgtest.NewDB(t)
 	ctx := context.Background()
@@ -135,7 +202,12 @@ func TestResourceSweepMachine(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	s := &ResourceSweeper{Pool: pool}
+	fake := startSweepDNS(t)
+	bulk := checker.NewResolver([]string{fake.addr})
+	// The timeout rows would otherwise cost 2 × 5s of dnsTimeout each.
+	bulk.SetAttemptTimeout(200 * time.Millisecond)
+	s := &ResourceSweeper{Pool: pool, Bulk: bulk}
+
 	batch, err := s.claim(ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -154,44 +226,14 @@ func TestResourceSweepMachine(t *testing.T) {
 		t.Error("claim must bump next_check_at ~2h (the lease)")
 	}
 
-	// Drive the confirmation machine directly through sweepHost outcomes
-	// by simulating lookups: apply the same transitions via the state
-	// machine copy. First definitive commits immediately.
-	apply := func(h *sweptHost, outcome domain.IPv6Status) {
-		// mirror of sweepHost's write path without the DNS lookup
-		o := outcome
-		status, pending, pendingCount := h.Status, h.Pending, h.PendingCount
-		switch {
-		case status == nil:
-			status, pending, pendingCount = &o, nil, 0
-		case o == *status:
-			pending, pendingCount = nil, 0
-		case pending != nil && o == *pending:
-			pendingCount++
-			if pendingCount >= 2 {
-				status, pending, pendingCount = &o, nil, 0
-			}
-		default:
-			pending, pendingCount = &o, 1
-		}
-		if _, err := pool.Exec(ctx, `
-			UPDATE resource_host SET aaaa_status=$2::ipv6_status, aaaa_pending=$3::ipv6_status,
-			  aaaa_pending_count=$4, last_checked_at=now(), next_check_at=now()+interval '24 hours'
-			WHERE id=$1`, h.ID, status, pending, pendingCount); err != nil {
-			t.Fatal(err)
-		}
-		h.Status, h.Pending, h.PendingCount = status, pending, pendingCount
-	}
-
-	h := &batch[0]
-	apply(h, "unsupported") // bootstrap-immediate
-	assertHost := func(wantStatus, wantPending string, wantCount int) {
+	hostID := batch[0].ID
+	assertHost := func(t *testing.T, wantStatus, wantPending string, wantCount int) {
 		t.Helper()
 		var st, pd *string
 		var n int16
 		if err := pool.QueryRow(ctx,
 			"SELECT aaaa_status::text, aaaa_pending::text, aaaa_pending_count FROM resource_host WHERE id=$1",
-			h.ID).Scan(&st, &pd, &n); err != nil {
+			hostID).Scan(&st, &pd, &n); err != nil {
 			t.Fatal(err)
 		}
 		got := fmt.Sprintf("%v/%v/%d", deref(st), deref(pd), n)
@@ -200,16 +242,66 @@ func TestResourceSweepMachine(t *testing.T) {
 			t.Errorf("host state = %s, want %s", got, want)
 		}
 	}
-	assertHost("unsupported", "<nil>", 0)
 
-	apply(h, "supported") // candidate 1
-	assertHost("unsupported", "supported", 1)
-	apply(h, "supported") // N=2 → flips
-	assertHost("supported", "<nil>", 0)
-	apply(h, "no_record") // new candidate
-	assertHost("supported", "no_record", 1)
-	apply(h, "supported") // agreement clears the candidate
-	assertHost("supported", "<nil>", 0)
+	// One sweep pass: make the row due again, re-claim it (which is where
+	// the machine's prior state comes from — sweepHost reads the claimed
+	// row, never a carried-over struct), and sweep it against the scripted
+	// answer. The re-claim also re-arms the 2h lease.
+	sweep := func(t *testing.T, answer string) {
+		t.Helper()
+		if _, err := pool.Exec(ctx,
+			"UPDATE resource_host SET next_check_at = now() - interval '1 minute' WHERE id=$1", hostID); err != nil {
+			t.Fatal(err)
+		}
+		claimed, err := s.claim(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(claimed) != 1 || claimed[0].ID != hostID {
+			t.Fatalf("re-claim = %+v", claimed)
+		}
+		fake.set(answer)
+		s.sweepHost(ctx, &claimed[0])
+	}
+
+	steps := []struct {
+		name                    string
+		answer                  string
+		wantStatus, wantPending string
+		wantCount               int
+	}{
+		{"NOERROR with only a non-routable address bootstraps unsupported", "loopback", "unsupported", "<nil>", 0},
+		{"a routable address is a candidate, not a flip", "routable", "unsupported", "supported", 1},
+		{"the second consecutive sighting flips (N=2)", "routable", "supported", "<nil>", 0},
+		{"NXDOMAIN is no_record, and a new candidate", "nxdomain", "supported", "no_record", 1},
+		{"agreement with the confirmed value clears the candidate", "routable", "supported", "<nil>", 0},
+		{"NOERROR with no AAAA at all is unsupported", "empty", "supported", "unsupported", 1},
+	}
+	for _, st := range steps {
+		t.Run(st.name, func(t *testing.T) {
+			sweep(t, st.answer)
+			assertHost(t, st.wantStatus, st.wantPending, st.wantCount)
+		})
+	}
+
+	// Non-definitive answers touch nothing at all — not the columns, and
+	// not the schedule: the row keeps the claim's +2h lease so the next
+	// sweep retries it soon, rather than the +24h a commit would set.
+	for _, answer := range []string{"servfail", "timeout"} {
+		t.Run("non-definitive: "+answer, func(t *testing.T) {
+			sweep(t, answer)
+			assertHost(t, "supported", "unsupported", 1)
+			var lease bool
+			if err := pool.QueryRow(ctx,
+				"SELECT next_check_at < now() + interval '3 hours' FROM resource_host WHERE id=$1",
+				hostID).Scan(&lease); err != nil {
+				t.Fatal(err)
+			}
+			if !lease {
+				t.Error("a non-definitive sweep must leave the claim's 2h lease, not commit a 24h schedule")
+			}
+		})
+	}
 }
 
 func deref(s *string) string {
