@@ -447,3 +447,44 @@ func TestRescueFitsTheCheckBudget(t *testing.T) {
 			perProviderBudget, checker.BulkQueryBudget, checker.BulkQueryBudget)
 	}
 }
+
+// TestCloseCancelsInFlightMaintenance: Close must reach the work already
+// running on the maintenance goroutine, not just stop the next tick. A
+// blackholed ops webhook makes evaluateBreakers sit on up to four sequential
+// 10s POSTs; when that coincides with SIGTERM, Close used to block for all
+// of them and systemd's TimeoutStopSec killed the crawler mid-shutdown.
+func TestCloseCancelsInFlightMaintenance(t *testing.T) {
+	h := newHarness(t)
+
+	entered := make(chan struct{})
+	alertCtxErr := make(chan error, 1)
+	h.r.alert = func(ctx context.Context, _ string) {
+		close(entered)
+		<-ctx.Done()
+		alertCtxErr <- ctx.Err()
+	}
+
+	// An open fast lane over an idle window closes on the next evaluation
+	// and alerts — the first of the four POSTs.
+	h.r.mu.Lock()
+	h.r.fastOpen = true
+	h.r.mu.Unlock()
+
+	done := make(chan struct{})
+	go func() { defer close(done); h.r.evaluateBreakers() }()
+	<-entered
+
+	h.r.Close()
+	select {
+	case err := <-alertCtxErr:
+		if !errors.Is(err, context.Canceled) {
+			t.Errorf("alert context ended with %v, want context.Canceled", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Close did not cancel the in-flight alert")
+	}
+	<-done
+
+	// The harness Cleanup calls Close again: cancelling twice is fine, where
+	// closing the old stop channel twice would have panicked.
+}

@@ -107,8 +107,13 @@ type Resolver struct {
 	fastOpen   bool
 	fastWindow *window
 
-	stop chan struct{}
-	wg   sync.WaitGroup
+	// life is the maintenance goroutine's lifetime. Close cancels it, so
+	// maintain stops between ticks AND an in-flight webhook POST or canary
+	// probe — which derive their deadlines from it — aborts with the
+	// process instead of holding Close for its full timeout.
+	life     context.Context
+	stopLife context.CancelFunc
+	wg       sync.WaitGroup
 }
 
 // New builds the consensus resolver. bulk is the shared bulk
@@ -121,8 +126,8 @@ func New(cfg Config, bulk *checker.Resolver, alert func(ctx context.Context, msg
 		alert:      alert,
 		logger:     logger,
 		fastWindow: newWindow(cfg.FastLane.Window),
-		stop:       make(chan struct{}),
 	}
+	r.life, r.stopLife = context.WithCancel(context.Background())
 	for _, def := range providerDefs {
 		res := checker.NewResolver(def.upstreams)
 		// Cap each attempt at perAttemptTimeout so perProviderBudget (2×)
@@ -143,7 +148,7 @@ func New(cfg Config, bulk *checker.Resolver, alert func(ctx context.Context, msg
 
 // Close stops the canary and window-maintenance goroutine.
 func (r *Resolver) Close() {
-	close(r.stop)
+	r.stopLife()
 	r.wg.Wait()
 }
 

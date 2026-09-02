@@ -100,7 +100,7 @@ func (r *Resolver) maintain() {
 
 	for {
 		select {
-		case <-r.stop:
+		case <-r.life.Done():
 			return
 		case <-evalTick.C:
 			r.evaluateBreakers()
@@ -113,7 +113,7 @@ func (r *Resolver) maintain() {
 // evaluateBreakers closes the fast lane on recovery and drops a provider
 // whose failure rate crossed the threshold.
 func (r *Resolver) evaluateBreakers() {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(r.life, 10*time.Second)
 	defer cancel()
 
 	// Fast-lane close: rate below recover_below over the trailing full
@@ -180,7 +180,7 @@ func (r *Resolver) runCanary() {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), perProviderBudget+5*time.Second)
+	ctx, cancel := context.WithTimeout(r.life, perProviderBudget+5*time.Second)
 	defer cancel()
 	o := r.queryProvider(ctx, p, canaryName)
 
