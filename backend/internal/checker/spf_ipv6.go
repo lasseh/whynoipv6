@@ -8,6 +8,32 @@ import (
 
 const maxSPFLookups = 10
 
+// maxMXAddressLookups is RFC 7208 §4.6.4's separate per-mx-term ceiling on
+// MX address lookups. They are NOT charged to the record's term budget, so
+// an mx with several hosts cannot push a compliant record over maxSPFLookups.
+const maxMXAddressLookups = 10
+
+// spfEval carries the DNS-lookup budget across the record and every include
+// or redirect it recurses into. exceeded is sticky: the budget belongs to
+// the whole evaluation, so any term that crosses it makes the record
+// error "too many DNS lookups" (01-engine.md §11.11) — not just a top-level
+// include:, which was the only branch that used to report it.
+type spfEval struct {
+	lookups  int
+	exceeded bool
+}
+
+// spend charges one term lookup; false means the budget is now blown and
+// the caller must stop.
+func (e *spfEval) spend() bool {
+	e.lookups++
+	if e.lookups > maxSPFLookups {
+		e.exceeded = true
+		return false
+	}
+	return true
+}
+
 // SPFIPv6 checks whether the domain's SPF record authorizes IPv6 senders
 // (01-engine.md §11.11).
 type SPFIPv6 struct {
@@ -91,7 +117,7 @@ func (c *SPFIPv6) Check(ctx context.Context, domain string, kind Kind) (Result, 
 	spfRecord := spfRecords[0]
 	d.SPFRecord = spfRecord
 
-	lookupCount := 0
+	ev := &spfEval{}
 	ip6Mechanisms := []string{}
 	includeChain := []string{}
 	includeHasIP6 := false
@@ -107,6 +133,9 @@ func (c *SPFIPv6) Check(ctx context.Context, domain string, kind Kind) (Result, 
 	var redirectDomain string
 
 	for _, part := range parts {
+		if ev.exceeded {
+			break
+		}
 		lower := strings.ToLower(part)
 		qual, mechanism := parseQualifier(lower)
 
@@ -126,13 +155,10 @@ func (c *SPFIPv6) Check(ctx context.Context, domain string, kind Kind) (Result, 
 			mechanismMatched = true
 			includeDomain := strings.TrimPrefix(mechanism, "include:")
 			includeChain = append(includeChain, includeDomain)
-			lookupCount++
-			if lookupCount > maxSPFLookups {
-				d.Error = "too many DNS lookups"
-				d.LookupCount = &lookupCount
-				return Result{Status: StatusError, Detail: d, Latency: time.Since(start)}, nil
+			if !ev.spend() {
+				break
 			}
-			if c.includeHasIPv6(ctx, includeDomain, &lookupCount) {
+			if c.includeHasIPv6(ctx, includeDomain, ev) {
 				includeHasIP6 = true
 			}
 			continue
@@ -148,7 +174,9 @@ func (c *SPFIPv6) Check(ctx context.Context, domain string, kind Kind) (Result, 
 		// Check 'a' mechanism for implicit IPv6.
 		if mechanism == "a" || strings.HasPrefix(mechanism, "a:") || strings.HasPrefix(mechanism, "a/") {
 			mechanismMatched = true
-			lookupCount++
+			if !ev.spend() {
+				break
+			}
 			target := domain
 			if after, ok := strings.CutPrefix(mechanism, "a:"); ok {
 				target = after
@@ -156,6 +184,11 @@ func (c *SPFIPv6) Check(ctx context.Context, domain string, kind Kind) (Result, 
 				if idx := strings.Index(target, "/"); idx >= 0 {
 					target = target[:idx]
 				}
+			}
+			if strings.Contains(target, "%") {
+				// A macro expands per message (RFC 7208 §7); querying the
+				// literal "a:%{d}" would resolve a name that does not exist.
+				continue
 			}
 			ips, _, _, _, lookupErr := c.dialer.Resolver().LookupAAAA(ctx, target)
 			if lookupErr == nil && len(ips) > 0 && isPassQualifier(qual) {
@@ -167,7 +200,9 @@ func (c *SPFIPv6) Check(ctx context.Context, domain string, kind Kind) (Result, 
 		// Check 'mx' mechanism for implicit IPv6 by resolving MX hosts' AAAA records.
 		if mechanism == "mx" || strings.HasPrefix(mechanism, "mx:") || strings.HasPrefix(mechanism, "mx/") {
 			mechanismMatched = true
-			lookupCount++
+			if !ev.spend() {
+				break
+			}
 			target := domain
 			if after, ok := strings.CutPrefix(mechanism, "mx:"); ok {
 				target = after
@@ -175,12 +210,14 @@ func (c *SPFIPv6) Check(ctx context.Context, domain string, kind Kind) (Result, 
 					target = target[:idx]
 				}
 			}
+			if strings.Contains(target, "%") {
+				continue
+			}
 			if isPassQualifier(qual) {
 				mxRecords, _, mxErr := c.dialer.Resolver().LookupMX(ctx, target)
 				if mxErr == nil {
-					for _, mx := range mxRecords {
-						lookupCount++
-						if lookupCount > maxSPFLookups {
+					for i, mx := range mxRecords {
+						if i >= maxMXAddressLookups {
 							break
 						}
 						mxIPs, _, _, _, mxAAAAErr := c.dialer.Resolver().LookupAAAA(ctx, mx.Mx)
@@ -203,13 +240,19 @@ func (c *SPFIPv6) Check(ctx context.Context, domain string, kind Kind) (Result, 
 
 	// Evaluate redirect= only if no mechanisms in this record matched.
 	// Per RFC 7208 §6.1: redirect is only evaluated after all mechanisms are checked.
-	if redirectDomain != "" && !mechanismMatched {
-		lookupCount++
-		if lookupCount <= maxSPFLookups {
-			if c.includeHasIPv6(ctx, redirectDomain, &lookupCount) {
-				includeHasIP6 = true
-			}
+	if redirectDomain != "" && !mechanismMatched && !ev.exceeded {
+		if ev.spend() && c.includeHasIPv6(ctx, redirectDomain, ev) {
+			includeHasIP6 = true
 		}
+	}
+
+	// One report for the whole evaluation: a budget blown inside a nested
+	// include used to surface as `unsupported`, which reads as "the domain
+	// rejects IPv6 senders" for a record RFC 7208 calls permerror.
+	if ev.exceeded {
+		d.Error = "too many DNS lookups"
+		d.LookupCount = &ev.lookups
+		return Result{Status: StatusError, Detail: d, Latency: time.Since(start)}, nil
 	}
 
 	hasIP6 := hasDirectIP6 || includeHasIP6
@@ -217,7 +260,7 @@ func (c *SPFIPv6) Check(ctx context.Context, domain string, kind Kind) (Result, 
 	d.IP6Mechanisms = ip6Mechanisms
 	d.IncludeHasIP6 = &includeHasIP6
 	d.IncludeChain = includeChain
-	d.LookupCount = &lookupCount
+	d.LookupCount = &ev.lookups
 
 	var status CheckStatus
 	switch {
@@ -244,8 +287,8 @@ func (c *SPFIPv6) Check(ctx context.Context, domain string, kind Kind) (Result, 
 
 // includeHasIPv6 recursively checks if an included SPF domain has ip6: mechanisms
 // with a pass qualifier.
-func (c *SPFIPv6) includeHasIPv6(ctx context.Context, domain string, lookupCount *int) bool {
-	if *lookupCount > maxSPFLookups {
+func (c *SPFIPv6) includeHasIPv6(ctx context.Context, domain string, ev *spfEval) bool {
+	if ev.exceeded {
 		return false
 	}
 
@@ -274,9 +317,11 @@ func (c *SPFIPv6) includeHasIPv6(ctx context.Context, domain string, lookupCount
 			}
 
 			if strings.HasPrefix(mechanism, "include:") {
-				*lookupCount++
 				includeDomain := strings.TrimPrefix(mechanism, "include:")
-				if c.includeHasIPv6(ctx, includeDomain, lookupCount) {
+				if !ev.spend() {
+					return false
+				}
+				if c.includeHasIPv6(ctx, includeDomain, ev) {
 					return true
 				}
 			}
@@ -285,9 +330,11 @@ func (c *SPFIPv6) includeHasIPv6(ctx context.Context, domain string, lookupCount
 			// For simplicity in recursive includes, we follow redirects since we're
 			// only looking for ip6: mechanisms, not evaluating full SPF results.
 			if strings.HasPrefix(mechanism, "redirect=") {
-				*lookupCount++
 				redirectDomain := strings.TrimPrefix(mechanism, "redirect=")
-				if c.includeHasIPv6(ctx, redirectDomain, lookupCount) {
+				if !ev.spend() {
+					return false
+				}
+				if c.includeHasIPv6(ctx, redirectDomain, ev) {
 					return true
 				}
 			}
