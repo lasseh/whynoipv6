@@ -1,16 +1,22 @@
 version: "2"
 linters:
   enable:
+    - bodyclose
     - errname
     - errorlint
     - exhaustive
     - goconst
     - gocritic
     - godot
+    - gosec
+    - makezero
     - misspell
+    - nilerr
     - noctx
     - prealloc
     - revive
+    - rowserrcheck
+    - sqlclosecheck
     - unconvert
     - unparam
     - wastedassign
@@ -22,6 +28,18 @@ linters:
         - diagnostic
         - style
         - performance
+    gosec:
+      excludes:
+        # G304 (file inclusion): every os.Open/ReadFile takes an operator
+        # path — v6ctl flags, the campaign checkout, the export dir. The
+        # API never opens a caller-supplied path.
+        - G304
+        # G301/G302/G306 (permissions): the export snapshots are served by
+        # nginx and the GeoIP mmdb is read by the crawler user, so 0755/0644
+        # is the contract, not an oversight.
+        - G301
+        - G302
+        - G306
     revive:
       rules:
         - name: unexported-return
@@ -48,10 +66,12 @@ linters:
           - goconst
       # Fixture/scripting literals in tests are values, not constants, and
       # gocritic's performance hints (hugeParam etc.) are noise in tests.
+      # gosec's fixture-file and bind-address findings are noise there too.
       - path: _test\.go
         linters:
           - goconst
           - gocritic
+          - gosec
           - unparam
           - noctx
     paths:

@@ -44,8 +44,8 @@ func opsCmd() *cobra.Command {
 			// host and only ever worked through the dev-compose shim.
 			inserted := 0
 			for _, port := range []string{"8953", "8954"} {
-				out, err := exec.CommandContext(cmd.Context(),
-					control, "-s", "127.0.0.1@"+port, "stats").Output() //nolint:gosec // operator-config command path
+				//nolint:gosec // operator-config command path
+				out, err := exec.CommandContext(cmd.Context(), control, "-s", "127.0.0.1@"+port, "stats").Output()
 				if err != nil {
 					// Output keeps the child's stderr on the ExitError;
 					// without it every failure reads "exit status 1".

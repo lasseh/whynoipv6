@@ -52,6 +52,6 @@ func ListASNLeaderboard(ctx context.Context, pool *pgxpool.Pool, nameQuery strin
 	}
 
 	return collectKeysetRows[ASNRow](ctx, pool,
-		q.OrderBy(fmt.Sprintf("%s %s, number %s", col, dir, dir)).Limit(uint64(limit+1)),
+		q.OrderBy(fmt.Sprintf("%s %s, number %s", col, dir, dir)).Limit(fetchLimit(limit)),
 		backward, "asn leaderboard")
 }

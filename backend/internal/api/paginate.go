@@ -371,15 +371,15 @@ func jsonInt32(v any) (int32, bool) {
 	switch n := v.(type) {
 	case json.Number:
 		i, err := n.Int64()
-		return int32(i), err == nil && fitsInt32(i)
+		return int32(i), err == nil && fitsInt32(i) //nolint:gosec // the ok flag carries the range check
 	case float64:
 		return int32(n), n >= math.MinInt32 && n <= math.MaxInt32
 	case int32:
 		return n, true
 	case int:
-		return int32(n), fitsInt32(int64(n))
+		return int32(n), fitsInt32(int64(n)) //nolint:gosec // the ok flag carries the range check
 	case int64:
-		return int32(n), fitsInt32(n)
+		return int32(n), fitsInt32(n) //nolint:gosec // the ok flag carries the range check
 	default:
 		return 0, false
 	}

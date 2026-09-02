@@ -81,7 +81,7 @@ func NewFrontier(pool *pgxpool.Pool, cfg FrontierConfig) *Frontier {
 
 // ClaimBatch runs one claim statement and returns the claimed snapshots.
 func (f *Frontier) ClaimBatch(ctx context.Context) ([]ClaimedDomain, error) {
-	limit := int32(f.cfg.BatchSize)
+	limit := int32(f.cfg.BatchSize) //nolint:gosec // claim.batch_size is a small registry int
 	if f.cfg.Order == "age" {
 		rows, err := f.q.ClaimBatchByAge(ctx, limit)
 		if err != nil {

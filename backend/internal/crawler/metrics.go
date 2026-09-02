@@ -214,7 +214,7 @@ func (m *Metrics) Checkpoint(ctx context.Context, final bool) {
 	if err != nil {
 		slog.Warn("queue depth probe failed", "err", err.Error())
 	}
-	depth := int32(depth64)
+	depth := int32(depth64) //nolint:gosec // a due-set count, far below int32
 
 	params := db.InsertCrawlerMetricsParams{
 		RunID:       pgtype.UUID{Bytes: m.runID, Valid: true},

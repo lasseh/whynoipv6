@@ -9,6 +9,16 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// fetchLimit is the N+1 window fetch as squirrel's uint64. The rims clamp
+// limit to at least 1 before it gets here; the guard only keeps a negative
+// from wrapping.
+func fetchLimit(limit int) uint64 {
+	if limit < 0 {
+		limit = 0
+	}
+	return uint64(limit + 1) //nolint:gosec // non-negative after the guard
+}
+
 // collectKeysetRows executes a built keyset window and restores display
 // order after a backward walk — the run half shared by every seek builder.
 func collectKeysetRows[T any](ctx context.Context, pool *pgxpool.Pool,

@@ -149,7 +149,7 @@ func runJournalctl(cmd *cobra.Command, formatter *logfmt.Formatter, f *logsFlags
 		return fmt.Errorf("%s not found; pipe the records in instead, e.g. "+
 			"`docker compose logs -f --no-log-prefix crawler | v6ctl logs -`", journalctl)
 	}
-	jc := exec.CommandContext(cmd.Context(), journalctl, journalctlArgs(f, extra)...)
+	jc := exec.CommandContext(cmd.Context(), journalctl, journalctlArgs(f, extra)...) //nolint:gosec // the operator's own journalctl flags
 	// journalctl's own diagnostics stay on stderr: merged into stdout they
 	// would reach the formatter and read like log content.
 	jc.Stderr = os.Stderr
@@ -167,7 +167,7 @@ func runJournalctl(cmd *cobra.Command, formatter *logfmt.Formatter, f *logsFlags
 	// process group, so a signalled exit under a cancelled context is the
 	// normal way --follow ends, not a failure.
 	if cmd.Context().Err() != nil {
-		return nil
+		return nil //nolint:nilerr // Ctrl-C reached journalctl too: a signalled exit is the normal end of --follow
 	}
 	if renderErr != nil {
 		return renderErr

@@ -371,7 +371,7 @@ func (s *Server) getNetworkStats(w http.ResponseWriter, r *http.Request) {
 	meta := NewMeta(asOf, generation)
 	meta.Source = sourceConfirmedState
 	rows, err := s.q.StatsTopNetworks(r.Context(), db.StatsTopNetworksParams{
-		FromDay: postgres.TS(from), ToDay: postgres.TS(to), TopN: int32(limit),
+		FromDay: postgres.TS(from), ToDay: postgres.TS(to), TopN: int32(limit), //nolint:gosec // parseNetworkLimit clamps limit to 10
 	})
 	if err != nil {
 		InternalError(w, r, err)

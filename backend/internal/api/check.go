@@ -366,7 +366,7 @@ func (s *Server) storedEvidence(r *http.Request, domainID int64, host string,
 	result := observe.MapLiveResult(domain.Kind(kind), sr, scanTS, scanTS, links, s.opts.ResourcesEnabled)
 	resultRaw, err := json.Marshal(result)
 	if err != nil {
-		return nil, nil
+		return nil, fmt.Errorf("marshal evidence: %w", err)
 	}
 	return resultRaw, nil
 }

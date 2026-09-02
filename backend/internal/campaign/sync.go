@@ -570,7 +570,7 @@ func writeCheckedYAML(path, content, id string) error {
 	if err := yaml.Unmarshal([]byte(content), &probe); err != nil || probe.UUID != id {
 		return fmt.Errorf("uuid splice would corrupt %s (got uuid %q): file left unchanged", filepath.Base(path), probe.UUID)
 	}
-	return os.WriteFile(path, []byte(content), 0o644)
+	return os.WriteFile(path, []byte(content), 0o644) //nolint:gosec // a campaign file the sync itself listed under repo_path
 }
 
 // gitTimeout bounds every git call the sync makes; the tick runs them under
@@ -584,7 +584,7 @@ var gitRemoteRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._/-]*$`)
 func git(ctx context.Context, repo string, args ...string) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, gitTimeout)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "git", append([]string{"-C", repo}, args...)...)
+	cmd := exec.CommandContext(ctx, "git", append([]string{"-C", repo}, args...)...) //nolint:gosec // fixed argv; the remote is validated by gitRemoteRe
 	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
 	// SIGTERM lets git release its index lock; the default Kill can leave
 	// .git/index.lock behind and wedge every later pull.

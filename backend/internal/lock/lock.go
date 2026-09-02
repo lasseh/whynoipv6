@@ -92,7 +92,7 @@ func Run(ctx context.Context, pool *pgxpool.Pool, job int32, wait time.Duration,
 		if waitCtx.Err() != nil {
 			// The interrupted backend session may be poisoned; drop it so the
 			// half-taken lock (if any) is released with the session.
-			conn.Conn().Close(context.WithoutCancel(ctx)) //nolint:errcheck // teardown
+			conn.Conn().Close(context.WithoutCancel(ctx)) //nolint:errcheck,gosec // teardown
 			if ctx.Err() != nil {
 				return fmt.Errorf("lock %s: %w", JobName(job), ctx.Err())
 			}
@@ -116,6 +116,6 @@ func unlock(ctx context.Context, conn *pgxpool.Conn, job int32) {
 	uctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), unlockTimeout)
 	defer cancel()
 	if _, err := conn.Exec(uctx, "SELECT pg_advisory_unlock($1, $2)", ClassID, job); err != nil {
-		conn.Conn().Close(uctx) //nolint:errcheck // teardown
+		conn.Conn().Close(uctx) //nolint:errcheck,gosec // teardown
 	}
 }

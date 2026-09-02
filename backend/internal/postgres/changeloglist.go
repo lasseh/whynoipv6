@@ -70,5 +70,5 @@ func ListChangelog(ctx context.Context, pool *pgxpool.Pool, f *ChangelogFilter,
 	}
 
 	return collectKeysetRows[ChangelogRow](ctx, pool,
-		q.OrderBy(order).Limit(uint64(limit+1)), backward, "changelog list")
+		q.OrderBy(order).Limit(fetchLimit(limit)), backward, "changelog list")
 }

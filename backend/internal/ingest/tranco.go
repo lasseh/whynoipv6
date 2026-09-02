@@ -253,9 +253,9 @@ func (ti *TrancoImporter) applyList(ctx context.Context, rep *TrancoReport, rows
 			return db.New(ti.pool).TrancoInsertAborted(ctx, db.TrancoInsertAbortedParams{
 				ListID:         rep.ListID,
 				ListDate:       postgres.Date(rep.ListDate),
-				LineCount:      ptr(int32(rep.LineCount)),
-				RejectedCount:  ptr(int32(rep.RejectedCount)),
-				DuplicateCount: ptr(int32(rep.DuplicateCount)),
+				LineCount:      count32(rep.LineCount),
+				RejectedCount:  count32(rep.RejectedCount),
+				DuplicateCount: count32(rep.DuplicateCount),
 				Note:           &note,
 			})
 		}
@@ -285,11 +285,11 @@ func (ti *TrancoImporter) applyList(ctx context.Context, rep *TrancoReport, rows
 	if _, err := q.TrancoInsertProvenance(ctx, db.TrancoInsertProvenanceParams{
 		ListID:         rep.ListID,
 		ListDate:       postgres.Date(rep.ListDate),
-		LineCount:      ptr(int32(rep.LineCount)),
-		ImportedCount:  ptr(int32(rep.ImportedCount)),
-		Delisted:       ptr(int32(rep.Delisted)),
-		RejectedCount:  ptr(int32(rep.RejectedCount)),
-		DuplicateCount: ptr(int32(rep.DuplicateCount)),
+		LineCount:      count32(rep.LineCount),
+		ImportedCount:  count32(rep.ImportedCount),
+		Delisted:       count32(rep.Delisted),
+		RejectedCount:  count32(rep.RejectedCount),
+		DuplicateCount: count32(rep.DuplicateCount),
 	}); err != nil {
 		return fmt.Errorf("tranco: provenance: %w", err)
 	}
@@ -397,9 +397,14 @@ func parseTrancoZip(zipBytes []byte) (rows [][]any, lineCount, rejected int, err
 			slog.Debug("tranco line rejected", "line", line, "err", err.Error())
 			continue
 		}
-		rows = append(rows, []any{int32(rank), host, domain.TLD(host)})
+		rows = append(rows, []any{int32(rank), host, domain.TLD(host)}) //nolint:gosec // rank ≤ maxTrancoLines, checked above
 	}
 	return rows, lineCount, rejected, nil
 }
 
-func ptr[T any](v T) *T { return &v }
+// count32 narrows a report counter for the int32 provenance columns; every
+// counter is bounded by maxTrancoLines.
+func count32(n int) *int32 {
+	v := int32(n) //nolint:gosec // ≤ maxTrancoLines
+	return &v
+}

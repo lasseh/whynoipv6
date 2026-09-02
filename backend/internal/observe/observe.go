@@ -318,7 +318,7 @@ func latencyMs(st checker.CheckStatus, d *checker.LatencyDetail) *int32 {
 	if st != checker.StatusSupported || d.AvgMS == nil {
 		return nil
 	}
-	ms := int32(*d.AvgMS)
+	ms := int32(*d.AvgMS) //nolint:gosec // milliseconds under the probe timeout
 	return &ms
 }
 
