@@ -30,6 +30,39 @@ import (
 // drainBudget is the graceful-shutdown drain deadline (04 §14 Decision).
 const drainBudget = 80 * time.Second
 
+// atLeastOne are the registry keys whose zero is not a setting but a
+// process that runs and does nothing right: no slots or an empty claim
+// batch idles forever, a zero lookup cap turns every NS/MX check into an
+// error, a zero QPS limiter blocks every consensus lookup, and zero
+// breaker samples or probes trip and restore on nothing.
+var atLeastOne = []string{
+	"worker_slots",
+	"claim.batch_size",
+	"checks.max_ns_lookups",
+	"checks.max_mx_lookups",
+	"consensus.per_provider_qps",
+	"consensus.fastlane_breaker.min_samples",
+	"consensus.provider_breaker.min_samples",
+	"consensus.provider_breaker.recovery_probes",
+}
+
+// validateBounds is the fail-fast gate for the values above (04 §13): the
+// registry types them but does not bound them, and each consumer would
+// otherwise start and misbehave quietly. An empty resolver.bulk_upstreams
+// is rejected too: the resolver's fallback is the public resolvers, which
+// must never carry the bulk load.
+func validateBounds(cfg *config.Config) error {
+	for _, key := range atLeastOne {
+		if v := cfg.Int(key); v < 1 {
+			return fmt.Errorf("config: %s must be at least 1, got %d", key, v)
+		}
+	}
+	if len(cfg.StringSlice("resolver.bulk_upstreams")) == 0 {
+		return fmt.Errorf("config: resolver.bulk_upstreams must name at least one upstream")
+	}
+	return nil
+}
+
 func main() {
 	if err := run(); err != nil {
 		fmt.Fprintln(os.Stderr, "crawler: "+err.Error())
@@ -51,6 +84,9 @@ func run() error {
 	}
 	defer flushLogs()
 	cfg.LogSummary(log, slog.LevelInfo)
+	if err := validateBounds(cfg); err != nil {
+		return err
+	}
 
 	rootCtx, rootCancel := context.WithCancel(context.Background())
 	defer rootCancel()
