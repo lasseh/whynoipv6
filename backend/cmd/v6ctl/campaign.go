@@ -23,6 +23,10 @@ func campaignCmd() *cobra.Command {
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cfg := cfgFromCmd(cmd)
+			ccfg := campaign.ConfigFrom(cfg)
+			if err := ccfg.Validate(); err != nil {
+				return err
+			}
 			pool, err := newPool(cmd)
 			if err != nil {
 				return err
@@ -32,7 +36,7 @@ func campaignCmd() *cobra.Command {
 			// by the JobCampaignSync lock; the wait is normative (04 §10).
 			var rep *campaign.Report
 			err = lock.Run(cmd.Context(), pool, lock.JobCampaignSync, singletonWait, func(ctx context.Context) error {
-				r, err := campaign.Sync(ctx, campaign.ConfigFrom(cfg), pool)
+				r, err := campaign.Sync(ctx, ccfg, pool)
 				rep = r
 				return err
 			})

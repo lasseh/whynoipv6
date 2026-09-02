@@ -17,6 +17,9 @@ import (
 // value at runtime.
 func TestConfigBinding(t *testing.T) {
 	t.Setenv("DATABASE_URL", "postgres://u@localhost/whynoipv6")
+	// The startup bounds now include the campaign checkout, which lives at
+	// /srv/whynoipv6-campaign in production and nowhere on a test machine.
+	t.Setenv("CAMPAIGN_REPO_PATH", t.TempDir())
 	cfg, err := config.Load("crawler")
 	if err != nil {
 		t.Fatal(err)
@@ -40,6 +43,7 @@ func TestValidateBounds(t *testing.T) {
 	for _, env := range []string{"WORKER_SLOTS", "CLAIM_BATCH_SIZE", "CHECKS_MAX_NS_LOOKUPS", "CONSENSUS_PER_PROVIDER_QPS"} {
 		t.Run(env, func(t *testing.T) {
 			t.Setenv("DATABASE_URL", "postgres://u@localhost/whynoipv6")
+			t.Setenv("CAMPAIGN_REPO_PATH", t.TempDir())
 			t.Setenv(env, "0")
 			cfg, err := config.Load("crawler")
 			if err != nil {

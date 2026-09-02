@@ -60,7 +60,9 @@ func validateBounds(cfg *config.Config) error {
 	if len(cfg.StringSlice("resolver.bulk_upstreams")) == 0 {
 		return fmt.Errorf("config: resolver.bulk_upstreams must name at least one upstream")
 	}
-	return nil
+	// The campaign checkout and git: tick step 5 needs both, and without
+	// this the crawler reports it once a night instead of at startup.
+	return campaign.ConfigFrom(cfg).Validate()
 }
 
 func main() {
