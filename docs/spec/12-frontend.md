@@ -288,12 +288,14 @@ Old rows carried a server-rendered `message` + `domain_url`. New rows are struct
 | `conn` | `unsupported` | `not_applicable` | `"{host} published IPv6 addresses — but connections fail"` | pink |
 | `conn` | `unsupported` | other | `"{host} is no longer reachable over IPv6"` | pink |
 | `conn` | `not_applicable` | any | `"{host} has no IPv6 addresses left to test"` | muted zinc |
-| `resources` | `supported` | any | `"{host} now loads all page resources over IPv6"` | emerald |
-| `resources` | `unsupported` | any | `"{host} loads some page resources without IPv6"` | pink |
+| `resources` | `supported` | any | `"{host} now passes the page-resource IPv6 grade"` | emerald |
+| `resources` | `unsupported` | any | `"{host} uses some page-resource hosts without IPv6"` | pink |
 | `resources` | `not_applicable` | `unsupported` | `"{host} no longer depends on IPv4-only page resources"` | muted zinc |
 | `resources` | `not_applicable` | other | `"{host} no longer loads third-party page resources"` | muted zinc |
 
 _Erratum 2026-09-02: the `resources | not_applicable` row is **no longer defensive-only** (03 §11 erratum, review issue 02), and it splits on `old_value` — the two rows above replace the single `"{host} no longer has its page resources checked"`. The write side suppresses this flip only when `conn` left `supported`, so every row that renders means "no third-party host left to grade", never "checking stopped": the old sentence named a reason only the suppressed branch has. From `unsupported` the flip also clears `resources_v4only` (and restores saint, for a hero), which is why that arm gets its own wording. The colour stays muted zinc in both: the dot and message hue key on `new_value`'s status everywhere (`status.test.ts` pins "muted states zinc"), and the sentence carries the direction, as it does on every other row. The `conn | not_applicable` row stays defensive-only._
+
+_Erratum 2026-09-02: the two `resources` rows above it are restated from the code. 89664e5 ("align site copy with what the crawler actually does") reworded them in `feed.go` and both goldens — the crawler grades a capped 50-host sample of third-party hosts, so "loads all page resources over IPv6" claimed more than it checks — but left this table and ADR 0002 item 4 carrying the old sentences. The code is normative; this row was stale, not the implementation._
 
 This is the same `(field, old, new)` key the server's feed serializer renders from (07 §5.4); the §11 goldens pin both wordings so they don't drift apart. The changelog page renders **all six fields** — `conn`/`resources` transitions appear here even though the phase-1 detail accordion shows only four dimensions (deliberate asymmetry: the changelog is the trust surface, not a detail view).
 
