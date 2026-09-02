@@ -509,6 +509,13 @@ the RFC 9457 `application/problem+json` Content-Type and the
 `RateLimit`/`RateLimit-Policy`/`Retry-After` response headers (report §7.3) pass through
 unmodified. Edge compression is gzip here, Brotli at the CDN (report §7.4).
 
+_Erratum 2026-09-02 (review issue 44): two operational limits guard `?q=` search, which is the API's other expensive read alongside `?format=csv`. A one- or two-character term yields no trigram, and terms like `com` match nearly every row, so each **distinct** value is a scan-and-sort over ~1M rows plus a second EXPLAIN pass for the count estimate — and because the CDN keys on the full URL, rotating the term makes every request an origin miss that the general 10 r/s zone does not touch._
+
+1. _**`limit_req zone=api_search` — 1 r/s, burst 5.** Same shape as `api_csv`: `map $arg_q $api_search_client` keys by client address when the parameter is present and to `""` (which `limit_req` skips) when it is not. `TestNginxDatasetsSplit` boots the real vhost and asserts that twelve rapid `?q=` requests draw a 429 while twelve `?class=` requests do not._
+2. _**`statement_timeout = 5s` on the API's pool.** Set as a per-session runtime parameter through `postgres.NewPool(dsn, postgres.APIStatementTimeout)`, the same channel that pins `timezone` — **deliberately not on the database role**: the crawler shares that role and its claim batches and stats rollups legitimately exceed 5 s. Without it a runaway scan holds a backend for the full 30 s request timeout while every other origin miss queues behind it. `TestPoolRuntimeParams` asserts both that the cap is 5 s on an API pool and that a plain pool does not inherit it._
+
+_Not done, deliberately: no `minLength` on `q`. That would change the OpenAPI schema and reject legitimate two-letter ccTLD searches; the decision keeps this operational._
+
 ```nginx
 server {
     listen 443 ssl;

@@ -125,6 +125,36 @@ func TestNginxDatasetsSplit(t *testing.T) {
 	if resp3.StatusCode != 502 {
 		t.Errorf("=/datasets should proxy (502 without upstream), got %d", resp3.StatusCode)
 	}
+
+	// The ?q= search zone (review issue 44): 1 r/s burst 5, keyed by client
+	// address only when the parameter is present. There is no upstream, so
+	// a proxied request answers 502 and a throttled one answers 429 — the
+	// two are unambiguous.
+	//
+	// The general api_perip zone is 10 r/s burst 30 and the requests above
+	// leave that far from exhausted, so a 429 here can only come from the
+	// search zone.
+	statuses := func(path string, n int) map[int]int {
+		t.Helper()
+		seen := map[int]int{}
+		for range n {
+			req, _ := http.NewRequest(http.MethodGet, "https://"+hostPort+path, nil)
+			req.Host = "api.whynoipv6.com"
+			r, err := client.Do(req)
+			if err != nil {
+				t.Fatalf("GET %s: %v", path, err)
+			}
+			_ = r.Body.Close()
+			seen[r.StatusCode]++
+		}
+		return seen
+	}
+	if got := statuses("/domains?q=example", 12); got[429] == 0 {
+		t.Errorf("12 rapid ?q= requests were all admitted (%v): the search zone did not fire", got)
+	}
+	if got := statuses("/domains?class=hero", 12); got[429] != 0 {
+		t.Errorf("non-search requests were throttled (%v): the map must key on $arg_q alone", got)
+	}
 }
 
 // writeSelfSigned mints a throwaway cert/key pair for the vhost, named and
