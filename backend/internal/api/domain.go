@@ -14,6 +14,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/lasseh/whynoipv6/internal/domain"
 	"github.com/lasseh/whynoipv6/internal/postgres"
@@ -689,6 +690,23 @@ func (s *Server) domainByPathHost(w http.ResponseWriter, r *http.Request) (db.Do
 	return row, true
 }
 
+// detailLastChange is the entity's own freshness clock for the detail-class
+// ETag (07 §6.1 row 2): the newest of its six confirmed-transition stamps
+// and its last scan. All seven columns are already on the row, so seeding
+// from them costs nothing.
+func detailLastChange(row *db.DomainDetailByHostRow) time.Time {
+	var newest time.Time
+	for _, ts := range []pgtype.Timestamptz{
+		row.LastCheckedAt, row.BaseSince, row.WwwSince, row.NsSince,
+		row.MxSince, row.ConnSince, row.ResourcesSince,
+	} {
+		if ts.Valid && ts.Time.After(newest) {
+			newest = ts.Time
+		}
+	}
+	return newest
+}
+
 // getDomain is GET /domains/{host} (07 §4.3). Disabled and rank-NULL
 // entities resolve here even though they are invisible in collections.
 func (s *Server) getDomain(w http.ResponseWriter, r *http.Request) {
@@ -712,7 +730,7 @@ func (s *Server) getDomain(w http.ResponseWriter, r *http.Request) {
 		InternalError(w, r, err)
 		return
 	}
-	if CacheList(w, r, generation) {
+	if CacheDetail(w, r, generation, detailLastChange(&row)) {
 		return
 	}
 

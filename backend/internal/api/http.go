@@ -195,6 +195,18 @@ func CacheList(w http.ResponseWriter, r *http.Request, generation int32) bool {
 	return applyETag(w, r, fmt.Sprintf(`W/"g%d-%s"`, generation, queryFingerprint(r)))
 }
 
+// CacheDetail sets the entity-detail class (07 §6.1 row 2): the same
+// Cache-Control as the list class, but the ETag is tied to that entity's
+// last confirmed transition, not only the daily generation. A transition
+// therefore invalidates the CDN copy when it commits rather than at the
+// next stats tick. The generation stays in the seed because the detail body
+// also carries generation-cadence numbers.
+func CacheDetail(w http.ResponseWriter, r *http.Request, generation int32, lastChange time.Time) bool {
+	w.Header().Set("Cache-Control",
+		"public, max-age=300, s-maxage=3600, stale-while-revalidate=600, stale-if-error=86400")
+	return applyETag(w, r, fmt.Sprintf(`W/"d%d-%d-%s"`, generation, lastChange.UnixNano(), queryFingerprint(r)))
+}
+
 // CacheChangelog: the live-surface class — ETag from the scope window's
 // max(changelog.ts), never the daily generation (07 §6.1).
 func CacheChangelog(w http.ResponseWriter, r *http.Request, maxTS time.Time) bool {

@@ -541,6 +541,57 @@ func TestDetailMasking(t *testing.T) {
 	}
 }
 
+// TestDetailETagTracksTransitions (07 §6.1 row 2, review issue 06): the
+// detail ETag is tied to the entity's last confirmed transition, so a
+// transition invalidates a CDN copy when it commits. Seeded from the daily
+// generation instead, this revalidation 304s and the edge keeps serving the
+// pre-transition body until the next stats tick.
+func TestDetailETagTracksTransitions(t *testing.T) {
+	srv, pool := newAPI(t)
+	const url = "/domains/d1.example"
+
+	resp, _ := fetch(t, srv.URL+url)
+	before := resp.Header.Get("ETag")
+	if before == "" {
+		t.Fatal("no ETag on the detail response")
+	}
+	if code := conditionalGet(t, srv.URL+url, before); code != http.StatusNotModified {
+		t.Fatalf("unchanged entity revalidated %d, want 304", code)
+	}
+
+	// The crawler confirms a base transition. generation does not move —
+	// that is the daily stats tick, which has not run.
+	if _, err := pool.Exec(context.Background(),
+		`UPDATE domain SET base_status = 'no_record', base_since = now() WHERE host = 'd1.example'`); err != nil {
+		t.Fatal(err)
+	}
+
+	resp, _ = fetch(t, srv.URL+url)
+	after := resp.Header.Get("ETag")
+	if after == before {
+		t.Errorf("ETag %s survived a confirmed transition", after)
+	}
+	if code := conditionalGet(t, srv.URL+url, before); code != http.StatusOK {
+		t.Errorf("stale validator revalidated %d, want 200", code)
+	}
+}
+
+// conditionalGet issues an If-None-Match revalidation and returns the status.
+func conditionalGet(t *testing.T, url, etag string) int {
+	t.Helper()
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, url, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("If-None-Match", etag)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	return resp.StatusCode
+}
+
 // TestShameList (07 §4.4): visibility computed read-side, exact meta.count,
 // trivial page block.
 func TestShameList(t *testing.T) {
