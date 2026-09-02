@@ -132,7 +132,7 @@ func ComputeCommit(in *CommitInput, cfg *CommitConfig) (*commitUnit, error) {
 	disabled := s.Disabled
 	disabledReason := s.DisabledReason
 	disabledAt := s.DisabledAt
-	info := in.Obs // informational values written in step 8 (may be nulled by step R first)
+	info := in.Obs // informational values written verbatim in step 8 (step R needs no reset)
 
 	// Step 1 — lifecycle: dead detection & recovery.
 	var deadStreak int16

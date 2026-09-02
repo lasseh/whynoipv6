@@ -64,8 +64,8 @@ func TestCapHistoryWindow(t *testing.T) {
 		from     time.Time
 		wantFrom time.Time
 	}{
-		{"ancient from is capped", time.Date(1990, 1, 1, 0, 0, 0, 0, time.UTC), to.AddDate(0, 0, -changelogRetentionDays)},
-		{"from at the cap survives", to.AddDate(0, 0, -changelogRetentionDays), to.AddDate(0, 0, -changelogRetentionDays)},
+		{"ancient from is capped", time.Date(1990, 1, 1, 0, 0, 0, 0, time.UTC), to.AddDate(0, 0, -historyWindowDays)},
+		{"from at the cap survives", to.AddDate(0, 0, -historyWindowDays), to.AddDate(0, 0, -historyWindowDays)},
 		{"from inside the cap survives", to.AddDate(0, 0, -90), to.AddDate(0, 0, -90)},
 	}
 	for _, tc := range tests {

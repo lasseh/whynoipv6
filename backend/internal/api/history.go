@@ -14,9 +14,9 @@ import (
 	db "github.com/lasseh/whynoipv6/internal/postgres/db"
 )
 
-// changelogRetentionDays mirrors the changelog hypertable retention policy
+// historyWindowDays mirrors the changelog hypertable retention policy
 // (05-schema.md — 730 days), surfaced in the history meta block.
-const changelogRetentionDays = 730
+const historyWindowDays = 730
 
 // HistoryPoint is one §4.9 trajectory sample: confirmed per-dimension state
 // reconstructed from the changelog + the ladder classification + the scan
@@ -82,9 +82,9 @@ func parseHistoryWindow(q url.Values) (from, to time.Time, weekly bool, err erro
 // capHistoryWindow bounds the synthesized window at the documented
 // changelog retention (history-only — the stats endpoints share the parser
 // but read real rollup rows): a wide `from` cannot make the day loop
-// allocate more than changelogRetentionDays points.
+// allocate more than historyWindowDays points.
 func capHistoryWindow(from, to time.Time) time.Time {
-	if oldest := to.AddDate(0, 0, -changelogRetentionDays); from.Before(oldest) {
+	if oldest := to.AddDate(0, 0, -historyWindowDays); from.Before(oldest) {
 		return oldest
 	}
 	return from
@@ -172,7 +172,7 @@ func (s *Server) getDomainHistory(w http.ResponseWriter, r *http.Request) {
 	}
 
 	out := HistoryEnvelope{Host: row.Host, Points: []HistoryPoint{}}
-	out.Meta.RetentionDays = changelogRetentionDays
+	out.Meta.RetentionDays = historyWindowDays
 	out.Meta.AsOf = asOf.UTC()
 
 	replay, err := s.q.ChangelogReplay(r.Context(), row.ID)
