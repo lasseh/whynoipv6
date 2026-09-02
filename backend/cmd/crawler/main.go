@@ -154,15 +154,21 @@ func run() error {
 
 	frontier := crawler.NewFrontier(pool, crawler.FrontierConfigFrom(cfg))
 	frontier.Process = w.Process
+	alerts := &preflightAlerter{now: time.Now}
 	frontier.Preflight = func(ctx context.Context) bool {
 		if preflight.Run(ctx) {
+			if alerts.recovered() {
+				notifier.Webhook(ctx, "crawler preflight recovered: IPv6 egress is back; claiming resumed")
+			}
 			return true
 		}
 		if ctx.Err() != nil {
 			return false // a cancelled probe is shutdown, not an outage (04 §14.4)
 		}
 		slog.Warn("ipv6 preflight failed; claiming nothing")
-		notifier.Webhook(ctx, "crawler preflight failed: no IPv6 egress; claiming paused")
+		if alerts.failed() {
+			notifier.Webhook(ctx, "crawler preflight failed: no IPv6 egress; claiming paused")
+		}
 		notifier.HeartbeatFail(ctx)
 		return false
 	}
@@ -255,6 +261,53 @@ func providerRefreshLoop(ctx context.Context, providers *ingest.ProviderMapping,
 			}
 		}
 	}
+}
+
+// preflightAlertInterval spaces the repeat ops-webhook alerts while an IPv6
+// egress outage persists. Deliberately not ops.healthcheck_min_interval:
+// that is 60s, the same as preflight.retry_interval, so reusing it would
+// throttle nothing.
+const preflightAlertInterval = 15 * time.Minute
+
+// preflightAlerter gates the ops-webhook alert behind a failing preflight
+// (04 §11 erratum). One message on the healthy→failed edge, then at most one
+// per preflightAlertInterval while it persists, then one on recovery. An
+// hour-long outage costs 5 messages instead of 60.
+//
+// The /fail ping is deliberately left per-cycle: healthchecks.io dedupes it
+// and it is what holds the check red for the duration.
+//
+// Not concurrency-safe, and does not need to be — the claim loop calls
+// Preflight from its single goroutine (crawler.Frontier.Run).
+type preflightAlerter struct {
+	failing  bool
+	lastSent time.Time
+	now      func() time.Time
+}
+
+// failed reports whether this failed cycle should post a webhook.
+func (a *preflightAlerter) failed() bool {
+	now := a.now()
+	if !a.failing {
+		a.failing, a.lastSent = true, now
+		return true
+	}
+	if now.Sub(a.lastSent) < preflightAlertInterval {
+		return false
+	}
+	a.lastSent = now
+	return true
+}
+
+// recovered reports whether this healthy cycle ends an outage, and so should
+// post the recovery message. False on every cycle that follows a healthy one,
+// including the first — a process that starts healthy announces nothing.
+func (a *preflightAlerter) recovered() bool {
+	if !a.failing {
+		return false
+	}
+	a.failing = false
+	return true
 }
 
 // geoipReloadLoop stats the mmdb files hourly and swaps readers on change

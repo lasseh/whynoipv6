@@ -2,6 +2,7 @@ package main
 
 import (
 	"testing"
+	"time"
 
 	"github.com/lasseh/whynoipv6/internal/campaign"
 	"github.com/lasseh/whynoipv6/internal/checker"
@@ -53,5 +54,45 @@ func TestValidateBounds(t *testing.T) {
 				t.Errorf("%s=0 passed the startup bounds", env)
 			}
 		})
+	}
+}
+
+// TestPreflightAlerter walks the claim loop's alert gate over an outage
+// (review issue 12, 04 §11 erratum): one message on the edge, then one per
+// preflightAlertInterval while it persists, then one on recovery. Before
+// the gate an hour of 60s retries posted 60 identical webhook messages.
+func TestPreflightAlerter(t *testing.T) {
+	base := time.Date(2026, 9, 2, 10, 0, 0, 0, time.UTC)
+	now := base
+	a := &preflightAlerter{now: func() time.Time { return now }}
+
+	if a.recovered() {
+		t.Error("a process that starts healthy must announce nothing")
+	}
+	if !a.failed() {
+		t.Error("the healthy→failed edge must alert")
+	}
+	// An hour of 60s retry cycles: only the 15-minute boundaries speak.
+	sent := 0
+	for range 59 {
+		now = now.Add(time.Minute)
+		if a.failed() {
+			sent++
+		}
+	}
+	if sent != 3 {
+		t.Errorf("repeats over an hour = %d, want 3 (15, 30, 45 min; the 60th lands at 60m)", sent)
+	}
+
+	now = now.Add(time.Minute)
+	if !a.recovered() {
+		t.Error("failed→healthy must post the recovery message")
+	}
+	if a.recovered() {
+		t.Error("recovery must be announced once, not on every healthy cycle")
+	}
+	// A second outage starts a fresh edge rather than inheriting lastSent.
+	if !a.failed() {
+		t.Error("a new outage must alert on its own edge")
 	}
 }

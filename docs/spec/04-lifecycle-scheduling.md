@@ -458,6 +458,8 @@ func (p *checker.Preflight) PassedWithin(d time.Duration) bool
 
 Claim-loop behavior when `Run` returns `false` (probe failed): the process **claims nothing**, sends an ops-webhook alert, pings the `/fail` endpoint of its healthchecks.io check (§15), logs `level=warn` (the probe-failure detail is logged at Error by `Run` itself, 01), and retries after `preflight.retry_interval`. Config (registry: 09-ops.md):
 
+_Erratum 2026-09-02: "sends an ops-webhook alert" is per **outage**, not per cycle. At a 60s retry interval the literal reading posts 60 identical messages an hour and 1,440 a day, which trains the on-call to mute the channel. The alert is now gated: one message on the healthy→failed edge, then at most one per **15 minutes** while the outage persists, then one `crawler preflight recovered` message on the failed→healthy edge. The interval is a constant in `cmd/crawler`, deliberately not `ops.healthcheck_min_interval` — that is 60s, the same as the retry interval, so reusing it would throttle nothing. The `/fail` ping stays **per cycle** as written (§15): healthchecks.io dedupes it, and it is what holds the check red. Same erratum applies to §12's loop pseudo-code. `TestPreflightAlerter` in `cmd/crawler` pins the sequence._
+
 ```yaml
 preflight:
   retry_interval: 60s   # sleep between failed preflights (this file owns this key)
