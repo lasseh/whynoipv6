@@ -19,7 +19,7 @@ func specPaths(t *testing.T) map[string]bool {
 	t.Helper()
 	raw, err := os.ReadFile(filepath.Join("..", "..", "..", "openapi", "openapi.yaml"))
 	if err != nil {
-		t.Skipf("openapi.yaml unavailable: %v", err)
+		t.Fatalf("openapi.yaml unavailable: %v", err)
 	}
 	var doc struct {
 		Paths map[string]map[string]any `yaml:"paths"`

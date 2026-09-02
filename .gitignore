@@ -13,3 +13,4 @@ backend/dist/
 backend/coverage.out
 backend/coverage.html
 
+.DS_Store

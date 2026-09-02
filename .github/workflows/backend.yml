@@ -11,6 +11,8 @@ on:
       - 'openapi/**'
       - 'Makefile'
       - '.github/workflows/backend.yml'
+      - 'deploy/**'
+      - 'docs/spec/09-ops.md'
   push:
     branches: [main]
     paths:
@@ -18,13 +20,15 @@ on:
       - 'openapi/**'
       - 'Makefile'
       - '.github/workflows/backend.yml'
+      - 'deploy/**'
+      - 'docs/spec/09-ops.md'
 
 permissions:
   contents: read
 
 concurrency:
   group: backend-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   backend:
