@@ -24,8 +24,8 @@ services:
     volumes:
       ["./deploy/unbound/${UNBOUND_DEV_PROFILE:-dev}/unbound1.conf:/opt/unbound/etc/unbound/unbound.conf:ro"]
     # Loopback-only: the crawler reaches unbound over the compose network by
-    # service name; the host publish exists for the latencyspike probe
-    # (backend/internal/consensus/latencyspike), which dials 127.0.0.1.
+    # service name; the host publish is for probing from the host
+    # (dig @127.0.0.1 -p 5301, unbound-control).
     ports: ["127.0.0.1:5301:53/udp", "127.0.0.1:5301:53/tcp"]
 
   unbound2:
