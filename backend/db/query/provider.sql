@@ -19,8 +19,14 @@ WHERE id = @id;
 -- name: ProviderDelete :execrows
 DELETE FROM dns_provider WHERE name = $1;
 
--- name: ProviderDomainCount :one
-SELECT count(*) FROM domain WHERE dns_provider_id = $1;
+-- `provider list`: one grouped pass over domain rather than a count per
+-- provider (only the partial idx_domain_dns_provider exists, so each of
+-- those was a scan).
+-- name: ProviderDomainCounts :many
+SELECT dns_provider_id, count(*) AS domains
+FROM domain
+WHERE dns_provider_id IS NOT NULL
+GROUP BY dns_provider_id;
 
 -- Tick step 3 — DNS-provider counter recompute (06-ingest.md §10.6).
 -- name: ResetProviderCounters :exec

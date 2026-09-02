@@ -201,7 +201,10 @@ type Querier interface {
 	// The API DNS-provider league table (07 §4.6): exact stored counters,
 	// count_v4 synthesized server-side.
 	ProviderDetail(ctx context.Context, id int64) (ProviderDetailRow, error)
-	ProviderDomainCount(ctx context.Context, dnsProviderID *int64) (int64, error)
+	// `provider list`: one grouped pass over domain rather than a count per
+	// provider (only the partial idx_domain_dns_provider exists, so each of
+	// those was a scan).
+	ProviderDomainCounts(ctx context.Context) ([]ProviderDomainCountsRow, error)
 	ProviderInsert(ctx context.Context, arg ProviderInsertParams) (int64, error)
 	ProviderLeaderboard(ctx context.Context) ([]ProviderLeaderboardRow, error)
 	// db/query/provider.sql — dns_provider reference data + attribution stamp

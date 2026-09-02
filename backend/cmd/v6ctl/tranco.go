@@ -84,7 +84,10 @@ func trancoCmd() *cobra.Command {
 					fmtPtr(r.RejectedCount), fmtPtr(r.DuplicateCount), note)
 			}
 			last, err := q.TrancoLastSuccessAt(cmd.Context())
-			if err == nil && last.Valid {
+			if err != nil {
+				return err
+			}
+			if last.Valid {
 				age := time.Since(last.Time)
 				fmt.Printf("hours since last successful import: %.1f (warn threshold %s)\n",
 					age.Hours(), cfg.Duration("tranco.stale_warn_after"))

@@ -18,6 +18,8 @@ func TestConfigBinding(t *testing.T) {
 	}
 	_ = cfg.String("unbound_stats.control")
 	_ = cfg.Duration("tranco.stale_warn_after")
+	_ = cfg.String("dns_provider.seed_path")
+	_ = cfg.Int("datasets.retention_days")
 	_ = campaign.ConfigFrom(cfg)
 	_ = ingest.TrancoConfigFrom(cfg)
 }
