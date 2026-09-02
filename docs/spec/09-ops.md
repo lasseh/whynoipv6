@@ -113,7 +113,9 @@ separate pool-size config key**. Recommended production value:
 `?pool_max_conns=32&sslmode=verify-full` on the crawler (which also needs a dedicated
 connection per held advisory lock, 04-lifecycle-scheduling.md), `?pool_max_conns=16` on
 the API. Required (no default); a missing/empty `DATABASE_URL` is a fatal startup error
-in every binary.
+in every binary. _Erratum 2026-09-02:_ every binary opens its pool through
+`postgres.NewPool`, which pins the session `timezone` to `UTC`; the daily snapshots key
+on `CURRENT_DATE`, so the server's own timezone GUC no longer matters.
 
 ---
 

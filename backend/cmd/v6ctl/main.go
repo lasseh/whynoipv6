@@ -14,6 +14,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/lasseh/whynoipv6/internal/config"
+	"github.com/lasseh/whynoipv6/internal/postgres"
 )
 
 type ctxKey struct{}
@@ -25,7 +26,7 @@ func cfgFromCmd(cmd *cobra.Command) *config.Config {
 
 // newPool opens the pgx pool from the config loaded by the root PersistentPreRunE.
 func newPool(cmd *cobra.Command) (*pgxpool.Pool, error) {
-	pool, err := pgxpool.New(cmd.Context(), cfgFromCmd(cmd).DatabaseURL)
+	pool, err := postgres.NewPool(cmd.Context(), cfgFromCmd(cmd).DatabaseURL)
 	if err != nil {
 		return nil, fmt.Errorf("connect: %w", err)
 	}

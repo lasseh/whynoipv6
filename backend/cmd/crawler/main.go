@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/lasseh/whynoipv6/internal/postgres"
 
 	"github.com/lasseh/whynoipv6/internal/campaign"
 	"github.com/lasseh/whynoipv6/internal/checker"
@@ -55,9 +55,9 @@ func run() error {
 	rootCtx, rootCancel := context.WithCancel(context.Background())
 	defer rootCancel()
 
-	pool, err := pgxpool.New(rootCtx, cfg.DatabaseURL)
+	pool, err := postgres.NewPool(rootCtx, cfg.DatabaseURL)
 	if err != nil {
-		return fmt.Errorf("open pool: %w", err)
+		return err
 	}
 	defer pool.Close()
 	q := db.New(pool)

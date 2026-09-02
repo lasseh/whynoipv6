@@ -13,7 +13,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/lasseh/whynoipv6/internal/postgres"
 
 	"github.com/lasseh/whynoipv6/internal/api"
 	"github.com/lasseh/whynoipv6/internal/config"
@@ -41,9 +41,9 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	pool, err := pgxpool.New(ctx, cfg.DatabaseURL)
+	pool, err := postgres.NewPool(ctx, cfg.DatabaseURL)
 	if err != nil {
-		return fmt.Errorf("open pool: %w", err)
+		return err
 	}
 	defer pool.Close()
 
