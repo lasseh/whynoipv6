@@ -1,8 +1,9 @@
 name: release
 
 # Cut with `make release` (tags vX.Y.Z and pushes the tag); this builds the
-# linux binaries, publishes a GitHub Release, and pushes the backend image to
-# GHCR — then fails the release if Trivy finds CRITICAL/HIGH vulns in it.
+# linux binaries, publishes a GitHub Release, then builds the backend image,
+# fails the release if Trivy finds CRITICAL/HIGH vulns in it, and only then
+# pushes it to GHCR.
 
 on:
   push:
@@ -73,6 +74,8 @@ jobs:
   docker:
     name: Docker image
     runs-on: ubuntu-latest
+    # A release whose binaries do not build must not publish an image.
+    needs: binaries
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -99,7 +102,42 @@ jobs:
       # The backend image carries all three binaries with /api as entrypoint
       # (backend/Dockerfile); the frontend image bakes its API origin per
       # environment, so it is deployed from compose/Ansible, not released.
-      - name: Build and push
+      #
+      # Three steps, not one, and the order is the point: the header promises
+      # to fail the release if Trivy finds CRITICAL/HIGH, and `push: true`
+      # here published :X.Y.Z before the scan ran. A red job does not
+      # unpublish a tag. So: build into the local daemon, scan that image,
+      # and only then push. The second build is a cache hit — the layers are
+      # already in the gha cache from the first — so this costs a re-export,
+      # not a rebuild.
+      #
+      # The scan needs an image the local docker daemon can see, which a
+      # multi-arch build cannot produce (`load: true` refuses more than one
+      # platform). So the gate builds amd64 alone and scans it; the
+      # vulnerabilities Trivy reports here live in the distroless base and the
+      # Go binaries, neither of which differs by architecture.
+      - name: Build amd64 for scanning
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: ./backend
+          push: false
+          load: true
+          platforms: linux/amd64
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:scan-${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Scan image for vulnerabilities
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # 0.36.0
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:scan-${{ github.sha }}
+          format: table
+          exit-code: "1"
+          severity: CRITICAL,HIGH
+
+      # Only now. Same context and the same checkout, so the sha tag names
+      # the commit that was scanned.
+      - name: Push
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           context: ./backend
@@ -109,11 +147,3 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
-      - name: Scan image for vulnerabilities
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # 0.36.0
-        with:
-          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${{ github.sha }}
-          format: table
-          exit-code: "1"
-          severity: CRITICAL,HIGH

@@ -29,9 +29,13 @@ help: ## Show this help
 build: ## Build all three binaries
 	@for b in $(BINARIES); do $(GO) build $(GOFLAGS) -o bin/$$b ./cmd/$$b; done
 
-build-linux: ## Build static linux/amd64 release binaries
-	@for b in $(BINARIES); do CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
-	  $(GO) build -ldflags="-s -w" -o dist/$$b ./cmd/$$b; done
+build-linux: ## Build static linux release binaries for both release architectures
+	@# Both architectures, because the release image is multi-arch: amd64-only
+	@# here let an arm64-only break reach the tag build (review issue 33).
+	@for arch in amd64 arm64; do \
+	  for b in $(BINARIES); do CGO_ENABLED=0 GOOS=linux GOARCH=$$arch \
+	    $(GO) build -ldflags="-s -w" -o dist/$$arch/$$b ./cmd/$$b || exit 1; done; \
+	done
 
 ##@ Quality
 test: ## Run tests (race detector always on)
