@@ -1881,6 +1881,7 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["ChangelogList"];
+            400: components["responses"]["InvalidParameter"];
             404: components["responses"]["NotFound"];
             422: components["responses"]["ValidationError"];
         };

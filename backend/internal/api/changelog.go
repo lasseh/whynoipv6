@@ -35,6 +35,10 @@ type changelogWindow struct {
 	HasTo    bool
 }
 
+// parseChangelogWindow splits its errors the way 07 §2.5 does: ?field= is an
+// enum, so a value outside it is a validationError → 422; a malformed or
+// reversed date is a *malformed* value, so it is a plain error → 400, the
+// same status parseHistoryWindow returns for the same shapes.
 func parseChangelogWindow(q url.Values) (changelogWindow, error) {
 	var w changelogWindow
 	if f := q.Get("field"); f != "" {
@@ -59,14 +63,14 @@ func parseChangelogWindow(q url.Values) (changelogWindow, error) {
 	if v := q.Get("from"); v != "" {
 		t, err := parse(v)
 		if err != nil {
-			return w, validationError{"from", "must be YYYY-MM-DD or RFC 3339"}
+			return w, errors.New("from must be YYYY-MM-DD or RFC 3339")
 		}
 		w.From, w.HasFrom = t, true
 	}
 	if v := q.Get("to"); v != "" {
 		t, err := parse(v)
 		if err != nil {
-			return w, validationError{"to", "must be YYYY-MM-DD or RFC 3339"}
+			return w, errors.New("to must be YYYY-MM-DD or RFC 3339")
 		}
 		// A bare date means the whole day: extend to its last representable
 		// microsecond (timestamptz precision) so ts <= to includes that
@@ -77,7 +81,7 @@ func parseChangelogWindow(q url.Values) (changelogWindow, error) {
 		w.To, w.HasTo = t, true
 	}
 	if w.HasFrom && w.HasTo && w.From.After(w.To) {
-		return w, validationError{"from", "must not be after to"}
+		return w, errors.New("from must not be after to")
 	}
 	return w, nil
 }
@@ -116,8 +120,12 @@ func (s *Server) listDomainChangelog(w http.ResponseWriter, r *http.Request) {
 func (s *Server) serveChangelogFeed(w http.ResponseWriter, r *http.Request, domainID *int64) {
 	win, err := parseChangelogWindow(r.URL.Query())
 	var ve validationError
-	if errors.As(err, &ve) {
+	switch {
+	case errors.As(err, &ve):
 		ValidationError(w, r, []FieldError{{Field: ve.field, Reason: ve.msg}})
+		return
+	case err != nil:
+		InvalidParameter(w, r, err.Error())
 		return
 	}
 	filter := postgres.ChangelogFilter{DomainID: domainID, Field: win.Field}

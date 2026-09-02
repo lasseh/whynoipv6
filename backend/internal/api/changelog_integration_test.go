@@ -5,6 +5,7 @@ package api_test
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -101,6 +102,30 @@ func TestChangelog(t *testing.T) {
 	var badField struct{ Type string }
 	if resp := getJSON(t, srv.URL+"/changelog?field=tls", &badField); resp.StatusCode != 422 {
 		t.Errorf("bad field: %d", resp.StatusCode)
+	}
+
+	// Review issue 09: ?field= is an enum → 422 validation-error (above),
+	// but a malformed or reversed date is a malformed *value* → 400
+	// invalid-parameter, the same status /stats/* and /history return.
+	// Both changelog operations that honour from/to are covered.
+	for _, base := range []string{"/changelog", "/domains/d3.example/changelog"} {
+		for name, query := range map[string]string{
+			"bad_from":         "?from=nonsense",
+			"bad_to":           "?to=nonsense",
+			"reversed_window":  "?from=2026-02-01&to=2026-01-01",
+			"bad_rfc3339_from": "?from=2026-02-01T25:00:00Z",
+		} {
+			t.Run(base+" "+name, func(t *testing.T) {
+				var problem struct{ Type string }
+				resp := getJSON(t, srv.URL+base+query, &problem)
+				if resp.StatusCode != 400 {
+					t.Errorf("status = %d, want 400", resp.StatusCode)
+				}
+				if !strings.HasSuffix(problem.Type, "/invalid-parameter") {
+					t.Errorf("type = %q, want invalid-parameter", problem.Type)
+				}
+			})
+		}
 	}
 
 	// ?from= window: only the last 4 days (conn + mx).

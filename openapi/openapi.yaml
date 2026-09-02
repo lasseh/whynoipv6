@@ -146,6 +146,7 @@ paths:
         - $ref: "#/components/parameters/limit"
       responses:
         "200": { $ref: "#/components/responses/ChangelogList" }
+        "400": { $ref: "#/components/responses/InvalidParameter" }
         "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/ValidationError" }
   /domains/{host}/changelog.atom:
