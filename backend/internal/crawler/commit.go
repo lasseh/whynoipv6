@@ -60,16 +60,45 @@ type Transition struct {
 	Dim domain.Dimension
 	Old domain.IPv6Status
 	New domain.IPv6Status
+	// Shadow marks a flip that wrote no changelog row (03 §11). The
+	// verdict is made once, in ComputeCommit, where conn's post-step-2
+	// status is in hand; metrics reads it rather than re-deriving it.
+	Shadow bool
 }
 
 // shadowTransition reports whether a confirmed flip is a deterministic
-// shadow of a base/www row from the same confirmation window and therefore
-// never written to the changelog (03 §11): conn → not_applicable only
-// happens when base/www lose their AAAA (which writes its own row), and
-// resources → not_applicable only happens when conn leaves supported.
-func shadowTransition(d domain.Dimension, newVal domain.IPv6Status) bool {
-	return (d == domain.DimConn || d == domain.DimResources) &&
-		newVal == domain.StatusNotApplicable
+// shadow of another row from the same confirmation window and therefore
+// never written to the changelog (03 §11).
+//
+// conn → not_applicable is always a shadow: it only happens when base/www
+// lose their AAAA, which writes its own row.
+//
+// resources → not_applicable is a shadow only when conn actually left
+// supported (03 §11 erratum, review issue 02). The old rule assumed it
+// could not happen any other way, but 02 §6's roll-up returns
+// not_applicable whenever the effective link set is empty — a pruned or
+// swept-clean dependency — with conn still supported. That flip is real
+// news: it clears resources_v4only, sets saint and turns ipv6_only
+// supported. Suppressing it left the per-domain changelog, the feeds and
+// the history replay asymmetric, since the reverse flip kept its row.
+//
+// connStatus is conn's status after step 2 has processed it — conn
+// precedes resources in the fixed dimension order, so by the time
+// resources is judged the value is this commit's, not the snapshot's. A
+// nil conn (never confirmed) is not evidence that conn left supported, so
+// it does not suppress.
+func shadowTransition(d domain.Dimension, newVal domain.IPv6Status, connStatus *domain.IPv6Status) bool {
+	if newVal != domain.StatusNotApplicable {
+		return false
+	}
+	switch d {
+	case domain.DimConn:
+		return true
+	case domain.DimResources:
+		return connStatus != nil && *connStatus != domain.StatusSupported
+	default:
+		return false
+	}
 }
 
 // CommitResult reports one commit's outcome.
@@ -207,13 +236,14 @@ func ComputeCommit(in *CommitInput, cfg *CommitConfig) (*commitUnit, error) {
 		case w.pending != nil && *w.pending == val: // pending re-observed
 			w.count++
 			if w.count >= domain.ConfirmN(d) {
-				if !shadowTransition(d, val) {
+				shadow := shadowTransition(d, val, work[domain.DimConn].status)
+				if !shadow {
 					changelog = append(changelog, db.InsertChangelogParams{
 						DomainID: s.ID, Ts: postgres.TS(t), Field: string(d),
 						OldValue: db.Ipv6Status(*w.status), NewValue: db.Ipv6Status(val),
 					})
 				}
-				transitions = append(transitions, Transition{Dim: d, Old: *w.status, New: val})
+				transitions = append(transitions, Transition{Dim: d, Old: *w.status, New: val, Shadow: shadow})
 				w.status = &val
 				w.since = &t
 				w.pending = nil

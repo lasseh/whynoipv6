@@ -101,7 +101,10 @@ func feedItemTitle(it *ChangelogItem) string {
 			return it.Host + " now passes the page-resource IPv6 grade"
 		case "unsupported":
 			return it.Host + " uses some page-resource hosts without IPv6"
-		default: // not_applicable — suppressed at write (03 §11); defensive only
+		default: // not_applicable — reachable since review issue 02: the
+			// shadow rule now suppresses this only when conn left
+			// supported, so a domain that drops its last dependency
+			// renders here (12-frontend §11 erratum).
 			return it.Host + " no longer has its page resources checked"
 		}
 	}

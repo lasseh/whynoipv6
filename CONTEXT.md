@@ -41,11 +41,19 @@ crystallized *after* the spec was frozen.
   domain payloads at render time, rendered as the table's "IPv6 Only" column.
   _Avoid:_ re-deriving conn+resources verdicts in the frontend or handlers.
 
-- **Shadow transition.** A confirmed `conn/resources → not_applicable` flip — a
-  deterministic consequence of a base/www/conn row from the same confirmation
-  window. It commits (status/`*_since`/telemetry Transition) but never writes a
-  changelog row (03 §11, write-time suppression, same mechanism as bootstrap).
-  _Avoid:_ read-time filtering of changelog rows per consumer.
+- **Shadow transition.** A confirmed `→ not_applicable` flip that another row
+  in the same confirmation window already explains. It commits
+  (status/`*_since`/telemetry Transition) but writes no changelog row (03 §11,
+  write-time suppression, same mechanism as bootstrap). Keyed on the **cause**,
+  not the target value: `conn → not_applicable` always qualifies (base/www lost
+  their AAAA and wrote their own row), while `resources → not_applicable`
+  qualifies only when `conn` actually left `supported` in this commit — the
+  roll-up also returns `not_applicable` for an empty link set, and a domain
+  dropping its last v4-only dependency is news worth a row. `ComputeCommit`
+  decides once and carries the verdict as `Transition.Shadow`, so metrics
+  counts what the changelog counts.
+  _Avoid:_ read-time filtering of changelog rows per consumer, and
+  re-deriving the predicate from `(dim, new_value)` alone.
 
 - **Commit unit.** The typed per-domain write unit `postgres.CommitUnit`
   (03 §12's batch: fenced `CommitDomainParams` UPDATE + changelog/scan/detail

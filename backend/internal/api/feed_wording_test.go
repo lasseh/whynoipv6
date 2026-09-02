@@ -25,6 +25,13 @@ func TestFeedItemTitleGoldens(t *testing.T) {
 		{"resources all over IPv6", "resources", "unsupported", "supported", "example.com now passes the page-resource IPv6 grade"},
 		{"resources partially v4-only", "resources", "supported", "unsupported", "example.com uses some page-resource hosts without IPv6"},
 		{"resources no longer checked", "resources", "supported", "not_applicable", "example.com no longer has its page resources checked"},
+		// Review issue 02: this row stopped being defensive-only. A domain
+		// that drops its last v4-only dependency confirms
+		// unsupported → not_applicable with conn still supported, which now
+		// writes a changelog row and renders here. See the 12-frontend §11
+		// erratum: the sentence reads as a downgrade for what is a
+		// saint-restoring transition, and the copy is a product call.
+		{"resources dependency dropped", "resources", "unsupported", "not_applicable", "example.com no longer has its page resources checked"},
 		// Transitions out of not_applicable are real rows (03 §11 suppresses
 		// only the way in); the `supported` arm is origin-agnostic for every
 		// field, and these pin that for the five fields the table lacked.

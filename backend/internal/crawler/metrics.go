@@ -125,7 +125,9 @@ func (m *Metrics) RecordScan(obs *observe.Observations, unresolvable bool,
 		m.c.succeeded++
 		m.c.bootstraps += res.Bootstraps
 		for _, tr := range res.Transitions {
-			if !shadowTransition(tr.Dim, tr.New) { // shadows write no changelog row (03 §11)
+			// One verdict, made in ComputeCommit where conn's post-step-2
+			// status is available; shadows write no changelog row (03 §11).
+			if !tr.Shadow {
 				m.c.confirmedTrans++
 			}
 		}

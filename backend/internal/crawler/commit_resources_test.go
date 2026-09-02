@@ -58,27 +58,73 @@ func TestCommitResourcesDimension(t *testing.T) {
 	}
 }
 
-// TestCommitResourcesShadowPinned pins the shipped 03 §11 rule for
-// resources → not_applicable while conn stays supported: the flip commits
-// and is reported as a Transition but writes no changelog row. Issue 02 of
-// the 2026-09 backend review questions the rule's premise; change this
-// test together with it.
-func TestCommitResourcesShadowPinned(t *testing.T) {
+// TestCommitResourcesNotApplicableIsNews replaces the old
+// TestCommitResourcesShadowPinned (review issue 02, 03 §11 erratum). The
+// shipped rule suppressed every resources → not_applicable flip on the
+// premise that it only happens when conn leaves supported. It does not:
+// 02 §6's roll-up returns not_applicable whenever the effective link set is
+// empty — a pruned or swept-clean dependency — with conn still supported.
+// That flip clears resources_v4only, sets saint and turns ipv6_only
+// supported, so it is public news and writes its row.
+func TestCommitResourcesNotApplicableIsNews(t *testing.T) {
 	m := newResourcesMachine(t)
 	m.step(0, stableObs(domain.DimResources, domain.ObsUnsupported), false)
 	m.step(24*time.Hour, stableObs(domain.DimResources, domain.ObsNotApplicable), false)
 	m.step(48*time.Hour, stableObs(domain.DimResources, domain.ObsNotApplicable), false)
 	u := m.step(72*time.Hour, stableObs(domain.DimResources, domain.ObsNotApplicable), false)
-	if len(u.Changelog) != 0 {
-		t.Fatalf("resources → not_applicable wrote a changelog row: %+v (03 §11 shadow rule)", u.Changelog)
+
+	if len(u.Changelog) != 1 || u.Changelog[0].Field != "resources" ||
+		u.Changelog[0].OldValue != db.Ipv6StatusUnsupported ||
+		u.Changelog[0].NewValue != db.Ipv6StatusNotApplicable {
+		t.Fatalf("changelog = %+v, want one resources unsupported → not_applicable row: "+
+			"conn never left supported, so this is not a shadow", u.Changelog)
 	}
-	if len(u.transitions) != 1 || u.transitions[0].Dim != domain.DimResources ||
-		u.transitions[0].New != domain.StatusNotApplicable {
-		t.Fatalf("flip must still report a Transition: %+v", u.transitions)
+	if len(u.transitions) != 1 || u.transitions[0].Shadow {
+		t.Errorf("transitions = %+v, want one non-shadow flip", u.transitions)
 	}
 	m.assertDim(domain.DimResources, ptrStatus(domain.StatusNotApplicable), nil, 0)
 	if !u.Domain.Saint {
 		t.Error("resources not_applicable with everything else supported is saint by the ladder (ADR 0003)")
+	}
+}
+
+// TestCommitResourcesShadowFollowsConn is the other half of the erratum:
+// when conn actually leaves supported in the same confirmation window, the
+// resources flip that trails it IS a deterministic shadow and stays out of
+// the changelog. conn's own row carries the news.
+func TestCommitResourcesShadowFollowsConn(t *testing.T) {
+	m := newResourcesMachine(t)
+	m.step(0, stableObs(domain.DimResources, domain.ObsUnsupported), false)
+
+	// base and www lose their AAAA, so conn and resources both go
+	// not_applicable together. conn confirms at N=2, resources at N=3.
+	obs := stableObs(domain.DimBase, domain.ObsNoRecord)
+	obs.WWW = domain.ObsNoRecord
+	obs.Conn = domain.ObsNotApplicable
+	obs.Resources = domain.ObsNotApplicable
+	var u *commitUnit
+	for i := 1; i <= 3; i++ {
+		u = m.step(time.Duration(i)*24*time.Hour, obs, false)
+	}
+
+	m.assertDim(domain.DimConn, ptrStatus(domain.StatusNotApplicable), nil, 0)
+	m.assertDim(domain.DimResources, ptrStatus(domain.StatusNotApplicable), nil, 0)
+	for _, row := range u.Changelog {
+		if row.Field == "resources" {
+			t.Errorf("resources wrote %+v: conn left supported, so this flip is a shadow", row)
+		}
+	}
+	var seen bool
+	for _, tr := range u.transitions {
+		if tr.Dim == domain.DimResources {
+			seen = true
+			if !tr.Shadow {
+				t.Errorf("resources transition %+v must be marked Shadow", tr)
+			}
+		}
+	}
+	if !seen {
+		t.Fatalf("no resources transition in %+v", u.transitions)
 	}
 }
 

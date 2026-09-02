@@ -39,7 +39,9 @@ func TestMetrics(t *testing.T) {
 		Bootstraps: 1,
 		Transitions: []Transition{
 			{Dim: domain.DimBase, Old: domain.StatusUnsupported, New: domain.StatusSupported},
-			{Dim: domain.DimConn, Old: domain.StatusSupported, New: domain.StatusNotApplicable}, // shadow
+			// Shadow is set by ComputeCommit, not re-derived here (03 §11
+			// erratum, review issue 02): metrics reads the flag.
+			{Dim: domain.DimConn, Old: domain.StatusSupported, New: domain.StatusNotApplicable, Shadow: true},
 		},
 	}
 	for range checkpointEvery - 21 {
