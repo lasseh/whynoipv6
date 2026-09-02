@@ -235,11 +235,21 @@ func TestResourceDiscovery(t *testing.T) {
 	}
 }
 
-// TestPreflightFreshness (01 §14.9): PassedWithin flips false exactly
+// TestPreflightFreshness (01 §14.9): the freshness window closes exactly
 // PreflightFreshness after the last pass with no probes in between.
+//
+// Asserted through LastPass, which is the production gate: the mapper
+// compares its preflightPassedAt input against preflightFreshness itself.
+// PassedWithin used to wrap this and nothing but this test called it
+// (review issue 48, 01 §12 erratum).
 func TestPreflightFreshness(t *testing.T) {
+	fresh := func(p *Preflight) bool {
+		last := p.LastPass()
+		return !last.IsZero() && time.Since(last) < PreflightFreshness
+	}
+
 	p := &Preflight{logger: slog.Default()}
-	if p.PassedWithin(PreflightFreshness) {
+	if fresh(p) {
 		t.Error("never-passed preflight reports fresh")
 	}
 	if !p.LastPass().IsZero() {
@@ -247,11 +257,11 @@ func TestPreflightFreshness(t *testing.T) {
 	}
 
 	p.lastPass.Store(time.Now().Add(-PreflightFreshness + 2*time.Second).UnixNano())
-	if !p.PassedWithin(PreflightFreshness) {
+	if !fresh(p) {
 		t.Error("pass 4m58s ago should be fresh")
 	}
 	p.lastPass.Store(time.Now().Add(-PreflightFreshness - time.Second).UnixNano())
-	if p.PassedWithin(PreflightFreshness) {
+	if fresh(p) {
 		t.Error("pass 5m01s ago should be stale")
 	}
 }

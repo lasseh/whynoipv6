@@ -65,12 +65,6 @@ func (p *Preflight) Run(ctx context.Context) bool {
 	return true
 }
 
-// PassedWithin reports whether the last successful probe is younger than d.
-func (p *Preflight) PassedWithin(d time.Duration) bool {
-	last := p.lastPass.Load()
-	return last != 0 && time.Since(time.Unix(0, last)) < d
-}
-
 // LastPass returns the time of the last successful probe (the zero Time if
 // none yet). It is the worker's source for the mapper's preflightPassedAt
 // input (02-observation-model.md — MapObservations).

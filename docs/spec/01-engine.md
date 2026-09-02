@@ -564,19 +564,18 @@ func NewPreflight(res *Resolver, probeHost string, logger *slog.Logger) *Preflig
 // lastPass.
 func (p *Preflight) Run(ctx context.Context) bool
 
-// PassedWithin reports whether the last successful probe is younger than d.
-func (p *Preflight) PassedWithin(d time.Duration) bool
-
 // LastPass returns the time of the last successful probe (the zero Time if
 // none yet). It is the worker's source for the mapper's preflightPassedAt
 // input (02-observation-model.md — MapObservations).
 func (p *Preflight) LastPass() time.Time
 ```
 
+_Erratum 2026-09-02: **`PassedWithin` is deleted** (review issue 48). It was never a production gate: the worker and the live-check consumer read `LastPass()`, and `observe.MapObservations` applies `preflightFreshness` to that timestamp itself — the only callers of `PassedWithin` were the §14.9 tests. Keeping a spec-declared method that nothing in the running system consults invited a future reader to change the wrong thing. `LastPass()` is the whole surface; the freshness comparison belongs to the mapper, which is where §14.9's assertion now points._
+
 Contract (consumers wire it, this package defines it):
 
 - The crawler runs `Run` before **every** claim cycle; on failure it claims nothing, alerts the ops webhook, pings the healthcheck `/fail` endpoint, and retries in 60s — that loop, the alert plumbing, and the claim integration are 04-lifecycle-scheduling.md's (heartbeat details: 09-ops.md).
-- Every `conn = unsupported` observation — whether from connection-refused, TLS failure, or timeout — additionally requires `PassedWithin(PreflightFreshness)`; otherwise the observation is downgraded to `error`. The composition table applying this is 02-observation-model.md's; the engine's job is only to expose an accurate clock.
+- Every `conn = unsupported` observation — whether from connection-refused, TLS failure, or timeout — additionally requires `PassedWithin(PreflightFreshness)`; otherwise the observation is downgraded to `error`. _(Erratum 2026-09-02: read this as "requires the last pass to be younger than `PreflightFreshness`" — the mapper compares `LastPass()` directly.)_ The composition table applying this is 02-observation-model.md's; the engine's job is only to expose an accurate clock.
 - `probeHost` comes from config `preflight.probe_host`, default `one.one.one.one:443` (§13). The host part is AAAA-resolved; the port part is dialed. A probe host with no port is a config error.
 
 ## 13. Config keys introduced by this file
@@ -606,4 +605,4 @@ Behavioral gates for this file's deliverables (test fixtures and the fake-DNS ha
 6. `https_ipv6`/`http_ipv6` produce the exact `error_type` strings of §11.6/§11.7 for refused / timeout / bad-cert / other failures (fake server fixtures: 10-testing.md).
 7. `resource_discovery` against a fixture page returns the full deduped external-host list (order = first seen, ≤50) with `<base href>` honored, own-host and subdomain references excluded, and `data:`/`javascript:` URIs ignored; its `Result.Status` is `supported` even when the list is empty.
 8. The bulk resolver issues zero queries to the public consensus resolvers, and `internal/checker` contains no in-process DNS cache (verified by the §6.2 deletion and grep gate 2).
-9. `Preflight.PassedWithin(PreflightFreshness)` flips false exactly 5 minutes after the last successful probe with no probes in between.
+9. The preflight freshness window closes exactly 5 minutes after the last successful probe with no probes in between. _(Erratum 2026-09-02: asserted through `LastPass()`, the production gate; `PassedWithin` is deleted — §12 erratum.)_
