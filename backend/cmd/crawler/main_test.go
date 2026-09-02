@@ -1,8 +1,11 @@
 package main
 
 import (
+	"context"
 	"testing"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/lasseh/whynoipv6/internal/campaign"
 	"github.com/lasseh/whynoipv6/internal/checker"
@@ -52,6 +55,38 @@ func TestValidateBounds(t *testing.T) {
 			}
 			if err := validateBounds(cfg); err == nil {
 				t.Errorf("%s=0 passed the startup bounds", env)
+			}
+		})
+	}
+}
+
+// TestValidatePoolSize (review issue 41): pool sizing is DSN-only, so the
+// floor is only enforceable at startup. pgxpool's own default is 4 — what
+// an operator who omits pool_max_conns gets — and at 4 the daily tick's
+// four nested connections starve everything else.
+func TestValidatePoolSize(t *testing.T) {
+	for name, tc := range map[string]struct {
+		dsn     string
+		wantErr bool
+	}{
+		"pgxpool default is too small": {"postgres://u@localhost/db", true},
+		"below the floor":              {"postgres://u@localhost/db?pool_max_conns=15", true},
+		"exactly the floor":            {"postgres://u@localhost/db?pool_max_conns=16", false},
+		"the documented 32":            {"postgres://u@localhost/db?pool_max_conns=32", false},
+	} {
+		t.Run(name, func(t *testing.T) {
+			cfg, err := pgxpool.ParseConfig(tc.dsn)
+			if err != nil {
+				t.Fatal(err)
+			}
+			// A pool that never dials: ParseConfig fixed MaxConns already.
+			pool, err := pgxpool.NewWithConfig(context.Background(), cfg)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer pool.Close()
+			if err := validatePoolSize(pool); (err != nil) != tc.wantErr {
+				t.Errorf("err = %v, want error: %t", err, tc.wantErr)
 			}
 		})
 	}

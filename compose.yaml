@@ -134,7 +134,10 @@ services:
     scale: ${CRAWLER_REPLICAS:-1}
     env_file: [.env]
     environment:
-      DATABASE_URL: postgres://whynoipv6:whynoipv6@db:5432/whynoipv6?sslmode=disable
+      # pool_max_conns is explicit: the crawler refuses to start below its
+      # floor of 16 (09-ops §2.1), and pgxpool's default is max(4, NumCPU)
+      # — which a laptop does not clear.
+      DATABASE_URL: postgres://whynoipv6:whynoipv6@db:5432/whynoipv6?sslmode=disable&pool_max_conns=32
       RESOLVER_BULK_UPSTREAMS: "unbound1:53,unbound2:53"
       # Laptop default 4: full 64-slot fan-out overruns OrbStack's 16k UDP
       # conntrack limit. The dev host sets CRAWLER_WORKER_SLOTS=64 in .env

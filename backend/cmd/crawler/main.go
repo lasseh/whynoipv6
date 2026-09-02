@@ -14,6 +14,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"github.com/lasseh/whynoipv6/internal/postgres"
 
 	"github.com/lasseh/whynoipv6/internal/campaign"
@@ -65,6 +67,32 @@ func validateBounds(cfg *config.Config) error {
 	return campaign.ConfigFrom(cfg).Validate()
 }
 
+// minCrawlerConns is the pool floor this binary needs to make progress.
+// Pool sizing is deliberately DSN-only (Annex C #8), so nothing else states
+// or checks it (09-ops §2.1 erratum, review issue 41).
+//
+// The floor is set by the deepest nesting, not the widest fan-out: the
+// 03:30 tick holds a lock connection, its nested campaign-sync lock holds a
+// second, the sync transaction a third and the dedupe transaction a fourth
+// — four at once, with the lifecycle sweep running underneath. Add the
+// standing holders (4 live-check consumers, the reaper, the sweeper, the
+// metrics checkpoint, the provider refresh) and 16 is the point below which
+// the tick can starve itself while 64 worker slots queue on Acquire. The
+// documented ?pool_max_conns=32 clears it with room; pgxpool's own default
+// of 4 does not, and an operator who omits the parameter gets exactly that.
+const minCrawlerConns = 16
+
+func validatePoolSize(pool *pgxpool.Pool) error {
+	if n := pool.Config().MaxConns; n < minCrawlerConns {
+		return fmt.Errorf("DATABASE_URL pool_max_conns=%d is below the crawler floor of %d: "+
+			"the daily tick nests four connections (lock, nested campaign lock, sync tx, "+
+			"dedupe tx) over the standing live-check, sweep and metrics holders, and would "+
+			"stall while worker slots queue on Acquire (09-ops §2.1 recommends 32)",
+			n, minCrawlerConns)
+	}
+	return nil
+}
+
 func main() {
 	if err := run(); err != nil {
 		fmt.Fprintln(os.Stderr, "crawler: "+err.Error())
@@ -98,6 +126,9 @@ func run() error {
 		return err
 	}
 	defer pool.Close()
+	if err := validatePoolSize(pool); err != nil {
+		return err
+	}
 	q := db.New(pool)
 
 	countries, err := geoip.LoadCountryMap(rootCtx, q)

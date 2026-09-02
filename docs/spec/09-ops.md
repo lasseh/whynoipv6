@@ -117,6 +117,8 @@ in every binary. _Erratum 2026-09-02:_ every binary opens its pool through
 `postgres.NewPool`, which pins the session `timezone` to `UTC`; the daily snapshots key
 on `CURRENT_DATE`, so the server's own timezone GUC no longer matters.
 
+_Erratum 2026-09-02 (review issue 41): the recommended 32 had no stated floor and nothing checked it, so an operator who simply omits `pool_max_conns` gets **pgxpool's own default of 4** and a crawler that stalls every night with nothing in the log to say why. The floor is set by the deepest **nesting**, not the widest fan-out: the 03:30 tick holds a lock connection, its nested campaign-sync lock a second, the sync transaction a third and the dedupe transaction a fourth — four at once, with the lifecycle sweep running underneath and the standing holders (4 live-check consumers, reaper, sweeper, metrics checkpoint, provider refresh) alongside. At 4 the tick starves itself while 64 worker slots queue on `Acquire`, commits stall, and leases start expiring at 30 minutes. `cmd/crawler` now refuses to start below **`minCrawlerConns = 16`**, naming the DSN key and the arithmetic; 32 clears it with room. The API has no nesting and keeps its 16._
+
 ---
 
 ## 2. Consolidated config registry (the single source)
