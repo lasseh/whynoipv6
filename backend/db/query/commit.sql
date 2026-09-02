@@ -20,7 +20,17 @@ UPDATE domain SET
   smtp_observed = @smtp_observed, parity_observed = @parity_observed,
   latency_v4_ms = @latency_v4_ms, latency_v6_ms = @latency_v6_ms,
   classification = @classification, class_flags = @class_flags, saint = @saint,
-  asn_id = @asn_id, country_id = @country_id,
+  -- Attribution rides the same stamp gate as the provider pivots below
+  -- (review issue 65): a scan that observed base non-definitively has nothing
+  -- to say about which ASN or country the domain is in, and writing back the
+  -- value it read at claim time reverts whatever an ingest wrote in between.
+  -- The lease fence protects against two scanners racing, not against a
+  -- scanner overwriting a non-scanner's write with stale data.
+  -- The two flags are always set together — attribution is one fact — but
+  -- they stay one-flag-per-column to keep the stamp_<col> convention the
+  -- commitflush binding guard parses.
+  asn_id = CASE WHEN @stamp_asn_id::boolean THEN @asn_id ELSE asn_id END,
+  country_id = CASE WHEN @stamp_country_id::boolean THEN @country_id ELSE country_id END,
   -- The provider pivots ride the same fenced UPDATE (06 §6.10): stamped only
   -- on definitive-base scans (the stamp flags), untouched otherwise — a lost
   -- lease can no longer leave pivots from a discarded scan.
@@ -36,6 +46,10 @@ WHERE id = @domain_id AND claimed_at = @lease;
 INSERT INTO changelog (domain_id, ts, field, old_value, new_value)
 VALUES (@domain_id, @ts, @field, @old_value, @new_value);
 
+-- The scan row keeps the snapshot values even when the UPDATE above skips
+-- them (review issue 65): a scan records what was believed at scan time, and
+-- it is append-only. The two uses of country_id/asn_id sit six lines apart and
+-- are deliberately different.
 -- name: InsertScan :exec
 INSERT INTO scan (domain_id, ts, base, www, ns, mx, conn, resources,
                   dnssec, ptr, smtp, parity, latency_v4_ms, latency_v6_ms,

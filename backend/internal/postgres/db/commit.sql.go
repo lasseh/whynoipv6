@@ -31,17 +31,27 @@ UPDATE domain SET
   smtp_observed = $33, parity_observed = $34,
   latency_v4_ms = $35, latency_v6_ms = $36,
   classification = $37, class_flags = $38, saint = $39,
-  asn_id = $40, country_id = $41,
+  -- Attribution rides the same stamp gate as the provider pivots below
+  -- (review issue 65): a scan that observed base non-definitively has nothing
+  -- to say about which ASN or country the domain is in, and writing back the
+  -- value it read at claim time reverts whatever an ingest wrote in between.
+  -- The lease fence protects against two scanners racing, not against a
+  -- scanner overwriting a non-scanner's write with stale data.
+  -- The two flags are always set together — attribution is one fact — but
+  -- they stay one-flag-per-column to keep the stamp_<col> convention the
+  -- commitflush binding guard parses.
+  asn_id = CASE WHEN $40::boolean THEN $41 ELSE asn_id END,
+  country_id = CASE WHEN $42::boolean THEN $43 ELSE country_id END,
   -- The provider pivots ride the same fenced UPDATE (06 §6.10): stamped only
   -- on definitive-base scans (the stamp flags), untouched otherwise — a lost
   -- lease can no longer leave pivots from a discarded scan.
-  dns_provider_id = CASE WHEN $42::boolean THEN $43 ELSE dns_provider_id END,
-  hosting_provider = CASE WHEN $44::boolean THEN $45 ELSE hosting_provider END,
-  disabled = $46, disabled_reason = $47, disabled_at = $48,
-  dead_streak = $49, error_streak = $50,
-  next_check_at = $51, last_checked_at = $52, last_counted_at = $53,
+  dns_provider_id = CASE WHEN $44::boolean THEN $45 ELSE dns_provider_id END,
+  hosting_provider = CASE WHEN $46::boolean THEN $47 ELSE hosting_provider END,
+  disabled = $48, disabled_reason = $49, disabled_at = $50,
+  dead_streak = $51, error_streak = $52,
+  next_check_at = $53, last_checked_at = $54, last_counted_at = $55,
   claimed_at = NULL, updated_at = now()
-WHERE id = $54 AND claimed_at = $55
+WHERE id = $56 AND claimed_at = $57
 `
 
 type CommitDomainParams struct {
@@ -84,7 +94,9 @@ type CommitDomainParams struct {
 	Classification        Classification     `json:"classification"`
 	ClassFlags            []string           `json:"class_flags"`
 	Saint                 bool               `json:"saint"`
+	StampAsnID            bool               `json:"stamp_asn_id"`
 	AsnID                 int32              `json:"asn_id"`
+	StampCountryID        bool               `json:"stamp_country_id"`
 	CountryID             int32              `json:"country_id"`
 	StampDnsProviderID    bool               `json:"stamp_dns_provider_id"`
 	DnsProviderID         *int64             `json:"dns_provider_id"`
@@ -145,7 +157,9 @@ func (q *Queries) CommitDomain(ctx context.Context, arg CommitDomainParams) (int
 		arg.Classification,
 		arg.ClassFlags,
 		arg.Saint,
+		arg.StampAsnID,
 		arg.AsnID,
+		arg.StampCountryID,
 		arg.CountryID,
 		arg.StampDnsProviderID,
 		arg.DnsProviderID,
@@ -232,6 +246,10 @@ type InsertScanParams struct {
 	AsnID          *int32             `json:"asn_id"`
 }
 
+// The scan row keeps the snapshot values even when the UPDATE above skips
+// them (review issue 65): a scan records what was believed at scan time, and
+// it is append-only. The two uses of country_id/asn_id sit six lines apart and
+// are deliberately different.
 func (q *Queries) InsertScan(ctx context.Context, arg InsertScanParams) error {
 	_, err := q.db.Exec(ctx, InsertScan,
 		arg.DomainID,

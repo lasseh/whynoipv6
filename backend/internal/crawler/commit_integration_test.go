@@ -261,3 +261,107 @@ func TestCommitPivots(t *testing.T) {
 		t.Fatal("fenced commit cleared the pivots")
 	}
 }
+
+// TestCommitAttributionStamp is review issue 65: asn_id/country_id were
+// written unconditionally, so a scan that observed base non-definitively
+// still wrote back the values it read at claim time — reverting whatever an
+// ingest had changed in between. The lease fence does not help: it guards
+// against two scanners racing, not against a scanner clobbering a
+// non-scanner's write with stale data.
+//
+// The shape mirrors TestCommitPivots, because the fix is the pivots' own
+// stamp gate applied two lines up in the same statement.
+func TestCommitAttributionStamp(t *testing.T) {
+	pool := pgtest.NewDB(t)
+	ctx := context.Background()
+	c := NewCommitter(pool, testCommitCfg())
+
+	// A second ASN and country to move the domain to, standing in for
+	// whatever an ingest would have re-derived.
+	var otherASN, otherCountry int32
+	if err := pool.QueryRow(ctx,
+		`INSERT INTO asn (number, name) VALUES (64512, 'Reassigned') RETURNING id`).
+		Scan(&otherASN); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(ctx,
+		`SELECT id FROM country WHERE code = 'SE'`).Scan(&otherCountry); err != nil {
+		t.Fatal(err)
+	}
+
+	snap := claimOne(t, pool)
+	f := NewFrontier(pool, FrontierConfig{BatchSize: 10, Order: "rank"})
+	reclaim := func() ClaimedDomain {
+		t.Helper()
+		if _, err := pool.Exec(ctx,
+			`UPDATE domain SET next_check_at = now() - interval '1 minute', claimed_at = NULL
+			 WHERE id=$1`, snap.ID); err != nil {
+			t.Fatal(err)
+		}
+		batch, err := f.ClaimBatch(ctx)
+		if err != nil || len(batch) != 1 {
+			t.Fatalf("reclaim: n=%d err=%v", len(batch), err)
+		}
+		return batch[0]
+	}
+	attribution := func() (asn, country int32) {
+		t.Helper()
+		if err := pool.QueryRow(ctx,
+			`SELECT asn_id, country_id FROM domain WHERE id=$1`, snap.ID).
+			Scan(&asn, &country); err != nil {
+			t.Fatal(err)
+		}
+		return asn, country
+	}
+
+	// A definitive-base scan stamps what it enriched.
+	res, err := c.Commit(ctx, &CommitInput{
+		Snapshot: snap, Obs: stableObs(domain.DimBase, domain.ObsSupported),
+		Attribution: &Attribution{AsnID: snap.AsnID, CountryID: snap.CountryID},
+		Details:     []byte(`{"results":{}}`), T: time.Now().UTC(),
+	})
+	if err != nil || res.LeaseLost {
+		t.Fatalf("commit: %+v err=%v", res, err)
+	}
+	if asn, country := attribution(); asn != snap.AsnID || country != snap.CountryID {
+		t.Fatalf("after a definitive scan: (%d, %d), want (%d, %d)",
+			asn, country, snap.AsnID, snap.CountryID)
+	}
+
+	// Now a concurrent writer moves the domain, between this scan's claim and
+	// its commit.
+	snap2 := reclaim()
+	if _, err := pool.Exec(ctx,
+		`UPDATE domain SET asn_id=$1, country_id=$2 WHERE id=$3`,
+		otherASN, otherCountry, snap.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	// A scan that learned nothing about base commits with a stale snapshot in
+	// hand. Attribution is deliberately non-nil: the stamp flag, not the
+	// nil-ness of the value, is what has to gate the write.
+	if res, err = c.Commit(ctx, &CommitInput{
+		Snapshot: snap2, Obs: stableObs(domain.DimBase, domain.ObsError),
+		Attribution: &Attribution{AsnID: snap2.AsnID, CountryID: snap2.CountryID},
+		Details:     []byte(`{"results":{}}`), T: time.Now().UTC(),
+	}); err != nil || res.LeaseLost {
+		t.Fatalf("deferred commit: %+v err=%v", res, err)
+	}
+	asn, country := attribution()
+	if asn != otherASN || country != otherCountry {
+		t.Errorf("a non-definitive scan reverted attribution to (%d, %d), want the concurrent (%d, %d)",
+			asn, country, otherASN, otherCountry)
+	}
+
+	// The scan row still records what the scan itself believed — append-only
+	// provenance, deliberately not gated.
+	var scanASN int32
+	if err := pool.QueryRow(ctx,
+		`SELECT asn_id FROM scan WHERE domain_id=$1 ORDER BY ts DESC LIMIT 1`, snap.ID).
+		Scan(&scanASN); err != nil {
+		t.Fatal(err)
+	}
+	if scanASN != snap2.AsnID {
+		t.Errorf("scan row asn_id = %d, want the scan-time %d", scanASN, snap2.AsnID)
+	}
+}

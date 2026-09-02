@@ -294,9 +294,15 @@ func ComputeCommit(in *CommitInput, cfg *CommitConfig) (*commitUnit, error) {
 	nextCheck := schedule(cfg.Schedule, disabled, obsOf[domain.DimBase], obsOf[domain.DimWWW],
 		errorStreak, in.BreakerOpen, t)
 
-	// Step 7 — attribution (deferred on non-definitive base).
+	// Step 7 — attribution (deferred on non-definitive base). The deferral is
+	// enforced by the stamp flag, not by these values: a scan that learned
+	// nothing must leave the columns alone rather than write the snapshot
+	// back over whatever an ingest changed in between (review issue 65).
+	// The snapshot values still flow into the scan row below, which records
+	// what was believed at scan time and is append-only.
+	stampAttribution := obsOf[domain.DimBase].Definitive() && in.Attribution != nil
 	asnID, countryID := s.AsnID, s.CountryID
-	if obsOf[domain.DimBase].Definitive() && in.Attribution != nil {
+	if stampAttribution {
 		asnID, countryID = in.Attribution.AsnID, in.Attribution.CountryID
 	}
 
@@ -308,7 +314,9 @@ func ComputeCommit(in *CommitInput, cfg *CommitConfig) (*commitUnit, error) {
 		Classification: db.Classification(class),
 		ClassFlags:     flags,
 		Saint:          saint,
+		StampAsnID:     stampAttribution,
 		AsnID:          asnID,
+		StampCountryID: stampAttribution,
 		CountryID:      countryID,
 		Disabled:       disabled,
 		DisabledAt:     postgres.TSPtr(disabledAt),

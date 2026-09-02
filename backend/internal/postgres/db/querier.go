@@ -188,6 +188,10 @@ type Querier interface {
 	InsertChangelog(ctx context.Context, arg InsertChangelogParams) error
 	// db/query/metrics.sql — sqlc query source (layout: 05-schema.md §10.2).
 	InsertCrawlerMetrics(ctx context.Context, arg InsertCrawlerMetricsParams) error
+	// The scan row keeps the snapshot values even when the UPDATE above skips
+	// them (review issue 65): a scan records what was believed at scan time, and
+	// it is append-only. The two uses of country_id/asn_id sit six lines apart and
+	// are deliberately different.
 	InsertScan(ctx context.Context, arg InsertScanParams) error
 	InsertScanDetail(ctx context.Context, arg InsertScanDetailParams) error
 	InsertUnboundStats(ctx context.Context, arg InsertUnboundStatsParams) error
