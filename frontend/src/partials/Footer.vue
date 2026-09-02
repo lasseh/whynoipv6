@@ -49,6 +49,29 @@
                 </svg>
               </a>
             </li>
+            <li class="ml-3">
+              <a
+                href="https://api.whynoipv6.com/docs"
+                target="_blank"
+                class="flex justify-center items-center text-fuchsia-600 bg-gray-800 hover:text-gray-100 hover:bg-fuchsia-600 rounded-full transition duration-150 ease-in-out"
+                aria-label="API documentation"
+              >
+                <svg
+                  class="w-8 h-8"
+                  viewBox="-4 -4 32 32"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.5"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path d="M8 5 4 12l4 7" />
+                  <path d="M16 5l4 7-4 7" />
+                  <path d="M13.5 4l-3 16" />
+                </svg>
+              </a>
+            </li>
           </ul>
 
           <!-- Copyrights note -->
