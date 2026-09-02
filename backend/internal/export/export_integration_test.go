@@ -66,9 +66,16 @@ func TestDatasetExport(t *testing.T) {
 		}
 	}
 
+	// The generation comes from stats_global_daily, seeded at CURRENT_DATE by
+	// migration 000003, and is read after the tier walk.
+	utc := time.Now().UTC()
+	wantGeneration := int32(utc.Year()*10000 + int(utc.Month())*100 + utc.Day())
+
 	e := &Exporter{Pool: pool, Dir: dir}
-	if err := e.Run(context.Background(), 20260710); err != nil {
+	if generation, err := e.Run(context.Background()); err != nil {
 		t.Fatal(err)
+	} else if generation != wantGeneration {
+		t.Fatalf("Run returned generation %d, want %d", generation, wantGeneration)
 	}
 
 	today := time.Now().UTC().Format("2006-01-02")
@@ -205,7 +212,7 @@ func TestDatasetExport(t *testing.T) {
 	if err := json.Unmarshal(raw, &m); err != nil {
 		t.Fatal(err)
 	}
-	if m.SchemaVersion != 1 || m.Generation != 20260710 || m.License != "CC-BY-NC-4.0" ||
+	if m.SchemaVersion != 1 || m.Generation != wantGeneration || m.License != "CC-BY-NC-4.0" ||
 		m.Latest.Date != today || m.Attribution == "" {
 		t.Errorf("manifest = %+v", m)
 	}
@@ -241,7 +248,7 @@ func TestDatasetExport(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read first SHA256SUMS: %v", err)
 	}
-	if err := e.Run(context.Background(), 20260710); err != nil {
+	if _, err := e.Run(context.Background()); err != nil {
 		t.Fatalf("same-day re-export: %v", err)
 	}
 	afterSums, err := os.ReadFile(filepath.Join(dir, today, "SHA256SUMS"))

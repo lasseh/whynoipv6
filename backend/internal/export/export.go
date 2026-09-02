@@ -143,7 +143,9 @@ type Exporter struct {
 // `immutable, max-age=31536000`. Instead a same-day re-export publishes the
 // next revision (2026-08-21, then 2026-08-21r2 …) and repoints latest, so
 // every published URL keeps serving the bytes it was first published with.
-func (e *Exporter) Run(ctx context.Context, generation int32) error {
+// The stats generation is read after the walk and returned: it is the value
+// the manifest carries.
+func (e *Exporter) Run(ctx context.Context) (int32, error) {
 	now := time.Now().UTC()
 	if e.Now != nil {
 		now = e.Now().UTC()
@@ -151,7 +153,7 @@ func (e *Exporter) Run(ctx context.Context, generation int32) error {
 	date := now.Format("2006-01-02")
 
 	if err := os.MkdirAll(e.Dir, 0o755); err != nil {
-		return fmt.Errorf("datasets dir: %w", err)
+		return 0, fmt.Errorf("datasets dir: %w", err)
 	}
 	// A staging dir left by a hard kill is never a snapshot (prune and the
 	// manifest ignore it) and would accumulate forever; this run holds the
@@ -164,14 +166,14 @@ func (e *Exporter) Run(ctx context.Context, generation int32) error {
 	}
 	tmp, err := os.MkdirTemp(e.Dir, ".export-*")
 	if err != nil {
-		return fmt.Errorf("export tmp: %w", err)
+		return 0, fmt.Errorf("export tmp: %w", err)
 	}
 	defer func() { _ = os.RemoveAll(tmp) }()
 	// MkdirTemp creates 0700 and rename(2) carries the mode to the published
 	// dated dir — which nginx serves as a foreign user, so it must be
 	// world-traversable or every file inside 403s.
 	if err := os.Chmod(tmp, 0o755); err != nil {
-		return fmt.Errorf("export tmp mode: %w", err)
+		return 0, fmt.Errorf("export tmp mode: %w", err)
 	}
 
 	var resources []datapackageResource
@@ -181,7 +183,7 @@ func (e *Exporter) Run(ctx context.Context, generation int32) error {
 		parquetName := fmt.Sprintf("whynoipv6-%s.%s", tier.Name, formatParquet)
 		if err := e.writeTier(ctx, filepath.Join(tmp, csvName), filepath.Join(tmp, parquetName),
 			tier.RankedOnly, tier.MaxRank); err != nil {
-			return fmt.Errorf("tier %s: %w", tier.Name, err)
+			return 0, fmt.Errorf("tier %s: %w", tier.Name, err)
 		}
 		for _, format := range []string{formatCSVGz, formatParquet} {
 			name := csvName
@@ -191,7 +193,7 @@ func (e *Exporter) Run(ctx context.Context, generation int32) error {
 			path := filepath.Join(tmp, name)
 			size, digest, err := fileDigest(path)
 			if err != nil {
-				return err
+				return 0, err
 			}
 			resources = append(resources, datapackageResource{
 				Name: strings.TrimSuffix(name, filepath.Ext(name)), Path: name,
@@ -206,7 +208,7 @@ func (e *Exporter) Run(ctx context.Context, generation int32) error {
 	// datapackage sources, DICTIONARY.md, and the manifest (07 §5.3).
 	listID, err := e.trancoListID(ctx)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	dp := datapackage{
 		Name: "whynoipv6-" + date, Title: "WhyNoIPv6 daily snapshot " + date,
@@ -216,10 +218,10 @@ func (e *Exporter) Run(ctx context.Context, generation int32) error {
 		Resources: resources,
 	}
 	if err := writeJSONFile(filepath.Join(tmp, "datapackage.json"), dp); err != nil {
-		return err
+		return 0, err
 	}
 	if err := os.WriteFile(filepath.Join(tmp, "SHA256SUMS"), []byte(strings.Join(sums, "\n")+"\n"), 0o644); err != nil {
-		return err
+		return 0, err
 	}
 
 	// Every snapshot carries its own dictionary (the package contract and
@@ -227,10 +229,10 @@ func (e *Exporter) Run(ctx context.Context, generation int32) error {
 	// short-TTL one nginx serves at /datasets/DICTIONARY.md.
 	dictionary := []byte(dictionaryText(listID))
 	if err := writeFileAtomic(filepath.Join(tmp, "DICTIONARY.md"), dictionary, 0o644); err != nil {
-		return err
+		return 0, err
 	}
 	if err := syncDir(tmp); err != nil {
-		return fmt.Errorf("fsync staging dir: %w", err)
+		return 0, fmt.Errorf("fsync staging dir: %w", err)
 	}
 
 	// Publish to a path that does not exist yet, so rename(2) is the whole
@@ -239,27 +241,38 @@ func (e *Exporter) Run(ctx context.Context, generation int32) error {
 	// under a URL that is served immutable for a year.
 	name, err := e.freshSnapshotName(date)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	if err := os.Rename(tmp, filepath.Join(e.Dir, name)); err != nil {
-		return fmt.Errorf("publish: %w", err)
+		return 0, fmt.Errorf("publish: %w", err)
 	}
 	if err := syncDir(e.Dir); err != nil {
-		return fmt.Errorf("fsync datasets dir: %w", err)
+		return 0, fmt.Errorf("fsync datasets dir: %w", err)
 	}
 
 	// The served root copy is rewritten in place on every export: through a
 	// temp file and rename, never truncate-then-write under a live reader.
 	if err := writeFileAtomic(filepath.Join(e.Dir, "DICTIONARY.md"), dictionary, 0o644); err != nil {
-		return err
+		return 0, err
 	}
 	if err := e.updateLatest(name); err != nil {
-		return err
+		return 0, err
 	}
 	if err := e.prune(now); err != nil {
-		return err
+		return 0, err
 	}
-	return e.writeManifest(ctx, now, generation)
+	// After the walk, not before: a stats rollup landing mid-export would
+	// otherwise stamp the manifest one generation behind the rows it
+	// describes. generated_at stays the run's start (it names the snapshot
+	// directory), so the remaining skew only ever over-states.
+	generation, err := e.src().Generation(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("generation: %w", err)
+	}
+	if err := e.writeManifest(ctx, now, generation); err != nil {
+		return 0, err
+	}
+	return generation, nil
 }
 
 // tsRFC3339 renders a nullable timestamp as RFC 3339 UTC.

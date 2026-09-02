@@ -19,11 +19,16 @@ import (
 // Tranco list ID become inputs, so the publication protocol runs with no
 // container. The integration test still covers the real SQL.
 type fakeSource struct {
-	rows   []Row
-	listID string
-	err    error // yielded as the sequence's final element
-	calls  int
+	rows       []Row
+	listID     string
+	err        error // yielded as the sequence's final element
+	calls      int
+	generation int32 // 0 -> fakeGeneration
+	genAtCalls int   // tier walks completed when Generation was read
 }
+
+// fakeGeneration is what a fake stamps unless a test sets its own.
+const fakeGeneration = 42
 
 func (s *fakeSource) Rows(_ context.Context, rankedOnly bool, maxRank int32) iter.Seq2[Row, error] {
 	return func(yield func(Row, error) bool) {
@@ -50,6 +55,14 @@ func (s *fakeSource) Rows(_ context.Context, rankedOnly bool, maxRank int32) ite
 
 func (s *fakeSource) ListID(context.Context) (string, error) { return s.listID, nil }
 
+func (s *fakeSource) Generation(context.Context) (int32, error) {
+	s.genAtCalls = s.calls
+	if s.generation == 0 {
+		return fakeGeneration, nil
+	}
+	return s.generation, nil
+}
+
 // rankedRows builds n ranked apex rows, ranks 1..n.
 func rankedRows(n int) []Row {
 	rows := make([]Row, n)
@@ -66,7 +79,7 @@ func rankedRows(n int) []Row {
 func runExport(t *testing.T, src Source, dir string, now time.Time) {
 	t.Helper()
 	e := &Exporter{Dir: dir, Source: src, Now: func() time.Time { return now }}
-	if err := e.Run(context.Background(), 42); err != nil {
+	if _, err := e.Run(context.Background()); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 }
@@ -212,7 +225,7 @@ func TestRunSourceErrorPublishesNothing(t *testing.T) {
 		Source: &fakeSource{err: errors.New("relation domain does not exist")},
 		Now:    func() time.Time { return time.Date(2026, 8, 20, 3, 0, 0, 0, time.UTC) },
 	}
-	if err := e.Run(context.Background(), 1); err == nil {
+	if _, err := e.Run(context.Background()); err == nil {
 		t.Fatal("Run succeeded despite the row read failing")
 	}
 	if _, err := os.Stat(filepath.Join(dir, "2026-08-20")); !os.IsNotExist(err) {
@@ -244,7 +257,7 @@ func TestRunPrunesRetention(t *testing.T) {
 
 	e := &Exporter{Dir: dir, Source: &fakeSource{rows: rankedRows(1)}, RetentionDays: 90,
 		Now: func() time.Time { return now }}
-	if err := e.Run(context.Background(), 1); err != nil {
+	if _, err := e.Run(context.Background()); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 
@@ -411,7 +424,7 @@ func TestPruneKeepsAllRevisionsOfAKeptDate(t *testing.T) {
 
 	e := &Exporter{Dir: dir, Source: &fakeSource{rows: rankedRows(1)}, RetentionDays: 90,
 		Now: func() time.Time { return now }}
-	if err := e.Run(context.Background(), 1); err != nil {
+	if _, err := e.Run(context.Background()); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 
@@ -438,11 +451,33 @@ func TestPublishCeiling(t *testing.T) {
 	}
 	e := &Exporter{Dir: dir, Source: &fakeSource{rows: rankedRows(1)},
 		Now: func() time.Time { return now }}
-	err := e.Run(context.Background(), 1)
+	_, err := e.Run(context.Background())
 	if err == nil {
 		t.Fatal("Run succeeded past the revision ceiling")
 	}
 	if !strings.Contains(err.Error(), "revisions already exist") {
 		t.Errorf("error = %v", err)
+	}
+}
+
+// TestRunReadsGenerationAfterTheWalk pins the manifest's generation to a read
+// that happens after every tier has been walked (issue 43). Reading it first
+// let a stats rollup landing mid-export stamp the manifest one day behind the
+// rows it describes — a consumer holding that generation would then skip the
+// download.
+func TestRunReadsGenerationAfterTheWalk(t *testing.T) {
+	src := &fakeSource{rows: rankedRows(2), generation: 20260710}
+	e := &Exporter{Dir: t.TempDir(), Source: src, RetentionDays: 90,
+		Now: func() time.Time { return time.Date(2026, 8, 20, 3, 0, 0, 0, time.UTC) }}
+	generation, err := e.Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if generation != 20260710 {
+		t.Errorf("Run returned generation %d, want 20260710", generation)
+	}
+	if src.genAtCalls != len(tiers) {
+		t.Errorf("generation read after %d of %d tier walks, want all of them",
+			src.genAtCalls, len(tiers))
 	}
 }

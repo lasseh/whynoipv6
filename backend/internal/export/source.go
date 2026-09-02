@@ -9,13 +9,14 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/lasseh/whynoipv6/internal/postgres"
 	db "github.com/lasseh/whynoipv6/internal/postgres/db"
 )
 
 // Source is the row seam under the exporter — the only place the export
 // touches a database. Everything else in this package is a filesystem
 // protocol (tiers, digests, SHA256SUMS, the datapackage, retention, the
-// manifest, publication), and putting the two database reads behind this
+// manifest, publication), and putting the three database reads behind this
 // interface is what lets that protocol be tested without a container.
 //
 // Two adapters: pgSource in production, and a slice-backed fake in the
@@ -31,6 +32,13 @@ type Source interface {
 	// failed read is an error, because the snapshot it would stamp is
 	// immutable once published (07 §5.3: cite the specific list ID).
 	ListID(ctx context.Context) (string, error)
+
+	// Generation is the daily stats generation stamped on the manifest.
+	// Run reads it after the tier walk, not before: a rollup landing
+	// mid-export would otherwise leave the manifest one day behind the
+	// rows it describes, and a consumer holding that generation would
+	// skip the download.
+	Generation(ctx context.Context) (int32, error)
 }
 
 // pgSource is the production adapter at the Source seam.
@@ -58,6 +66,14 @@ func (s pgSource) Rows(ctx context.Context, rankedOnly bool, maxRank int32) iter
 			yield(Row{}, fmt.Errorf("export rows: %w", err))
 		}
 	}
+}
+
+func (s pgSource) Generation(ctx context.Context) (int32, error) {
+	generation, _, err := postgres.Generation(ctx, db.New(s.pool))
+	if err != nil {
+		return 0, err
+	}
+	return generation, nil
 }
 
 func (s pgSource) ListID(ctx context.Context) (string, error) {
