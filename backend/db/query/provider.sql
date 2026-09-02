@@ -43,7 +43,7 @@ WHERE p.id = agg.dns_provider_id;
 -- provider remove clears referencing domains first (FK); they re-stamp on
 -- their next scan commit (06-ingest.md §6.11 self-healing).
 -- name: ProviderClearDomains :execrows
-UPDATE domain SET dns_provider_id = NULL
+UPDATE domain SET dns_provider_id = NULL, updated_at = now()
 WHERE dns_provider_id = (SELECT id FROM dns_provider WHERE name = $1);
 
 -- The API DNS-provider league table (07 §4.6): exact stored counters,

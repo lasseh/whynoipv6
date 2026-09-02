@@ -158,7 +158,8 @@ func (q *Queries) CampaignMembers(ctx context.Context, campaignID int32) ([]int6
 
 const CampaignPublicDetail = `-- name: CampaignPublicDetail :one
 SELECT c.id, c.uuid, c.name, c.description, c.source_file, c.tags, c.disabled,
-       (SELECT count(*) FROM campaign_domain cd WHERE cd.campaign_id = c.id) AS domain_count
+       (SELECT count(*) FROM campaign_domain cd JOIN domain d ON d.id = cd.domain_id
+          WHERE cd.campaign_id = c.id AND NOT d.disabled) AS domain_count
 FROM campaign c WHERE c.uuid = $1
 `
 
@@ -191,7 +192,8 @@ func (q *Queries) CampaignPublicDetail(ctx context.Context, uuid pgtype.UUID) (C
 
 const CampaignPublicList = `-- name: CampaignPublicList :many
 SELECT c.uuid, c.name, c.description, c.source_file, c.tags,
-       (SELECT count(*) FROM campaign_domain cd WHERE cd.campaign_id = c.id) AS domain_count,
+       (SELECT count(*) FROM campaign_domain cd JOIN domain d ON d.id = cd.domain_id
+          WHERE cd.campaign_id = c.id AND NOT d.disabled) AS domain_count,
        s.day AS adoption_day, s.domains AS adoption_domains, s.v6_ready AS adoption_v6_ready
 FROM campaign c
 LEFT JOIN LATERAL (
@@ -218,6 +220,8 @@ type CampaignPublicListRow struct {
 // ?tag= via the GIN-indexed tags array. Each row carries the same adoption
 // pair as the detail via a lateral read of the latest stats_campaign_daily
 // row (the set is tens of rows, so the per-row join is trivially cheap).
+// domain_count counts the members the members page walks and the adoption
+// snapshot counts: disabled rows are excluded on all three surfaces.
 func (q *Queries) CampaignPublicList(ctx context.Context, tag string) ([]CampaignPublicListRow, error) {
 	rows, err := q.db.Query(ctx, CampaignPublicList, tag)
 	if err != nil {

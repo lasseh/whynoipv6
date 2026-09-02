@@ -44,7 +44,7 @@ func (q *Queries) ProviderByName(ctx context.Context, name string) (ProviderByNa
 }
 
 const ProviderClearDomains = `-- name: ProviderClearDomains :execrows
-UPDATE domain SET dns_provider_id = NULL
+UPDATE domain SET dns_provider_id = NULL, updated_at = now()
 WHERE dns_provider_id = (SELECT id FROM dns_provider WHERE name = $1)
 `
 

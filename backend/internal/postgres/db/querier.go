@@ -39,6 +39,8 @@ type Querier interface {
 	// ?tag= via the GIN-indexed tags array. Each row carries the same adoption
 	// pair as the detail via a lateral read of the latest stats_campaign_daily
 	// row (the set is tens of rows, so the per-row join is trivially cheap).
+	// domain_count counts the members the members page walks and the adoption
+	// snapshot counts: disabled rows are excluded on all three surfaces.
 	CampaignPublicList(ctx context.Context, tag string) ([]CampaignPublicListRow, error)
 	CampaignRemoveMembersNotIn(ctx context.Context, arg CampaignRemoveMembersNotInParams) (int64, error)
 	CampaignUUIDBySourceFile(ctx context.Context, sourceFile *string) (pgtype.UUID, error)
