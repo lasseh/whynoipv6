@@ -4,6 +4,9 @@ import (
 	"errors"
 	"net/url"
 	"testing"
+
+	"github.com/lasseh/whynoipv6/internal/domain"
+	db "github.com/lasseh/whynoipv6/internal/postgres/db"
 )
 
 // The §3.3 grammar is pure, so every closed-set rejection is a table row
@@ -112,5 +115,46 @@ func TestParseDomainFilterAccepts(t *testing.T) {
 	}
 	if !isUnfiltered(&empty.DomainListFilter) {
 		t.Error("an empty query produced a filtered spec")
+	}
+}
+
+// TestMaskObservationTotality is review issue 54's second item. Every arm of
+// maskObservation's switch falls through to "render it", so the exhaustive
+// linter cannot gate it and a new Observation value would silently become
+// public. Same shape as observe's TestBridgeTotality: drive every declared
+// value plus one that is not declared at all.
+//
+// The §4.3 rule: error and inconsistent are never public; partial is public
+// only where the caller allows it (ptr, parity); everything else renders
+// verbatim.
+func TestMaskObservationTotality(t *testing.T) {
+	never := map[domain.Observation]bool{
+		domain.ObsError:        true,
+		domain.ObsInconsistent: true,
+	}
+	inputs := append([]domain.Observation{"bogus"}, domain.ObservationValues...)
+
+	for _, o := range inputs {
+		obs := db.Observation(o)
+		for _, allowPartial := range []bool{false, true} {
+			got := maskObservation(&obs, allowPartial)
+
+			if never[o] || (o == domain.ObsPartial && !allowPartial) {
+				if got != nil {
+					t.Errorf("maskObservation(%s, allowPartial=%t) = %q, want masked", o, allowPartial, *got)
+				}
+				continue
+			}
+			switch {
+			case got == nil:
+				t.Errorf("maskObservation(%s, allowPartial=%t) = nil, want it rendered", o, allowPartial)
+			case *got != string(o):
+				t.Errorf("maskObservation(%s, allowPartial=%t) = %q, want the value verbatim", o, allowPartial, *got)
+			}
+		}
+	}
+
+	if maskObservation(nil, true) != nil {
+		t.Error("a NULL observation must render as null")
 	}
 }
