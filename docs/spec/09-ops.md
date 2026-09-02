@@ -140,6 +140,7 @@ needs them.
 | `DATABASE_URL` | string (pgx DSN) | — (required) | api, crawler, v6ctl | 05,06 | Postgres connection string; pool params in the DSN (§1). |
 | `API_LISTEN` | string `host:port` | `[::1]:8080` | api | 07 §1.1 | HTTP bind; IPv6 loopback by design (nginx-fronted). Override to `:8080` only for dev. |
 | `GEOIP_PATH` | string (dir) | `/var/lib/GeoIP` | crawler | 05,11 | Directory holding `ipinfo_lite.mmdb` (IPinfo Lite, country + ASN); hourly mtime check + atomic reader swap. |
+| `IPINFO_TOKEN` | string (**secret**) | — (empty) | v6ctl(geoip) | 11 | IPinfo API token for `v6ctl geoip update`; `--token` overrides it. _Erratum 2026-09-02 (review issue 54): registered here rather than read by `os.Getenv` in `cmd/v6ctl/geoip.go`, so it is redacted to set/unset in the startup summary like every other secret. The `geoip` subtree loads config through `config.LoadWithoutDB` — it needs no database, which is why it used to skip the loader entirely._ |
 | `DATASETS_DIR` | string (dir) | `/var/lib/whynoipv6/datasets` | api, v6ctl(export) | 07 §7.2 | Dataset snapshot root; API reads `manifest.json`, `v6ctl export` writes snapshots. |
 | `PUBLIC_BASE_URL` | string (URL) | `https://api.whynoipv6.com` | api | 07 | Public origin for absolute Atom/JSON-Feed self-links (report §6.4) and any absolute dataset/manifest URLs (report §6.3); the API binds `[::1]:8080` behind nginx and cannot infer its own origin. |
 | `LOG_LEVEL` | string enum `debug\|info\|warn\|error` | `info` (api, crawler) / `warn` (v6ctl) | all | 13 | slog level (§13). |

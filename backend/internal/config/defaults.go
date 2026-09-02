@@ -15,6 +15,7 @@ func registryDefaults(binary string) map[string]any {
 		// §2.1 Global deployment keys (UPPERCASE env).
 		"API_LISTEN":      "[::1]:8080",
 		"GEOIP_PATH":      "/var/lib/GeoIP",
+		"IPINFO_TOKEN":    "", // secret; only `v6ctl geoip update` reads it
 		"DATASETS_DIR":    "/var/lib/whynoipv6/datasets",
 		"PUBLIC_BASE_URL": "https://api.whynoipv6.com",
 		"LOG_LEVEL":       logLevel,

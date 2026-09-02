@@ -11,6 +11,8 @@ import (
 
 	"github.com/oschwald/maxminddb-golang/v2"
 	"github.com/spf13/cobra"
+
+	"github.com/lasseh/whynoipv6/internal/config"
 )
 
 const (
@@ -22,9 +24,22 @@ const (
 // PersistentPreRunE — fetching the database needs no database.
 func geoipCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:               "geoip",
-		Short:             "GeoIP database management (IPinfo Lite)",
-		PersistentPreRunE: func(*cobra.Command, []string) error { return nil },
+		Use:   "geoip",
+		Short: "GeoIP database management (IPinfo Lite)",
+		// This subtree needs no database — it runs from a systemd timer and
+		// the dev init container — so it loads config without requiring
+		// DATABASE_URL rather than skipping the loader entirely. Skipping it
+		// is what left IPINFO_TOKEN and GEOIP_PATH on os.Getenv, outside the
+		// registry and outside the startup summary's secret redaction
+		// (review issue 54).
+		PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {
+			cfg, err := config.LoadWithoutDB("v6ctl")
+			if err != nil {
+				return err
+			}
+			cmd.SetContext(context.WithValue(cmd.Context(), ctxKey{}, cfg))
+			return nil
+		},
 	}
 
 	var token, dir, url string
@@ -33,16 +48,15 @@ func geoipCmd() *cobra.Command {
 		Short: "Download the IPinfo Lite mmdb into GEOIP_PATH (dev init + prod timer)",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			cfg := cfgFromCmd(cmd)
 			if token == "" {
-				token = os.Getenv("IPINFO_TOKEN")
+				token = cfg.IPinfoToken
 			}
 			if token == "" {
 				return fmt.Errorf("ipinfo token required (--token or IPINFO_TOKEN)")
 			}
 			if dir == "" {
-				if dir = os.Getenv("GEOIP_PATH"); dir == "" {
-					dir = "/var/lib/GeoIP"
-				}
+				dir = cfg.GeoIPPath // registry default /var/lib/GeoIP
 			}
 			return geoipUpdate(cmd.Context(), url, token, dir)
 		},

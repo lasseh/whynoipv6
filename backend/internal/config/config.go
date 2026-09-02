@@ -26,6 +26,7 @@ var secretKeys = map[string]bool{
 	"ops.healthcheck_tick_url": true,
 	"taillight.api_key":        true,
 	"campaign.git_remote":      true, // a remote name by contract, but a token URL would work
+	"IPINFO_TOKEN":             true,
 }
 
 // Config is the resolved configuration of one binary. Global deployment keys
@@ -36,6 +37,7 @@ type Config struct {
 	DatabaseURL   string
 	APIListen     string
 	GeoIPPath     string
+	IPinfoToken   string // secret; summarized as set/unset, never by value
 	DatasetsDir   string
 	PublicBaseURL string
 	LogLevel      slog.Level
@@ -46,7 +48,17 @@ type Config struct {
 
 // Load builds the configuration for the named binary (api, crawler, v6ctl).
 // A missing YAML file is normal; a missing DATABASE_URL is a fatal error.
-func Load(binary string) (*Config, error) {
+func Load(binary string) (*Config, error) { return load(binary, true) }
+
+// LoadWithoutDB is Load for the verbs that touch no database. `v6ctl geoip
+// update` is the only one: it runs from a systemd timer and from the dev
+// init container, neither of which sets DATABASE_URL. Everything else is
+// identical, so those verbs read IPINFO_TOKEN and GEOIP_PATH through the
+// registry — with IPINFO_TOKEN summarized as set/unset like every other
+// secret — instead of reaching past it to os.Getenv (review issue 54).
+func LoadWithoutDB(binary string) (*Config, error) { return load(binary, false) }
+
+func load(binary string, requireDSN bool) (*Config, error) {
 	v := viper.New()
 	for key, def := range registryDefaults(binary) {
 		v.SetDefault(key, def)
@@ -66,7 +78,7 @@ func Load(binary string) (*Config, error) {
 	v.AutomaticEnv()
 
 	dsn := v.GetString("DATABASE_URL")
-	if dsn == "" {
+	if dsn == "" && requireDSN {
 		return nil, errors.New("DATABASE_URL is required (postgres://USER:PASS@HOST:5432/whynoipv6)")
 	}
 	lvl, err := parseLevel("LOG_LEVEL", v.GetString("LOG_LEVEL"))
@@ -78,6 +90,7 @@ func Load(binary string) (*Config, error) {
 		DatabaseURL:   dsn,
 		APIListen:     v.GetString("API_LISTEN"),
 		GeoIPPath:     v.GetString("GEOIP_PATH"),
+		IPinfoToken:   v.GetString("IPINFO_TOKEN"),
 		DatasetsDir:   v.GetString("DATASETS_DIR"),
 		PublicBaseURL: v.GetString("PUBLIC_BASE_URL"),
 		LogLevel:      lvl,
