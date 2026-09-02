@@ -801,6 +801,8 @@ Body: `{"host": "<host>"}`.
 
 (`as_of` = `domain.last_checked_at`.)
 
+_Erratum 2026-09-02: the object also carries **`disabled`** (bool) and **`disabled_reason`** (`dead|service|manual|delisted`, null when enabled). Without them the §5.1.1 step-4 dedupe was unreadable: disabled rows keep receiving slow-lane scans (03 §5), so a dead or delisted domain scanned inside the window answered `status:"done", cached:true` with its pre-death confirmed statuses and no way to tell — while `GET /domains/{host}` showed `disabled:true` for the same host. Additive; `CheckConfirmed` in `openapi.yaml` carries both._
+
 #### 5.1.4 Shared result mapper (one implementation, four consumers)
 
 `MapLiveResult(sr checker.ScanResult) → result JSON`. Applies the engine→public dimension mapping exactly (keys are the PUBLIC dimension names, not engine check names):

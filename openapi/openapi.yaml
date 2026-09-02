@@ -1913,7 +1913,13 @@ components:
         created_at: { type: string, format: date-time }
     CheckConfirmed:
       type: object
-      required: [classification, class_flags, saint, status, as_of]
+      description: >
+        The §5.1.3 confirmed-state block. `disabled` matters on the
+        domain-side dedupe envelope: disabled rows still receive slow-lane
+        scans, so one scanned inside the dedupe window answers
+        `status: "done"` with its pre-death confirmed statuses. Read
+        `disabled` before rendering the block as current state.
+      required: [classification, class_flags, saint, status, as_of, disabled, disabled_reason]
       properties:
         classification: { $ref: "#/components/schemas/Classification" }
         class_flags:
@@ -1922,6 +1928,11 @@ components:
         saint: { type: boolean }
         status: { $ref: "#/components/schemas/StatusBlock" }
         as_of: { type: string, format: date-time, nullable: true }
+        disabled: { type: boolean }
+        disabled_reason:
+          type: string
+          nullable: true
+          enum: [dead, service, manual, delisted]
     CheckEnvelope:
       type: object
       description: >

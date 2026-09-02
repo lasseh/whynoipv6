@@ -37,12 +37,20 @@ type CheckEnvelope struct {
 }
 
 // CheckConfirmed is the read-time confirmed-state block (§5.1.3).
+//
+// disabled/disabled_reason are here because the domain-side dedupe serves a
+// synthetic done envelope from any row scanned inside the window, and
+// disabled rows keep getting slow-lane scans (03 §5). Without them a dead
+// domain answers status:done with its pre-death statuses and nothing says
+// so, while GET /domains/{host} shows disabled:true for the same host.
 type CheckConfirmed struct {
 	Classification string      `json:"classification"`
 	ClassFlags     []string    `json:"class_flags"`
 	Saint          bool        `json:"saint"`
 	Status         StatusBlock `json:"status"`
 	AsOf           *time.Time  `json:"as_of"`
+	Disabled       bool        `json:"disabled"`
+	DisabledReason *string     `json:"disabled_reason"`
 }
 
 // checkJobEnqueueLockID keys the pg_advisory_xact_lock serializing the §6.3
@@ -403,13 +411,19 @@ func confirmedBlock(row *db.DomainConfirmedRow) *CheckConfirmed {
 	if flags == nil {
 		flags = []string{}
 	}
-	return &CheckConfirmed{
+	block := &CheckConfirmed{
 		Classification: string(row.Classification),
 		ClassFlags:     flags,
 		Saint:          row.Saint,
 		Status:         statusBlockTyped(&sextet),
 		AsOf:           postgres.TimePtr(row.LastCheckedAt),
+		Disabled:       row.Disabled,
 	}
+	if row.DisabledReason != nil {
+		reason := string(*row.DisabledReason)
+		block.DisabledReason = &reason
+	}
+	return block
 }
 
 // ratePrefix keys the limiter: /64 for IPv6, exact address for IPv4

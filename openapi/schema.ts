@@ -1456,6 +1456,7 @@ export interface components {
             /** Format: date-time */
             created_at: string;
         };
+        /** @description The §5.1.3 confirmed-state block. `disabled` matters on the domain-side dedupe envelope: disabled rows still receive slow-lane scans, so one scanned inside the dedupe window answers `status: "done"` with its pre-death confirmed statuses. Read `disabled` before rendering the block as current state. */
         CheckConfirmed: {
             classification: components["schemas"]["Classification"];
             class_flags: components["schemas"]["ClassFlag"][];
@@ -1463,6 +1464,9 @@ export interface components {
             status: components["schemas"]["StatusBlock"];
             /** Format: date-time */
             as_of: string | null;
+            disabled: boolean;
+            /** @enum {string|null} */
+            disabled_reason: "dead" | "service" | "manual" | "delisted" | null;
         };
         /** @description The §5.1.2 job body. `id` is null only on the domain-side dedupe envelope. `result` statuses are raw observations (incl. `inconsistent` on base/www), explicitly NOT confirmed state. */
         CheckEnvelope: {

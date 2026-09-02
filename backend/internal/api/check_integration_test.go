@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -357,6 +358,84 @@ func TestLatestCheck(t *testing.T) {
 		t.Errorf("read side must create no job rows (n=%d)", jobs)
 	}
 }
+
+// TestDedupeEnvelopeMarksDisabled (07 §5.1.3 erratum, review issue 07):
+// disabled rows keep receiving slow-lane scans, so one scanned inside the
+// window is served as a synthetic done envelope carrying its pre-death
+// confirmed statuses. The confirmed block must say the row is disabled and
+// why, or the caller renders a dead domain as a live hero.
+func TestDedupeEnvelopeMarksDisabled(t *testing.T) {
+	srv, pool := newCheckAPI(t, api.Options{LinkTTL: 7 * 24 * time.Hour, DedupeWindow: time.Hour})
+	ctx := context.Background()
+
+	for _, f := range []struct{ host, disabled, reason string }{
+		{"live.no", "false", "NULL"},
+		{"dead.no", "true", "'dead'"},
+	} {
+		if _, err := pool.Exec(ctx, fmt.Sprintf(
+			`INSERT INTO domain (host, kind, rank, created_by, asn_id, country_id, tld,
+			                     classification, base_status, base_since, last_checked_at,
+			                     disabled, disabled_reason)
+			 VALUES ('%s', 'apex', 10, 'tranco', (SELECT id FROM asn WHERE number = 0),
+			         (SELECT id FROM country WHERE code = 'NO'), 'no', 'hero',
+			         'supported', now() - interval '30 days', now() - interval '10 minutes',
+			         %s, %s)`, f.host, f.disabled, f.reason)); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := pool.Exec(ctx,
+			`INSERT INTO scan_detail (domain_id, ts, details)
+			 SELECT id, now() - interval '10 minutes', $1 FROM domain WHERE host = $2`,
+			fakeScanResult(f.host), f.host); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	var env struct {
+		Status    string `json:"status"`
+		Cached    bool   `json:"cached"`
+		Confirmed *struct {
+			Classification string  `json:"classification"`
+			Disabled       bool    `json:"disabled"`
+			DisabledReason *string `json:"disabled_reason"`
+		} `json:"confirmed"`
+	}
+
+	for name, tc := range map[string]struct {
+		host     string
+		disabled bool
+		reason   *string
+	}{
+		"live_row_is_not_disabled": {"live.no", false, nil},
+		"dead_row_is_marked":       {"dead.no", true, ptr("dead")},
+	} {
+		t.Run(name, func(t *testing.T) {
+			r := getJSON(t, srv.URL+"/check/latest?host="+tc.host, &env)
+			if r.StatusCode != 200 || env.Status != "done" || !env.Cached {
+				t.Fatalf("envelope = %d %+v, want a cached done dedupe hit", r.StatusCode, env)
+			}
+			if env.Confirmed == nil {
+				t.Fatal("no confirmed block")
+			}
+			// The stale hero verdict is served either way — that is the
+			// point: only the marker distinguishes the two.
+			if env.Confirmed.Classification != "hero" {
+				t.Errorf("classification = %q, want the stored hero", env.Confirmed.Classification)
+			}
+			if env.Confirmed.Disabled != tc.disabled {
+				t.Errorf("disabled = %v, want %v", env.Confirmed.Disabled, tc.disabled)
+			}
+			switch {
+			case tc.reason == nil && env.Confirmed.DisabledReason != nil:
+				t.Errorf("disabled_reason = %q, want null", *env.Confirmed.DisabledReason)
+			case tc.reason != nil && (env.Confirmed.DisabledReason == nil ||
+				*env.Confirmed.DisabledReason != *tc.reason):
+				t.Errorf("disabled_reason = %v, want %q", env.Confirmed.DisabledReason, *tc.reason)
+			}
+		})
+	}
+}
+
+func ptr(s string) *string { return &s }
 
 // TestLiveCheckReaper: stale pending/processing jobs flip to failed.
 func TestLiveCheckReaper(t *testing.T) {
