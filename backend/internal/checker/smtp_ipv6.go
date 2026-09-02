@@ -82,6 +82,21 @@ func (c *SMTPIPv6) Check(ctx context.Context, domain string, kind Kind) (Result,
 			return Result{Status: StatusUnsupported, Detail: d, Latency: time.Since(start)}, nil
 		}
 		d.Error = lastErr.Error()
+		// A timeout is not evidence (review issue 63). `mx` sits in the hero
+		// bar, so a false unsupported costs a domain its hero status and
+		// raises mail_missing — and outbound port 25 is filtered by most
+		// cloud providers, so an egress change would time out identically
+		// for every domain on earth and mark the internet's mail
+		// IPv6-unsupported after two counted scans. Defer instead: `error`
+		// leaves the confirmed value alone, and error_streak is driven by
+		// base and www only (03 §5 step 5), so deferring here has no
+		// lifecycle side effect.
+		//
+		// Refused is different and stays definitive above: the host answered,
+		// and what it said was no.
+		if isTimeout(lastErr) {
+			return Result{Status: StatusError, Detail: d, Latency: time.Since(start)}, nil
+		}
 	}
 
 	return Result{

@@ -377,4 +377,31 @@ func TestSMTPIPv6(t *testing.T) {
 			t.Errorf("error = %q", d.Error)
 		}
 	})
+
+	// Review issue 63: a timeout is not evidence. `mx` sits in the hero bar
+	// (classify.go), so a false unsupported costs a domain its hero status
+	// and raises mail_missing — and outbound port 25 is filtered by most
+	// cloud providers, so an egress change would time out identically for
+	// every domain and mark the internet's mail IPv6-unsupported after two
+	// counted scans. Refused stays definitive (the host answered, and said
+	// no); a timeout defers.
+	t.Run("timed-out MX is error, not unsupported", func(t *testing.T) {
+		z := newZone(t,
+			"mailer.test. 3600 IN MX 10 mx.mailer.test.",
+			// The RFC 6666 discard prefix: dropped rather than refused, which
+			// is what a port-25 egress filter looks like from here.
+			"mx.mailer.test. 3600 IN AAAA 100::1")
+		d := loopbackDialer(t, z)
+		d.dialer = &net.Dialer{Timeout: 200 * time.Millisecond}
+		c := &SMTPIPv6{dialer: d, port: "25"}
+
+		res, err := c.Check(context.Background(), "mailer.test", KindApex)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if res.Status != StatusError {
+			t.Fatalf("a timed-out MX gave %s, want error: %v",
+				res.Status, res.Detail.common().Error)
+		}
+	})
 }
