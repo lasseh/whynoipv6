@@ -156,7 +156,10 @@ func (f *sweepDNS) handle(w dns.ResponseWriter, r *dns.Msg) {
 	}
 	switch b {
 	case "routable":
-		m.Answer = append(m.Answer, aaaa("2001:db8::1"))
+		// Must be genuinely routable: since review issue 15 the routable
+		// filter rejects everything the SSRF blocklist does, and the
+		// documentation range 2001:db8::/32 is on that list.
+		m.Answer = append(m.Answer, aaaa("2606:4700::1"))
 	case "loopback": // NOERROR with a non-routable address only
 		m.Answer = append(m.Answer, aaaa("::1"))
 	case "empty": // NOERROR, no AAAA

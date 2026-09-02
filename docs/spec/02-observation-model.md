@@ -258,6 +258,8 @@ func isGloballyRoutableIPv6(ip net.IP) bool {
 
 The same function is exported from `internal/checker` and reused by the bulk-path checks that count AAAA answers (`dns_ns_ipv6`, `dns_mx_ipv6`, the resource-host sweep — see 01-engine.md and §6).
 
+_Erratum 2026-09-02: the function body above is superseded. It named fewer ranges than 01-engine.md §8's SSRF blocklist, and the gap was reachable: an AAAA in 64:ff9b::/96 (NAT64), 100::/64, 2001::/32 (Teredo), 2001:db8::/32, 2002::/16 (6to4) or fec0::/10 reduced to `exists`, confirmed `base = supported` at N=2, and then failed **every** pinned dial with `errAddrBlocked` — so `conn` stayed `error`, non-definitive, for as long as the record stood, and the domain sat at `partial` with a hero bar that could never verify. The shipped predicate rejects IPv4/IPv4-mapped and then walks the SSRF blocklist itself: `checker.blockedIPv6` is parsed once into `blockedV6Nets`, which both `SafeDialer` and `IsGloballyRoutableIPv6` read, so the two lists are one list by construction and cannot drift apart again. `TestRoutableMatchesTheSSRFBlocklist` asserts exactly that, and `TestIsGloballyRoutableIPv6` carries a row per range. Expect a small population to move from `base = supported` to `no_record`/`unsupported`; N=2 absorbs the churn._
+
 ### 2.6 Quorum rules
 
 The quorum is taken **over reduced symbols, not record sets** (GeoDNS legitimately returns different AAAA contents per region; what must agree is *whether v6 exists*), and only **over valid answers**:

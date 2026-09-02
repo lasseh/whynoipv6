@@ -35,6 +35,17 @@ func (f *fakeProvider) set(b string) {
 	f.behavior = b
 }
 
+// The scripted AAAA answers must be *globally routable*: the reducer drops
+// anything checker.IsGloballyRoutableIPv6 rejects, so a quorum built on
+// them would reduce to `empty` and every exists row would fail. These were
+// 2001:db8:: until review issue 15 aligned the routable filter with the
+// SSRF blocklist, which blocks the documentation range.
+const (
+	routableAAAA1 = "2606:4700::1"
+	routableAAAA2 = "2606:4700::2"
+	routableAAAA3 = "2606:4700::99"
+)
+
 // resetCounts zeroes the wire counters before a scripted row.
 func (f *fakeProvider) resetCounts() {
 	f.mu.Lock()
@@ -80,12 +91,12 @@ func (f *fakeProvider) handle(w dns.ResponseWriter, r *dns.Msg) {
 	case "exists":
 		switch q.Qtype {
 		case dns.TypeAAAA:
-			m.Answer = append(m.Answer, aaaa("2001:db8::1"), aaaa("2001:db8::2"))
+			m.Answer = append(m.Answer, aaaa(routableAAAA1), aaaa(routableAAAA2))
 		case dns.TypeA:
 			m.Answer = append(m.Answer, a("192.0.2.1"))
 		}
 	case "exists2":
-		m.Answer = append(m.Answer, aaaa("2001:db8::99"))
+		m.Answer = append(m.Answer, aaaa(routableAAAA3))
 	case "a_present":
 		if q.Qtype == dns.TypeA {
 			m.Answer = append(m.Answer, a("192.0.2.7"))
@@ -307,7 +318,7 @@ func TestQuorumByteIdentical(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(ans.IPs) != 2 || ans.IPs[0].String() != "2001:db8::1" || ans.IPs[1].String() != "2001:db8::2" {
+	if len(ans.IPs) != 2 || ans.IPs[0].String() != routableAAAA1 || ans.IPs[1].String() != routableAAAA2 {
 		t.Errorf("answer = %v, want cloudflare's exact 2-record set", ans.IPs)
 	}
 }

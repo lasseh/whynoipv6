@@ -44,6 +44,30 @@ var blockedIPv6 = []string{
 	"fd00:ec2::254/128", // AWS IPv6 metadata
 }
 
+// The two blocklists, parsed once at init. IsGloballyRoutableIPv6 reads
+// blockedV6Nets as well, so the ranges the dialer refuses and the ones the
+// consensus reducer refuses to count as `exists` are one list by
+// construction (02 §2.5 erratum). They used to be two hand-maintained sets:
+// a domain whose only AAAA fell in the gap — 6to4, Teredo, NAT64 — confirmed
+// base=supported and then failed every pinned dial with errAddrBlocked,
+// leaving conn non-definitive forever.
+var (
+	blockedV4Nets = mustParseCIDRs(blockedIPv4)
+	blockedV6Nets = mustParseCIDRs(blockedIPv6)
+)
+
+func mustParseCIDRs(cidrs []string) []*net.IPNet {
+	nets := make([]*net.IPNet, 0, len(cidrs))
+	for _, cidr := range cidrs {
+		_, network, err := net.ParseCIDR(cidr)
+		if err != nil {
+			panic(fmt.Sprintf("invalid blocked CIDR %q: %v", cidr, err))
+		}
+		nets = append(nets, network)
+	}
+	return nets
+}
+
 // SafeDialer wraps net.Dialer with SSRF protection.
 type SafeDialer struct {
 	resolver  *Resolver
@@ -54,31 +78,14 @@ type SafeDialer struct {
 
 // NewSafeDialer creates a SafeDialer with the full SSRF blocklist.
 func NewSafeDialer(resolver *Resolver) *SafeDialer {
-	v4Nets := make([]*net.IPNet, 0, len(blockedIPv4))
-	for _, cidr := range blockedIPv4 {
-		_, network, err := net.ParseCIDR(cidr)
-		if err != nil {
-			panic(fmt.Sprintf("invalid blocked CIDR %q: %v", cidr, err))
-		}
-		v4Nets = append(v4Nets, network)
-	}
-	v6Nets := make([]*net.IPNet, 0, len(blockedIPv6))
-	for _, cidr := range blockedIPv6 {
-		_, network, err := net.ParseCIDR(cidr)
-		if err != nil {
-			panic(fmt.Sprintf("invalid blocked CIDR %q: %v", cidr, err))
-		}
-		v6Nets = append(v6Nets, network)
-	}
-
 	return &SafeDialer{
 		resolver: resolver,
 		dialer: &net.Dialer{
 			Timeout:   10 * time.Second,
 			KeepAlive: 30 * time.Second,
 		},
-		blockedV4: v4Nets,
-		blockedV6: v6Nets,
+		blockedV4: blockedV4Nets,
+		blockedV6: blockedV6Nets,
 	}
 }
 
