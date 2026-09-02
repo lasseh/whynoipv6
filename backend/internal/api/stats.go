@@ -361,7 +361,7 @@ func (s *Server) getNetworkStats(w http.ResponseWriter, r *http.Request) {
 	}
 	limit, err := parseNetworkLimit(r)
 	if err != nil {
-		InvalidParameter(w, r, err.Error())
+		invalidParam(w, r, err) // strips the ErrCursorInvalid prefix, as the list rims do
 		return
 	}
 	generation, asOf, ok := s.enterCache(w, r, false)

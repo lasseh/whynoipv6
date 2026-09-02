@@ -25,6 +25,14 @@ func TestFeedItemTitleGoldens(t *testing.T) {
 		{"resources all over IPv6", "resources", "unsupported", "supported", "example.com now passes the page-resource IPv6 grade"},
 		{"resources partially v4-only", "resources", "supported", "unsupported", "example.com uses some page-resource hosts without IPv6"},
 		{"resources no longer checked", "resources", "supported", "not_applicable", "example.com no longer has its page resources checked"},
+		// Transitions out of not_applicable are real rows (03 §11 suppresses
+		// only the way in); the `supported` arm is origin-agnostic for every
+		// field, and these pin that for the five fields the table lacked.
+		{"base from not_applicable", "base", "not_applicable", "supported", "example.com now supports IPv6 on the base domain"},
+		{"ns from not_applicable", "ns", "not_applicable", "supported", "example.com now supports IPv6 on nameservers"},
+		{"mx from not_applicable", "mx", "not_applicable", "supported", "example.com now supports IPv6 on mail"},
+		{"conn from not_applicable", "conn", "not_applicable", "supported", "example.com is now reachable over IPv6"},
+		{"resources from not_applicable", "resources", "not_applicable", "supported", "example.com now passes the page-resource IPv6 grade"},
 	}
 	for _, g := range goldens {
 		t.Run(g.name, func(t *testing.T) {
