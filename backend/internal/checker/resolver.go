@@ -44,6 +44,11 @@ func NewResolver(upstreams []string) *Resolver {
 	return &Resolver{upstreams: upstreams}
 }
 
+// BulkQueryBudget is the worst case of one QueryWithRetry on a resolver
+// with no per-attempt cap: one attempt plus one retry, dnsTimeout each.
+// The AAAA checks size their budget from it (see AAAACheckTimeout).
+const BulkQueryBudget = 2 * dnsTimeout
+
 // SetAttemptTimeout caps each individual query attempt at d (default
 // dnsTimeout). With a caller context spanning QueryWithRetry, this keeps a
 // hanging first attempt from consuming the whole budget so the retry still

@@ -431,3 +431,19 @@ func TestBreakers(t *testing.T) {
 		t.Errorf("dropped = %q after 3 canary passes, want restored", got)
 	}
 }
+
+// TestRescueFitsTheCheckBudget pins the arithmetic 01 §11.1's Decision
+// states. The dns_aaaa_base/www budget has to cover the quorum fan-out plus
+// both bulk lookups the §2.7b rescue chains — the CD=1 re-query, then
+// classifyA. It did not when §2.7b landed (4s + 10s + 10s against 15s), so a
+// slow CD answer starved classifyA into a_error and a cd_empty rescue came
+// out as error. This is a budget nobody re-derives by hand; the test does.
+func TestRescueFitsTheCheckBudget(t *testing.T) {
+	worst := perProviderBudget + 2*checker.BulkQueryBudget
+	if checker.AAAACheckTimeout < worst {
+		t.Errorf("AAAA check budget %s < rescue worst case %s "+
+			"(fan-out %s + CD %s + conditional A %s)",
+			checker.AAAACheckTimeout, worst,
+			perProviderBudget, checker.BulkQueryBudget, checker.BulkQueryBudget)
+	}
+}

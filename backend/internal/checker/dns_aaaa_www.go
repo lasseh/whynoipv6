@@ -43,7 +43,7 @@ func (c *DNSAAAAWWW) Name() string { return NameDNSAAAAWWW }
 
 func (c *DNSAAAAWWW) Check(ctx context.Context, host string, _ Kind) (Result, error) {
 	start := time.Now()
-	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, AAAACheckTimeout)
 	defer cancel()
 
 	wwwDomain := "www." + host

@@ -17,13 +17,21 @@ func NewDNSAAAABase(res AAAAResolver) *DNSAAAABase {
 	return &DNSAAAABase{res: res}
 }
 
+// AAAACheckTimeout is the dns_aaaa_base / dns_aaaa_www per-check budget
+// (01-engine.md §11.1 Decision, erratum 2026-09-02). It has to cover the
+// quorum fan-out plus BOTH conditional bulk lookups the §2.7b broken-DNSSEC
+// rescue can chain — the CD=1 re-query and then classifyA. The original 15s
+// was derived for fan-out + one A lookup, before §2.7b existed: a slow CD
+// answer then left classifyA on a nearly-dead context, and its a_error
+// turned a cd_empty rescue into a plain error.
+// consensus.TestRescueFitsTheCheckBudget pins the arithmetic.
+const AAAACheckTimeout = 25 * time.Second
+
 func (c *DNSAAAABase) Name() string { return NameDNSAAAABase }
 
 func (c *DNSAAAABase) Check(ctx context.Context, host string, _ Kind) (Result, error) {
 	start := time.Now()
-	// 15s: quorum fan-out worst case + the conditional bulk A lookup
-	// (01-engine.md §11.1 Decision).
-	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, AAAACheckTimeout)
 	defer cancel()
 
 	ans, err := c.res.LookupAAAA(ctx, host)

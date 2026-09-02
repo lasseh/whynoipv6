@@ -386,7 +386,7 @@ The engine-status → per-dimension observation mapping (including which `partia
 
 ### 11.1 `dns_aaaa_base` — apex AAAA (adapted)
 
-Source: `v6audit/internal/checker/dns_aaaa_base.go`. Constructor becomes `NewDNSAAAABase(res AAAAResolver)`. Target name: the entity host itself (`domain` param) — for `kind=subdomain` that is the subdomain. **Decision:** the per-check timeout rises from v6audit's 5s to **15s**: the quorum fan-out worst case (2s per resolver + one retry ≈ 4s) plus the conditional bulk A lookup (5s + one retry ≈ 10s) can legitimately exceed 5s; 15s covers the worst case without slack-hunting. Body:
+Source: `v6audit/internal/checker/dns_aaaa_base.go`. Constructor becomes `NewDNSAAAABase(res AAAAResolver)`. Target name: the entity host itself (`domain` param) — for `kind=subdomain` that is the subdomain. **Decision:** the per-check timeout rises from v6audit's 5s to **15s**: the quorum fan-out worst case (2s per resolver + one retry ≈ 4s) plus the conditional bulk A lookup (5s + one retry ≈ 10s) can legitimately exceed 5s; 15s covers the worst case without slack-hunting. _Erratum 2026-09-02:_ this Decision predates §2.7b's CD=1 re-query, which adds a second bulk lookup ahead of the conditional A on the rescue path — 4s + 10s + 10s. The shipped budget is **25s** (`checker.AAAACheckTimeout`, shared with §11.2); at 15s a slow CD answer left the conditional A on a dead context and turned a `cd_empty` rescue into `error`. Body:
 
 ```go
 ans, err := c.res.LookupAAAA(ctx, host)
