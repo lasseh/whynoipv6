@@ -112,18 +112,20 @@ requirements.
 
 ## Contributors
 
-<a href="https://github.com/lasseh">
-  <img src="https://github.com/lasseh.png?size=50" alt="lasseh" width="50" height="50">
-</a>
-<a href="https://github.com/aulonm">
-  <img src="https://github.com/aulonm.png?size=50" alt="aulonm" width="50" height="50">
-</a>
-<a href="https://github.com/joms">
-  <img src="https://github.com/joms.png?size=50" alt="joms" width="50" height="50">
-</a>
-<a href="https://github.com/sklirg">
-  <img src="https://github.com/sklirg.png?size=50" alt="sklirg" width="50" height="50">
-</a>
-<a href="https://github.com/Foxboron">
-  <img src="https://github.com/Foxboron.png?size=50" alt="Foxboron" width="50" height="50">
-</a>
+<div align="center">
+  <a href="https://github.com/lasseh">
+    <img src="https://github.com/lasseh.png?size=50" alt="lasseh" width="50" height="50">
+  </a>
+  <a href="https://github.com/aulonm">
+    <img src="https://github.com/aulonm.png?size=50" alt="aulonm" width="50" height="50">
+  </a>
+  <a href="https://github.com/joms">
+    <img src="https://github.com/joms.png?size=50" alt="joms" width="50" height="50">
+  </a>
+  <a href="https://github.com/sklirg">
+    <img src="https://github.com/sklirg.png?size=50" alt="sklirg" width="50" height="50">
+  </a>
+  <a href="https://github.com/Foxboron">
+    <img src="https://github.com/Foxboron.png?size=50" alt="Foxboron" width="50" height="50">
+  </a>
+</div>
