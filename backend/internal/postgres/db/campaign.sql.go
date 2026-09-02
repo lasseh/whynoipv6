@@ -272,8 +272,11 @@ func (q *Queries) CampaignRemoveMembersNotIn(ctx context.Context, arg CampaignRe
 
 const CampaignUUIDBySourceFile = `-- name: CampaignUUIDBySourceFile :one
 SELECT uuid FROM campaign WHERE source_file = $1
+ORDER BY disabled, updated_at DESC LIMIT 1
 `
 
+// source_file is not unique (a fork leaves the disabled old row beside the
+// new one), so the reuse rule prefers the enabled, most recently touched row.
 func (q *Queries) CampaignUUIDBySourceFile(ctx context.Context, sourceFile *string) (pgtype.UUID, error) {
 	row := q.db.QueryRow(ctx, CampaignUUIDBySourceFile, sourceFile)
 	var uuid pgtype.UUID

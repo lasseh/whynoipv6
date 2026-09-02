@@ -43,6 +43,8 @@ type Querier interface {
 	// snapshot counts: disabled rows are excluded on all three surfaces.
 	CampaignPublicList(ctx context.Context, tag string) ([]CampaignPublicListRow, error)
 	CampaignRemoveMembersNotIn(ctx context.Context, arg CampaignRemoveMembersNotInParams) (int64, error)
+	// source_file is not unique (a fork leaves the disabled old row beside the
+	// new one), so the reuse rule prefers the enabled, most recently touched row.
 	CampaignUUIDBySourceFile(ctx context.Context, sourceFile *string) (pgtype.UUID, error)
 	CampaignUpdateFromFile(ctx context.Context, arg CampaignUpdateFromFileParams) (int32, error)
 	// The ?scope=campaign global feed (07 §4.8): transitions of domains in ANY

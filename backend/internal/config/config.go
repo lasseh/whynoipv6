@@ -25,6 +25,7 @@ var secretKeys = map[string]bool{
 	"ops.healthcheck_url":      true,
 	"ops.healthcheck_tick_url": true,
 	"taillight.api_key":        true,
+	"campaign.git_remote":      true, // a remote name by contract, but a token URL would work
 }
 
 // Config is the resolved configuration of one binary. Global deployment keys

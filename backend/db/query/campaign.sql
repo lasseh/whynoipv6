@@ -3,8 +3,11 @@
 -- name: CampaignByUUID :one
 SELECT id, uuid, name, source_file, disabled FROM campaign WHERE uuid = $1;
 
+-- source_file is not unique (a fork leaves the disabled old row beside the
+-- new one), so the reuse rule prefers the enabled, most recently touched row.
 -- name: CampaignUUIDBySourceFile :one
-SELECT uuid FROM campaign WHERE source_file = $1;
+SELECT uuid FROM campaign WHERE source_file = $1
+ORDER BY disabled, updated_at DESC LIMIT 1;
 
 -- name: CampaignUpdateFromFile :one
 UPDATE campaign
