@@ -41,7 +41,12 @@ INSERT INTO hosting_provider (slug, name) VALUES
   ('hetzner',      'Hetzner'),
   ('linode',       'Linode'),
   ('ovh',          'OVH'),
-  ('stackpath',    'StackPath');
+  ('stackpath',    'StackPath')
+-- Idempotent, so `migrate force N-1 && migrate up` does not die here and
+-- leave the version dirty again (review issue 67). DO UPDATE, not DO NOTHING:
+-- the display names are corrected occasionally, and this INSERT is the only
+-- place they are written — the tick's upsert sets name = slug.
+ON CONFLICT (slug) DO UPDATE SET name = EXCLUDED.name;
 
 -- Closes a standing OPEN-2 violation: hosting_provider is a public filter
 -- (?hosting=, internal/postgres/domainlist.go) that had no index, while its

@@ -6,8 +6,21 @@
 -- (asn.number = 0, country.code = 'UN'), never by literal id.
 -- =============================================================================
 
+-- Every seed below is idempotent, matching the stats row at the end of this
+-- file and the role creation in 000007 (review issue 67). The unique
+-- constraints already made a re-run safe from corruption — it errored — but
+-- `migrate force N-1 && migrate up`, the documented way out of a dirty
+-- version, then died on the seed and left the version dirty again. The
+-- operator's next move was hand-editing schema_migrations at 3am.
+--
+-- The reference tables take DO UPDATE rather than DO NOTHING: they are
+-- corrected occasionally (a country renamed, an ASN's name fixed), and a
+-- DO NOTHING re-run would silently skip the correction it was run to apply.
+-- The asn sentinel takes DO NOTHING — its name is not data anyone corrects.
+
 -- Sentinel ASN (attribution fallback; appears in /asns as in production).
-INSERT INTO asn (number, name) VALUES (0, 'Unknown');
+INSERT INTO asn (number, name) VALUES (0, 'Unknown')
+ON CONFLICT (number) DO NOTHING;
 
 -- Country reference data: 251 rows, including the sentinel
 -- (code 'UN', name 'Unknown', tld '.UN'). Lifted from production
@@ -267,7 +280,8 @@ INSERT INTO country (name, code, tld) VALUES
 ('Venezuela', 'VE', '.VE'),
 ('Virgin Islands', 'VG', '.VG'),
 ('Vietnam', 'VN', '.VN'),
-('Unknown', 'UN', '.UN');
+('Unknown', 'UN', '.UN')
+ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name, tld = EXCLUDED.tld;
 
 -- Day-0 stats rows: the /stats/overview endpoint (07) reads the latest
 -- stats_global_daily row and MUST always find one, even on first boot before
