@@ -11,8 +11,8 @@ import (
 	"github.com/lasseh/whynoipv6/internal/postgres/pgtest"
 )
 
-// TestHarnessBoot is the P1.10 smoke test: the container boots, migrations
-// 000001→000003 are applied, and one SELECT runs against the migrated schema.
+// TestHarnessBoot is the P1.10 smoke test: the container boots, every
+// embedded migration is applied, and one SELECT runs against the schema.
 func TestHarnessBoot(t *testing.T) {
 	pool := pgtest.NewDB(t)
 	ctx := context.Background()
@@ -165,5 +165,25 @@ func TestMigrateDownUp(t *testing.T) {
 	v, dirty, err := mig.Version()
 	if err != nil || dirty || v != 11 {
 		t.Errorf("version after down/up = %d dirty=%t err=%v, want 11 clean", v, dirty, err)
+	}
+}
+
+// TestTemplateIsCurrent: every clone the harness hands out must carry the
+// migration set in the tree. pgtest builds its template once per server and
+// used to keep it forever, so against a long-lived PGTEST_DSN a checkout
+// that added a migration silently tested the previous schema.
+func TestTemplateIsCurrent(t *testing.T) {
+	pool := pgtest.NewDB(t)
+	var version int
+	var dirty bool
+	if err := pool.QueryRow(context.Background(),
+		"SELECT version, dirty FROM schema_migrations").Scan(&version, &dirty); err != nil {
+		t.Fatal(err)
+	}
+	if dirty {
+		t.Error("the template is dirty: a migration failed halfway")
+	}
+	if want := pgtest.EmbeddedVersion(); version != want {
+		t.Errorf("clone is at migration %d, the tree embeds %d — stale template", version, want)
 	}
 }

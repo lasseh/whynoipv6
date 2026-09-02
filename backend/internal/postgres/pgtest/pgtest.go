@@ -18,6 +18,8 @@ import (
 	"log"
 	"net/url"
 	"os"
+	"strconv"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -40,10 +42,15 @@ const (
 	// dsnEnv names the server to test against. Set by `make test-integration`.
 	dsnEnv = "PGTEST_DSN"
 
-	// templateDB is the migrated database every test clones. Nothing ever
-	// connects to it: CREATE DATABASE ... TEMPLATE fails while a session is
-	// attached to the source, so all admin work runs against "postgres".
-	templateDB = "whynoipv6_template"
+	// templatePrefix names the migrated database every test clones. The
+	// embedded migration version is part of the name (see templateDB), so
+	// "the template exists" also means "at this version": a checkout that
+	// adds a migration gets a fresh template instead of silently cloning a
+	// stale schema. Nothing ever connects to it — CREATE DATABASE ...
+	// TEMPLATE fails while a session is attached to the source, so all admin
+	// work runs against "postgres", and reading the version out of the
+	// template is exactly what the name avoids.
+	templatePrefix = "whynoipv6_template_v"
 	// buildDB is where the template is migrated before being renamed into
 	// place, so "templateDB exists" always means "templateDB is fully
 	// migrated" — an interrupted build leaves no half-migrated template.
@@ -125,6 +132,58 @@ func startContainer(ctx context.Context) (*tcpostgres.PostgresContainer, error) 
 	)
 }
 
+// EmbeddedVersion is the highest migration number in db/migrations —
+// golang-migrate's version after a clean Up, and the version every clone of
+// the template must report.
+func EmbeddedVersion() int {
+	entries, err := migrations.Files.ReadDir(".")
+	if err != nil {
+		panic("pgtest: read embedded migrations: " + err.Error())
+	}
+	highest := 0
+	for _, e := range entries {
+		digits := e.Name()[:strings.IndexFunc(e.Name(), func(r rune) bool { return r < '0' || r > '9' })]
+		n, err := strconv.Atoi(digits)
+		if err != nil {
+			panic("pgtest: unnumbered migration " + e.Name())
+		}
+		highest = max(highest, n)
+	}
+	return highest
+}
+
+// templateDB is templatePrefix plus the embedded migration version.
+func templateDB() string { return templatePrefix + strconv.Itoa(EmbeddedVersion()) }
+
+// dropStaleTemplates removes templates built from a different migration set.
+// Called under templateLock, so no other binary is mid-build; a clone still
+// running off a stale template belongs to a tree that no longer exists.
+func dropStaleTemplates(ctx context.Context, admin *pgx.Conn) error {
+	rows, err := admin.Query(ctx,
+		"SELECT datname FROM pg_database WHERE datname LIKE $1 AND datname <> $2",
+		templatePrefix+"%", templateDB())
+	if err != nil {
+		return fmt.Errorf("list templates: %w", err)
+	}
+	var stale []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			rows.Close()
+			return err
+		}
+		stale = append(stale, name)
+	}
+	rows.Close()
+	for _, name := range stale {
+		log.Printf("pgtest: dropping stale template %s (migrations now at %d)", name, EmbeddedVersion())
+		if _, err := admin.Exec(ctx, "DROP DATABASE IF EXISTS "+name+" WITH (FORCE)"); err != nil {
+			return fmt.Errorf("drop stale template %s: %w", name, err)
+		}
+	}
+	return nil
+}
+
 // ensureTemplate creates and migrates templateDB unless it is already there.
 // Every test binary calls this against the same server, so the work happens
 // once behind templateLock and the result is only published under the template
@@ -143,9 +202,13 @@ func ensureTemplate(ctx context.Context) error {
 		_, _ = admin.Exec(context.WithoutCancel(ctx), "SELECT pg_advisory_unlock($1)", templateLock)
 	}()
 
+	if err := dropStaleTemplates(ctx, admin); err != nil {
+		return err
+	}
+
 	var exists bool
 	if err := admin.QueryRow(ctx,
-		"SELECT EXISTS (SELECT 1 FROM pg_database WHERE datname = $1)", templateDB).Scan(&exists); err != nil {
+		"SELECT EXISTS (SELECT 1 FROM pg_database WHERE datname = $1)", templateDB()).Scan(&exists); err != nil {
 		return fmt.Errorf("look up template: %w", err)
 	}
 	if exists {
@@ -161,13 +224,13 @@ func ensureTemplate(ctx context.Context) error {
 	if err := MigrateUp(replaceDBName(adminDSN, buildDB)); err != nil {
 		return err
 	}
-	if _, err := admin.Exec(ctx, "ALTER DATABASE "+buildDB+" RENAME TO "+templateDB); err != nil {
+	if _, err := admin.Exec(ctx, "ALTER DATABASE "+buildDB+" RENAME TO "+templateDB()); err != nil {
 		return fmt.Errorf("publish template: %w", err)
 	}
 	return nil
 }
 
-// MigrateUp applies the embedded migrations 000001→000003 to dsn.
+// MigrateUp applies every embedded migration to dsn.
 func MigrateUp(dsn string) error {
 	mig, err := NewMigrator(dsn)
 	if err != nil {
@@ -220,7 +283,7 @@ func NewDB(t *testing.T) *pgxpool.Pool {
 	// share lock on the source — but a clone racing another binary's DROP
 	// comes back as 55006, so retry briefly before failing the test.
 	for attempt := range 5 {
-		if _, err = admin.Exec(ctx, "CREATE DATABASE "+name+" TEMPLATE "+templateDB); err == nil {
+		if _, err = admin.Exec(ctx, "CREATE DATABASE "+name+" TEMPLATE "+templateDB()); err == nil {
 			break
 		}
 		var pgErr *pgconn.PgError

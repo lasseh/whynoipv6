@@ -83,10 +83,11 @@ so a live result can never disagree in shape with a stored one.
 
 ## Database layer
 
-- **Migrations:** 3 logical migrations under `backend/db/migrations/`
-  (`000001_base_schema`, `000002_timescaledb`, `000003_seed`), embedded via
-  `go:embed`, applied by `v6ctl migrate up`. Forward-only in production — there is
-  deliberately no `down` verb.
+- **Migrations:** numbered pairs under `backend/db/migrations/`, starting with
+  `000001_base_schema`, `000002_timescaledb`, `000003_seed` and appended to as
+  the schema moves. Embedded via `go:embed`, applied by `v6ctl migrate up`.
+  Forward-only in production — there is deliberately no `down` verb, though the
+  `.down.sql` files exist for the test harness's down/up round trip.
 - **Hypertables:** `scan` (2y retention), `scan_detail` (90d), `changelog`
   (forever), `crawler_metrics` (90d), `unbound_stats` (30d), `stats_asn_daily`;
   plus the `scan_daily_adoption` continuous aggregate. Modern columnstore API only.
@@ -127,7 +128,7 @@ redacted.
 every PR, alongside `make lint`, `make spec-lint` (Spectral on `openapi.yaml`),
 `make test`, `make test-integration`, `make vulncheck`, `make build-linux`, and the
 frontend gates `make frontend-test` / `frontend-lint` / `frontend-build`
-(see `.github/workflows/ci.yml`).
+(see `.github/workflows/backend.yml` and `frontend.yml`).
 
 ## Conventions to keep
 
