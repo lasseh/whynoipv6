@@ -354,10 +354,11 @@ func TestConditionalALookup(t *testing.T) {
 }
 
 // TestConditionalCDLookup is 10-testing §3.2b's table (02 §2.7b). The CD=1
-// re-query runs iff no quorum was reached AND every answering provider
-// returned SERVFAIL/REFUSED — one timeout in the set disqualifies it, and a
-// reached quorum never gets there. Counters assert the "CD=1 issued?"
-// column, including the +1 A on the cd_empty rows.
+// re-query runs iff no quorum was reached AND at least two providers
+// returned an explicit SERVFAIL/REFUSED with no other rcode among the
+// answers. A timeout does not disqualify, it just does not count toward the
+// two; a reached quorum never gets there. Counters assert the "CD=1
+// issued?" column, including the +1 A on the cd_empty rows.
 func TestConditionalCDLookup(t *testing.T) {
 	h := newHarness(t)
 
@@ -376,13 +377,18 @@ func TestConditionalCDLookup(t *testing.T) {
 		{"cd_empty_apresent", "servfail", "servfail", "servfail", "a_present", "cd_empty", "a_present", "", 1, 1},
 		{"cd_empty_aabsent", "servfail", "servfail", "servfail", "empty", "cd_empty", "a_absent", "", 1, 1},
 		{"cd_fail_servfail", "servfail", "servfail", "servfail", "servfail", "cd_fail", "", "plain", 2, 0},
-		// 10-testing §3.2b calls this row cd_notrun_timeout — "a timeout
-		// present → not the all-SERVFAIL signature". The shipped
-		// allServfailOrRefused skips empty rcodes instead, so the rescue
-		// DOES run and can credit a supported base off one provider's
-		// SERVFAIL. Pinned as shipped; review issue 16 owns the decision,
-		// and flipping it flips this row.
-		{"cd_runs_on_one_servfail_plus_timeouts", "timeout", "timeout", "servfail", "exists", "cd_present", "", "", 1, 0},
+		// The two-answer rule (review issue 16, 02 §2.7b erratum). One
+		// SERVFAIL among timeouts is one provider's hiccup, not a broken
+		// zone: no rescue, and the lookup stays a non-definitive error.
+		// This is 10-testing §3.2b's cd_notrun_timeout row.
+		{"cd_notrun_timeout", "timeout", "timeout", "servfail", "exists", "", "", "plain", 0, 0},
+		// Two explicit answers agree, the third is silent → rescue runs.
+		{"cd_runs_on_two_servfail_plus_timeout", "timeout", "servfail", "servfail", "exists", "cd_present", "", "", 1, 0},
+		// Two explicit SERVFAIL/REFUSED but a third provider answered
+		// NOERROR: some other rcode is present, so the signature is broken
+		// and no rescue runs. One valid answer is short of quorum, so the
+		// lookup is a plain error — no CD=1, and no conditional A either.
+		{"cd_notrun_mixed_rcode", "refused", "servfail", "empty", "a_present", "", "", "plain", 0, 0},
 		{"cd_notrun_exists", "exists", "exists", "servfail", "exists", "", "", "", 0, 0},
 		{"cd_notrun_empty", "empty", "empty", "empty", "a_present", "", "a_present", "", 0, 1},
 	}

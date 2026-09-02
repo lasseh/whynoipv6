@@ -371,21 +371,33 @@ func (r *Resolver) classifyA(ctx context.Context, name string) (outcome string, 
 	}
 }
 
+// cdRescueQuorum is how many providers must return an explicit
+// SERVFAIL/REFUSED before the CD=1 rescue is allowed to run (§2.7b
+// erratum). One is not enough: a single provider's validation hiccup would
+// otherwise let an un-quorumed local-Unbound answer credit a definitive
+// base. Two agreeing is the signal that the zone, not our vantage, is
+// broken. It is deliberately below the three that
+// AAAADetail.ExplicitlyUnresolvable requires — that serves 03 §4 branch
+// (b), a different rule.
+const cdRescueQuorum = 2
+
 // allServfailOrRefused detects the broken-DNSSEC signature (§2.7b): at least
-// one explicit SERVFAIL/REFUSED rcode, every non-empty rcode in that set,
-// and no valid answer (checked by the caller).
+// cdRescueQuorum explicit SERVFAIL/REFUSED rcodes, no other rcode from any
+// provider that answered, and no valid answer (checked by the caller). A
+// timeout neither qualifies nor disqualifies — it just does not count
+// toward the two.
 func allServfailOrRefused(outcomes []providerOutcome) bool {
-	sawExplicit := false
+	explicit := 0
 	for _, o := range outcomes {
 		if o.rcode == "" {
-			continue // timeout/transport — does not qualify, but does not disqualify
+			continue // timeout/transport — silence, not a signal either way
 		}
 		if o.rcode != checker.RcodeServfail && o.rcode != checker.RcodeRefused {
 			return false
 		}
-		sawExplicit = true
+		explicit++
 	}
-	return sawExplicit
+	return explicit >= cdRescueQuorum
 }
 
 // rescueCD issues the single CD=1 (checking-disabled) AAAA re-query through
