@@ -417,3 +417,100 @@ func TestProbeDialEnforcesBlocklist(t *testing.T) {
 		t.Errorf("error = %v, want a blocklist rejection", err)
 	}
 }
+
+// TestResponseParityWalksTheAddressRotation is review issue 63. The check
+// tried v6IPs[0] and stopped, so a site announcing several AAAAs with a dead
+// first edge earned a definitive `unsupported` on the dimension that feeds
+// broken_v6 and ipv6_only — while every browser reached it on the next
+// address via Happy Eyeballs. Three counted scans hitting the same first
+// address confirmed it and the site was publicly flagged as broken.
+func TestResponseParityWalksTheAddressRotation(t *testing.T) {
+	body := strings.Repeat("x", 128)
+	port, roots := dualStackTLSServer(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(body))
+	}))
+
+	t.Run("blocked first address is skipped, not fatal", func(t *testing.T) {
+		z := newZone(t,
+			"example.com. 3600 IN AAAA 2001:db8::dead",
+			"example.com. 3600 IN AAAA ::1",
+			"example.com. 3600 IN A 127.0.0.1")
+		d := loopbackDialer(t, z)
+		// Block only the first address, as the SSRF list would for one edge
+		// that happens to sit in a reserved range.
+		_, blocked, err := net.ParseCIDR("2001:db8::dead/128")
+		if err != nil {
+			t.Fatal(err)
+		}
+		d.blockedV6 = []*net.IPNet{blocked}
+		c := &ResponseParity{dialer: d, port: port, rootCAs: roots}
+
+		res, err := c.Check(context.Background(), "example.com", KindApex)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if res.Status != StatusSupported {
+			t.Fatalf("a blocked first address gave %s: %+v", res.Status, res.Detail)
+		}
+		det, ok := res.Detail.(*ParityDetail)
+		if !ok || det.IPv6 == nil {
+			t.Fatalf("detail = %+v", res.Detail)
+		}
+		if det.IPv6.Address != "::1" {
+			t.Errorf("fetched over %s, want the second address ::1", det.IPv6.Address)
+		}
+	})
+
+	t.Run("unreachable first address is walked past", func(t *testing.T) {
+		// 100::/64 is the RFC 6666 discard prefix: routers drop it, so the
+		// dial fails rather than hanging on a live host that never answers.
+		z := newZone(t,
+			"example.com. 3600 IN AAAA 100::1",
+			"example.com. 3600 IN AAAA ::1",
+			"example.com. 3600 IN A 127.0.0.1")
+		d := loopbackDialer(t, z)
+		// The discard prefix is dropped rather than refused, so the dial
+		// hangs until it times out. Shorten that here: the walk is what is
+		// under test, not how long the crawler is willing to wait.
+		d.dialer = &net.Dialer{Timeout: 200 * time.Millisecond}
+		c := &ResponseParity{dialer: d, port: port, rootCAs: roots}
+
+		res, err := c.Check(context.Background(), "example.com", KindApex)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if res.Status != StatusSupported {
+			t.Fatalf("a dead first address gave %s: %+v", res.Status, res.Detail)
+		}
+		det, ok := res.Detail.(*ParityDetail)
+		if !ok || det.IPv6 == nil {
+			t.Fatalf("detail = %+v", res.Detail)
+		}
+		if det.IPv6.Address != "::1" {
+			t.Errorf("fetched over %s, want the second address ::1", det.IPv6.Address)
+		}
+	})
+
+	t.Run("every address blocked stays an error", func(t *testing.T) {
+		z := newZone(t,
+			"example.com. 3600 IN AAAA 2001:db8::dead",
+			"example.com. 3600 IN A 127.0.0.1")
+		d := loopbackDialer(t, z)
+		_, blocked, err := net.ParseCIDR("2001:db8::/32")
+		if err != nil {
+			t.Fatal(err)
+		}
+		d.blockedV6 = []*net.IPNet{blocked}
+		c := &ResponseParity{dialer: d, port: port, rootCAs: roots}
+
+		res, err := c.Check(context.Background(), "example.com", KindApex)
+		if err != nil {
+			t.Fatal(err)
+		}
+		// Nothing was probed, so this is our refusal rather than the site's
+		// failure: error, never a definitive unsupported.
+		if res.Status != StatusError {
+			t.Errorf("all-blocked gave %s, want error", res.Status)
+		}
+	})
+}

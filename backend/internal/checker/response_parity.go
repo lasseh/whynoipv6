@@ -3,6 +3,7 @@ package checker
 import (
 	"context"
 	"crypto/x509"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -15,7 +16,21 @@ const (
 	maxRedirects    = 3
 	maxBodySize     = 1 << 20 // 1MB
 	parityTolerance = 0.10    // 10%
+
+	// maxAddressAttempts bounds the per-family address walk (review issue
+	// 63). The check used to try v6IPs[0] and stop, so a site announcing
+	// four AAAAs with a decommissioned first edge earned a definitive
+	// `unsupported` on the dimension that feeds broken_v6 and ipv6_only —
+	// while every browser reached it on the second address. Three is enough
+	// for the realistic "one address in the rotation is dead" case without
+	// letting a large rotation eat the 20s budget.
+	maxAddressAttempts = 3
 )
+
+// errNoUsableAddress means every candidate was refused by the SSRF
+// blocklist, so nothing was probed. That is our refusal, not the site's
+// failure, and it maps to error rather than to a verdict.
+var errNoUsableAddress = errors.New("no usable address")
 
 // ResponseParity compares HTTP responses over IPv4 and IPv6
 // (01-engine.md §11.8).
@@ -81,31 +96,27 @@ func (c *ResponseParity) Check(ctx context.Context, domain string, kind Kind) (R
 		}, nil
 	}
 
-	v4IP := v4IPs[0]
-	v6IP := v6IPs[0]
-
-	// Validate both IPs.
-	if err := c.dialer.ValidateIP(v4IP); err != nil {
-		d.Error = "IPv4 address in blocked range"
-		return Result{Status: StatusError, Detail: d, Latency: time.Since(start)}, nil
-	}
-	if err := c.dialer.ValidateIP(v6IP); err != nil {
-		d.Error = "IPv6 address in blocked range"
-		return Result{Status: StatusError, Detail: d, Latency: time.Since(start)}, nil
-	}
-
 	// Fetch over IPv4 (baseline).
-	v4Result, err := c.fetch(ctx, domain, v4IP, "tcp4")
+	v4Result, err := c.fetchAny(ctx, domain, v4IPs, "tcp4")
 	if err != nil {
+		if errors.Is(err, errNoUsableAddress) {
+			d.Error = "IPv4 address in blocked range"
+			return Result{Status: StatusError, Detail: d, Latency: time.Since(start)}, nil
+		}
 		// Can't establish a baseline — nothing to compare against.
 		d.Error = fmt.Sprintf("IPv4 request failed: %v", err)
 		return Result{Status: StatusNotApplicable, Detail: d, Latency: time.Since(start)}, nil
 	}
 
 	// Fetch over IPv6.
-	v6Result, err := c.fetch(ctx, domain, v6IP, "tcp6")
+	v6Result, err := c.fetchAny(ctx, domain, v6IPs, "tcp6")
 	if err != nil {
-		// IPv6 HTTPS doesn't work — parity is unsupported, not an internal error.
+		if errors.Is(err, errNoUsableAddress) {
+			d.Error = "IPv6 address in blocked range"
+			return Result{Status: StatusError, Detail: d, Latency: time.Since(start)}, nil
+		}
+		// Every address we were allowed to try failed: IPv6 HTTPS doesn't
+		// work here — unsupported, not an internal error.
 		d.Error = fmt.Sprintf("IPv6 request failed: %v", err)
 		return Result{Status: StatusUnsupported, Detail: d, Latency: time.Since(start)}, nil
 	}
@@ -153,6 +164,40 @@ func (c *ResponseParity) Check(ctx context.Context, domain string, kind Kind) (R
 		Detail:  d,
 		Latency: time.Since(start),
 	}, nil
+}
+
+// fetchAny walks one family's addresses in order and returns the first that
+// answers, up to maxAddressAttempts (review issue 63).
+//
+// A blocked address is skipped rather than fatal and does not consume an
+// attempt: a rotation with one address in a blocked range still has the
+// others. Only when nothing was probed at all does this report
+// errNoUsableAddress, which is the case that stays an error.
+func (c *ResponseParity) fetchAny(ctx context.Context, domain string, ips []net.IP, network string) (ParityFetch, error) {
+	var lastErr error
+	attempts := 0
+	for _, ip := range ips {
+		if attempts >= maxAddressAttempts {
+			break
+		}
+		if err := c.dialer.ValidateIP(ip); err != nil {
+			lastErr = err
+			continue
+		}
+		attempts++
+		f, err := c.fetch(ctx, domain, ip, network)
+		if err == nil {
+			return f, nil
+		}
+		lastErr = err
+		if ctx.Err() != nil {
+			break // the whole-check budget is gone; further tries cannot help
+		}
+	}
+	if attempts == 0 {
+		return ParityFetch{}, fmt.Errorf("%w: %w", errNoUsableAddress, lastErr)
+	}
+	return ParityFetch{}, lastErr
 }
 
 func (c *ResponseParity) fetch(ctx context.Context, domain string, ip net.IP, network string) (ParityFetch, error) {
