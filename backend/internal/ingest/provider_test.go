@@ -1,6 +1,10 @@
 package ingest
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/lasseh/whynoipv6/internal/checker"
+)
 
 func testMapping() *ProviderMapping {
 	return &ProviderMapping{suffixes: map[string]int64{
@@ -105,6 +109,16 @@ func TestHostingTag(t *testing.T) {
 		}
 		if got := NormalizeHosting(true, []string{"cdn.example-cdn.io"}, 0); got != nil {
 			t.Errorf("unmatched CDN chain = %v, want nil", got)
+		}
+	})
+	// Totality: the suffix set the checker detects (01-engine §11.2) and the
+	// tag set §6.10 writes are one literal, so every detected suffix has a tag.
+	t.Run("every_detected_suffix_has_a_tag", func(t *testing.T) {
+		for suffix, want := range checker.CDNSuffixTags {
+			got := NormalizeHosting(true, []string{"x." + suffix + "."}, 0)
+			if got == nil || *got != want {
+				t.Errorf("suffix %s = %v, want %s", suffix, got, want)
+			}
 		}
 	})
 }

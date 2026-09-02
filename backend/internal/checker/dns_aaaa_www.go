@@ -7,19 +7,24 @@ import (
 	"time"
 )
 
-// knownCDNPatterns are CNAME targets that indicate CDN usage.
-var knownCDNPatterns = []string{
-	"cloudfront.net",
-	"cloudflare.net",
-	"akamaiedge.net",
-	"akamai.net",
-	"fastly.net",
-	"edgekey.net",
-	"azureedge.net",
-	"cdn.cloudflarenet.com",
-	"edgecastcdn.net",
-	"stackpathdns.com",
-	"googleapis.com",
+// CDNSuffixTags are the CNAME target suffixes that indicate CDN usage
+// (01-engine.md §11.2), each mapped to the normalized hosting tag the commit
+// path writes (06-ingest.md §6.10, erratum: single-sourced here beside
+// §11.2's list rather than in ingest).
+//
+//nolint:goconst // a literal data table; repeated tags are values
+var CDNSuffixTags = map[string]string{
+	"cloudfront.net":        "cloudfront",
+	"cloudflare.net":        "cloudflare",
+	"akamaiedge.net":        "akamai",
+	"akamai.net":            "akamai",
+	"fastly.net":            "fastly",
+	"edgekey.net":           "akamai",
+	"azureedge.net":         "azure",
+	"cdn.cloudflarenet.com": "cloudflare",
+	"edgecastcdn.net":       "edgecast",
+	"stackpathdns.com":      "stackpath",
+	"googleapis.com":        "google",
 }
 
 // DNSAAAAWWW checks whether www.<host> has at least one AAAA record,
@@ -56,7 +61,7 @@ func (c *DNSAAAAWWW) Check(ctx context.Context, host string, _ Kind) (Result, er
 
 		// Detect CDN usage.
 		for _, cname := range ans.CNAMEChain {
-			for _, pattern := range knownCDNPatterns {
+			for pattern := range CDNSuffixTags {
 				if strings.HasSuffix(strings.TrimSuffix(cname, "."), pattern) {
 					d.CDNDetected = true
 					break

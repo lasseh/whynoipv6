@@ -2,25 +2,9 @@ package ingest
 
 import (
 	"strings"
-)
 
-// cdnSuffixTags maps the checker's fixed CDN-suffix list (01-engine.md §11.2,
-// single-sourced here per 06-ingest.md §6.10) to normalized hosting tags.
-//
-//nolint:goconst // a literal data table; repeated tags are values
-var cdnSuffixTags = map[string]string{
-	"cloudfront.net":        "cloudfront",
-	"cloudflare.net":        "cloudflare",
-	"cdn.cloudflarenet.com": "cloudflare",
-	"akamaiedge.net":        "akamai",
-	"akamai.net":            "akamai",
-	"edgekey.net":           "akamai",
-	"fastly.net":            "fastly",
-	"azureedge.net":         "azure",
-	"edgecastcdn.net":       "edgecast",
-	"stackpathdns.com":      "stackpath",
-	"googleapis.com":        "google",
-}
+	"github.com/lasseh/whynoipv6/internal/checker"
+)
 
 // hostingASNTags is the launch seed set of hosting/cloud ASN → tag
 // (06-ingest.md §6.10 Decision; extended as collected data shows gaps).
@@ -46,7 +30,7 @@ func NormalizeHosting(cdnDetected bool, cnameChain []string, asn uint) *string {
 			// Folded like the NS hosts in provider.go: a mixed-case CNAME
 			// target must still hit its suffix key.
 			c := strings.ToLower(strings.TrimSuffix(cname, "."))
-			for suffix, tag := range cdnSuffixTags {
+			for suffix, tag := range checker.CDNSuffixTags {
 				if c == suffix || strings.HasSuffix(c, "."+suffix) {
 					t := tag
 					return &t
