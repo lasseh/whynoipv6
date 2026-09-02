@@ -82,7 +82,7 @@ vulncheck: ## Scan for known vulnerabilities
 
 ##@ Codegen
 generate: ## Regenerate sqlc + OpenAPI codegen; fail if the tree is stale (the CI drift gate)
-	sqlc generate
+	$(GO) tool sqlc generate
 	$(GO) tool oapi-codegen -config ../openapi/oapi-codegen.yaml ../openapi/openapi.yaml
 	npx -y openapi-typescript@7 ../openapi/openapi.yaml -o ../openapi/schema.ts
 	@# status --porcelain, not diff: a generator that emits a NEW file leaves

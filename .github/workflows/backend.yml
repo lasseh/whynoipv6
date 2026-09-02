@@ -46,12 +46,21 @@ jobs:
       - name: Lint
         uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
-          version: latest
+          # Pinned, unlike everything else here: `latest` picks up new default
+          # analyzers on a release we did not choose, so a PR that changes
+          # nothing goes red. This is the version the repo passes today; bump
+          # it with the dependency updates, not by surprise.
+          version: v2.13.1
           working-directory: backend
 
+      # sqlc is NOT installed here: it rides in go.mod through the `tool`
+      # directive, so `make generate`'s drift gate compares the committed
+      # output against a generator version that is itself committed. A new
+      # sqlc release used to turn every open PR red with a diff nobody wrote.
+      # govulncheck and gotestsum stay rolling on purpose — neither decides
+      # whether a diff is stale.
       - name: Install tools
         run: |
-          go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest
           go install golang.org/x/vuln/cmd/govulncheck@latest
           go install gotest.tools/gotestsum@latest
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
