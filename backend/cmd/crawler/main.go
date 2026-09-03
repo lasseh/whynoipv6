@@ -121,7 +121,7 @@ func main() {
 //nolint:gocritic // startup wiring is one linear sequence by design (04 §13)
 func run() error {
 	// Startup order (fail fast — 04 §13): config → pool → sentinels →
-	// GeoIP → engine/consensus/preflight → run_id → goroutines.
+	// GeoIP → run_id → engine/consensus/preflight → goroutines.
 	cfg, err := config.Load("crawler")
 	if err != nil {
 		return err
@@ -159,6 +159,17 @@ func run() error {
 	}
 	defer geoReader.Close()
 
+	// run_id/worker are minted here rather than after the wiring below (04
+	// §13) so every daemon-lifetime component logs under them. The consensus
+	// breakers outlive any single scan and their warnings used to ship with
+	// no run and no pid, which made two crawlers on one host indistinguishable
+	// in the log.
+	runID := uuid.New()
+	hostname, _ := os.Hostname()
+	worker := fmt.Sprintf("%s:%d", hostname, os.Getpid())
+	log = log.With("run_id", runID.String(), "worker", worker)
+	slog.SetDefault(log)
+
 	bulk := checker.NewResolver(cfg.StringSlice("resolver.bulk_upstreams"))
 	dialer := checker.NewSafeDialer(bulk)
 	notifier := notify.New(cfg.String("ops.webhook_url"), cfg.String("ops.healthcheck_url"),
@@ -175,12 +186,6 @@ func run() error {
 		return err
 	}
 	committer := crawler.NewCommitter(pool, crawler.CommitConfigFrom(cfg))
-
-	runID := uuid.New()
-	hostname, _ := os.Hostname()
-	worker := fmt.Sprintf("%s:%d", hostname, os.Getpid())
-	log = log.With("run_id", runID.String(), "worker", worker)
-	slog.SetDefault(log)
 
 	metrics := crawler.NewMetrics(pool, runID, worker)
 	metrics.GeoIPBuildEpoch = geoReader.BuildEpoch

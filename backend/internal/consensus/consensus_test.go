@@ -606,6 +606,7 @@ func TestFastLaneCloses(t *testing.T) {
 		h := newHarness(t)
 		h.r.mu.Lock()
 		h.r.fastOpen = true
+		h.r.fastOpenedAt = time.Now()
 		h.r.mu.Unlock()
 		h.r.evaluateBreakers() // no samples at all in the window
 		if h.r.FastLaneSuppressed() {

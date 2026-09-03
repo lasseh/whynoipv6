@@ -524,7 +524,7 @@ Goroutine inventory per process (started by `cmd/crawler/main.go`, all tied to o
 | 7 | Metrics checkpointer | 1 | §15: per-1000-domains + 5-min-idle `crawler_metrics` rows, heartbeat throttle | this file |
 | 8 | GeoIP mmdb reloader | 1 (hourly ticker) | stat + atomic reader swap of the two mmdb files | 06-ingest.md — mmdb hot reload |
 
-Startup order (fail fast — any failure exits non-zero before any goroutine starts): load config (viper env; startup log line with secrets redacted) → open pgx pool → resolve sentinel asn/country ids by lookup → open GeoIP readers (missing/unreadable mmdb = fatal) → construct engine + consensus + preflight → generate `run_id` (UUIDv4) → start goroutines 1–8.
+Startup order (fail fast — any failure exits non-zero before any goroutine starts): load config (viper env; startup log line with secrets redacted) → open pgx pool → resolve sentinel asn/country ids by lookup → open GeoIP readers (missing/unreadable mmdb = fatal) → generate `run_id` (UUIDv4) → construct engine + consensus + preflight → start goroutines 1–8.
 
 Both processes run goroutines 3/4 (SKIP LOCKED consumer, no singleton gating — 2×4 live-check workers total) and 5 (singleton jobs deduplicate via §10 locks) and 6 (the sweep's claim query is also SKIP LOCKED-safe; see 06-ingest.md).
 

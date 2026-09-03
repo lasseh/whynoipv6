@@ -101,11 +101,12 @@ type Resolver struct {
 
 	providers []*providerState // fixed order
 
-	mu         sync.Mutex
-	dropped    string // name of the dropped provider, "" = none
-	canaryOK   int    // consecutive canary successes for the dropped provider
-	fastOpen   bool
-	fastWindow *window
+	mu           sync.Mutex
+	dropped      string // name of the dropped provider, "" = none
+	canaryOK     int    // consecutive canary successes for the dropped provider
+	fastOpen     bool
+	fastOpenedAt time.Time // when fastOpen last flipped true; logged as open_for on close
+	fastWindow   *window
 
 	// life is the maintenance goroutine's lifetime. Close cancels it, so
 	// maintain stops between ticks AND an in-flight webhook POST or canary

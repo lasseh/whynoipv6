@@ -3,6 +3,8 @@ package consensus
 import (
 	"context"
 	"fmt"
+	"math"
+	"strings"
 	"sync"
 	"time"
 )
@@ -59,6 +61,23 @@ func (w *window) reset() {
 	w.buckets = map[int64]*bucket{}
 }
 
+// round3 trims a rate to three decimals. The raw quotient ships as
+// 0.05263157894736842, which reads as noise next to a 0.05 threshold.
+func round3(f float64) float64 { return math.Round(f*1000) / 1000 }
+
+// providerNonAnswers renders each provider's non-answer count over its own
+// breaker window (§2.10). The fast-lane rate says the quorum is degraded;
+// this says whether one resolver is responsible or all three answered and
+// merely disagreed — the first thing an operator needs on a breaker page.
+func (r *Resolver) providerNonAnswers() string {
+	parts := make([]string, 0, len(r.providers))
+	for _, p := range r.providers {
+		total, bad := p.window.counts()
+		parts = append(parts, fmt.Sprintf("%s %d/%d", p.name, bad, total))
+	}
+	return strings.Join(parts, " ")
+}
+
 // recordFastLane records one consensus-lookup outcome and opens the
 // fast-lane breaker when the non-definitive rate crosses the threshold
 // (§2.9). Closing is evaluated by the maintenance ticker.
@@ -72,20 +91,30 @@ func (r *Resolver) recordFastLane(ctx context.Context, definitive bool) {
 		return
 	}
 	total, bad := r.fastWindow.counts()
-	if total >= r.cfg.FastLane.MinSamples && float64(bad)/float64(total) > r.cfg.FastLane.NondefinitiveRate {
+	rate := float64(bad) / float64(total)
+	if total >= r.cfg.FastLane.MinSamples && rate > r.cfg.FastLane.NondefinitiveRate {
 		// Re-check under the lock: many lookups cross the threshold in the
 		// same instant, and only the one that flips the breaker alerts.
 		r.mu.Lock()
 		flipped := !r.fastOpen
 		r.fastOpen = true
+		r.fastOpenedAt = time.Now()
 		r.mu.Unlock()
 		if !flipped {
 			return
 		}
-		msg := fmt.Sprintf("consensus fast-lane breaker OPEN: nondefinitive rate %.3f over %s (n=%d)",
-			float64(bad)/float64(total), r.cfg.FastLane.Window, total)
-		r.logger.Warn("fastlane breaker open", "rate", float64(bad)/float64(total), "n", total)
-		r.alert(ctx, msg)
+		providers := r.providerNonAnswers()
+		r.logger.Warn("fastlane breaker open: 2h/6h recheck pull-ins suspended, non-definitive scans fall back to cadence(rank)",
+			"nondefinitive", bad,
+			"samples", total,
+			"rate", round3(rate),
+			"threshold", r.cfg.FastLane.NondefinitiveRate,
+			"window", r.cfg.FastLane.Window.String(),
+			"provider_nonanswers", providers)
+		r.alert(ctx, fmt.Sprintf(
+			"consensus fast-lane breaker OPEN: %.3f non-definitive over %s (n=%d, threshold %.3f) "+
+				"— recheck pull-ins suspended; provider non-answers: %s",
+			rate, r.cfg.FastLane.Window, total, r.cfg.FastLane.NondefinitiveRate, providers))
 	}
 }
 
@@ -123,12 +152,35 @@ func (r *Resolver) evaluateBreakers() {
 	r.mu.Unlock()
 	if fastOpen {
 		total, bad := r.fastWindow.counts()
-		if total == 0 || float64(bad)/float64(total) < r.cfg.FastLane.RecoverBelow {
+		rate := 0.0
+		if total > 0 {
+			rate = float64(bad) / float64(total)
+		}
+		// Both arms log the same "closed", and they mean opposite things:
+		// the rate genuinely fell, or nothing was sampled at all. An idle
+		// window still counts as recovered (§2.9), but a bare "closed" left
+		// an operator unable to tell a recovery from a stalled crawler.
+		reason := "rate recovered"
+		if total == 0 {
+			reason = "no lookups in window"
+		}
+		if total == 0 || rate < r.cfg.FastLane.RecoverBelow {
 			r.mu.Lock()
+			openFor := time.Since(r.fastOpenedAt).Round(time.Second)
 			r.fastOpen = false
 			r.mu.Unlock()
-			r.logger.Info("fastlane breaker closed")
-			r.alert(ctx, "consensus fast-lane breaker closed")
+			r.logger.Info("fastlane breaker closed: recheck pull-ins resumed",
+				"reason", reason,
+				"nondefinitive", bad,
+				"samples", total,
+				"rate", round3(rate),
+				"recover_below", r.cfg.FastLane.RecoverBelow,
+				"window", r.cfg.FastLane.Window.String(),
+				"open_for", openFor.String())
+			r.alert(ctx, fmt.Sprintf(
+				"consensus fast-lane breaker closed after %s (%s: %.3f non-definitive over %s, n=%d) "+
+					"— recheck pull-ins resumed",
+				openFor, reason, rate, r.cfg.FastLane.Window, total))
 		}
 	}
 
