@@ -226,6 +226,18 @@ func Sync(ctx context.Context, cfg Config, pool *pgxpool.Pool) (*Report, error) 
 	// enough to find it, and from source_file otherwise.
 	for _, p := range rejectedPaths {
 		id := rawFileUUID(p)
+		if id != "" {
+			if _, err := uuid.Parse(id); err != nil {
+				// rawFileUUID's regex is deliberately looser than
+				// ParseFile's — it has to read a uuid out of YAML that did
+				// not parse — so a malformed value reaches here, and a
+				// truncated uuid is often WHY the file was rejected. Treat
+				// it as absent so source_file still finds the campaign:
+				// this is the run the freeze exists for. mustUUID would
+				// panic, and nothing recovers around the tick.
+				id = ""
+			}
+		}
 		if id == "" {
 			base := filepath.Base(p)
 			if prior, err := q.CampaignUUIDBySourceFile(ctx, &base); err == nil {

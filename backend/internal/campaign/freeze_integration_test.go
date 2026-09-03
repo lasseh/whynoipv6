@@ -76,6 +76,41 @@ func TestCampaignRejectedFileFreezesDisable(t *testing.T) {
 	}
 }
 
+// TestCampaignMalformedUUIDFreezesDisable is the same rule with the uuid line
+// itself broken — a truncated uuid, which is the likeliest hand-edit error in
+// a campaign file and a reason ParseFile rejects one. rawFileUUID's regex is
+// deliberately looser than ParseFile's, so it reads the bad value straight
+// back out; parsing it as a uuid there panics the sync, and with it the
+// crawler, since nothing recovers around the tick. The freeze has to fall
+// through to source_file instead.
+func TestCampaignMalformedUUIDFreezesDisable(t *testing.T) {
+	pool := pgtest.NewDB(t)
+	ctx := context.Background()
+	dir := t.TempDir()
+
+	writeFixture(t, dir, "a.yml", campA)
+	writeFixture(t, dir, "keeper.yml", campKeeper)
+	run(t, pool, dir)
+
+	writeFixture(t, dir, "a.yml", "uuid: 8f14e45f-ceea-467a-9dfb\n"+campA)
+	rep := run(t, pool, dir)
+
+	if _, ok := rep.RejectedFiles["a.yml"]; !ok {
+		t.Fatalf("rejected files = %v, want the truncated uuid", rep.RejectedFiles)
+	}
+	if !slices.Contains(rep.DisableFrozen, "Campaign A") {
+		t.Errorf("DisableFrozen = %v, want Campaign A", rep.DisableFrozen)
+	}
+	var disabled bool
+	if err := pool.QueryRow(ctx,
+		"SELECT disabled FROM campaign WHERE source_file='a.yml'").Scan(&disabled); err != nil {
+		t.Fatal(err)
+	}
+	if disabled {
+		t.Error("the campaign was disabled over a file whose uuid line is malformed")
+	}
+}
+
 // TestCampaignAllHostsRejectedFreezesRemoval is the second rule: a file that
 // listed hosts and produced none is a bad edit, not an emptied campaign.
 // Removing every member over it would unlist the whole campaign.
