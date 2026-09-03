@@ -94,7 +94,13 @@ func (c *SMTPIPv6) Check(ctx context.Context, domain string, kind Kind) (Result,
 		//
 		// Refused is different and stays definitive above: the host answered,
 		// and what it said was no.
-		if isTimeout(lastErr) {
+		//
+		// An unreachable network is the same deferral for a stronger
+		// reason: ENETUNREACH/EHOSTUNREACH is our own kernel declining to
+		// route the dial, so the MX never saw it. A host that loses its
+		// IPv6 route would otherwise mark every MX in the frontier
+		// unsupported at full speed instead of timing out slowly.
+		if isTimeout(lastErr) || isUnreachable(lastErr) {
 			return Result{Status: StatusError, Detail: d, Latency: time.Since(start)}, nil
 		}
 	}

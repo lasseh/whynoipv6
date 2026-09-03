@@ -8,7 +8,9 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -404,4 +406,42 @@ func TestSMTPIPv6(t *testing.T) {
 				res.Status, res.Detail.common().Error)
 		}
 	})
+
+	// The subtest above dials the discard prefix and relies on it being
+	// blackholed, which is true from a host with a default IPv6 route and
+	// false from one without: there the kernel answers ENETUNREACH before
+	// the packet leaves, which is how it fails on a CI runner. That errno is
+	// the same non-evidence as the timeout — our own routing, not the MX's
+	// answer — so it rules the same way, and injecting it through the
+	// dialer's control hook pins the branch without needing a broken host.
+	t.Run("an unreachable MX is error, not unsupported", func(t *testing.T) {
+		z := newZone(t,
+			"mailer.test. 3600 IN MX 10 mx.mailer.test.",
+			"mx.mailer.test. 3600 IN AAAA 100::1")
+		d := loopbackDialer(t, z)
+		d.dialer = &net.Dialer{ControlContext: unreachableOn("tcp6")}
+		c := &SMTPIPv6{dialer: d, port: "25"}
+
+		res, err := c.Check(context.Background(), "mailer.test", KindApex)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if res.Status != StatusError {
+			t.Fatalf("an unreachable MX gave %s, want error: %v",
+				res.Status, res.Detail.common().Error)
+		}
+	})
+}
+
+// unreachableOn builds a net.Dialer control hook that fails every dial on
+// the named network with ENETUNREACH, wrapped the way the kernel's own
+// failure arrives: *net.OpError → *os.SyscallError → syscall.Errno. A host
+// with working IPv6 cannot produce the errno any other way.
+func unreachableOn(network string) func(context.Context, string, string, syscall.RawConn) error {
+	return func(_ context.Context, n, _ string, _ syscall.RawConn) error {
+		if n == network {
+			return os.NewSyscallError("connect", syscall.ENETUNREACH)
+		}
+		return nil
+	}
 }

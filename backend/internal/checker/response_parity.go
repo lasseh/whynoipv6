@@ -139,6 +139,13 @@ func (c *ResponseParity) Check(ctx context.Context, domain string, kind Kind) (R
 			d.Error = fmt.Sprintf("IPv6 request timed out: %v", err)
 			return Result{Status: StatusError, Detail: d, Latency: time.Since(start)}, nil
 		}
+		if isUnreachable(err) {
+			// Our kernel declined to route the dial, so no address was ever
+			// tried and the site said nothing. Same deferral as the timeout
+			// above; the fallthrough below reads it as the site's answer.
+			d.Error = fmt.Sprintf("IPv6 request unreachable: %v", err)
+			return Result{Status: StatusError, Detail: d, Latency: time.Since(start)}, nil
+		}
 		// Every address we were allowed to try failed for a reason the site
 		// gave us — refused, reset, bad certificate: IPv6 HTTPS doesn't work
 		// here — unsupported, not an internal error.

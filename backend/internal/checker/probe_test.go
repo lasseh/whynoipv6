@@ -548,6 +548,31 @@ func TestResponseParityDefersOnATimeout(t *testing.T) {
 		}
 	})
 
+	// Same branch from the other direction: on a host with no route to the
+	// discard prefix the dial fails with ENETUNREACH instead of hanging, and
+	// the fallthrough below reads our own routing as the site's answer. The
+	// control hook injects the errno so the assertion does not depend on the
+	// runner having global IPv6.
+	t.Run("an unreachable IPv6 fetch defers", func(t *testing.T) {
+		port, roots := dualStackTLSServer(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			_, _ = w.Write([]byte(body))
+		}))
+		z := newZone(t,
+			"example.com. 3600 IN AAAA 100::1",
+			"example.com. 3600 IN A 127.0.0.1")
+		d := loopbackDialer(t, z)
+		d.dialer = &net.Dialer{ControlContext: unreachableOn("tcp6")}
+		c := &ResponseParity{dialer: d, port: port, rootCAs: roots}
+
+		res, err := c.Check(context.Background(), "example.com", KindApex)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if res.Status != StatusError {
+			t.Fatalf("an unreachable IPv6 fetch gave %s, want error: %+v", res.Status, res.Detail)
+		}
+	})
+
 	t.Run("a refused IPv6 fetch stays unsupported", func(t *testing.T) {
 		// IPv4-only listener, so ::1 on the same port is refused outright.
 		// The host answered, and what it said was no — that is evidence, and

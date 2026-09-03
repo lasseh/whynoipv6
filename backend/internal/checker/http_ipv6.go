@@ -66,3 +66,13 @@ func (c *HTTPIPv6) tryHTTP(ctx context.Context, domain string, ip net.IP) (Resul
 func isConnRefused(err error) bool {
 	return errors.Is(err, syscall.ECONNREFUSED)
 }
+
+// isUnreachable reports the kernel refusing to route the dial at all:
+// ENETUNREACH (no route for the family or prefix) or EHOSTUNREACH (an ICMP
+// destination-unreachable came back). Like a timeout and unlike a refusal,
+// it is a statement about our vantage, not the far end's — the far end was
+// never reached to make one. smtp_ipv6 and the parity check's v6 branch
+// defer on it; the parity v4 branch does not (01-engine.md §11.10 erratum).
+func isUnreachable(err error) bool {
+	return errors.Is(err, syscall.ENETUNREACH) || errors.Is(err, syscall.EHOSTUNREACH)
+}

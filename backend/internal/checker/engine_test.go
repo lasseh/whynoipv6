@@ -177,7 +177,22 @@ func TestHTTPErrorTypes(t *testing.T) {
 	if !isTLSError(mismatch) {
 		t.Error("http.ErrSchemeMismatch not classified certificate_error")
 	}
-	if isConnRefused(errors.New("other")) || isTimeout(errors.New("other")) || isTLSError(errors.New("other")) {
+	// ENETUNREACH/EHOSTUNREACH cannot be produced on a host that has a
+	// default IPv6 route, so the chain is built rather than dialled. Both
+	// must defer, and a refusal must not: refused is the far end answering.
+	netUnreach := &net.OpError{Op: "dial", Net: "tcp6", Err: os.NewSyscallError("connect", syscall.ENETUNREACH)}
+	if !isUnreachable(netUnreach) {
+		t.Error("ENETUNREACH not classified unreachable")
+	}
+	hostUnreach := &net.OpError{Op: "dial", Net: "tcp6", Err: os.NewSyscallError("connect", syscall.EHOSTUNREACH)}
+	if !isUnreachable(hostUnreach) {
+		t.Error("EHOSTUNREACH not classified unreachable")
+	}
+	if isUnreachable(refused) {
+		t.Error("ECONNREFUSED classified unreachable: a refusal is the far end's answer, not our routing")
+	}
+	if isConnRefused(errors.New("other")) || isTimeout(errors.New("other")) ||
+		isTLSError(errors.New("other")) || isUnreachable(errors.New("other")) {
 		t.Error("generic error must classify as unknown")
 	}
 }
