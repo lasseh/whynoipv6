@@ -25,14 +25,13 @@
 
 ## What is WhyNoIPv6.com?
 
-WhyNoIPv6.com is a public, account-free measurement service that asks a simple question
-about the internet's most popular domains: *"Does this site work over IPv6, and if not,
-why not?"*
+WhyNoIPv6.com checks whether popular domains work over IPv6 and explains what is
+missing when they do not. The results are public and require no account.
 
-The crawler checks domains from Tranco's top-million ranking and community-maintained
-campaigns. It measures IPv6 support across websites, authoritative DNS, and mail
-infrastructure. The results are published as domain tier lists and adoption views by
-country, network, provider, and campaign.
+The crawler checks domains from Tranco's top-million ranking and
+community-maintained campaigns. It tests websites, authoritative DNS, and mail
+infrastructure. The site publishes domain tier lists and tracks adoption by country,
+network, provider, and campaign.
 
 <div align="center">
   <img alt="The github.com report: apex and www missing IPv6, nameservers and mail supported, with a 90-day timeline" src=".github/images/github-status.png">
@@ -40,47 +39,49 @@ country, network, provider, and campaign.
 
 ## Why is IPv6 important?
 
-The unallocated IPv4 address pools are exhausted. Keeping the IPv4 internet growing now
-depends on address sharing, address transfers, and increasingly complicated workarounds.
-IPv6 provides the address space needed for continued growth without those constraints.
+The free pools of IPv4 addresses are exhausted. New services now depend on address
+sharing, address transfers, or other workarounds. IPv6 removes that address shortage.
 
-IPv6 is not new or experimental. Its first Standards Track specification was published
-in 1998, and World IPv6 Launch took place in 2012. Major access networks, cloud providers,
-and content platforms have supported it for years. Popular websites that still lack IPv6
-are leaving the job unfinished. WhyNoIPv6 measures that gap and makes it public.
+IPv6 is neither new nor experimental. The first Standards Track specification was
+published in 1998, and World IPv6 Launch took place in 2012. Major access networks,
+cloud providers, and content platforms have supported IPv6 for years. Popular websites
+that still lack it have left the job unfinished. WhyNoIPv6 tracks that gap and names
+names.
 
 ## How does it work?
 
-Active domains are normally checked once every 24 hours:
+The crawler normally checks active domains every 24 hours.
 
-- **What is checked:** The crawler looks for IPv6 records on the root domain, `www`,
-  authoritative nameservers, and mail servers. It also tests whether the website answers
-  over IPv6. Additional diagnostics cover DNSSEC, SPF, PTR, SMTP, TLS, response parity,
-  and latency. For reachable sites, it discovers external resource hosts and checks their
-  IPv6 records; it does not download and test every page resource.
-- **Reliable results:** The root-domain and `www` checks normally query three public DNS
-  resolvers and require at least two matching answers. After the first result is
-  established, later changes must appear repeatedly before the public status changes.
-  An error or one unreliable DNS response does not rewrite an established status.
-- **Clear classifications:** Confirmed results place each domain in the **hero**,
-  **partial**, **sinner**, or **inactive** tier. Domains remain **unknown** until there is
-  enough evidence. Classification uses no numeric score or letter grade. A hero reaches
-  **saint** status when its external resource-host check finds no IPv4-only dependency.
+- **Coverage.** It checks the apex domain, `www`, authoritative nameservers, and mail
+  servers for IPv6 records. It also connects to the website over IPv6. Other checks cover
+  DNSSEC, SPF, PTR, SMTP, TLS, response parity, and latency. For reachable sites, the
+  crawler finds external resource hosts and checks their IPv6 records. It does not
+  download and test every resource on every page.
+- **DNS consensus.** Checks for the apex domain and `www` normally query three public DNS
+  resolvers. At least two must return the same answer. Once the crawler has established a
+  result, a new result must appear repeatedly before the public status changes. A failed
+  check or one disagreeing resolver cannot overwrite an established status.
+- **Tiers.** Confirmed results place each domain in the **hero**, **partial**, **sinner**,
+  or **inactive** tier. A domain remains **unknown** until the crawler has enough evidence
+  to classify it. There are no numeric scores or letter grades. A hero becomes a
+  **saint** when none of its detected external resource hosts are IPv4-only.
 
 ## What is Tranco?
 
-The [Tranco list](https://tranco-list.eu/) is a research-oriented ranking of popular
-domains. It combines several data sources and is designed to resist manipulation,
-addressing problems found in older rankings such as Alexa. WhyNoIPv6 uses Tranco's
-standard top-million list; it is a popularity ranking, not a direct traffic census.
+[Tranco](https://tranco-list.eu/) ranks popular domains for research. It combines several
+data sources and includes safeguards against the manipulation that affected older
+rankings such as Alexa. WhyNoIPv6 uses Tranco's standard top-million list. The ranking
+measures popularity, not exact traffic.
 
 ## Campaigns
 
-Campaigns track groups such as banks, government websites, or ISPs in a particular
-country. They let anyone follow and shame the domains they care about beyond the Tranco
-list. Campaign definitions are plain YAML files kept in the separate
+Campaigns track related domains, such as banks, government websites, or ISPs within a
+country. They bring domains outside the Tranco list into view and let communities shame
+the ones they care about.
+
+Campaign definitions are YAML files in the separate
 [whynoipv6-campaign](https://github.com/lasseh/whynoipv6-campaign) repository. Follow that
-repository's contribution instructions to submit one.
+repository's contribution guide to submit one.
 
 ## The stack
 
@@ -111,18 +112,20 @@ requirements.
 
 ## Contributors
 
-<a href="https://github.com/lasseh">
-  <img src="https://github.com/lasseh.png?size=50" alt="lasseh" width="50" height="50">
-</a>
-<a href="https://github.com/aulonm">
-  <img src="https://github.com/aulonm.png?size=50" alt="aulonm" width="50" height="50">
-</a>
-<a href="https://github.com/joms">
-  <img src="https://github.com/joms.png?size=50" alt="joms" width="50" height="50">
-</a>
-<a href="https://github.com/sklirg">
-  <img src="https://github.com/sklirg.png?size=50" alt="sklirg" width="50" height="50">
-</a>
-<a href="https://github.com/Foxboron">
-  <img src="https://github.com/Foxboron.png?size=50" alt="Foxboron" width="50" height="50">
-</a>
+<div align="center">
+  <a href="https://github.com/lasseh">
+    <img src="https://github.com/lasseh.png?size=50" alt="lasseh" width="50" height="50">
+  </a>
+  <a href="https://github.com/aulonm">
+    <img src="https://github.com/aulonm.png?size=50" alt="aulonm" width="50" height="50">
+  </a>
+  <a href="https://github.com/joms">
+    <img src="https://github.com/joms.png?size=50" alt="joms" width="50" height="50">
+  </a>
+  <a href="https://github.com/sklirg">
+    <img src="https://github.com/sklirg.png?size=50" alt="sklirg" width="50" height="50">
+  </a>
+  <a href="https://github.com/Foxboron">
+    <img src="https://github.com/Foxboron.png?size=50" alt="Foxboron" width="50" height="50">
+  </a>
+</div>

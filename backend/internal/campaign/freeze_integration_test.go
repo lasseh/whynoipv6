@@ -39,7 +39,7 @@ func TestCampaignRejectedFileFreezesDisable(t *testing.T) {
 	writeFixture(t, dir, "keeper.yml", campKeeper)
 	run(t, pool, dir)
 
-	raw, err := os.ReadFile(filepath.Join(dir, "a.yml"))
+	raw, err := os.ReadFile(filepath.Join(dir, CampaignsDir, "a.yml"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -166,7 +166,7 @@ func TestCampaignEmptyCheckoutAborts(t *testing.T) {
 	run(t, pool, dir)
 
 	for _, name := range []string{"a.yml", "keeper.yml"} {
-		if err := os.Remove(filepath.Join(dir, name)); err != nil {
+		if err := os.Remove(filepath.Join(dir, CampaignsDir, name)); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -204,8 +204,15 @@ func TestCampaignEmptyCheckoutAborts(t *testing.T) {
 // against a fresh database has no campaigns to disable.
 func TestCampaignEmptyCheckoutOnEmptyDB(t *testing.T) {
 	pool := pgtest.NewDB(t)
+	dir := t.TempDir()
+	// campaigns/ present but empty. A checkout missing the directory
+	// altogether aborts earlier, in ListYAMLFiles, which is a different
+	// case: this guard is about a directory that parsed nothing.
+	if err := os.MkdirAll(filepath.Join(dir, CampaignsDir), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := Sync(context.Background(), Config{
-		RepoPath: t.TempDir(), GitRemote: "origin",
+		RepoPath: dir, GitRemote: "origin",
 		MaxDomainsPerFile: 1000, MaxSubdomainsPerDomain: 20,
 	}, pool); err != nil {
 		t.Errorf("empty checkout against an empty DB: %v", err)

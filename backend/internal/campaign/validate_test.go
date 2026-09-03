@@ -79,8 +79,8 @@ func TestCampaignValidate(t *testing.T) {
 
 	setup := func() *gitRepo {
 		r := newGitRepo(t)
-		r.write("nordic-banks.yml", baseCampaign)
-		r.write("telcos.yml", otherCampaign)
+		r.write("campaigns/nordic-banks.yml", baseCampaign)
+		r.write("campaigns/telcos.yml", otherCampaign)
 		r.commitAll("seed")
 		r.run("checkout", "-b", "pr")
 		return r
@@ -88,7 +88,7 @@ func TestCampaignValidate(t *testing.T) {
 
 	t.Run("added_file_with_uuid_fails", func(t *testing.T) {
 		r := setup()
-		r.write("new.yml", "title: New\ndescription: d\nuuid: 99999999-8888-7777-6666-555555555555\ndomains:\n  - example.no\n")
+		r.write("campaigns/new.yml", "title: New\ndescription: d\nuuid: 99999999-8888-7777-6666-555555555555\ndomains:\n  - example.no\n")
 		r.commitAll("add with uuid")
 		res, err := Validate(ctx, r.dir, "main", 1000, 20)
 		if err != nil {
@@ -101,7 +101,7 @@ func TestCampaignValidate(t *testing.T) {
 
 	t.Run("modified_uuid_fails", func(t *testing.T) {
 		r := setup()
-		r.write("nordic-banks.yml", strings.Replace(baseCampaign,
+		r.write("campaigns/nordic-banks.yml", strings.Replace(baseCampaign,
 			"11111111-2222-3333-4444-555555555555", "99999999-8888-7777-6666-555555555555", 1))
 		r.commitAll("mutate uuid")
 		res, err := Validate(ctx, r.dir, "main", 1000, 20)
@@ -115,8 +115,8 @@ func TestCampaignValidate(t *testing.T) {
 
 	t.Run("rename_preserving_uuid_passes", func(t *testing.T) {
 		r := setup()
-		r.rm("nordic-banks.yml")
-		r.write("norse-banks.yml", baseCampaign)
+		r.rm("campaigns/nordic-banks.yml")
+		r.write("campaigns/norse-banks.yml", baseCampaign)
 		r.commitAll("rename")
 		res, err := Validate(ctx, r.dir, "main", 1000, 20)
 		if err != nil {
@@ -133,7 +133,7 @@ func TestCampaignValidate(t *testing.T) {
 
 	t.Run("within_file_duplicate_fails_with_lines", func(t *testing.T) {
 		r := setup()
-		r.write("dup.yml", "title: Dup\ndescription: d\ndomains:\n  - bank.se\n  - other.se\n  - BANK.se\n")
+		r.write("campaigns/dup.yml", "title: Dup\ndescription: d\ndomains:\n  - bank.se\n  - other.se\n  - BANK.se\n")
 		r.commitAll("dup")
 		res, err := Validate(ctx, r.dir, "main", 1000, 20)
 		if err != nil {
@@ -152,7 +152,7 @@ func TestCampaignValidate(t *testing.T) {
 		for i := 0; i < 1001; i++ {
 			fmt.Fprintf(&b, "  - host%d.no\n", i)
 		}
-		r.write("big.yml", b.String())
+		r.write("campaigns/big.yml", b.String())
 		r.commitAll("big")
 		res, err := Validate(ctx, r.dir, "main", 1000, 20)
 		if err != nil {
@@ -165,7 +165,7 @@ func TestCampaignValidate(t *testing.T) {
 
 	t.Run("bad_hostname_and_public_suffix_fail", func(t *testing.T) {
 		r := setup()
-		r.write("bad.yml", "title: Bad\ndescription: d\ndomains:\n  - ok.no\n  - not_a_host!\n  - co.uk\n")
+		r.write("campaigns/bad.yml", "title: Bad\ndescription: d\ndomains:\n  - ok.no\n  - not_a_host!\n  - co.uk\n")
 		r.commitAll("bad hosts")
 		res, err := Validate(ctx, r.dir, "main", 1000, 20)
 		if err != nil {
@@ -179,7 +179,7 @@ func TestCampaignValidate(t *testing.T) {
 
 	t.Run("cross_file_duplicate_never_blocks", func(t *testing.T) {
 		r := setup()
-		r.write("more.yml", "title: More\ndescription: d\ndomains:\n  - bank.no\n")
+		r.write("campaigns/more.yml", "title: More\ndescription: d\ndomains:\n  - bank.no\n")
 		r.commitAll("cross dup")
 		res, err := Validate(ctx, r.dir, "main", 1000, 20)
 		if err != nil {
@@ -195,7 +195,7 @@ func TestCampaignValidate(t *testing.T) {
 
 	t.Run("unknown_key_fails", func(t *testing.T) {
 		r := setup()
-		r.write("extra.yml", "title: X\ndescription: d\nowner: someone\ndomains:\n  - x.no\n")
+		r.write("campaigns/extra.yml", "title: X\ndescription: d\nowner: someone\ndomains:\n  - x.no\n")
 		r.commitAll("extra key")
 		res, err := Validate(ctx, r.dir, "main", 1000, 20)
 		if err != nil {
@@ -208,7 +208,10 @@ func TestCampaignValidate(t *testing.T) {
 
 	t.Run("local_mode_skips_uuid_rule", func(t *testing.T) {
 		dir := t.TempDir()
-		if err := os.WriteFile(filepath.Join(dir, "a.yml"),
+		if err := os.MkdirAll(filepath.Join(dir, CampaignsDir), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, CampaignsDir, "a.yml"),
 			[]byte("title: A\ndescription: d\nuuid: 11111111-2222-3333-4444-555555555555\ndomains:\n  - a.no\n"), 0o644); err != nil {
 			t.Fatal(err)
 		}

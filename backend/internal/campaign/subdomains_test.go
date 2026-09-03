@@ -212,7 +212,7 @@ func TestValidateSubdomains(t *testing.T) {
 	setup := func(t *testing.T) *gitRepo {
 		t.Helper()
 		r := newGitRepo(t)
-		r.write("nordic-banks.yml", baseCampaign)
+		r.write("campaigns/nordic-banks.yml", baseCampaign)
 		r.commitAll("seed")
 		r.run("checkout", "-b", "pr")
 		return r
@@ -306,8 +306,10 @@ func TestValidateSubdomains(t *testing.T) {
 
 	t.Run("local mode walks every list", func(t *testing.T) {
 		dir := t.TempDir()
-		if err := os.MkdirAll(filepath.Join(dir, SubdomainsDir), 0o755); err != nil {
-			t.Fatal(err)
+		for _, d := range []string{CampaignsDir, SubdomainsDir} {
+			if err := os.MkdirAll(filepath.Join(dir, d), 0o755); err != nil {
+				t.Fatal(err)
+			}
 		}
 		if err := os.WriteFile(filepath.Join(dir, SubdomainsDir, "bank.no.yml"),
 			[]byte("subdomains:\n  - api.bank.no\n"), 0o644); err != nil {

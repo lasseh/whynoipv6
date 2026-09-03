@@ -16,8 +16,17 @@ import (
 
 func TestMain(m *testing.M) { os.Exit(pgtest.Main(m)) }
 
+// writeFixture writes one campaign file into the checkout's campaigns/ dir.
 func writeFixture(t *testing.T, dir, name, content string) {
 	t.Helper()
+	writeFileIn(t, filepath.Join(dir, CampaignsDir), name, content)
+}
+
+func writeFileIn(t *testing.T, dir, name, content string) {
+	t.Helper()
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -32,11 +41,7 @@ func mustExecTest(t *testing.T, pool *pgxpool.Pool, sql string, args ...any) {
 
 func writeSubdomainFixture(t *testing.T, dir, name, content string) {
 	t.Helper()
-	sub := filepath.Join(dir, SubdomainsDir)
-	if err := os.MkdirAll(sub, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	writeFixture(t, sub, name, content)
+	writeFileIn(t, filepath.Join(dir, SubdomainsDir), name, content)
 }
 
 func run(t *testing.T, pool *pgxpool.Pool, dir string) *Report {
@@ -82,7 +87,7 @@ func TestCampaignSync(t *testing.T) {
 	if rep.WriteBack != "written (push disabled)" {
 		t.Errorf("write-back = %q", rep.WriteBack)
 	}
-	raw, _ := os.ReadFile(filepath.Join(dir, "a.yml"))
+	raw, _ := os.ReadFile(filepath.Join(dir, CampaignsDir, "a.yml"))
 	if !strings.Contains(string(raw), "uuid: ") {
 		t.Fatalf("uuid not written back:\n%s", raw)
 	}
@@ -120,7 +125,7 @@ func TestCampaignSync(t *testing.T) {
 	}
 
 	// --- rename: same uuid, new filename → source_file update, no churn.
-	if err := os.Rename(filepath.Join(dir, "a.yml"), filepath.Join(dir, "a-renamed.yml")); err != nil {
+	if err := os.Rename(filepath.Join(dir, CampaignsDir, "a.yml"), filepath.Join(dir, CampaignsDir, "a-renamed.yml")); err != nil {
 		t.Fatal(err)
 	}
 	rep = run(t, pool, dir)
@@ -143,7 +148,7 @@ func TestCampaignSync(t *testing.T) {
 	// distinction the guard draws — a file gone from a healthy repo still
 	// disables its campaign.
 	writeFixture(t, dir, "keeper.yml", campKeeper)
-	if err := os.Remove(filepath.Join(dir, "a-renamed.yml")); err != nil {
+	if err := os.Remove(filepath.Join(dir, CampaignsDir, "a-renamed.yml")); err != nil {
 		t.Fatal(err)
 	}
 	rep = run(t, pool, dir)
@@ -217,7 +222,7 @@ domains:
 	if _, ok := rep.RejectedFiles["b.yml"]; ok {
 		t.Errorf("original file must survive the duplicate-uuid guard")
 	}
-	if err := os.Remove(filepath.Join(dir, "b-copy.yml")); err != nil {
+	if err := os.Remove(filepath.Join(dir, CampaignsDir, "b-copy.yml")); err != nil {
 		t.Fatal(err)
 	}
 
@@ -457,20 +462,18 @@ func TestCampaignSyncRealRepo(t *testing.T) {
 	if repo == "" {
 		repo = filepath.Join(os.Getenv("HOME"), "code", "go", "src", "github.com", "lasseh", "whynoipv6-campaign")
 	}
-	if _, err := os.Stat(repo); err != nil {
+	campaigns := filepath.Join(repo, CampaignsDir)
+	entries, err := os.ReadDir(campaigns)
+	if err != nil {
 		t.Skipf("campaign repo checkout not available: %v", err)
 	}
 	// Copy to a temp dir so write-back cannot touch the real checkout.
 	dir := t.TempDir()
-	entries, err := os.ReadDir(repo)
-	if err != nil {
-		t.Fatal(err)
-	}
 	for _, e := range entries {
 		if e.IsDir() || (filepath.Ext(e.Name()) != ".yml" && filepath.Ext(e.Name()) != ".yaml") {
 			continue
 		}
-		raw, err := os.ReadFile(filepath.Join(repo, e.Name()))
+		raw, err := os.ReadFile(filepath.Join(campaigns, e.Name()))
 		if err != nil {
 			t.Fatal(err)
 		}
