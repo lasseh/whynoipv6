@@ -188,6 +188,61 @@ func TestChangelogWindowValidator(t *testing.T) {
 	}
 }
 
+// TestChangelogWindowValidatorAtTheCap is the same rule at a saturated
+// window. The row count catches a late commit only while the window is under
+// feed.recent_window; at the cap an insertion is also an eviction, so neither
+// max(ts) nor the count moves. The global feed sits at the cap permanently,
+// which is exactly where a stale 304 is most expensive — so the ETag reads
+// both ends of the window.
+func TestChangelogWindowValidatorAtTheCap(t *testing.T) {
+	srv, pool := newAPI(t)
+	seedEntities(t, pool)
+	ctx := context.Background()
+
+	// 60 rows on one Norwegian domain, one an hour: the window is the newest
+	// 50, from now()-1h back to now()-50h.
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO changelog (domain_id, ts, field, old_value, new_value)
+		 SELECT d.id, now() - (g * interval '1 hour'), 'ns', 'unsupported', 'supported'
+		 FROM (SELECT d.id FROM domain d JOIN country c ON c.id = d.country_id
+		       WHERE c.code = 'NO' LIMIT 1) d, generate_series(1, 60) g`); err != nil {
+		t.Fatal(err)
+	}
+
+	const path = "/countries/no/changelog"
+	resp, _ := fetch(t, srv.URL+path)
+	etag := resp.Header.Get("ETag")
+	if etag == "" {
+		t.Fatal("no ETag")
+	}
+
+	// Below the window: no row enters, so nothing about the response changes
+	// and the validator must hold.
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO changelog (domain_id, ts, field, old_value, new_value)
+		 SELECT d.id, now() - interval '100 hours', 'mx', 'unsupported', 'supported'
+		 FROM (SELECT d.id FROM domain d JOIN country c ON c.id = d.country_id
+		       WHERE c.code = 'NO' LIMIT 1) d`); err != nil {
+		t.Fatal(err)
+	}
+	if code := conditionalGet(t, srv.URL+path, etag); code != http.StatusNotModified {
+		t.Errorf("revalidated %d, want 304 — a row below the window changed nothing", code)
+	}
+
+	// Inside the window: max(ts) does not move and the count cannot, since
+	// the row that enters evicts the one at the far end.
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO changelog (domain_id, ts, field, old_value, new_value)
+		 SELECT d.id, now() - interval '25 hours 30 minutes', 'mx', 'unsupported', 'supported'
+		 FROM (SELECT d.id FROM domain d JOIN country c ON c.id = d.country_id
+		       WHERE c.code = 'NO' LIMIT 1) d`); err != nil {
+		t.Fatal(err)
+	}
+	if code := conditionalGet(t, srv.URL+path, etag); code != http.StatusOK {
+		t.Errorf("revalidated %d, want 200 — a full window gained a row and dropped one", code)
+	}
+}
+
 // TestFeedRecentWindowScope pins which feeds feed.recent_window sizes
 // (review issue 10, 09-ops §2 erratum). The global and per-domain feeds are
 // index-backed and follow the key; the country and campaign feeds hold the
