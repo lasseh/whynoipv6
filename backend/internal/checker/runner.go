@@ -214,6 +214,23 @@ func (r *Runner) runCheck(ctx context.Context, host string, kind Kind, c Checker
 	}()
 
 	if ctx.Err() != nil {
+		// This check never ran: the domain budget expired while it waited for
+		// one of the concurrencyLimit slots. That is the starvation review
+		// issue 68 asked about, and it was previously silent — the result
+		// carries "scan cancelled" but the scan_detail payload keeps only the
+		// status, so nothing downstream could name the check that lost.
+		//
+		// It should not fire. Worst case both phases run to their declared
+		// timeouts: phase 1 is 6 checks under a limit of 6 (30s, all
+		// parallel) and phase 2 is 9 under 6, whose worst-order makespan is
+		// 40s — 70s against a 90s domainTimeout. If this line appears in
+		// production, that arithmetic is wrong somewhere and the check name
+		// says where to look.
+		r.logger.Warn("check starved: domain budget expired before it ran",
+			"domain", host,
+			"check", c.Name(),
+			"err", ctx.Err().Error(),
+		)
 		results.Store(c.Name(), Result{
 			Status: StatusError,
 			Detail: &CommonDetail{Error: "scan cancelled"},

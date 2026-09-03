@@ -1,6 +1,7 @@
 package checker
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"errors"
@@ -12,6 +13,7 @@ import (
 	"os"
 	"slices"
 	"strings"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
@@ -346,5 +348,58 @@ func TestPreflightFreshness(t *testing.T) {
 	p.lastPass.Store(time.Now().Add(-PreflightFreshness - time.Second).UnixNano())
 	if fresh(p) {
 		t.Error("pass 5m01s ago should be stale")
+	}
+}
+
+// neverRanChecker records whether Check was reached.
+type neverRanChecker struct{ ran *bool }
+
+func (neverRanChecker) Name() string { return "never_ran" }
+func (c neverRanChecker) Check(context.Context, string, Kind) (Result, error) {
+	*c.ran = true
+	return Result{Status: StatusSupported}, nil
+}
+
+// TestStarvedCheckIsLogged is review issue 68, which asked which of the nine
+// phase-2 checks starves at the 90s domainTimeout under concurrencyLimit=6.
+//
+// The arithmetic says none can. Worst case every check runs to its own
+// declared timeout: phase 1 is 6 checks under a limit of 6 — 15/15/25/30/20/5s
+// all in parallel, so 30s — and phase 2 is 9 under 6, durations
+// 30/30/30/20/15/15/10/10/10. The worst ordering starts the three 30s checks
+// last, at t=10 when the first short slot frees, finishing at 40s. 30 + 40 =
+// 70s against a 90s budget.
+//
+// So this is a guard, not a fix. The runner already detected the condition
+// and said nothing: it stored "scan cancelled" and moved on, and the
+// scan_detail payload keeps only the status, so nothing downstream could name
+// the check that lost. If the arithmetic is ever wrong — a per-check timeout
+// raised, a tenth phase-2 check added — production now says which one.
+func TestStarvedCheckIsLogged(t *testing.T) {
+	var buf bytes.Buffer
+	r := &Runner{logger: slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelWarn}))}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // the domain budget expired while this check waited for a slot
+
+	ran := false
+	var results sync.Map
+	r.runCheck(ctx, "starved.example", KindApex, neverRanChecker{ran: &ran}, &results)
+
+	if ran {
+		t.Error("a check whose context is already done must not run")
+	}
+	got, ok := results.Load("never_ran")
+	if !ok {
+		t.Fatal("no result stored for the starved check")
+	}
+	res, ok := got.(Result)
+	if !ok || res.Status != StatusError {
+		t.Errorf("starved check = %+v, want error", got)
+	}
+
+	logged := buf.String()
+	if !strings.Contains(logged, "check starved") || !strings.Contains(logged, "never_ran") {
+		t.Errorf("starvation logged %q, want a warn naming the check", logged)
 	}
 }
