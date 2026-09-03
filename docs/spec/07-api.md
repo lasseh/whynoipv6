@@ -598,6 +598,16 @@ The companion **hosting/CDN provider** axis is `domain.hosting_provider` — a n
 }
 ```
 
+**Disabled campaigns (Decision 2026-09-03, review issue 57).** The three surfaces deliberately disagree, and the rule is:
+
+| surface | disabled campaign |
+|---|---|
+| `GET /campaigns` (and `?tag=`) | **hidden** — `WHERE NOT c.disabled` |
+| `GET /campaigns/{uuid}` and its sub-collections, feeds and changelog | **served**, with `disabled: true` |
+| `GET /campaigns/{uuid}/stats` | **404** (§4.10) |
+
+The detail serves it because this object carries `disabled` — a detail that 404'd on `disabled: true` could never emit the field — and because a campaign disabled by a file rename still owns changelog rows that link to it; making those links dead would lose history the API still serves. The list hides it because the list is the set of live campaigns. `/stats` 404s because there is no `stats_campaign_daily` row after a campaign stops being counted, so the alternative is a series that ends at the disable date with no marker in the payload. `campaignByPathUUID` therefore does **not** test `Disabled`; `getCampaignStats` does, and that asymmetry is intended rather than an oversight. `TestDisabledCampaignVisibility` pins all three.
+
 Members are ordinary domain rows joined via `campaign_domain`, **ordered by `host` and paged with the same keyset cursor** as every other collection (§3.2 — `host` is a unique key, so the seek is total even though members' `rank` is usually NULL). Campaign members are a genuinely-bounded set, so `meta.count` is **exact**. `adoption.v6_ready_percent` comes from `stats_campaign_daily` (`v6_ready` = base supported ∧ ns supported ∧ www ∈ {supported, not_applicable}), never per-entity scoring; `adoption.day` is the stats date. **Keyed by raw UUID** (OPEN-1), not shortuuid. `tags` backs the mandate surface (OPEN-12; the `campaign.tags` TEXT[] column, 05-schema.md — campaign table). Time series: `GET /campaigns/{uuid}/stats`.
 
 ### 4.8 Changelog event (the trust surface)

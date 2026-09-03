@@ -657,3 +657,62 @@ func TestCountryLeaderboardSurvivesANaN(t *testing.T) {
 		t.Errorf("/countries/se with a NaN row = %d, want 200", resp.StatusCode)
 	}
 }
+
+// TestDisabledCampaignVisibility pins review issue 57's decision: a disabled
+// campaign stays reachable at its detail and says so, disappears from the
+// list, and 404s on stats.
+//
+// The three are not an oversight, which is why the answer was to write the
+// rule down rather than make them agree. §4.7 serializes `disabled` on the
+// detail, so a detail that 404'd could never emit `true` — and a campaign
+// disabled because its file was renamed has to stay linkable from the
+// changelog rows it still owns. The list hides it because it is not a live
+// campaign. §4.10 404s because there is no stats row for a campaign that
+// stopped being counted, so the alternative is a series that ends at the
+// disable date with no marker.
+func TestDisabledCampaignVisibility(t *testing.T) {
+	srv, pool := newAPI(t)
+	seedEntities(t, pool)
+
+	const deadUUID = "33333333-3333-3333-3333-333333333333"
+	if _, err := pool.Exec(context.Background(),
+		`INSERT INTO campaign (uuid, name, description, source_file, tags, disabled)
+		 VALUES ($1, 'Retired Campaign', 'file was renamed', 'campaigns/retired.yaml', '{}', true)`,
+		deadUUID); err != nil {
+		t.Fatalf("seed disabled campaign: %v", err)
+	}
+
+	// The detail serves it, and reports the state rather than hiding it.
+	var detail struct {
+		UUID     string `json:"uuid"`
+		Name     string `json:"name"`
+		Disabled bool   `json:"disabled"`
+	}
+	if resp := getJSON(t, srv.URL+"/campaigns/"+deadUUID, &detail); resp.StatusCode != 200 {
+		t.Fatalf("disabled campaign detail = %d, want 200", resp.StatusCode)
+	}
+	if !detail.Disabled || detail.UUID != deadUUID {
+		t.Errorf("detail = %+v, want disabled:true", detail)
+	}
+
+	// The list does not.
+	var list struct {
+		Items []struct {
+			UUID string `json:"uuid"`
+		} `json:"items"`
+	}
+	getJSON(t, srv.URL+"/campaigns", &list)
+	for _, it := range list.Items {
+		if it.UUID == deadUUID {
+			t.Error("a disabled campaign appeared in the list")
+		}
+	}
+
+	// Stats 404 (07 §4.10).
+	var problem struct {
+		Type string `json:"type"`
+	}
+	if resp := getJSON(t, srv.URL+"/campaigns/"+deadUUID+"/stats", &problem); resp.StatusCode != 404 {
+		t.Errorf("disabled campaign stats = %d, want 404", resp.StatusCode)
+	}
+}
