@@ -617,14 +617,20 @@ func rebaseInProgress(repo string) bool {
 // rollbackToRemote returns the checkout to its tracked remote branch after a
 // failed write-back push. Empty result = the tree is clean and level with
 // the remote; anything else is a reason the operator has to repair by hand.
+//
+// `--keep`, never `--hard`: /srv/whynoipv6-campaign is a checkout a person
+// can be editing, and --hard would discard whatever they had in flight to
+// clean up after a push we could not land. --keep refuses instead, and the
+// refusal is reported — the sync has already done its database work, so
+// leaving one repair for a human beats silently deleting their work.
 func rollbackToRemote(ctx context.Context, repo string) string {
 	if rebaseInProgress(repo) {
 		if out, err := git(ctx, repo, "rebase", "--abort"); err != nil {
 			return "rebase --abort: " + strings.TrimSpace(out)
 		}
 	}
-	if out, err := git(ctx, repo, "reset", "--hard", "@{u}"); err != nil {
-		return "reset --hard @{u}: " + strings.TrimSpace(out)
+	if out, err := git(ctx, repo, "reset", "--keep", "@{u}"); err != nil {
+		return "reset --keep @{u}: " + strings.TrimSpace(out)
 	}
 	return ""
 }

@@ -170,3 +170,53 @@ func TestWriteBackRollsBackOnPushFailure(t *testing.T) {
 		t.Error("a rebase was left in progress")
 	}
 }
+
+// TestRollbackKeepsUncommittedWork: campaign.repo_path is a checkout a
+// person can be editing. `reset --hard` would take whatever they had in
+// flight along with the stranded write-back commit it was cleaning up, and
+// the sync's database work is already done by then — one repair left for a
+// human beats silently deleting their file.
+func TestRollbackKeepsUncommittedWork(t *testing.T) {
+	work, _ := gitRepoPair(t)
+	git := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", args...)
+		cmd.Dir = work
+		cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0", "GIT_CONFIG_GLOBAL=/dev/null")
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %s: %v\n%s", strings.Join(args, " "), err, out)
+		}
+	}
+
+	// A file the operator owns, level with the remote.
+	notes := filepath.Join(work, "notes.md")
+	if err := os.WriteFile(notes, []byte("published\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	git("add", "notes.md")
+	git("commit", "-m", "notes")
+	git("push", "origin", "main")
+
+	// The stranded write-back commit the rollback exists to undo.
+	if err := os.WriteFile(filepath.Join(work, "c.yml"),
+		[]byte("title: A\ndescription: x\nuuid: 3b3b3b3b-4444-4444-4444-444444444444\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	git("commit", "-am", "chore: assign campaign uuids [skip ci]")
+
+	// …and an edit in flight on a file that commit did not touch.
+	if err := os.WriteFile(notes, []byte("draft in progress\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if msg := rollbackToRemote(context.Background(), work); msg != "" {
+		t.Fatalf("rollback = %q, want it to succeed", msg)
+	}
+	got, err := os.ReadFile(notes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "draft in progress\n" {
+		t.Errorf("notes.md = %q; the rollback discarded work it was not cleaning up", got)
+	}
+}
