@@ -174,6 +174,13 @@ func (e *pslEvalError) Unwrap() error { return e.err }
 // created_by='live_check', rank NULL, parent linked only when the
 // registrable parent row ALREADY exists — never auto-ensured.
 func (lc *LiveChecker) ensureDomain(ctx context.Context, host string) (domain.Kind, error) {
+	if lc.Countries == nil {
+		// A wiring bug rather than a runtime condition, but this runs in a
+		// consumer goroutine nothing recovers around, so the alternative is
+		// a nil deref at the insert below taking the crawler down with it.
+		// GeoEnricher makes the same check before attributing (worker.go).
+		return "", errors.New("live check: country map not configured")
+	}
 	registrable, tld, err := domain.PSLParse(host)
 	if err != nil {
 		return "", &pslEvalError{err: err}

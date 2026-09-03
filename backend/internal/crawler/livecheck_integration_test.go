@@ -109,4 +109,12 @@ func TestLiveCheckEnsureDomain(t *testing.T) {
 	if kind, err := lc.ensureDomain(ctx, "nyapex.no"); err != nil || kind != "apex" {
 		t.Errorf("re-ensure: kind=%s err=%v", kind, err)
 	}
+
+	// An unwired country map fails the job rather than the process: the
+	// insert dereferences it, and nothing recovers around the consumer
+	// goroutine that calls this.
+	unwired := &LiveChecker{Pool: pool, Q: q}
+	if _, err := unwired.ensureDomain(ctx, "another.no"); err == nil {
+		t.Error("a nil country map was accepted")
+	}
 }
