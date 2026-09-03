@@ -514,3 +514,67 @@ func TestResponseParityWalksTheAddressRotation(t *testing.T) {
 		}
 	})
 }
+
+// TestResponseParityDefersOnATimeout applies issue 63's lesson to the verdict
+// rather than the walk. A timeout is our clock running out, not the site's
+// answer, and every other check here already says so — dial.go's isTimeout
+// branch, tls_ipv6, smtp_ipv6. fetchAny made it matter more: up to
+// maxAddressAttempts dials per family at the dialer's 10s against this
+// check's 20s, so one dead IPv4 address plus one slow IPv6 address is exactly
+// the budget and the second half of the check never gets to run.
+func TestResponseParityDefersOnATimeout(t *testing.T) {
+	body := strings.Repeat("x", 64)
+
+	t.Run("a timed-out IPv6 fetch defers", func(t *testing.T) {
+		port, roots := dualStackTLSServer(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			_, _ = w.Write([]byte(body))
+		}))
+		// The RFC 6666 discard prefix again, and the only AAAA this time, so
+		// the walk has nothing left to try and the check has to rule on a
+		// timeout.
+		z := newZone(t,
+			"example.com. 3600 IN AAAA 100::1",
+			"example.com. 3600 IN A 127.0.0.1")
+		d := loopbackDialer(t, z)
+		d.dialer = &net.Dialer{Timeout: 200 * time.Millisecond}
+		c := &ResponseParity{dialer: d, port: port, rootCAs: roots}
+
+		res, err := c.Check(context.Background(), "example.com", KindApex)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if res.Status != StatusError {
+			t.Fatalf("a timed-out IPv6 fetch gave %s, want error: %+v", res.Status, res.Detail)
+		}
+	})
+
+	t.Run("a refused IPv6 fetch stays unsupported", func(t *testing.T) {
+		// IPv4-only listener, so ::1 on the same port is refused outright.
+		// The host answered, and what it said was no — that is evidence, and
+		// the deferral above must not swallow it.
+		ln, err := net.Listen("tcp4", "127.0.0.1:0")
+		if err != nil {
+			t.Skipf("IPv4 loopback unavailable: %v", err)
+		}
+		srv := &httptest.Server{Listener: ln, Config: &http.Server{Handler: http.HandlerFunc(
+			func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte(body)) },
+		)}}
+		srv.StartTLS()
+		t.Cleanup(srv.Close)
+		roots := x509.NewCertPool()
+		roots.AddCert(srv.Certificate())
+
+		z := newZone(t,
+			"example.com. 3600 IN AAAA ::1",
+			"example.com. 3600 IN A 127.0.0.1")
+		c := &ResponseParity{dialer: loopbackDialer(t, z), port: lnPort(t, ln), rootCAs: roots}
+
+		res, err := c.Check(context.Background(), "example.com", KindApex)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if res.Status != StatusUnsupported {
+			t.Fatalf("a refused IPv6 fetch gave %s, want unsupported: %+v", res.Status, res.Detail)
+		}
+	})
+}

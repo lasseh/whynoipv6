@@ -20,10 +20,14 @@ const (
 	// maxAddressAttempts bounds the per-family address walk (review issue
 	// 63). The check used to try v6IPs[0] and stop, so a site announcing
 	// four AAAAs with a decommissioned first edge earned a definitive
-	// `unsupported` on the dimension that feeds broken_v6 and ipv6_only —
-	// while every browser reached it on the second address. Three is enough
-	// for the realistic "one address in the rotation is dead" case without
-	// letting a large rotation eat the 20s budget.
+	// `unsupported` on parity — while every browser reached it on the
+	// second address. Three is enough for the realistic "one address in the
+	// rotation is dead" case without letting a large rotation eat the 20s
+	// budget.
+	//
+	// parity is informational (02 §7.4): it does NOT feed conn, and so not
+	// broken_v6 or ipv6_only either — those come from https_ipv6 through
+	// composeConn. An earlier draft of this comment said otherwise.
 	maxAddressAttempts = 3
 )
 
@@ -103,6 +107,13 @@ func (c *ResponseParity) Check(ctx context.Context, domain string, kind Kind) (R
 			d.Error = "IPv4 address in blocked range"
 			return Result{Status: StatusError, Detail: d, Latency: time.Since(start)}, nil
 		}
+		if isTimeout(err) {
+			// Our clock ran out, which is not the same as "this site has no
+			// IPv4 baseline" — and not_applicable is a value, not an
+			// absence. Defer, the same way the v6 branch below does.
+			d.Error = fmt.Sprintf("IPv4 request timed out: %v", err)
+			return Result{Status: StatusError, Detail: d, Latency: time.Since(start)}, nil
+		}
 		// Can't establish a baseline — nothing to compare against.
 		d.Error = fmt.Sprintf("IPv4 request failed: %v", err)
 		return Result{Status: StatusNotApplicable, Detail: d, Latency: time.Since(start)}, nil
@@ -115,8 +126,22 @@ func (c *ResponseParity) Check(ctx context.Context, domain string, kind Kind) (R
 			d.Error = "IPv6 address in blocked range"
 			return Result{Status: StatusError, Detail: d, Latency: time.Since(start)}, nil
 		}
-		// Every address we were allowed to try failed: IPv6 HTTPS doesn't
-		// work here — unsupported, not an internal error.
+		if isTimeout(err) {
+			// A timeout is not evidence, and the address walk makes running
+			// out of budget easy: up to maxAddressAttempts dials per family
+			// at the dialer's 10s against this check's 20s, so a slow IPv4
+			// baseline can leave the first IPv6 dial no time at all. One
+			// dead v4 address plus one slow v6 address is exactly 20s, and
+			// the site would be recorded as serving a broken IPv6 response
+			// over a clock we set. Every other check in this package
+			// already defers here — dial.go's isTimeout branch, tls_ipv6,
+			// smtp_ipv6.
+			d.Error = fmt.Sprintf("IPv6 request timed out: %v", err)
+			return Result{Status: StatusError, Detail: d, Latency: time.Since(start)}, nil
+		}
+		// Every address we were allowed to try failed for a reason the site
+		// gave us — refused, reset, bad certificate: IPv6 HTTPS doesn't work
+		// here — unsupported, not an internal error.
 		d.Error = fmt.Sprintf("IPv6 request failed: %v", err)
 		return Result{Status: StatusUnsupported, Detail: d, Latency: time.Since(start)}, nil
 	}
