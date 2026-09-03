@@ -533,6 +533,18 @@ RETURNING id, host, aaaa_status, aaaa_pending, aaaa_pending_count;
 
 **Decision (constants, not config):** `$1` = 100 (`sweepBatchSize`), empty-claim sleep = 60s (`sweepEmptyPoll`); both are Go constants in `internal/crawler/resourcesweep.go` — the volume is too small to warrant config keys. Hosts in a batch are processed sequentially by the one goroutine (2–4 qps needs no fan-out).
 
+_Erratum 2026-09-03 (review issue 56): the flat `interval '2 hours'` in the SQL above is now a three-way `CASE`. A non-definitive sweep writes nothing (§5.4), so the claim's bump was the entire schedule for a host that never answers — 12 lookups a day against 1 for a healthy host, forever. That is affordable for a SERVFAIL, which returns in milliseconds, and not for a host that goes silent: the sweeper is a single sequential goroutine and each silent host costs it the full 3s `sweepLookupBudget`, so ~2,400 of them saturate it and the sweep stops keeping up._
+
+```sql
+SET next_check_at = now() + CASE
+      WHEN last_checked_at IS NULL THEN interval '6 hours'
+      WHEN last_checked_at < now() - interval '3 days' THEN interval '24 hours'
+      ELSE interval '2 hours'
+    END
+```
+
+_The **lease** semantics are unchanged — the bump is still the crash lease, just a longer one for hosts that have not been answering, which is exactly the population whose re-scan is least urgent. No new column: `ResourceSweepCommit` is the sole writer of `last_checked_at` and runs only on a definitive outcome, so the column already means "when we last learned anything" — NULL for never-resolved, stale for resolved-once-and-stuck. A stuck host settles at what a healthy host costs, and a recovering one returns to the 2h retry by itself the moment the commit stamps the column. NULL takes 6h rather than 24h so a host discovery found minutes ago whose first lookup failed does not wait a day for its second. `TestResourceSweepClaimBacksOff` pins all three branches and the recovery._
+
 ### 5.3 Sweep worker — AAAA lookup and mapping
 
 Per host, ONE AAAA lookup via the **bulk resolver** (the two local Unbound instances; resolver seam owned by 02-observation-model.md — no consensus quorum on this path), mapped to a sweep outcome:
@@ -554,7 +566,8 @@ Commit per host, mirroring the domain commit machine with N=2 (all writes are si
 
 ```
 if outcome is non-definitive:
-    # touch nothing else; the claim already set next_check_at = now()+2h — leave it
+    # touch nothing else; the claim already set next_check_at — leave it
+    # (2h, or the §5.2 erratum's backoff for a host that has not been answering)
     return
 
 if aaaa_status IS NULL:                     # first-ever definitive value commits immediately

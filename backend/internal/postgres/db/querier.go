@@ -270,6 +270,20 @@ type Querier interface {
 	// insert (bump dependent_count) from a conflict update (don't).
 	ResourceManualUpsert(ctx context.Context, arg ResourceManualUpsertParams) error
 	// The sweep claim (06 §5.2): the schedule bump IS the crash lease.
+	//
+	// The bump backs off for hosts that never answer (review issue 56). A
+	// non-definitive sweep writes nothing, so a host that cannot be resolved
+	// kept the flat 2h bump forever — 12 lookups a day against 1 for a healthy
+	// host, and each silent (as opposed to SERVFAIL) one costs the sweeper's
+	// single sequential goroutine the full sweepLookupBudget of 3s.
+	//
+	// last_checked_at is the counter, and it needs no new column:
+	// ResourceSweepCommit is its ONLY writer and runs only on a definitive
+	// outcome, so the column already means "when we last learned anything".
+	// NULL = never resolved since it entered the registry; stale = resolved
+	// once and stuck since. A stuck host settles at what a healthy host costs,
+	// which is the right ceiling, and returns to the 2h retry by itself the
+	// moment it answers.
 	ResourceSweepClaim(ctx context.Context, batch int32) ([]ResourceSweepClaimRow, error)
 	// The sweep host commit (06 §5.4): one single-row write per definitive
 	// outcome.

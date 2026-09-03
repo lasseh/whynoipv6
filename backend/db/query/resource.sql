@@ -29,9 +29,27 @@ FROM resource_host
 WHERE host = ANY(@hosts::text[]) AND aaaa_status IS NOT NULL;
 
 -- The sweep claim (06 §5.2): the schedule bump IS the crash lease.
+--
+-- The bump backs off for hosts that never answer (review issue 56). A
+-- non-definitive sweep writes nothing, so a host that cannot be resolved
+-- kept the flat 2h bump forever — 12 lookups a day against 1 for a healthy
+-- host, and each silent (as opposed to SERVFAIL) one costs the sweeper's
+-- single sequential goroutine the full sweepLookupBudget of 3s.
+--
+-- last_checked_at is the counter, and it needs no new column:
+-- ResourceSweepCommit is its ONLY writer and runs only on a definitive
+-- outcome, so the column already means "when we last learned anything".
+-- NULL = never resolved since it entered the registry; stale = resolved
+-- once and stuck since. A stuck host settles at what a healthy host costs,
+-- which is the right ceiling, and returns to the 2h retry by itself the
+-- moment it answers.
 -- name: ResourceSweepClaim :many
 UPDATE resource_host
-SET next_check_at = now() + interval '2 hours'
+SET next_check_at = now() + CASE
+      WHEN last_checked_at IS NULL THEN interval '6 hours'
+      WHEN last_checked_at < now() - interval '3 days' THEN interval '24 hours'
+      ELSE interval '2 hours'
+    END
 WHERE id IN (
   SELECT id FROM resource_host
   WHERE next_check_at <= now()

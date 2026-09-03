@@ -14,7 +14,9 @@ import (
 	"github.com/miekg/dns"
 
 	"github.com/lasseh/whynoipv6/internal/checker"
+	"github.com/lasseh/whynoipv6/internal/domain"
 	"github.com/lasseh/whynoipv6/internal/postgres"
+	db "github.com/lasseh/whynoipv6/internal/postgres/db"
 	"github.com/lasseh/whynoipv6/internal/postgres/pgtest"
 )
 
@@ -431,5 +433,94 @@ func TestResourceCLI(t *testing.T) {
 	}
 	if stored, _ := countDeps(t, pool, "manual.example.net"); stored != 0 {
 		t.Errorf("double remove must not decrement below 0: stored=%d", stored)
+	}
+}
+
+// TestResourceSweepClaimBacksOff is review issue 56. A non-definitive sweep
+// writes nothing, so the claim's flat 2h bump was the whole schedule for a
+// host that never answers: 12 lookups a day against 1 for a healthy host,
+// each silent one costing the sweeper's single sequential goroutine the full
+// 3s sweepLookupBudget.
+//
+// The backoff needs no new column. ResourceSweepCommit is the only writer of
+// last_checked_at and runs only on a definitive outcome, so the column
+// already means "when we last learned anything": NULL is never-resolved,
+// stale is resolved-once-and-stuck.
+func TestResourceSweepClaimBacksOff(t *testing.T) {
+	pool := pgtest.NewDB(t)
+	ctx := context.Background()
+
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO resource_host (host, dependent_count, next_check_at, last_checked_at)
+		VALUES ('never.example.net', 1, now() - interval '1 minute', NULL),
+		       ('stale.example.net', 1, now() - interval '1 minute', now() - interval '10 days'),
+		       ('fresh.example.net', 1, now() - interval '1 minute', now() - interval '1 hour')`); err != nil {
+		t.Fatal(err)
+	}
+
+	s := &ResourceSweeper{Pool: pool}
+	batch, err := s.claim(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(batch) != 3 {
+		t.Fatalf("claimed %d hosts, want 3", len(batch))
+	}
+
+	for host, want := range map[string]time.Duration{
+		// Never resolved: 4 lookups a day, not 12. Not the full 24h — a host
+		// resource discovery found minutes ago whose first lookup failed
+		// should not wait a day for its second.
+		"never.example.net": 6 * time.Hour,
+		// Resolved once, nothing since: it is stuck, so cost it exactly what
+		// a healthy host costs.
+		"stale.example.net": 24 * time.Hour,
+		// Recently healthy: keep the quick retry, which is the one case where
+		// retrying soon is worth anything.
+		"fresh.example.net": 2 * time.Hour,
+	} {
+		var gap time.Duration
+		var secs float64
+		if err := pool.QueryRow(ctx,
+			`SELECT extract(epoch FROM next_check_at - now()) FROM resource_host WHERE host=$1`,
+			host).Scan(&secs); err != nil {
+			t.Fatal(err)
+		}
+		gap = time.Duration(secs) * time.Second
+		if gap < want-time.Minute || gap > want+time.Minute {
+			t.Errorf("%s: next_check_at is %v out, want ~%v", host, gap.Round(time.Minute), want)
+		}
+	}
+
+	// A stuck host that starts answering must fall back to the normal
+	// cadence on its own — the backoff reads last_checked_at, and the commit
+	// writes it.
+	var stuckID int64
+	if err := pool.QueryRow(ctx,
+		`SELECT id FROM resource_host WHERE host='stale.example.net'`).Scan(&stuckID); err != nil {
+		t.Fatal(err)
+	}
+	supported := domain.StatusSupported
+	if err := db.New(pool).ResourceSweepCommit(ctx, db.ResourceSweepCommitParams{
+		ID: stuckID, AaaaStatus: statusDB(&supported),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx,
+		`UPDATE resource_host SET next_check_at = now() - interval '1 minute' WHERE id=$1`,
+		stuckID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.claim(ctx); err != nil {
+		t.Fatal(err)
+	}
+	var secs float64
+	if err := pool.QueryRow(ctx,
+		`SELECT extract(epoch FROM next_check_at - now()) FROM resource_host WHERE id=$1`,
+		stuckID).Scan(&secs); err != nil {
+		t.Fatal(err)
+	}
+	if gap := time.Duration(secs) * time.Second; gap > 3*time.Hour {
+		t.Errorf("a recovered host is still backed off %v, want the 2h retry", gap.Round(time.Minute))
 	}
 }
