@@ -48,6 +48,21 @@ type HistoryEnvelope struct {
 // UTC, from=to−90d, interval daily|weekly, 400 on malformed input. `to` is
 // clamped to today — the future holds no confirmed state, and an unbounded
 // ?to=9999-12-31 would otherwise drive history's per-day synthesis loop.
+//
+// `from` is deliberately NOT clamped here, and the asymmetry is not an
+// oversight (review issue 60/58). The two directions cost different things:
+// a far-future `to` synthesizes days that do not exist, while a far-past
+// `from` only widens an indexed range scan over rows that do. Measured on a
+// database holding 3 years of daily snapshots, `?from=0001-01-01` returns
+// 1097 points in 9ms against 91 points in 1ms for the default 90-day
+// window — linear in the data returned, which is what any client asking for
+// the full series would pay anyway.
+//
+// Clamping it would be actively wrong: the stats tables have no retention
+// policy (changelog is kept forever, 000002), so a floor at
+// historyWindowDays would silently truncate a series the API is supposed to
+// serve. History caps its own window separately in capHistoryWindow, because
+// there the loop allocates per day rather than per row.
 func parseHistoryWindow(q url.Values) (from, to time.Time, weekly bool, err error) {
 	now := time.Now().UTC()
 	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)

@@ -522,3 +522,53 @@ func TestStatsLiveSetCounters(t *testing.T) {
 			latest.SmtpSupported, latest.SmtpGraded)
 	}
 }
+
+// TestWideStatsWindowServesEverything is review issue 58's `from` half, and
+// it pins the behaviour AGAINST the fix that issue proposed.
+//
+// The issue read the unclamped `from` as an amplifier — "a two-millennium
+// scan" — and recommended a floor. Measured, it is not: `to` is clamped
+// because a far-future bound makes history synthesize days that do not
+// exist, while a far-past `from` only widens an indexed range scan over rows
+// that do. On 3 years of daily snapshots, ?from=0001-01-01 returns every row
+// in single-digit milliseconds, linear in what it returns.
+//
+// A floor at historyWindowDays would have silently truncated this series by
+// a year: the stats tables carry no retention policy. The test exists so the
+// next reader who spots the asymmetry does not "fix" it.
+func TestWideStatsWindowServesEverything(t *testing.T) {
+	srv, pool := newAPI(t)
+	ctx := context.Background()
+
+	// Three years of snapshots — deliberately more than historyWindowDays.
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO stats_global_daily (day, domains, sinners, partial, heroes, saints,
+		  inactive, unknown, disabled, base_supported, www_supported, ns_supported,
+		  mx_supported, conn_supported, resources_supported, top_heroes, top_nameserver)
+		SELECT d::date, 1000, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1
+		FROM generate_series(now() - interval '3 years', now(), interval '1 day') d
+		ON CONFLICT (day) DO NOTHING`); err != nil {
+		t.Fatal(err)
+	}
+
+	var wide, narrow struct {
+		Points []map[string]any `json:"points"`
+	}
+	if resp := getJSON(t, srv.URL+"/stats/overview?from=0001-01-01", &wide); resp.StatusCode != 200 {
+		t.Fatalf("wide window = %d, want 200", resp.StatusCode)
+	}
+	getJSON(t, srv.URL+"/stats/overview", &narrow)
+
+	if len(narrow.Points) == 0 || len(wide.Points) <= len(narrow.Points) {
+		t.Fatalf("wide=%d narrow=%d points; the wide window must serve more",
+			len(wide.Points), len(narrow.Points))
+	}
+	// The whole seeded series, not a slice of it. 730 is api.historyWindowDays,
+	// spelled out because this test is in the external package — it is the cap
+	// history applies to its own window and must NOT be applied here.
+	const historyCapDays = 730
+	if len(wide.Points) <= historyCapDays {
+		t.Errorf("wide window returned %d points, want the full series past the %d-day history cap",
+			len(wide.Points), historyCapDays)
+	}
+}
