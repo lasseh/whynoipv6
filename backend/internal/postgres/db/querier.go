@@ -77,6 +77,11 @@ type Querier interface {
 	CheckJobFail(ctx context.Context, arg CheckJobFailParams) error
 	// The §5.1 live-check job lifecycle.
 	CheckJobInsert(ctx context.Context, arg CheckJobInsertParams) (CheckJobInsertRow, error)
+	// The global cap counts EVERY row, including the never-claimed ones the
+	// per-IP count above excludes (review issue 60). The two limits do different
+	// jobs: the per-IP one is fairness to a caller, so it should not bill work
+	// that was never done; this one is system backpressure, and a queue full of
+	// unclaimed jobs is precisely when backpressure is wanted.
 	CheckJobRateGlobal(ctx context.Context) (CheckJobRateGlobalRow, error)
 	// Rate limiting (07 §6.3): /64-prefix and global hourly windows; min_created
 	// feeds retry_after = ceil(3600 − (now − min(created_at))).

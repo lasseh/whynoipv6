@@ -468,3 +468,49 @@ func TestLiveCheckReaper(t *testing.T) {
 		t.Errorf("reaped job = %s %q", status, errMsg)
 	}
 }
+
+// TestRateLimitSkipsUnclaimedReapedJobs is review issue 60. The per-IP quota
+// counted every row in the window with no status filter, so a job the reaper
+// failed before any consumer claimed it burned the caller's allowance — and
+// that happens exactly when the system is failing them: the crawler is down,
+// or the queue is deeper than fail_after. An hour's lockout for an outage
+// they did not cause, with retry_after telling them to wait it out.
+//
+// What still counts is anything a consumer claimed, however it ended. A
+// caller cannot submit hosts engineered to burn a 90s domainTimeout and fail,
+// and use the failure to buy unlimited requests.
+func TestRateLimitSkipsUnclaimedReapedJobs(t *testing.T) {
+	srv, pool := newCheckAPI(t, api.Options{RateIPPerHour: 3, RateGlobalPerHour: 100})
+	ctx := context.Background()
+
+	seed := func(t *testing.T, host, status string, claimed bool) {
+		t.Helper()
+		_, err := pool.Exec(ctx,
+			`INSERT INTO check_job (host, requester_ip, status, claimed_at, completed_at)
+			 VALUES ($1, '2001:db8:60::1'::inet, $2::check_job_status,
+			         CASE WHEN $3::bool THEN now() ELSE NULL END, now())`,
+			host, status, claimed)
+		if err != nil {
+			t.Fatalf("seed %s: %v", host, err)
+		}
+	}
+
+	// The quota is 3/h per /64 in this harness. Three jobs the reaper failed
+	// before anyone claimed them must not consume it.
+	seed(t, "reaped1.no", "failed", false)
+	seed(t, "reaped2.no", "failed", false)
+	seed(t, "reaped3.no", "failed", false)
+
+	if resp := postCheck(t, srv, "2001:db8:60::9", `{"host":"after-reap.no"}`); resp.StatusCode != 202 {
+		t.Fatalf("three unclaimed reaped jobs consumed the quota: %d", resp.StatusCode)
+	}
+
+	// A claimed job that failed is different: real crawler work was spent on
+	// it, so it counts. Two more of those plus the 202 above fills the bucket.
+	seed(t, "worked1.no", "failed", true)
+	seed(t, "worked2.no", "failed", true)
+	over := postCheck(t, srv, "2001:db8:60::a", `{"host":"after-work.no"}`)
+	if over.StatusCode != 429 {
+		t.Errorf("claimed-then-failed jobs must count against the quota: %d", over.StatusCode)
+	}
+}

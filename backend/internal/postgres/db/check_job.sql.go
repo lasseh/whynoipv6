@@ -169,6 +169,11 @@ type CheckJobRateGlobalRow struct {
 	MinCreated interface{} `json:"min_created"`
 }
 
+// The global cap counts EVERY row, including the never-claimed ones the
+// per-IP count above excludes (review issue 60). The two limits do different
+// jobs: the per-IP one is fairness to a caller, so it should not bill work
+// that was never done; this one is system backpressure, and a queue full of
+// unclaimed jobs is precisely when backpressure is wanted.
 func (q *Queries) CheckJobRateGlobal(ctx context.Context) (CheckJobRateGlobalRow, error) {
 	row := q.db.QueryRow(ctx, CheckJobRateGlobal)
 	var i CheckJobRateGlobalRow
@@ -180,6 +185,20 @@ const CheckJobRatePrefix = `-- name: CheckJobRatePrefix :one
 SELECT count(*)::int AS n, min(created_at) AS min_created
 FROM check_job
 WHERE requester_ip <<= $1::cidr AND created_at > now() - interval '1 hour'
+  -- A job the reaper failed before any consumer claimed it consumed no
+  -- crawler work at all, and it got there because the system was failing the
+  -- caller — the crawler was down, or the queue was deeper than fail_after
+  -- (review issue 60). Charging the per-IP quota for that locks a user out
+  -- for an hour over an outage they did not cause, and retry_after tells
+  -- them to wait it out.
+  --
+  -- claimed_at is set only by CheckJobClaim and never reset, so
+  -- ` + "`" + `failed AND claimed_at IS NULL` + "`" + ` is exactly "reaped before anyone looked
+  -- at it": CheckJobFail is called by the consumer, which has claimed by
+  -- definition. Anything claimed still counts however it ended, so a caller
+  -- submitting hosts engineered to burn a 90s domainTimeout and fail cannot
+  -- use failure to buy unlimited requests.
+  AND NOT (status = 'failed' AND claimed_at IS NULL)
 `
 
 type CheckJobRatePrefixRow struct {
