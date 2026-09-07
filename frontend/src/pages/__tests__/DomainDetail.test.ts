@@ -22,6 +22,7 @@ describe('DomainDetail page', () => {
         { path: '/', component: { template: '<div />' } },
         { path: '/domains', component: { template: '<div />' } },
         { path: '/faq', component: { template: '<div />' } },
+        { path: '/check/:target?', name: 'LiveCheck', component: { template: '<div />' } },
         {
           path: '/domains/:domain([^/]+)/not-found',
           name: 'DomainNotFound',
@@ -64,6 +65,7 @@ describe('DomainDetail page', () => {
       routes: [
         { path: '/', component: { template: '<div />' } },
         { path: '/faq', component: { template: '<div />' } },
+        { path: '/check/:target?', name: 'LiveCheck', component: { template: '<div />' } },
         { path: '/domains/:domain([^/]+)', name: 'DomainDetail', component: DomainDetail },
       ],
     })
@@ -77,5 +79,31 @@ describe('DomainDetail page', () => {
 
     expect(wrapper.text()).toContain('Mandate')
     expect(wrapper.text()).toContain('Dutch Central Government') // tooltip names
+  })
+
+  // The live check sends a host it already crawls here instead of scanning it.
+  // Landing on a different page than you asked for needs a reason on screen.
+  it.each([
+    ['/domains/example.com?from=check', true],
+    ['/domains/example.com', false],
+  ])('%s explains the redirect: %s', async (path, explained) => {
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        { path: '/', component: { template: '<div />' } },
+        { path: '/faq', component: { template: '<div />' } },
+        { path: '/check/:target?', name: 'LiveCheck', component: { template: '<div />' } },
+        { path: '/domains/:domain([^/]+)', name: 'DomainDetail', component: DomainDetail },
+      ],
+    })
+    await router.push(path)
+    await router.isReady()
+
+    const wrapper = mount(DomainDetail, {
+      global: { plugins: [router], stubs: layoutStubs },
+    })
+    await flushPromises()
+
+    expect(wrapper.text().includes('We already track example.com')).toBe(explained)
   })
 })

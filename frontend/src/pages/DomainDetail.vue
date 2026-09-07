@@ -15,8 +15,13 @@ import { getDomainChangelog } from '@/api'
 import { useDomainDetail } from '@/composables/useDomainDetail'
 import { setPageMeta, setPageTitle } from '@/composables/usePageMeta'
 import { domainPageHead } from '@/utils/domain-head'
+import { formatDateTime } from '@/utils/date'
 
 const route = useRoute()
+
+// The live check redirects a host we already crawl here rather than spending a
+// scan on it. Without a word of explanation that reads as a broken form.
+const fromCheck = computed(() => route.query.from === 'check')
 
 const { domain, changelogs, history, subdomains, error } = useDomainDetail(
   () => route.params.domain as string,
@@ -61,6 +66,11 @@ watch(domain, (d) => {
           <ApiError v-if="error" :problem="error" />
 
           <template v-else-if="domain">
+            <p v-if="fromCheck" class="mb-4 text-sm text-gray-400">
+              We already track {{ domain.host }} — this is our crawl from
+              {{ domain.last_checked_at ? formatDateTime(domain.last_checked_at) : 'never' }}.
+            </p>
+
             <DomainReportHeader :domain="domain" show-rank />
 
             <DomainStatusCard :domain="domain" :history="history" />

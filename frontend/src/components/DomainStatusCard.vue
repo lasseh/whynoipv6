@@ -252,14 +252,27 @@ const formattedTsCheck = computed(() =>
 
   <InformationalCard :informational="domain.informational" />
 
-  <div class="mt-4 flex items-center justify-between text-xs font-normal text-gray-400">
+  <div
+    class="mt-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-xs font-normal text-gray-400"
+  >
     <span>Last checked: {{ formattedTsCheck }}</span>
-    <RouterLink
-      to="/faq?page=rules"
-      class="text-gray-400 hover:text-fuchsia-500 underline underline-offset-2"
-    >
-      How these checks work →
-    </RouterLink>
+    <span class="flex flex-wrap items-center gap-x-4 gap-y-1">
+      <!-- Confirmed status needs several consecutive scans to flip, so a domain
+           that just enabled IPv6 still reads unsupported here. This is the way
+           to a raw observation; ?recheck=1 stops /check bouncing back. -->
+      <RouterLink
+        :to="`/check/${domain.host}?recheck=1`"
+        class="text-gray-400 hover:text-fuchsia-500 underline underline-offset-2"
+      >
+        Run a live check →
+      </RouterLink>
+      <RouterLink
+        to="/faq?page=rules"
+        class="text-gray-400 hover:text-fuchsia-500 underline underline-offset-2"
+      >
+        How these checks work →
+      </RouterLink>
+    </span>
   </div>
   <!-- End Domain Status Card -->
 </template>

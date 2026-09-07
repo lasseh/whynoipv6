@@ -3,16 +3,50 @@
 // envelope), plus the shareable-URL contract — the canonical URL is
 // /check/{domain}, stored results load via GET /check/latest inside the
 // 7 d TTL (auto-recheck past it), and legacy numeric /check/{id} links
-// upgrade to the domain form. The page renders; this composable decides.
+// upgrade to the domain form. A submitted host we already crawl daily skips
+// the scan entirely and lands on its domain page (?recheck=1 opts back in).
+// The page renders; this composable decides.
 import { onMounted, onScopeDispose, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { createCheck, getCheck, getLatestCheck, isCheckEnvelope } from '@/api'
+import { createCheck, getCheck, getDomain, getLatestCheck, isCheckEnvelope } from '@/api'
 import type { CheckEnvelope } from '@/api'
 import { ApiProblem } from '@/api/problem'
 import { extractHost } from '@/utils/host'
 
 const POLL_MS = 2_000
 const POLL_LIMIT = 60 // ~2 min; the engine's whole-scan budget is 90 s
+
+/**
+ * The host's canonical form when we already crawl it daily, else null.
+ *
+ * A ranked, enabled domain is one the frontier scans every day, so a fresh
+ * engine run mostly re-derives what the detail page already shows — and the
+ * person typing a top-million host is rarely its operator. Rank-NULL rows are
+ * excluded deliberately: `created_by = 'live_check'` rows exist *because*
+ * someone checked their own domain, which is the case a redirect serves worst.
+ *
+ * Fails open. A 404, a 5xx, or a dead network all read as "not tracked" and let
+ * the check proceed — a blip on /domains must never block a live check.
+ */
+async function trackedHost(target: string, signal: AbortSignal): Promise<string | null> {
+  const ranked = async (h: string): Promise<string | null> => {
+    try {
+      const d = await getDomain(h, signal)
+      // The API canonicalizes (case, punycode, trailing dot); redirect to what
+      // it returned, not to what was typed.
+      return d.rank !== null && !d.disabled ? d.host : null
+    } catch {
+      return null
+    }
+  }
+  const hit = await ranked(target)
+  if (hit !== null) return hit
+  // A pasted https://www.example.com/… reduces to www.example.com, which is its
+  // own rank-NULL subdomain row — so without this the guard misses an apex we
+  // crawl daily and spends a scan on it. The apex page carries the www row,
+  // which is what the reader was asking about anyway.
+  return target.startsWith('www.') ? ranked(target.slice(4)) : null
+}
 
 export function useLiveCheck() {
   const route = useRoute()
@@ -98,7 +132,9 @@ export function useLiveCheck() {
 
   function reflectHost(h: string) {
     activeTarget = h
-    if (route.params.target !== h) {
+    // ?recheck=1 has done its job by now; drop it so the shareable URL is clean
+    // and a reload takes the normal (redirecting) path.
+    if (route.params.target !== h || route.query.recheck !== undefined) {
       void router.replace(`/check/${h}`)
     }
   }
@@ -122,10 +158,23 @@ export function useLiveCheck() {
     envelope.value = null
   }
 
-  async function submit(target = extractHost(host.value)) {
+  async function submit(target = extractHost(host.value), opts: { recheck?: boolean } = {}) {
     if (!target || running.value || retryLeft.value > 0) return
     host.value = target // show the cleaned host in the input
     const c = beginRequest()
+    if (!opts.recheck) {
+      const tracked = await trackedHost(target, c.signal)
+      if (c.signal.aborted) return // cancelled while we looked the host up
+      if (tracked !== null) {
+        running.value = false
+        void router.replace({
+          name: 'DomainDetail',
+          params: { domain: tracked },
+          query: { from: 'check' }, // the page explains why it redirected
+        })
+        return
+      }
+    }
     try {
       const res = await createCheck(target, c.signal)
       reflectHost(res.host)
@@ -196,6 +245,11 @@ export function useLiveCheck() {
     activeTarget = raw
     if (/^\d+$/.test(raw)) {
       void loadByID(Number(raw))
+    } else if (route.query.recheck !== undefined) {
+      // The domain page's "Run a live check". Skip both the stored-result read
+      // (a tracked host is always inside the 7 d TTL) and the tracked-domain
+      // guard, or this would bounce straight back to where it came from.
+      void submit(raw, { recheck: true })
     } else {
       void loadByHost(raw)
     }

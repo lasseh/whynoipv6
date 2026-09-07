@@ -122,3 +122,12 @@ describe('DomainStatusCard resources description', () => {
     )
   })
 })
+
+// Confirmed status lags a deploy by several scans, so the card has to offer a
+// raw observation. ?recheck=1 is what stops /check redirecting straight back.
+describe('DomainStatusCard live-check link', () => {
+  it('links to a forced live check for this host', () => {
+    const wrapper = mountCard('supported', 'supported')
+    expect(wrapper.find(`[to="/check/${domainDetail.host}?recheck=1"]`).exists()).toBe(true)
+  })
+})

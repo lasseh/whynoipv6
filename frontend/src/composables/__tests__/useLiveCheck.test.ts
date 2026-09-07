@@ -12,11 +12,28 @@ vi.mock('@/api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/api')>()),
   createCheck: vi.fn(),
   getCheck: vi.fn(),
+  getDomain: vi.fn(),
   getLatestCheck: vi.fn(),
 }))
-import { createCheck, getCheck, getLatestCheck } from '@/api'
+import { createCheck, getCheck, getDomain, getLatestCheck } from '@/api'
+import type { DomainDetail } from '@/api'
 
 type Machine = ReturnType<typeof useLiveCheck>
+
+/** Only the two fields the tracked-domain guard reads. */
+function domainRow(over: Partial<DomainDetail> = {}): DomainDetail {
+  return { host: 'vg.no', rank: 42, disabled: false, ...over } as DomainDetail
+}
+
+/** The guard's fall-through: nothing tracked, so a check runs. */
+function untracked() {
+  vi.mocked(getDomain).mockRejectedValue(
+    new ApiProblem(
+      { type: 'https://whynoipv6.com/problems/not-found', title: 'Missing', status: 404 },
+      404,
+    ),
+  )
+}
 
 function envelope(over: Partial<CheckEnvelope> = {}): CheckEnvelope {
   return {
@@ -36,7 +53,14 @@ function envelope(over: Partial<CheckEnvelope> = {}): CheckEnvelope {
 async function setup(path = '/check'): Promise<{ router: Router; m: Machine }> {
   const router = createRouter({
     history: createMemoryHistory(),
-    routes: [{ path: '/check/:target?', name: 'LiveCheck', component: { template: '<div />' } }],
+    routes: [
+      { path: '/check/:target?', name: 'LiveCheck', component: { template: '<div />' } },
+      {
+        path: '/domains/:domain([^/]+)',
+        name: 'DomainDetail',
+        component: { template: '<div />' },
+      },
+    ],
   })
   await router.push(path)
   await router.isReady()
@@ -57,6 +81,7 @@ describe('useLiveCheck', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.useFakeTimers()
+    untracked() // the guard is off the path unless a test opts in
   })
   afterEach(() => {
     vi.useRealTimers()
@@ -180,6 +205,139 @@ describe('useLiveCheck', () => {
 
     expect(getCheck).toHaveBeenCalledWith(7, expect.anything())
     expect(m.envelope.value?.status).toBe('done')
+    expect(router.currentRoute.value.fullPath).toBe('/check/vg.no')
+  })
+})
+
+// A host we crawl daily costs a full engine run to re-derive what its detail
+// page already shows, so the submit path resolves it first and redirects.
+describe('useLiveCheck tracked-domain guard', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.useFakeTimers()
+    untracked()
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('redirects a ranked domain to its page instead of checking it', async () => {
+    vi.mocked(getDomain).mockResolvedValue(domainRow())
+    const { router, m } = await setup()
+
+    m.host.value = 'vg.no'
+    void m.submit()
+    await flushPromises()
+
+    expect(createCheck).not.toHaveBeenCalled()
+    expect(router.currentRoute.value.fullPath).toBe('/domains/vg.no?from=check')
+    expect(m.running.value).toBe(false)
+  })
+
+  it('redirects to the canonical host the API returned, not the typed one', async () => {
+    vi.mocked(getDomain).mockResolvedValue(domainRow({ host: 'vg.no' }))
+    const { router, m } = await setup()
+
+    m.host.value = 'VG.no.'
+    void m.submit()
+    await flushPromises()
+
+    expect(router.currentRoute.value.fullPath).toBe('/domains/vg.no?from=check')
+  })
+
+  it('checks a rank-NULL host — it is in the table, not in the list', async () => {
+    vi.mocked(getDomain).mockResolvedValue(domainRow({ rank: null }))
+    vi.mocked(createCheck).mockResolvedValue(envelope({ cached: true }))
+    const { m } = await setup()
+
+    m.host.value = 'vg.no'
+    void m.submit()
+    await flushPromises()
+
+    expect(createCheck).toHaveBeenCalledWith('vg.no', expect.anything())
+  })
+
+  it('checks a disabled domain rather than landing on its stale page', async () => {
+    vi.mocked(getDomain).mockResolvedValue(domainRow({ disabled: true }))
+    vi.mocked(createCheck).mockResolvedValue(envelope({ cached: true }))
+    const { m } = await setup()
+
+    m.host.value = 'vg.no'
+    void m.submit()
+    await flushPromises()
+
+    expect(createCheck).toHaveBeenCalledWith('vg.no', expect.anything())
+  })
+
+  it('fails open when the domain lookup errors', async () => {
+    vi.mocked(getDomain).mockRejectedValue(new TypeError('network down'))
+    vi.mocked(createCheck).mockResolvedValue(envelope({ cached: true }))
+    const { m } = await setup()
+
+    m.host.value = 'vg.no'
+    void m.submit()
+    await flushPromises()
+
+    expect(createCheck).toHaveBeenCalledWith('vg.no', expect.anything())
+    expect(m.problem.value).toBeNull()
+  })
+
+  // A pasted URL reduces to www.<host>, which is its own rank-NULL row — the
+  // apex behind it is the one we crawl daily.
+  it('falls back to the apex when a www host is not itself ranked', async () => {
+    vi.mocked(getDomain).mockImplementation((h) =>
+      h === 'vg.no'
+        ? Promise.resolve(domainRow())
+        : Promise.resolve(domainRow({ host: 'www.vg.no', rank: null })),
+    )
+    const { router, m } = await setup()
+
+    m.host.value = 'https://www.vg.no/some/path'
+    void m.submit()
+    await flushPromises()
+
+    expect(createCheck).not.toHaveBeenCalled()
+    expect(router.currentRoute.value.fullPath).toBe('/domains/vg.no?from=check')
+  })
+
+  it('checks a www host when no apex is ranked either', async () => {
+    vi.mocked(getDomain).mockResolvedValue(domainRow({ host: 'www.vg.no', rank: null }))
+    vi.mocked(createCheck).mockResolvedValue(envelope({ host: 'www.vg.no', cached: true }))
+    const { m } = await setup()
+
+    m.host.value = 'www.vg.no'
+    void m.submit()
+    await flushPromises()
+
+    expect(createCheck).toHaveBeenCalledWith('www.vg.no', expect.anything())
+  })
+
+  // The plan hooks only submit(); this is the chain that relies on it — an
+  // expired shareable link must redirect rather than re-scan.
+  it('an expired /check/{host} link redirects instead of rechecking', async () => {
+    vi.mocked(getLatestCheck).mockRejectedValue(
+      new ApiProblem(
+        { type: 'https://whynoipv6.com/problems/not-found', title: 'Missing', status: 404 },
+        404,
+      ),
+    )
+    vi.mocked(getDomain).mockResolvedValue(domainRow())
+    const { router } = await setup('/check/vg.no')
+    await flushPromises()
+
+    expect(createCheck).not.toHaveBeenCalled()
+    expect(router.currentRoute.value.fullPath).toBe('/domains/vg.no?from=check')
+  })
+
+  it('?recheck=1 runs the check on a ranked domain and cleans the URL', async () => {
+    vi.mocked(getDomain).mockResolvedValue(domainRow())
+    vi.mocked(createCheck).mockResolvedValue(envelope({ cached: true }))
+    const { router } = await setup('/check/vg.no?recheck=1')
+    await flushPromises()
+
+    expect(createCheck).toHaveBeenCalledWith('vg.no', expect.anything())
+    expect(getDomain).not.toHaveBeenCalled() // guard bypassed, no bounce back
+    expect(getLatestCheck).not.toHaveBeenCalled() // stored-result read skipped
     expect(router.currentRoute.value.fullPath).toBe('/check/vg.no')
   })
 })

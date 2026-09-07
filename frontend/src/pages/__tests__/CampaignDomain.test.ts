@@ -31,6 +31,7 @@ describe('CampaignDomain page', () => {
         { path: '/faq', component: { template: '<div />' } },
         { path: '/campaigns', component: { template: '<div />' } },
         { path: '/campaigns/:uuid', component: { template: '<div />' } },
+        { path: '/check/:target?', name: 'LiveCheck', component: { template: '<div />' } },
         {
           path: '/campaigns/:uuid/:domain([^/]+)/not-found',
           name: 'CampaignDomainNotFound',
