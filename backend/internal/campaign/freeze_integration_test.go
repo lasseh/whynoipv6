@@ -99,6 +99,37 @@ func TestCampaignMalformedUUIDFreezesDisable(t *testing.T) {
 	}
 }
 
+// TestCampaignMissingUUIDFreezesDisable: the sync never writes a uuid
+// (ADR-0005), so a file whose uuid line went missing is rejected. The
+// campaign it describes is found through source_file and frozen, not
+// disabled.
+func TestCampaignMissingUUIDFreezesDisable(t *testing.T) {
+	pool := pgtest.NewDB(t)
+	ctx := context.Background()
+	dir := t.TempDir()
+
+	writeFixture(t, dir, "a.yml", campA)
+	writeFixture(t, dir, "keeper.yml", campKeeper)
+	run(t, pool, dir)
+
+	writeFixture(t, dir, "a.yml", campABody)
+	rep := run(t, pool, dir)
+
+	if reason := rep.RejectedFiles["a.yml"]; !strings.Contains(reason, "no uuid") {
+		t.Fatalf("rejected files = %v, want a.yml for its missing uuid", rep.RejectedFiles)
+	}
+	if !slices.Contains(rep.DisableFrozen, "Campaign A") {
+		t.Errorf("DisableFrozen = %v, want Campaign A", rep.DisableFrozen)
+	}
+	var disabled bool
+	if err := pool.QueryRow(ctx, "SELECT disabled FROM campaign WHERE uuid=$1", campAUUID).Scan(&disabled); err != nil {
+		t.Fatal(err)
+	}
+	if disabled {
+		t.Error("the campaign was disabled over a file whose uuid line is missing")
+	}
+}
+
 // TestCampaignAllHostsRejectedFreezesRemoval is the second rule: a file that
 // listed hosts and produced none is a bad edit, not an emptied campaign.
 // Removing every member over it would unlist the whole campaign.
