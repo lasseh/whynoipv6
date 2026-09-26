@@ -39,19 +39,7 @@ func TestCampaignRejectedFileFreezesDisable(t *testing.T) {
 	writeFixture(t, dir, "keeper.yml", campKeeper)
 	run(t, pool, dir)
 
-	raw, err := os.ReadFile(filepath.Join(dir, CampaignsDir, "a.yml"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	id := ""
-	for _, l := range strings.Split(string(raw), "\n") {
-		if after, ok := strings.CutPrefix(l, "uuid: "); ok {
-			id = after
-		}
-	}
-	if id == "" {
-		t.Fatal("no uuid written back")
-	}
+	id := campAUUID
 
 	// Break the file in a way ParseFile refuses, keeping the uuid line
 	// readable — which is the case rawFileUUID exists for.
@@ -92,7 +80,7 @@ func TestCampaignMalformedUUIDFreezesDisable(t *testing.T) {
 	writeFixture(t, dir, "keeper.yml", campKeeper)
 	run(t, pool, dir)
 
-	writeFixture(t, dir, "a.yml", "uuid: 8f14e45f-ceea-467a-9dfb\n"+campA)
+	writeFixture(t, dir, "a.yml", "uuid: 8f14e45f-ceea-467a-9dfb\n"+campABody)
 	rep := run(t, pool, dir)
 
 	if _, ok := rep.RejectedFiles["a.yml"]; !ok {
@@ -129,7 +117,7 @@ func TestCampaignAllHostsRejectedFreezesRemoval(t *testing.T) {
 	}
 
 	// Every entry fails canonicalization: no public suffix.
-	writeFixture(t, dir, "a.yml", `title: Campaign A
+	writeFixture(t, dir, "a.yml", "uuid: "+campAUUID+"\n"+`title: Campaign A
 description: First fixture campaign.
 domains:
     - not a host

@@ -94,7 +94,7 @@ func TestCampaignValidate(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if res.OK() || !strings.Contains(strings.Join(res.Failures, "\n"), "assigned by the import bot") {
+		if res.OK() || !strings.Contains(strings.Join(res.Failures, "\n"), "leave uuid out") {
 			t.Errorf("failures = %v", res.Failures)
 		}
 	})

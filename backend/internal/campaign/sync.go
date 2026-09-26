@@ -1,6 +1,7 @@
 // Package campaign implements the single campaign-repo sync
 // (06-ingest.md §3): YAML parse/validation, uuid-keyed upsert, membership
-// diff, uuid-set soft delete, and the bot uuid write-back.
+// diff, and uuid-set soft delete. The sync only reads the checkout; uuids
+// are assigned in the campaign repo by `make all` (ADR-0005).
 package campaign
 
 import (
@@ -12,11 +13,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
-	"strings"
 	"syscall"
 	"time"
-
-	"gopkg.in/yaml.v3"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -34,7 +32,6 @@ type Config struct {
 	MaxDomainsPerFile      int
 	MaxSubdomainsPerDomain int
 	Pull                   bool // git pull --ff-only before parsing (prod: true)
-	Push                   bool // commit+push the uuid write-back (prod: true)
 	// Force overrides the empty-checkout guard: a run that parsed no files
 	// while the database has enabled campaigns aborts rather than
 	// soft-deleting all of them (06 §3.3 step 5 erratum). Operator-set via
@@ -67,8 +64,6 @@ type Report struct {
 
 	RejectedFiles map[string]string
 	RejectedHosts map[string]string
-
-	WriteBack string // "pushed" | "nothing to push" | "written (push disabled)" | "failed: …"
 }
 
 // Sync is the ONE sync implementation (06-ingest.md §3.1) — called by
@@ -81,7 +76,7 @@ func Sync(ctx context.Context, cfg Config, pool *pgxpool.Pool) (*Report, error) 
 	// is an option, a URL may carry a token that the startup summary and
 	// git's own error output would print. Credentials belong in the git
 	// config or deploy key, never in the registry value.
-	if (cfg.Pull || cfg.Push) && !gitRemoteRe.MatchString(cfg.GitRemote) {
+	if cfg.Pull && !gitRemoteRe.MatchString(cfg.GitRemote) {
 		return nil, fmt.Errorf("campaign sync: campaign.git_remote %q must be a remote name, not a URL or an option", cfg.GitRemote)
 	}
 	if cfg.Pull {
@@ -101,6 +96,14 @@ func Sync(ctx context.Context, cfg Config, pool *pgxpool.Pool) (*Report, error) 
 		f, err := ParseFile(p, cfg.MaxDomainsPerFile)
 		if err != nil {
 			rep.RejectedFiles[filepath.Base(p)] = err.Error()
+			rejectedPaths = append(rejectedPaths, p)
+			continue
+		}
+		// The sync never writes a uuid (ADR-0005). A file without one waits
+		// for `make all`, and a campaign whose uuid line went missing is
+		// frozen through its source_file rather than disabled.
+		if f.UUID == "" {
+			rep.RejectedFiles[filepath.Base(p)] = "no uuid: run `make all` in the campaign repo"
 			rejectedPaths = append(rejectedPaths, p)
 			continue
 		}
@@ -142,77 +145,48 @@ func Sync(ctx context.Context, cfg Config, pool *pgxpool.Pool) (*Report, error) 
 
 	fileUUIDs := map[string]bool{} // every uuid present in a repo file this run
 	for _, f := range files {
-		if f.UUID != "" {
-			fileUUIDs[f.UUID] = true
-		}
+		fileUUIDs[f.UUID] = true
 	}
 
-	seenUUIDs := []pgtype.UUID{} // all uuids seen this run (incl. generated); empty (not nil) so an
+	seenUUIDs := []pgtype.UUID{} // all uuids seen this run; empty (not nil) so an
 	// all-files-deleted repo still disables every campaign (NULL array skips all)
-	writeBack := map[string]string{} // file path -> generated uuid
 	for _, f := range files {
 		var campaignID int32
+		row, err := q.CampaignByUUID(ctx, mustUUID(f.UUID))
 		switch {
-		case f.UUID != "":
-			row, err := q.CampaignByUUID(ctx, mustUUID(f.UUID))
-			switch {
-			case err == nil:
-				if row.SourceFile != nil && *row.SourceFile != f.Path {
-					rep.Renamed = append(rep.Renamed, *row.SourceFile+" → "+f.Path)
-					slog.Info("campaign renamed", "old", *row.SourceFile, "new", f.Path)
-				}
-				if row.Disabled {
-					rep.ReEnabled = append(rep.ReEnabled, f.Path)
-					slog.Info("campaign re-enabled (file re-appeared)", "file", f.Path)
-				}
-				campaignID, err = q.CampaignUpdateFromFile(ctx, db.CampaignUpdateFromFileParams{
-					Uuid: mustUUID(f.UUID), Name: f.Title, Description: f.Description,
-					Tags: f.Tags, SourceFile: &f.Path,
-				})
-				if err != nil {
-					return nil, fmt.Errorf("campaign sync: update %s: %w", f.Path, err)
-				}
-				rep.Updated = append(rep.Updated, f.Path)
-			case !isNoRows(err):
-				return nil, fmt.Errorf("campaign sync: lookup uuid %s: %w", f.Path, err)
-			default:
-				// Unknown uuid: the file is new to this DB, so adopt it.
-				// The repo assigns uuids (its own `make fix-uuids`) and PR
-				// validation pins them (§4.2), so identity is decided there,
-				// not here. Nothing in this path can mint one instead —
-				// step 6's write-back needs campaign.push, false wherever
-				// the sync runs off a mounted checkout — so rejecting would
-				// strand the campaign for good.
-				campaignID, err = q.CampaignInsert(ctx, db.CampaignInsertParams{
-					Uuid: mustUUID(f.UUID), Name: f.Title, Description: f.Description,
-					SourceFile: &f.Path, Tags: f.Tags,
-				})
-				if err != nil {
-					return nil, fmt.Errorf("campaign sync: adopt %s: %w", f.Path, err)
-				}
-				rep.Created = append(rep.Created, f.Path)
+		case err == nil:
+			if row.SourceFile != nil && *row.SourceFile != f.Path {
+				rep.Renamed = append(rep.Renamed, *row.SourceFile+" → "+f.Path)
+				slog.Info("campaign renamed", "old", *row.SourceFile, "new", f.Path)
 			}
-			seenUUIDs = append(seenUUIDs, mustUUID(f.UUID))
-
-		default:
-			// Step 4: file without uuid — reuse a failed write-back's uuid.
-			newUUID := ""
-			if prior, err := q.CampaignUUIDBySourceFile(ctx, &f.Path); err == nil {
-				if u := uuidString(prior); !fileUUIDs[u] {
-					newUUID = u
-				}
+			if row.Disabled {
+				rep.ReEnabled = append(rep.ReEnabled, f.Path)
+				slog.Info("campaign re-enabled (file re-appeared)", "file", f.Path)
 			}
-			if newUUID == "" {
-				newUUID = uuid.NewString()
-			}
-			writeBack[filepath.Join(cfg.RepoPath, CampaignsDir, f.Path)] = newUUID
-			campaignID, err = upsertNoUUID(ctx, q, f, newUUID)
+			campaignID, err = q.CampaignUpdateFromFile(ctx, db.CampaignUpdateFromFileParams{
+				Uuid: mustUUID(f.UUID), Name: f.Title, Description: f.Description,
+				Tags: f.Tags, SourceFile: &f.Path,
+			})
 			if err != nil {
-				return nil, fmt.Errorf("campaign sync: insert %s: %w", f.Path, err)
+				return nil, fmt.Errorf("campaign sync: update %s: %w", f.Path, err)
+			}
+			rep.Updated = append(rep.Updated, f.Path)
+		case !isNoRows(err):
+			return nil, fmt.Errorf("campaign sync: lookup uuid %s: %w", f.Path, err)
+		default:
+			// Unknown uuid: the file is new to this DB, so adopt it. The
+			// campaign repo assigns uuids (`make all`, ADR-0005), so identity
+			// is decided there, not here.
+			campaignID, err = q.CampaignInsert(ctx, db.CampaignInsertParams{
+				Uuid: mustUUID(f.UUID), Name: f.Title, Description: f.Description,
+				SourceFile: &f.Path, Tags: f.Tags,
+			})
+			if err != nil {
+				return nil, fmt.Errorf("campaign sync: adopt %s: %w", f.Path, err)
 			}
 			rep.Created = append(rep.Created, f.Path)
-			seenUUIDs = append(seenUUIDs, mustUUID(newUUID))
 		}
+		seenUUIDs = append(seenUUIDs, mustUUID(f.UUID))
 
 		if err := syncMembers(ctx, q, ens, campaignID, f, rep); err != nil {
 			return nil, err
@@ -274,9 +248,6 @@ func Sync(ctx context.Context, cfg Config, pool *pgxpool.Pool) (*Report, error) 
 		return nil, fmt.Errorf("campaign sync: commit: %w", err)
 	}
 
-	// Step 6: uuid write-back after the import transaction commits.
-	rep.WriteBack = writeBackUUIDs(ctx, cfg, writeBack)
-
 	slog.Info("campaign sync done",
 		"created", len(rep.Created), "updated", len(rep.Updated),
 		"renamed", len(rep.Renamed), "re_enabled", len(rep.ReEnabled),
@@ -285,26 +256,8 @@ func Sync(ctx context.Context, cfg Config, pool *pgxpool.Pool) (*Report, error) 
 		"curated_files", rep.CuratedFiles, "curated_adds", rep.CuratedAdds,
 		"curated_removes", rep.CuratedRemoves, "curated_frozen", rep.CuratedFrozen,
 		"disable_frozen", len(rep.DisableFrozen),
-		"rejected_files", len(rep.RejectedFiles), "rejected_hosts", len(rep.RejectedHosts),
-		"write_back", rep.WriteBack)
+		"rejected_files", len(rep.RejectedFiles), "rejected_hosts", len(rep.RejectedHosts))
 	return rep, nil
-}
-
-// upsertNoUUID inserts a new campaign, or updates in place when the reused
-// uuid already exists (a previous write-back push failed after commit).
-func upsertNoUUID(ctx context.Context, q *db.Queries, f *File, id string) (int32, error) {
-	if cid, err := q.CampaignUpdateFromFile(ctx, db.CampaignUpdateFromFileParams{
-		Uuid: mustUUID(id), Name: f.Title, Description: f.Description,
-		Tags: f.Tags, SourceFile: &f.Path,
-	}); err == nil {
-		return cid, nil
-	} else if !isNoRows(err) {
-		return 0, err
-	}
-	return q.CampaignInsert(ctx, db.CampaignInsertParams{
-		Uuid: mustUUID(id), Name: f.Title, Description: f.Description,
-		SourceFile: &f.Path, Tags: f.Tags,
-	})
 }
 
 // syncMembers diffs one campaign's membership set (§3.3 step 3).
@@ -536,169 +489,6 @@ func dedupeUUIDs(ctx context.Context, pool *pgxpool.Pool, files []*File, rep *Re
 		}
 	}
 	return out
-}
-
-// writeBackUUIDs inserts generated uuid lines and makes the single bot
-// commit (§3.3 step 6). A file that could not be written is reported, not
-// folded into "nothing to push".
-func writeBackUUIDs(ctx context.Context, cfg Config, pending map[string]string) string {
-	if len(pending) == 0 {
-		return "nothing to push"
-	}
-	changed := false
-	var failures []string
-	for path, id := range pending {
-		ok, err := insertUUIDLine(path, id)
-		if err != nil {
-			slog.Warn("uuid write-back failed", "file", path, "err", err.Error())
-			failures = append(failures, filepath.Base(path)+": "+err.Error())
-			continue
-		}
-		changed = changed || ok
-	}
-	report := func(s string) string {
-		if len(failures) > 0 {
-			return "failed: write " + strings.Join(failures, "; ") + "; " + s
-		}
-		return s
-	}
-	if !changed {
-		return report("nothing to push")
-	}
-	if !cfg.Push {
-		return report("written (push disabled)")
-	}
-	if out, err := git(ctx, cfg.RepoPath, "commit", "-am", "chore: assign campaign uuids [skip ci]"); err != nil {
-		return report("failed: commit: " + strings.TrimSpace(out))
-	}
-	out, err := git(ctx, cfg.RepoPath, "push", cfg.GitRemote)
-	if err == nil {
-		return report("pushed")
-	}
-	// Non-fast-forward: rebase and retry once. The retry's own output is
-	// what the operator needs, not the first attempt's.
-	if _, rebaseErr := git(ctx, cfg.RepoPath, "pull", "--rebase", cfg.GitRemote); rebaseErr == nil {
-		retryOut, retryErr := git(ctx, cfg.RepoPath, "push", cfg.GitRemote)
-		if retryErr == nil {
-			return report("pushed")
-		}
-		out = retryOut
-	}
-
-	// §3.3 step 6 says step 4's source_file reuse recovers on the next run,
-	// but that assumes the file still lacks its uuid — false once
-	// insertUUIDLine ran. Left alone, the local commit strands: the next run
-	// finds nothing pending and never retries the push, and every later
-	// `pull --ff-only` aborts the whole sync once origin moves. Roll back to
-	// the remote instead; the uuid rows are already committed to the
-	// database, so the next run re-derives the same write-back from a clean
-	// tree.
-	rollback := rollbackToRemote(ctx, cfg.RepoPath)
-	slog.Warn("uuid write-back push failed", "err", strings.TrimSpace(out), "rollback", rollback)
-	msg := "failed: push: " + strings.TrimSpace(out)
-	if rollback != "" {
-		msg += "; rollback failed: " + rollback
-	}
-	return report(msg)
-}
-
-// rebaseInProgress reports whether the retry left a rebase half-applied.
-// Either state directory means git considers a rebase live; both are how
-// git itself decides (wt_status).
-func rebaseInProgress(repo string) bool {
-	for _, d := range []string{"rebase-merge", "rebase-apply"} {
-		if _, err := os.Stat(filepath.Join(repo, ".git", d)); err == nil {
-			return true
-		}
-	}
-	return false
-}
-
-// rollbackToRemote returns the checkout to its tracked remote branch after a
-// failed write-back push. Empty result = the tree is clean and level with
-// the remote; anything else is a reason the operator has to repair by hand.
-//
-// `--keep`, never `--hard`: /srv/whynoipv6-campaign is a checkout a person
-// can be editing, and --hard would discard whatever they had in flight to
-// clean up after a push we could not land. --keep refuses instead, and the
-// refusal is reported — the sync has already done its database work, so
-// leaving one repair for a human beats silently deleting their work.
-func rollbackToRemote(ctx context.Context, repo string) string {
-	if rebaseInProgress(repo) {
-		if out, err := git(ctx, repo, "rebase", "--abort"); err != nil {
-			return "rebase --abort: " + strings.TrimSpace(out)
-		}
-	}
-	if out, err := git(ctx, repo, "reset", "--keep", "@{u}"); err != nil {
-		return "reset --keep @{u}: " + strings.TrimSpace(out)
-	}
-	return ""
-}
-
-// yamlIndented reports a continuation line of a block scalar or wrapped value.
-func yamlIndented(l string) bool { return strings.HasPrefix(l, " ") || strings.HasPrefix(l, "\t") }
-
-// insertUUIDLine adds `uuid: <id>` after the description key (and its block
-// continuation lines, blank lines inside a block scalar included), or fills
-// an empty `uuid:` key in place, preserving the rest of the file
-// byte-for-byte. The result is parsed before it is written: a splice that
-// would not read back as the uuid is an error, never a committed file.
-func insertUUIDLine(path, id string) (bool, error) {
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		return false, err
-	}
-	lines := strings.SplitAfter(string(raw), "\n")
-	insertAt := -1
-	for i, l := range lines {
-		if strings.HasPrefix(l, "uuid:") {
-			if strings.TrimSpace(strings.TrimPrefix(l, "uuid:")) != "" {
-				return false, nil // already assigned
-			}
-			// `uuid:` with no value (the make fix-uuids placeholder): fill it.
-			lines[i] = "uuid: " + id + "\n"
-			return true, writeCheckedYAML(path, strings.Join(lines, ""), id)
-		}
-		if insertAt < 0 && strings.HasPrefix(l, "description:") {
-			insertAt = i + 1
-			for insertAt < len(lines) {
-				if yamlIndented(lines[insertAt]) {
-					insertAt++
-					continue
-				}
-				if strings.TrimSpace(lines[insertAt]) == "" {
-					// A blank line is part of a block scalar when an indented
-					// line follows it; otherwise the value ended here.
-					j := insertAt + 1
-					for j < len(lines) && strings.TrimSpace(lines[j]) == "" {
-						j++
-					}
-					if j < len(lines) && yamlIndented(lines[j]) {
-						insertAt = j
-						continue
-					}
-				}
-				break
-			}
-		}
-	}
-	if insertAt < 0 {
-		return false, fmt.Errorf("no description: line in %s", path)
-	}
-	out := strings.Join(lines[:insertAt], "") + "uuid: " + id + "\n" + strings.Join(lines[insertAt:], "")
-	return true, writeCheckedYAML(path, out, id)
-}
-
-// writeCheckedYAML writes the spliced file only if it decodes with the uuid
-// the splice meant to add.
-func writeCheckedYAML(path, content, id string) error {
-	var probe struct {
-		UUID string `yaml:"uuid"`
-	}
-	if err := yaml.Unmarshal([]byte(content), &probe); err != nil || probe.UUID != id {
-		return fmt.Errorf("uuid splice would corrupt %s (got uuid %q): file left unchanged", filepath.Base(path), probe.UUID)
-	}
-	return os.WriteFile(path, []byte(content), 0o644) //nolint:gosec // a campaign file the sync itself listed under repo_path
 }
 
 // gitTimeout bounds every git call the sync makes; the tick runs them under

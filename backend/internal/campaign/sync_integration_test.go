@@ -48,7 +48,7 @@ func run(t *testing.T, pool *pgxpool.Pool, dir string) *Report {
 	t.Helper()
 	rep, err := Sync(context.Background(), Config{
 		RepoPath: dir, GitRemote: "origin", MaxDomainsPerFile: 1000,
-		MaxSubdomainsPerDomain: 20, Pull: false, Push: false,
+		MaxSubdomainsPerDomain: 20, Pull: false,
 	}, pool)
 	if err != nil {
 		t.Fatalf("sync: %v", err)
@@ -56,18 +56,26 @@ func run(t *testing.T, pool *pgxpool.Pool, dir string) *Report {
 	return rep
 }
 
-const campA = `title: Campaign A
+// campAUUID is campA's identity. Fixtures carry their uuid the way the
+// campaign repo does after `make all`: the sync never writes one (ADR-0005).
+const campAUUID = "3b3b3b3b-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+
+// campABody is campA before `make all`.
+const campABody = `title: Campaign A
 description: First fixture campaign.
 domains:
     - a-one.no
     - api.a-two.no
 `
 
+const campA = "uuid: " + campAUUID + "\n" + campABody
+
 // campKeeper exists so the checkout is never empty: an empty checkout is a
 // broken clone, not a repo where every campaign was deleted (review issue
 // 29), and Sync refuses it.
 const campKeeper = `title: Keeper
 description: Keeps the checkout non-empty.
+uuid: 3b3b3b3b-bbbb-4bbb-8bbb-bbbbbbbbbbbb
 domains:
     - keeper.no
 `
@@ -78,25 +86,27 @@ func TestCampaignSync(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()
 
-	// --- new file without uuid: insert + write-back.
-	writeFixture(t, dir, "a.yml", campA)
+	// --- new file without uuid: rejected, nothing created, file untouched.
+	writeFixture(t, dir, "a.yml", campABody)
 	rep := run(t, pool, dir)
+	if reason, ok := rep.RejectedFiles["a.yml"]; !ok || !strings.Contains(reason, "no uuid") {
+		t.Errorf("a file without uuid should be rejected: %v", rep.RejectedFiles)
+	}
+	if len(rep.Created) != 0 || rep.MembershipAdds != 0 {
+		t.Errorf("a file without uuid created rows: %+v", rep)
+	}
+	raw, _ := os.ReadFile(filepath.Join(dir, CampaignsDir, "a.yml"))
+	if string(raw) != campABody {
+		t.Errorf("the sync wrote to the checkout:\n%s", raw)
+	}
+
+	// --- the same file after `make all`: adopted under its own uuid.
+	writeFixture(t, dir, "a.yml", campA)
+	rep = run(t, pool, dir)
 	if len(rep.Created) != 1 || rep.MembershipAdds != 2 {
 		t.Fatalf("create: %+v", rep)
 	}
-	if rep.WriteBack != "written (push disabled)" {
-		t.Errorf("write-back = %q", rep.WriteBack)
-	}
-	raw, _ := os.ReadFile(filepath.Join(dir, CampaignsDir, "a.yml"))
-	if !strings.Contains(string(raw), "uuid: ") {
-		t.Fatalf("uuid not written back:\n%s", raw)
-	}
-	uuidLine := ""
-	for _, l := range strings.Split(string(raw), "\n") {
-		if strings.HasPrefix(l, "uuid: ") {
-			uuidLine = strings.TrimPrefix(l, "uuid: ")
-		}
-	}
+	uuidLine := campAUUID
 
 	// Subdomain entry: parent auto-created with created_by='parent_link'.
 	var createdBy, kind string
@@ -167,7 +177,7 @@ func TestCampaignSync(t *testing.T) {
 	}
 
 	// --- re-appearance (same uuid): re-enable, no membership churn.
-	writeFixture(t, dir, "a-renamed.yml", campA[:len(campA)-1]+"\nuuid: "+uuidLine+"\n")
+	writeFixture(t, dir, "a-renamed.yml", campA)
 	rep = run(t, pool, dir)
 	if len(rep.ReEnabled) != 1 || rep.MembershipAdds != 0 {
 		t.Errorf("re-appearance: %+v", rep)
@@ -467,7 +477,7 @@ func TestCampaignSyncRealRepo(t *testing.T) {
 	if err != nil {
 		t.Skipf("campaign repo checkout not available: %v", err)
 	}
-	// Copy to a temp dir so write-back cannot touch the real checkout.
+	// Copy the campaign files into a fixture checkout.
 	dir := t.TempDir()
 	for _, e := range entries {
 		if e.IsDir() || (filepath.Ext(e.Name()) != ".yml" && filepath.Ext(e.Name()) != ".yaml") {
@@ -487,7 +497,7 @@ func TestCampaignSyncRealRepo(t *testing.T) {
 	// (campaign.max_domains_per_file, default 5000) and is set explicitly here.
 	rep, err := Sync(context.Background(), Config{
 		RepoPath: dir, GitRemote: "origin", MaxDomainsPerFile: 5000,
-		Pull: false, Push: false,
+		Pull: false,
 	}, pool)
 	if err != nil {
 		t.Fatalf("sync: %v", err)

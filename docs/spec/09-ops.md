@@ -208,10 +208,9 @@ Provider names/addresses (`1.1.1.1`, `8.8.8.8`, `9.9.9.9` + their v6 forms), the
 
 | Key | env var | Type | Default | From | Meaning |
 |---|---|---|---|---|---|
-| `campaign.repo_path` | `CAMPAIGN_REPO_PATH` | string (dir) | `/srv/whynoipv6-campaign` | 06 | Shared checkout owned by the service user (git pull + write-back). |
-| `campaign.git_remote` | `CAMPAIGN_GIT_REMOTE` | string | `origin` | 06 | Push target for the bot UUID write-back commit (deploy key). |
+| `campaign.repo_path` | `CAMPAIGN_REPO_PATH` | string (dir) | `/srv/whynoipv6-campaign` | 06 | Shared checkout owned by the service user (git pull only; the sync never writes to it, ADR-0005). |
+| `campaign.git_remote` | `CAMPAIGN_GIT_REMOTE` | string | `origin` | 06 | Remote for `git pull --ff-only`. |
 | `campaign.pull` | `CAMPAIGN_PULL` | bool | `true` | 06 | `git pull --ff-only` before parsing. `false` in containers: the distroless image has no git — the checkout is a volume refreshed by `campaign-init`. |
-| `campaign.push` | `CAMPAIGN_PUSH` | bool | `true` | 06 | Commit + push the bot UUID write-back. `false` wherever no git/deploy key (containers); generated uuids are still written to files when the mount allows. |
 | `campaign.max_domains_per_file` | `CAMPAIGN_MAX_DOMAINS_PER_FILE` | int | `5000` | 06 | Per-YAML-file domain cap (schema validation). Raised from 1000 (2026-08-01): the live repo's Dutch central-government register holds 1,723 hosts. |
 | `campaign.max_subdomains_per_domain` | `CAMPAIGN_MAX_SUBDOMAINS_PER_DOMAIN` | int | `20` | 06 | Entry cap for one `subdomains/<apex>.yml` list. Deliberately small: the lists name the endpoints a service needs, not a zone dump. |
 

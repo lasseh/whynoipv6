@@ -150,7 +150,6 @@ services:
       LOG_LEVEL: info
       # No git in the distroless image — campaign-init owns clone/refresh.
       CAMPAIGN_PULL: "false"
-      CAMPAIGN_PUSH: "false"
     volumes:
       - "geoip:/var/lib/GeoIP:ro"
       - "datasets:/var/lib/whynoipv6/datasets"

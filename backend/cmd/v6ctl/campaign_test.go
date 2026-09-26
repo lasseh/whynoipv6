@@ -17,31 +17,21 @@ func TestSyncOutcome(t *testing.T) {
 		wantErr  bool
 		contains string
 	}{
-		"clean run": {
-			rep: campaign.Report{WriteBack: "pushed"},
-		},
-		"nothing to push is clean": {
-			rep: campaign.Report{WriteBack: "nothing to push"},
-		},
+		"clean run": {},
 		"rejected file": {
-			rep:      campaign.Report{WriteBack: "pushed", RejectedFiles: map[string]string{"nrk.no.yml": "bad label"}},
+			rep:      campaign.Report{RejectedFiles: map[string]string{"nrk.no.yml": "bad label"}},
 			wantErr:  true,
 			contains: "1 rejected file(s)",
 		},
 		"rejected host": {
-			rep:      campaign.Report{WriteBack: "pushed", RejectedHosts: map[string]string{"x.example": "not a public suffix"}},
+			rep:      campaign.Report{RejectedHosts: map[string]string{"x.example": "not a public suffix"}},
 			wantErr:  true,
 			contains: "1 rejected host(s)",
 		},
 		"curated frozen": {
-			rep:      campaign.Report{WriteBack: "pushed", CuratedFrozen: true},
+			rep:      campaign.Report{CuratedFrozen: true},
 			wantErr:  true,
 			contains: "curated removals frozen",
-		},
-		"write-back failed": {
-			rep:      campaign.Report{WriteBack: "failed: push rejected"},
-			wantErr:  true,
-			contains: "uuid write-back failed",
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

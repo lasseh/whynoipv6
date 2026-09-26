@@ -23,7 +23,7 @@ func TestConfigValidate(t *testing.T) {
 		noGit   bool
 		wantErr bool
 	}{
-		{"checkout and git present", Config{RepoPath: dir, Pull: true, Push: true}, false, false},
+		{"checkout and git present", Config{RepoPath: dir, Pull: true}, false, false},
 		{"checkout missing", Config{RepoPath: filepath.Join(dir, "absent"), Pull: true}, false, true},
 		{"checkout is a file", Config{RepoPath: file, Pull: true}, false, true},
 		{"git needed but absent", Config{RepoPath: dir, Pull: true}, true, true},

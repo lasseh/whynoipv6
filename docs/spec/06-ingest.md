@@ -221,7 +221,7 @@ Exactly five top-level keys per file; unknown keys are a validation error:
 |---|---|---|
 | `title` | non-empty string | yes |
 | `description` | non-empty string | yes |
-| `uuid` | UUID string | no — only the import bot ever writes it |
+| `uuid` | UUID string | no — the maintainer assigns it with `make all` in the campaign repo; the sync never writes it (ADR-0005) |
 | `domains` | non-empty list of hostname strings | yes |
 | `tags` | list of strings (mandate/campaign tags, OPEN-12) | no |
 
@@ -237,7 +237,7 @@ After acquiring the lock, run `git -C <campaign.repo_path> pull --ff-only <campa
 
 1. **Parse** every `campaigns/*.yml`/`*.yaml` per §3.2. Every domain entry goes through `Canonicalize` (§1) **before** entity lookup/creation and membership diff; entries failing it are skipped and counted under `rejected + reasons`. Then hosts are **deduped within each file** (first occurrence wins). The importer must never fail or warn on a host present in multiple campaign files: that is N legitimate membership rows for one domain row (membership model, 05-schema.md — campaign tables). Files failing schema/hostname/size validation (§4.2 checks, minus the git-diff UUID check) are rejected and reported; a rejected file **never partially imports**.
 2. **Duplicate-uuid guard:** if one uuid appears in >1 file, keep the file whose path equals the DB's `campaign.source_file` for that uuid and reject the others; if none matches, reject all of them. (This defeats a copied-uuid file coexisting with the original.)
-3. **Files with uuid.** A file whose uuid does not exist in `campaign` is ADOPTED: insert `campaign` with the file's own uuid. **The repo owns campaign identity, not the DB.** uuids are minted in the campaign repo (`make fix-uuids` fills empty `uuid:` fields) and pinned by PR validation (§4.2), so a uuid the DB has not seen means a campaign it does not have yet — including the production-data migration, whose YAML files already carry production uuids (08-migration-cutover.md). The DB cannot mint one instead: step 6's write-back needs `campaign.push`, which is false wherever the sync runs off a mounted checkout (the production crawler included), so a rejection here strands the campaign permanently — no later run can resolve it.
+3. **Files with uuid.** A file whose uuid does not exist in `campaign` is ADOPTED: insert `campaign` with the file's own uuid. **The repo owns campaign identity, not the DB.** uuids are minted in the campaign repo (`make all`, ADR-0005) and pinned by PR validation (§4.2), so a uuid the DB has not seen means a campaign it does not have yet — including the production-data migration, whose YAML files already carry production uuids (08-migration-cutover.md). The sync never mints one (step 4).
 
    A uuid **edited in place** on an existing file therefore forks rather than rejects: step 5 disables the row holding the old uuid and this step creates one for the new uuid, both reported as `disabled` + `created`. §4.2's UUID-trust check is what stops that reaching the DB in the first place.
 
@@ -251,14 +251,15 @@ After acquiring the lock, run `git -C <campaign.repo_path> pull --ff-only <campa
    a. **Ensure entity** per host (§3.4): existing `domain` row by host, else create.
    b. **Additions:** `INSERT INTO campaign_domain (campaign_id, domain_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`. On membership addition to an **existing** domain row, apply the re-entry rule (same as Tranco step 10): `disabled_reason = 'delisted'` → re-enable (`disabled=false, disabled_reason=NULL, disabled_at=NULL`) + `next_check_at = now()`; `'dead'` → keep disabled, `next_check_at = now()`; `'service'`/`'manual'` → unchanged.
    c. **Removals:** `DELETE FROM campaign_domain WHERE campaign_id = $1 AND domain_id <> ALL($2::bigint[])` (`$2` = desired ids). Membership removal deletes the membership row **only** — the entity remains; the lifecycle sweep handles orphaning (§3.6).
-4. **Files without uuid:** first run `SELECT uuid FROM campaign WHERE source_file = $file` — if a row exists AND its uuid appears in no repo file, REUSE that uuid (a previous write-back push failed; this makes write-back idempotent and prevents duplicate campaigns). Otherwise generate a fresh UUIDv4. Insert `campaign (uuid, name, description, source_file, tags)` (`tags` = the normalized §3.2 list, or NULL) + memberships (per step 3's ensure/diff) inside the import transaction.
+4. **Files without uuid** are rejected and reported (`no uuid: run make all in the campaign repo`). A campaign already tied to that file through `source_file` is frozen per step 5's erratum, not disabled.
+
+   _Erratum 2026-09-26 (ADR-0005): this step used to mint a uuid, insert the campaign under it, and write the uuid back to the file in step 6. The sync now only reads the checkout. The maintainer assigns uuids with `make all` before pushing, so a file without one is a merge that skipped that step._
 5. **Deletion (uuid-set diff, not source_file diff):** after steps 3–4:
 
    ```sql
    UPDATE campaign SET disabled = true, updated_at = now()
    WHERE NOT disabled
      AND uuid <> ALL($1::uuid[]);   -- $1 = all uuids seen in the repo this run,
-                                    --      including newly generated ones
    ```
 
    _Erratum 2026-09-02 (review issue 29): "seen in the repo this run" counted only files that **parsed**, so a rejected file was indistinguishable from a deleted one and one bad edit soft-deleted the campaign it described. One rule now covers all three shapes of "we could not read it": **a campaign is disabled only when its file is genuinely gone from a checkout we could read.**_
@@ -269,13 +270,13 @@ After acquiring the lock, run `git -C <campaign.repo_path> pull --ff-only <campa
 
    _`TestCampaignRejectedFileFreezesDisable`, `TestCampaignAllHostsRejectedFreezesRemoval`, `TestCampaignEmptyCheckoutAborts` and `TestCampaignEmptyCheckoutOnEmptyDB` in `internal/campaign` pin the four cases._
 
-   Log each disabled campaign. Membership rows are kept (soft delete, history preserved); orphaned rank-NULL domains are handled by the lifecycle sweep (§3.6). A restored YAML *without* a uuid is a new campaign per step 4 (new uuid written back); the old disabled row stays soft-deleted. Consequence, stated for the implementer: a uuid edited in place = old campaign disabled by this step + a new campaign adopted by step 3 — both loudly in the report, and the public URL moves with the uuid, so §4.2 blocks it at PR time.
-6. **Write-back:** after the import transaction commits, write generated uuids into their files (preserving each file's other content byte-for-byte apart from the inserted `uuid: <value>` line after `description:`), make ONE bot commit — message exactly `chore: assign campaign uuids [skip ci]` — and push via the deploy key to `campaign.git_remote`. On non-fast-forward: `git pull --rebase` and retry the push once; on final failure: ops-webhook alert and continue — step 4's reuse rule recovers on the next run. If no uuids were generated, no commit is made.
-7. **Report** to the ops webhook: created/updated/renamed/re-enabled/disabled campaigns, membership adds/removes, rejected files with reasons (schema, hostname, size, duplicate uuid), rejected host entries + reasons, write-back status (pushed / nothing to push / failed).
+   Log each disabled campaign. Membership rows are kept (soft delete, history preserved); orphaned rank-NULL domains are handled by the lifecycle sweep (§3.6). A restored YAML *without* a uuid is rejected per step 4 until `make all` gives it a new uuid, which makes it a new campaign; the old disabled row stays soft-deleted. Consequence, stated for the implementer: a uuid edited in place = old campaign disabled by this step + a new campaign adopted by step 3 — both loudly in the report, and the public URL moves with the uuid, so §4.2 blocks it at PR time.
+6. _Removed 2026-09-26 (ADR-0005): the uuid write-back. The sync never writes to the checkout and never pushes._
+7. **Report** to the ops webhook: created/updated/renamed/re-enabled/disabled campaigns, membership adds/removes, rejected files with reasons (schema, hostname, size, duplicate uuid, missing uuid), rejected host entries + reasons.
 
-   _Erratum 2026-09-02 (review issue 42): reporting is not enough on the `v6ctl campaign sync` path. **"Completed with rejections" exits non-zero** — any rejected file, any rejected host entry, `CuratedFrozen`, or a `failed:` write-back. The database work has already committed at that point, so the exit code changes only visibility, and visibility is the gap: the verb runs from the webhook-triggered CI job and under systemd `OnFailure`, both of which read the exit status and nothing else, and a rejected campaign file that never imports looked exactly like a clean sync to both. `tranco import` already exits non-zero on its aborted outcome. The daily-tick path is unaffected — it has no exit code — and its report still travels by log line. `TestSyncOutcome` in `cmd/v6ctl` pins the six cases._
+   _Erratum 2026-09-02 (review issue 42): reporting is not enough on the `v6ctl campaign sync` path. **"Completed with rejections" exits non-zero** — any rejected file, any rejected host entry, or `CuratedFrozen`. The database work has already committed at that point, so the exit code changes only visibility, and visibility is the gap: the verb runs from the webhook-triggered CI job and under systemd `OnFailure`, both of which read the exit status and nothing else, and a rejected campaign file that never imports looked exactly like a clean sync to both. `tranco import` already exits non-zero on its aborted outcome. The daily-tick path is unaffected — it has no exit code — and its report still travels by log line. `TestSyncOutcome` in `cmd/v6ctl` pins the cases._
 
-All DB work in steps 3–5 runs in **one import transaction**; parsing (step 1–2) happens before it opens, write-back (step 6) after it commits.
+All DB work in steps 3–5 runs in **one import transaction**; parsing (step 1–2) happens before it opens.
 
 ### 3.4 Ensure-entity: subdomain auto-link and parent auto-create (PSL at import only)
 
@@ -300,14 +301,13 @@ Classification is per-entity; children never change a parent's tier. **There is 
 ```yaml
 campaign:
   repo_path: /srv/whynoipv6-campaign   # string; shared checkout, owned by the service user
-  git_remote: origin                   # string; push target for the bot commit (deploy key)
+  git_remote: origin                   # string; remote for git pull --ff-only
   pull: true                           # bool; git pull before parsing — false in containers (no git in the distroless image)
-  push: true                           # bool; commit+push the uuid write-back — false in containers
   max_domains_per_file: 5000           # int; PR-validation size cap (§4); >1,723 — the Dutch central-government register
   max_subdomains_per_domain: 20        # int; entry cap for one subdomains/<apex>.yml list (§3.7)
 ```
 
-Ops (Ansible; definitions in 09-ops.md): the checkout and the GitHub deploy key (write access, campaign repo only) are provisioned for the single service user that runs both `crawler` and CI-invoked `v6ctl`.
+Ops (Ansible; definitions in 09-ops.md): the checkout is provisioned for the single service user that runs both `crawler` and CI-invoked `v6ctl`. It needs no write access: the campaign repo is public and the sync never pushes (ADR-0005).
 
 ### 3.6 Lifecycle-sweep linkage (restated for the sweep's owner)
 
@@ -371,9 +371,9 @@ A single workflow in the **campaign repository**, new and tiny. It runs only on 
 - **Tags (blocking):** if `tags` is present, each entry must normalize to `^[a-z0-9][a-z0-9-]{0,31}$` (lowercase kebab, ≤32 chars) with ≤16 tags per file (§3.2 Decision); an empty/whitespace or over-long/over-count tag fails, listing the file and offending tag.
 - **UUID trust (blocking, diff vs main):** contributors never invent UUIDs. Compare each file's `uuid:` value between the PR head and the merge-base with main (rename detection disabled — `--no-renames` — so renames appear as delete+add):
   - **Added file:** `uuid` must be absent or empty — UNLESS its value equals the uuid of **exactly one** file deleted in the same PR (a git rename, possibly undetected as such). Then it passes, and the bot comment states loudly: `"rename detected: old.yml → new.yml (uuid preserved)"`.
-  - **Modified file:** `uuid` must be byte-identical to the value in main (absent stays absent — only the bot commit ever adds one).
+  - **Modified file:** `uuid` must be byte-identical to the value in main (absent stays absent — only the maintainer's `make all` ever adds one).
   - **Deleted file:** allowed (that is how a campaign is retired; sync disables it, §3.3 step 5).
-  - Any other introduction or change of a `uuid:` value → fail with: `"uuid values are assigned by the import bot; remove the uuid field"`.
+  - Any other introduction or change of a `uuid:` value → fail with: `"leave uuid out; the maintainer assigns it with make all"`.
 - **Hostname validation (blocking):** per entry, `Canonicalize` (§1) plus the eTLD+1 check (§3.4 step 1: the host must have an ICANN-section registrable domain; both apexes and subdomains of it pass — a host that *is* a public suffix, or under an unknown TLD, fails). Failure lists file, line, entry, reason.
 - **Within-file duplicate (blocking):** two entries in the same file normalizing to the same host → error listing the host and both line numbers. Scope: the changed file only.
 - **Size cap (blocking):** ≤ `campaign.max_domains_per_file` (default 5000; raised from 1000 on 2026-08-01 — the live Dutch central-government file holds 1,723 hosts) list entries per file.
@@ -765,7 +765,6 @@ All keys below are introduced here and consolidated in the registry (09-ops.md),
 | `campaign.repo_path` | string | `/srv/whynoipv6-campaign` | crawler + v6ctl |
 | `campaign.git_remote` | string | `origin` | crawler + v6ctl |
 | `campaign.pull` | bool | true | crawler + v6ctl |
-| `campaign.push` | bool | true | crawler + v6ctl |
 | `campaign.max_domains_per_file` | int | 5000 | v6ctl (validate) |
 | `campaign.max_subdomains_per_domain` | int | 20 | crawler + v6ctl |
 | `crawler.resources.enabled` | bool | false | crawler |
@@ -782,7 +781,7 @@ Hardcoded constants (deliberately not config): v6ctl advisory-lock wait 5m; disc
 3. Re-importing the same list ID is a no-op (short-circuit in step 2; provenance `ON CONFLICT … DO NOTHING` as the second guard); an aborted list is never auto-retried; `--force` imports it.
 4. A fixture where >2% of ranked rows would delist aborts with `aborted=true` + note and leaves all ranks unchanged; the same fixture with `--force` applies. The same fixture against a DB whose last successful import is 5 days old **imports** (the budget scaled to 10%), and a fixture past the 10% ceiling still aborts at that staleness.
 5. Re-entry: a `delisted` row present in today's list is re-enabled with `next_check_at = now()`; a `dead` row stays disabled with `next_check_at = now()`; `service`/`manual` rows only get rank updates.
-6. Campaign sync against a fixture repo covers: new file without uuid (insert + write-back), rename (source_file update), file deletion (soft-disable via uuid-set diff), re-appearance (re-enable, no membership churn), duplicate uuid across files (source_file match wins), unknown uuid (adopted, on a new file and on one whose uuid changed in place — the latter forking into disabled + created), subdomain entry (parent auto-created, `created_by='parent_link'`, `parent_id` set), and the membership re-entry rule.
+6. Campaign sync against a fixture repo covers: new file without uuid (rejected, checkout left untouched), rename (source_file update), file deletion (soft-disable via uuid-set diff), re-appearance (re-enable, no membership churn), duplicate uuid across files (source_file match wins), unknown uuid (adopted, on a new file and on one whose uuid changed in place — the latter forking into disabled + created), subdomain entry (parent auto-created, `created_by='parent_link'`, `parent_id` set), and the membership re-entry rule.
 7. `v6ctl campaign validate` reproduces every §4.2 blocking check on fixture PRs (added-file-with-uuid, modified-uuid, rename-with-preserved-uuid, within-file duplicate, oversize file) and never fails on cross-file duplicates.
 7a. Curated subdomain lists (§3.7): the parser accepts relative labels (including multi-level) and rejects a full host, a bare `www`, a normalized duplicate, an over-cap list, an unknown key, and a filename that is not the canonical registrable apex; validation reports each failure at the offending entry's line. Sync against a fixture repo covers: unknown apex (skipped, reported, no rows created), tracked apex (children created `kind='subdomain'`/`created_by='curated'`, parent untouched), a host already known from another ingress (origin kept, parent backfilled so it appears in `subdomain_count`), entry dropped (membership removed, row left for the sweep), re-listing a delisted host (re-enabled and due), a disabled apex (skipped **without** unlisting its hosts), two files claiming one apex (both rejected), and any rejection suspending the removal diff.
 8. Discovery statements A–C + prune maintain `dependent_count` exactly (property test: count equals `SELECT count(*) FROM domain_resource WHERE resource_host_id = X` after arbitrary interleavings); manual links survive prune; `required=FALSE` links are excluded from the roll-up input.

@@ -66,7 +66,6 @@ func registryDefaults(binary string) map[string]any {
 		"campaign.repo_path":            "/srv/whynoipv6-campaign",
 		"campaign.git_remote":           "origin",
 		"campaign.pull":                 true,
-		"campaign.push":                 true,
 		"campaign.max_domains_per_file": 5000,
 
 		// Curated subdomain lists: subdomains/<apex>.yml in the same repo.

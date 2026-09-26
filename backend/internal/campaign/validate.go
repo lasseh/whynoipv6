@@ -180,12 +180,12 @@ func Validate(ctx context.Context, repo, base string, maxDomains, maxSubdomains 
 					if from := deletedUUIDs[headUUID]; len(from) == 1 {
 						fmt.Fprintf(&comment, "**rename detected:** `%s` → `%s` (uuid preserved)\n\n", from[0], ch.name)
 					} else {
-						fail(1, "uuid values are assigned by the import bot; remove the uuid field")
+						fail(1, "leave uuid out; the maintainer assigns it with make all")
 					}
 				}
 			case 'M':
 				if headUUID != baseUUID {
-					fail(1, "uuid values are assigned by the import bot; remove the uuid field")
+					fail(1, "leave uuid out; the maintainer assigns it with make all")
 				}
 			}
 		}

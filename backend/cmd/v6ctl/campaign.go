@@ -68,7 +68,6 @@ func campaignCmd() *cobra.Command {
 					fmt.Printf("  %s: %s\n", h, strings.Split(reason, "\n")[0])
 				}
 			}
-			fmt.Printf("write-back: %s\n", rep.WriteBack)
 			return syncOutcome(rep)
 		},
 	}
@@ -103,9 +102,6 @@ func syncOutcome(rep *campaign.Report) error {
 	}
 	if n := len(rep.DisableFrozen); n > 0 {
 		reasons = append(reasons, fmt.Sprintf("%d campaign(s) frozen", n))
-	}
-	if strings.HasPrefix(rep.WriteBack, "failed:") {
-		reasons = append(reasons, "uuid write-back "+rep.WriteBack)
 	}
 	if len(reasons) == 0 {
 		return nil

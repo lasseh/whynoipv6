@@ -137,16 +137,16 @@ docker compose run --rm geoip-init
 docker compose run --rm --user root --entrypoint /v6ctl api export
 
 # campaign sync — the campaign volume (cloned/refreshed by campaign-init) is
-# mounted on the crawler service, which also sets CAMPAIGN_PULL/PUSH=false
+# mounted on the crawler service, which also sets CAMPAIGN_PULL=false
 # (the distroless image has no git):
 docker compose run --rm --entrypoint /v6ctl crawler campaign sync
 ```
 
 **`campaign sync` exit codes.** `0` is a clean sync. `1` covers both a sync
 that never ran (bad config, git failure, DB error) and one that **completed
-with rejections** — a rejected campaign file, a rejected host entry, a
-`CuratedFrozen` run whose curated removals were suspended, or a failed UUID
-write-back. The database work commits either way; the exit code is what
+with rejections** — a rejected campaign file, a rejected host entry, a campaign file
+without a uuid, or a `CuratedFrozen` run whose curated removals were
+suspended. The database work commits either way; the exit code is what
 reaches the webhook-triggered CI job and systemd `OnFailure`, which is why a
 partial sync is not allowed to look clean. Read the printed report to tell
 the two apart: a run that never started prints no `created:` line.
@@ -281,11 +281,12 @@ frontier lag, error ratio, TimescaleDB job failures, Unbound down. Heartbeats go
 healthchecks.io (`ops.healthcheck_url`), failures to the ops webhook
 (`ops.webhook_url`).
 
-### Campaign repo automation ([`deploy/campaign-repo/`](../deploy/campaign-repo/))
+### Campaign repo
 
-Workflows staged for the separate `whynoipv6-campaign` repo: PRs are validated with
-`v6ctl campaign validate` (bot comment, no DB), and a push to `main` dispatches a
-`campaign-sync` event so the backend can run `v6ctl campaign sync`.
+The separate `whynoipv6-campaign` repo has no CI. The maintainer runs `make all`
+there after merging a campaign PR, which assigns missing uuids and checks them,
+and a pre-push hook blocks a push that skipped it. The backend only reads the
+checkout: it never writes a uuid and never pushes (ADR-0005).
 
 Campaign files live in that repo's `campaigns/` directory (06-ingest.md §3.2). If
 its layout ever changes again, **deploy the backend first**: a sync that cannot find
