@@ -193,13 +193,13 @@ func validateSubdomainFiles(repo string, files []changedFile, maxSubdomains int,
 		var others []string
 		for _, p := range claimants[parsed.Apex] {
 			if p != parsed.Path {
-				others = append(others, p)
+				others = append(others, fmt.Sprintf("%#q", p))
 			}
 		}
 		if len(others) > 0 {
 			res.Failures = append(res.Failures, fmt.Sprintf(
-				"%s:1: `%s` is already listed by `%s` — one file per domain, merge them",
-				ch.name, parsed.Apex, strings.Join(others, "`, `")))
+				"%s:1: %#q is already listed by %s — one file per domain, merge them",
+				ch.name, parsed.Apex, strings.Join(others, ", ")))
 			continue
 		}
 

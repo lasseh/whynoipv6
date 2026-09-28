@@ -207,7 +207,7 @@ func Validate(ctx context.Context, repo, base string, maxDomains, maxSubdomains 
 						continue
 					}
 					if otherTitle, ok := hosts[h]; ok {
-						lines = append(lines, fmt.Sprintf("- `%s` is also in `%s`", h, otherTitle))
+						lines = append(lines, fmt.Sprintf("- %#q is also in %#q", h, otherTitle))
 					}
 				}
 			}
