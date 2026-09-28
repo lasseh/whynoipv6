@@ -109,7 +109,7 @@ docker compose run --rm --entrypoint /v6ctl migrate <verb> [args...]
 | `tranco import [--force]` | one import attempt of the Tranco top-1M (`--force` bypasses the sanity guard: ≥950k rows, ≤2% delist) |
 | `tranco status` | last 10 imports + staleness check |
 | `campaign sync` | sync the campaign-YAML checkout into the DB (see below); **exits 1 when the sync completed with rejections** |
-| `campaign validate --repo <path> [--base <ref>]` | CI-style validation of campaign YAML, no DB needed |
+| `campaign validate --repo <path> [--base <ref>]` | offline checks of campaign and subdomain files, no DB needed; `--base` checks only the files changed since that ref (run on a PR branch before merging) |
 | `geoip update [--token …] [--dir …]` | download a fresh IPinfo Lite mmdb (atomic replace; crawler hot-reloads hourly) |
 | `provider seed [--path …]` | load the curated DNS-provider mapping (embedded list by default; idempotent) |
 | `provider add <name> <ns-suffix>…` / `remove` / `list` | curate the DNS-provider mapping |

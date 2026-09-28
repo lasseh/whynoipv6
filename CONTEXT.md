@@ -99,6 +99,15 @@ crystallized *after* the spec was frozen.
   _Avoid:_ seeding a fixed-window surface from the global mark; it never
   304s, because some domain somewhere transitions every few minutes.
 
+- **Campaign uuid.** A campaign's identity: the `uuid:` line in its file under
+  `campaigns/` in the campaign repo, which the API exposes as the campaign's
+  URL key. The filename and title can change; the uuid never does. Only the
+  maintainer's `make all` in the campaign repo writes one (ADR-0005), and
+  `campaign.Sync` only reads it. A file without one is a rejected file, and a
+  uuid the database has not seen is adopted as a new campaign.
+  _Avoid:_ minting or writing a uuid from the backend, and treating
+  `source_file` as identity (it is provenance, used only for the freeze).
+
 - **Series spec.** The `{points}` counterpart to the list spec —
   `api.SeriesSpec{Live, Window, Fetch, Day, Point}` consumed by
   `api.ServeSeries`, which owns the §4.10 rim: window parsing, the optional
