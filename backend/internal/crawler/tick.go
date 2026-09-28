@@ -74,7 +74,7 @@ func (t *Tick) Run(ctx context.Context) error {
 	}
 
 	// Step 5 — campaign sync (nested BLOCKING lock: the tick waits out a
-	// concurrent webhook-triggered sync rather than dropping the daily
+	// concurrent operator-run sync rather than dropping the daily
 	// guarantee).
 	if err := lock.Run(ctx, t.Pool, lock.JobCampaignSync, v6ctlLockWait, func(ctx context.Context) error {
 		_, err := campaign.Sync(ctx, t.Campaign, t.Pool)

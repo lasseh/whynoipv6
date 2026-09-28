@@ -38,7 +38,7 @@ type changedFile struct {
 	status byte   // A, M, D
 }
 
-// Validate runs the §4.2 checks. base != "" is CI mode: only the files
+// Validate runs the §4.2 checks. base != "" is diff mode: only the files
 // changed vs the merge base are evaluated and the UUID diff rule applies;
 // base == "" is local mode: every campaigns/ YAML plus every curated
 // subdomain list, no git required. The verb never touches the DB or the
@@ -168,7 +168,7 @@ func Validate(ctx context.Context, repo, base string, maxDomains, maxSubdomains 
 			firstSeen[host] = e.Line
 		}
 
-		// UUID trust (CI mode only).
+		// UUID trust (diff mode only).
 		if base != "" {
 			// Byte-identical comparison (06 §4.2): read the raw uuid text on
 			// both sides — never the parser-normalized form.
@@ -293,7 +293,7 @@ func gitFileUUID(ctx context.Context, repo, base, name string) string {
 }
 
 // addedHosts computes the PR's newly-added hosts for one file: head minus
-// base (CI mode with an existing base file); everything otherwise.
+// base (diff mode with an existing base file); everything otherwise.
 func addedHosts(ctx context.Context, repo, base string, ch changedFile, parsed *File) []string {
 	if base == "" || ch.status == 'A' {
 		return parsed.Hosts

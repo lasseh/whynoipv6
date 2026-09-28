@@ -421,8 +421,8 @@ ExecStart=/usr/bin/curl -fsS --max-time 15 -X POST "${OPS_WEBHOOK_URL}" \
 alerting infrastructure. The **Tranco import has no timer**: it is fired by the crawler
 coordinator goroutine under the `JobTrancoImport` advisory lock (06-ingest.md,
 04-lifecycle-scheduling.md). The **daily tick has no timer**: the coordinator fires it at
-`03:30 UTC` under `JobDailyTick`. Campaign sync runs from the tick **and** on a
-GitHub Actions `repository_dispatch` webhook → operator CI runs `v6ctl campaign sync` (06-ingest.md).
+`03:30 UTC` under `JobDailyTick`. Campaign sync runs from the tick; an operator
+runs `v6ctl campaign sync` when a sync should not wait for it (06-ingest.md §3.1).
 
 | Timer | Host | OnCalendar (UTC) | ExecStart | Notes |
 |---|---|---|---|---|

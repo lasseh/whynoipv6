@@ -8,9 +8,9 @@ import (
 )
 
 // TestSyncOutcome pins the exit-code contract from review issue 42: a sync
-// that completed *with rejections* is not a clean run. The webhook-triggered
-// CI job and systemd OnFailure read the exit code and nothing else, so a
-// rejected file or a frozen curated diff has to reach them through it.
+// that completed *with rejections* is not a clean run. Whatever runs the verb
+// reads the exit code first, so a rejected file or a frozen curated diff has
+// to reach it through that.
 func TestSyncOutcome(t *testing.T) {
 	for name, tc := range map[string]struct {
 		rep      campaign.Report

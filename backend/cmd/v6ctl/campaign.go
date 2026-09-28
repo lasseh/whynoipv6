@@ -82,10 +82,10 @@ func campaignCmd() *cobra.Command {
 // syncOutcome turns "completed with rejections" into a non-zero exit
 // (review issue 42, 06 §3.3 step 7 erratum). The database work has already
 // committed by this point, so the exit code changes nothing but
-// visibility — and visibility is the whole problem: the verb runs from a
-// webhook-triggered CI job and under systemd OnFailure, and a rejected
-// campaign file that never imports, or a CuratedFrozen run that suspends
-// every curated removal, looked exactly like a clean sync to both.
+// visibility — and visibility is the whole problem: whatever runs the verb
+// reads the exit code first, and a rejected campaign file that never
+// imports, or a CuratedFrozen run that suspends every curated removal,
+// looked exactly like a clean sync.
 //
 // `tranco import`, the sibling verb, already exits non-zero on its aborted
 // outcome.

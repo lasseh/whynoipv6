@@ -21,7 +21,7 @@ const ClassID int32 = 60660
 const (
 	JobDailyTick     int32 = 1 // the daily tick, all steps, one lock for the whole sequence
 	JobTrancoImport  int32 = 2 // Tranco import (coordinator cycle + `v6ctl tranco import`)
-	JobCampaignSync  int32 = 3 // campaign sync (tick step 5 + webhook + `v6ctl campaign sync`)
+	JobCampaignSync  int32 = 3 // campaign sync (tick step 5 + `v6ctl campaign sync`)
 	JobDatasetExport int32 = 4 // nightly dataset snapshot export (`v6ctl export`)
 )
 

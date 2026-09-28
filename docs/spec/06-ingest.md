@@ -15,7 +15,6 @@ _Frozen 2026-08 — historical design record. The shipped code is the implementa
 - resource discovery/prune/counter statements executed inside the per-domain commit transaction (transaction machinery owned by 03-state-machine.md)
 - `db/query/stats.sql`, `db/query/country.sql`, `db/query/asn.sql` — the four `stats_*` snapshot upserts and the ported `update_country_metrics`/`update_asn_metrics` counter recomputes (§10), called by the daily tick steps 2–3 (04-lifecycle-scheduling.md — The daily tick) and by `v6ctl stats recalc`
 - `cmd/v6ctl` verbs: `tranco import`, `tranco status`, `campaign sync`, `campaign validate`, `resource add`, `resource remove`, `shame add|remove|list`, `provider add|remove|list`, `stats recalc`
-- `.github/workflows/validate.yml` in the campaign repository (PR validation Action)
 
 **Companion files:** 05-schema.md (all DDL: `domain`, `campaign`, `campaign_domain`, `resource_host`, `domain_resource`, `tranco_import`, `asn`, `country`, `top_shame`, the Tranco staging table), 02-observation-model.md (bulk-resolver seam and bogon filter used by the resource sweep, the attribution answer-set ordering, and the resources roll-up algorithm that turns confirmed host statuses into the `resources` observation), 03-state-machine.md (the per-domain commit transaction the discovery statements run inside; it consumes the roll-up's observation), 04-lifecycle-scheduling.md (daily tick step order, lifecycle sweep, advisory-lock package `internal/lock`), 07-api.md (the `/stats/*`, `/stats/overview`, `/asns`, `/countries` serializers that read the §10 snapshot/counter columns, and the `v6_ready`/`top_heroes`/`top_nameserver`/`count_v4` read-side formulas), 09-ops.md (config-key registry, systemd timers, ops webhook), 00-overview.md (canonical sizing constants), 10-testing.md (all fixtures and test vectors named here).
 
@@ -55,7 +54,7 @@ Unit-test vectors (fixture table in 10-testing.md — Canonicalize vectors; thes
 | Ingress | When | On Canonicalize failure |
 |---|---|---|
 | Tranco import (§2 step 5 below) | per CSV line | count in `tranco_import.rejected_count`, log at debug, continue |
-| Campaign PR validation (§4 below) | per YAML domain entry | CI check fails with the offending file, line, and reason |
+| Campaign PR validation (§4 below) | per YAML domain entry | `v6ctl campaign validate` fails with the offending file, line, and reason |
 | Campaign sync (§3 step 3 below) | per YAML domain entry, **before** entity lookup/creation and membership diff | entry skipped, counted under `rejected + reasons` in the sync report |
 | Curated subdomain lists (§3.7 below) | on the filename (must round-trip to itself), and on each `<label>.<apex>` join — the join is what validates the label | whole file rejected (never a partial list), reported under its repo-relative path; a rejection also suspends the removal diff |
 | POST /check | body domain — Canonicalize() first, then the POST /check-only policy layer (reject RFC 2606 TLDs, `.internal`, `.local`); owned by 07-api.md | `400 invalid-parameter` (RFC 9457 `application/problem+json`, 07-api.md — §2.5) |
@@ -209,7 +208,9 @@ tranco:
 
 ### 3.1 One implementation, serialized
 
-There is exactly ONE sync implementation: `internal/campaign.Sync(ctx, cfg, pool)`. `v6ctl campaign sync` (webhook path: on merge to main, GitHub Actions `repository_dispatch` → operator CI runs it on the backend host) and the crawler daily tick (04-lifecycle-scheduling.md — daily tick, step 5, after the lifecycle sweep) both call it. The webhook is latency sugar; the cron is the guarantee — **both** stay. No other code touches the campaign checkout or the campaign tables' YAML-derived columns.
+There is exactly ONE sync implementation: `internal/campaign.Sync(ctx, cfg, pool)`. `v6ctl campaign sync` (run by the operator when a sync should not wait for the tick) and the crawler daily tick (04-lifecycle-scheduling.md — daily tick, step 5, after the lifecycle sweep) both call it.
+
+_Erratum 2026-09-28: a merge to main used to trigger `v6ctl campaign sync` through a GitHub Actions `repository_dispatch` webhook. That workflow was never installed in the campaign repo and its staged copy is deleted. The daily tick is the only automatic trigger._ No other code touches the campaign checkout or the campaign tables' YAML-derived columns.
 
 Sync serializes across processes with the `JobCampaignSync` session-level advisory lock (`internal/lock`, ClassID 60660, job 3), acquired **before any git operation** — the lock protects the shared checkout at `campaign.repo_path` as well as the DB. The lock lives on a dedicated pooled connection held for the whole run; the import transaction runs on the pool as usual. **Both sync paths use the blocking `Run(JobCampaignSync, wait=5m, …)` variant** — an explicitly requested sync and the daily tick's nested step each wait out a concurrent run rather than dropping the daily guarantee; deadline exceeded → exit 1 with `"another campaign sync is running"`. A crash mid-sync closes the connection and releases the lock automatically.
 
@@ -274,7 +275,7 @@ After acquiring the lock, run `git -C <campaign.repo_path> pull --ff-only <campa
 6. _Removed 2026-09-26 (ADR-0005): the uuid write-back. The sync never writes to the checkout and never pushes._
 7. **Report** to the ops webhook: created/updated/renamed/re-enabled/disabled campaigns, membership adds/removes, rejected files with reasons (schema, hostname, size, duplicate uuid, missing uuid), rejected host entries + reasons.
 
-   _Erratum 2026-09-02 (review issue 42): reporting is not enough on the `v6ctl campaign sync` path. **"Completed with rejections" exits non-zero** — any rejected file, any rejected host entry, or `CuratedFrozen`. The database work has already committed at that point, so the exit code changes only visibility, and visibility is the gap: the verb runs from the webhook-triggered CI job and under systemd `OnFailure`, both of which read the exit status and nothing else, and a rejected campaign file that never imports looked exactly like a clean sync to both. `tranco import` already exits non-zero on its aborted outcome. The daily-tick path is unaffected — it has no exit code — and its report still travels by log line. `TestSyncOutcome` in `cmd/v6ctl` pins the cases._
+   _Erratum 2026-09-02 (review issue 42): reporting is not enough on the `v6ctl campaign sync` path. **"Completed with rejections" exits non-zero** — any rejected file, any rejected host entry, or `CuratedFrozen`. The database work has already committed at that point, so the exit code changes only visibility, and visibility is the gap: whatever runs the verb reads the exit status first, and a rejected campaign file that never imports looked exactly like a clean sync. `tranco import` already exits non-zero on its aborted outcome. The daily-tick path is unaffected — it has no exit code — and its report still travels by log line. `TestSyncOutcome` in `cmd/v6ctl` pins the cases._
 
 All DB work in steps 3–5 runs in **one import transaction**; parsing (step 1–2) happens before it opens.
 
@@ -357,35 +358,37 @@ Removal is the whole lifecycle story: this ingress never disables a row. Droppin
 
 ---
 
-## 4. PR-validation GitHub Action (campaign repo)
+## 4. PR validation (campaign repo)
+
+_Erratum 2026-09-28: the campaign repo has no CI. The GitHub Action this section specified was dropped (campaign repo a389b61) and its staged copy deleted. `v6ctl campaign validate` is unchanged. The maintainer runs it in diff mode (`--base origin/main`) on a PR branch before merging, and contributors can run local mode on their checkout. uuids are assigned after the merge with `make all` (ADR-0005)._
 
 ### 4.1 Shape
 
-A single workflow in the **campaign repository**, new and tiny. It runs only on `pull_request`, and evaluates **only the `.yml`/`.yaml` files changed by the PR** (git diff against the merge base with main) — never the whole repo, so pre-existing issues in untouched files cannot fail an unrelated PR. The Action has **no DB access**.
+Validation of a PR evaluates **only the `.yml`/`.yaml` files changed by the PR** (git diff against the merge base with main) — never the whole repo, so pre-existing issues in untouched files cannot fail an unrelated PR. It has **no DB access**.
 
-**Decision:** the Action's checks are implemented as `v6ctl campaign validate` (§4.3), built from the backend repo inside the workflow — this keeps `Canonicalize` and the YAML parser single-sourced in Go instead of reimplemented in shell.
+**Decision:** the checks are implemented as `v6ctl campaign validate` (§4.3) — this keeps `Canonicalize` and the YAML parser single-sourced in Go instead of reimplemented in shell.
 
 ### 4.2 Checks (per changed file, in order)
 
 - **YAML schema (blocking):** tolerant parse per §3.2; exactly the five keys `title` (non-empty string, required), `description` (non-empty string, required), `uuid` (optional), `domains` (required, non-empty list), `tags` (optional list of strings). Unknown keys → error.
 - **Tags (blocking):** if `tags` is present, each entry must normalize to `^[a-z0-9][a-z0-9-]{0,31}$` (lowercase kebab, ≤32 chars) with ≤16 tags per file (§3.2 Decision); an empty/whitespace or over-long/over-count tag fails, listing the file and offending tag.
 - **UUID trust (blocking, diff vs main):** contributors never invent UUIDs. Compare each file's `uuid:` value between the PR head and the merge-base with main (rename detection disabled — `--no-renames` — so renames appear as delete+add):
-  - **Added file:** `uuid` must be absent or empty — UNLESS its value equals the uuid of **exactly one** file deleted in the same PR (a git rename, possibly undetected as such). Then it passes, and the bot comment states loudly: `"rename detected: old.yml → new.yml (uuid preserved)"`.
+  - **Added file:** `uuid` must be absent or empty — UNLESS its value equals the uuid of **exactly one** file deleted in the same PR (a git rename, possibly undetected as such). Then it passes, and the summary states loudly: `"rename detected: old.yml → new.yml (uuid preserved)"`.
   - **Modified file:** `uuid` must be byte-identical to the value in main (absent stays absent — only the maintainer's `make all` ever adds one).
   - **Deleted file:** allowed (that is how a campaign is retired; sync disables it, §3.3 step 5).
   - Any other introduction or change of a `uuid:` value → fail with: `"leave uuid out; the maintainer assigns it with make all"`.
 - **Hostname validation (blocking):** per entry, `Canonicalize` (§1) plus the eTLD+1 check (§3.4 step 1: the host must have an ICANN-section registrable domain; both apexes and subdomains of it pass — a host that *is* a public suffix, or under an unknown TLD, fails). Failure lists file, line, entry, reason.
 - **Within-file duplicate (blocking):** two entries in the same file normalizing to the same host → error listing the host and both line numbers. Scope: the changed file only.
 - **Size cap (blocking):** ≤ `campaign.max_domains_per_file` (default 5000; raised from 1000 on 2026-08-01 — the live Dutch central-government file holds 1,723 hosts) list entries per file.
-- **Cross-file duplicate (informational only — NEVER blocking):** for each host added by the PR that already appears in another campaign file (**Decision:** compared against all other `campaigns/` files at the PR head), the bot comment notes ``"`host` is also in `<other campaign title>`"``. This is expected and legitimate: the membership model exists precisely so one domain belongs to several campaigns and is still checked once per day. Do NOT implement any code path that rejects, warns-as-failure, or auto-dedupes across files.
-- **Bot comment:** parsed summary per changed file (`"32 domains, 3 subdomains → parents auto-linked"` — subdomain count from the §3.4 PSL classification), plus the cross-file informational lines and any rename notices. Exit status reflects blocking checks only.
+- **Cross-file duplicate (informational only — NEVER blocking):** for each host added by the PR that already appears in another campaign file (**Decision:** compared against all other `campaigns/` files at the PR head), the summary notes ``"`host` is also in `<other campaign title>`"``. This is expected and legitimate: the membership model exists precisely so one domain belongs to several campaigns and is still checked once per day. Do NOT implement any code path that rejects, warns-as-failure, or auto-dedupes across files.
+- **Summary (`--comment-file`):** parsed summary per changed file (`"32 domains, 3 subdomains → parents auto-linked"` — subdomain count from the §3.4 PSL classification), plus the cross-file informational lines and any rename notices. Exit status reflects blocking checks only.
 
-Changed `subdomains/*.yml` files (§3.7) are validated in the same run, by the same verb, and share the failure format and comment style. Their blocking checks:
+Changed `subdomains/*.yml` files (§3.7) are validated in the same run, by the same verb, and share the failure format and summary style. Their blocking checks:
 
 - **Filename (blocking):** must be the canonical registrable apex — `Canonicalize` round-trips it unchanged, and PSL says it is an eTLD+1, not a public suffix or a subdomain.
 - **One file per domain (blocking):** two files naming the same apex (`nrk.no.yml` beside `nrk.no.yaml`) fail, compared against **all** subdomain files at the PR head — so adding a second file is caught even when the first is untouched by the PR. Note this is the opposite stance to campaign files' cross-file duplicates above, and for the opposite reason: a domain belongs in many campaigns, but has exactly one subdomain list.
 - **Entries (blocking):** each relative label must survive joining to the apex and `Canonicalize`; a full host (`api.nrk.no`) fails, telling the contributor to write the label; bare `www` fails as redundant against the apex's own `www` dimension; duplicates after normalization fail; the list may not exceed `campaign.max_subdomains_per_domain`. One bad entry fails the whole file.
-- **Bot comment:** per file, the entry count and the resolved hosts, plus an informational line that the apex must already be tracked (CI has no DB and cannot check it — the sync reports that skip instead).
+- **Summary:** per file, the entry count and the resolved hosts, plus an informational line that the apex must already be tracked (validate has no DB and cannot check it — the sync reports that skip instead).
 
 ### 4.3 `v6ctl campaign validate`
 
@@ -394,56 +397,19 @@ v6ctl campaign validate [--repo <path>] [--base <git-ref>] [--comment-file <path
 ```
 
 - `--repo` (default `.`): campaign checkout to validate.
-- `--base` given (CI mode): changed-file set = `git -C <repo> diff --name-status --no-renames <base>...HEAD` filtered to `campaigns/*.yml`/`*.yaml`; runs all §4.2 checks including the UUID diff rule (reading each file's `uuid:` at `<base>` via `git show`).
+- `--base` given (diff mode): changed-file set = `git -C <repo> diff --name-status --no-renames <base>...HEAD` filtered to `campaigns/*.yml`/`*.yaml`; runs all §4.2 checks including the UUID diff rule (reading each file's `uuid:` at `<base>` via `git show`).
 - `--base` omitted (local mode): validates **every** `campaigns/` YAML file, skipping the UUID diff rule (no git required); cross-file duplicates still reported informationally.
-- `--comment-file` (default: stdout): writes the bot-comment Markdown.
-- Exit 0 = all blocking checks passed; exit 1 = at least one blocking failure; failures are also printed as `file:line: message` lines on stderr for the Action log.
-- The verb never touches the DB or the network (safe to run in CI); it shares `internal/campaign`'s parser and `internal/domain.Canonicalize` with sync.
+- `--comment-file` (default: stdout): writes the summary Markdown.
+- Exit 0 = all blocking checks passed; exit 1 = at least one blocking failure; failures are also printed as `file:line: message` lines on stderr.
+- The verb never touches the DB or the network; it shares `internal/campaign`'s parser and `internal/domain.Canonicalize` with sync.
 
-### 4.4 Workflow file (campaign repo, `.github/workflows/validate.yml`)
+### 4.4 Workflow file
 
-```yaml
-name: validate
-on: pull_request
-permissions:
-  contents: read
-  pull-requests: write
-jobs:
-  validate:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - uses: actions/checkout@v4
-        with:
-          repository: lasseh/whynoipv6
-          path: .backend
-      - uses: actions/setup-go@v5
-        with:
-          go-version: stable
-      - name: build v6ctl
-        run: cd .backend/backend && go build -o /tmp/v6ctl ./cmd/v6ctl
-      - name: validate changed campaign and subdomain files
-        run: |
-          /tmp/v6ctl campaign validate \
-            --repo . \
-            --base "origin/${{ github.base_ref }}" \
-            --comment-file /tmp/comment.md
-      - name: post bot comment
-        if: always()
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh pr comment "${{ github.event.pull_request.number }}" \
-            --body-file /tmp/comment.md --edit-last --create-if-none
-```
+_Removed 2026-09-28 (see the §4 erratum). The workflow YAML is in git history._
 
-**Decision:** the backend monorepo is checked out as `lasseh/whynoipv6` with the Go module at `backend/` (design §6 monorepo layout); `--edit-last --create-if-none` keeps exactly one bot comment per PR. The comment step runs `if: always()` so failures still get the summary.
+### 4.5 One-time repo cleanup
 
-### 4.5 One-time repo cleanup (before merging the Action)
-
-Commit `chore: remove within-file duplicate hosts` in the campaign repo, deleting the 6 existing within-file duplicate entries — `Dutch_Central_Goverment.yml`: `magazines.rijksoverheid.nl`, `magazines.werkenvoornederland.nl`, `parlement.nl`, `services.belastingdienst.nl`, `temis.nl` (second occurrence of each); `German_Federal_Government.yml`: `bundesarchiv.de` (second occurrence). Do NOT touch cross-file duplicates — the 99 hosts appearing in multiple files today are intentional memberships.
+_Done. The 6 within-file duplicates this section listed are gone from the campaign repo, and `v6ctl campaign validate` passes on every file._
 
 ---
 

@@ -146,9 +146,9 @@ docker compose run --rm --entrypoint /v6ctl crawler campaign sync
 that never ran (bad config, git failure, DB error) and one that **completed
 with rejections** — a rejected campaign file, a rejected host entry, a campaign file
 without a uuid, or a `CuratedFrozen` run whose curated removals were
-suspended. The database work commits either way; the exit code is what
-reaches the webhook-triggered CI job and systemd `OnFailure`, which is why a
-partial sync is not allowed to look clean. Read the printed report to tell
+suspended. The database work commits either way; the exit code is the first
+thing an operator or a wrapping script sees, which is why a partial sync is
+not allowed to look clean. Read the printed report to tell
 the two apart: a run that never started prints no `created:` line.
 
 ### The DNS-provider mapping

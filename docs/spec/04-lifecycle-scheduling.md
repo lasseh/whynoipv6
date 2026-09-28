@@ -382,7 +382,7 @@ Steps (canonical order, one advisory lock for the whole sequence):
 
    **Decision:** the design phrases heuristic (a) as "apex+www both `no_record` confirmed while NS exists", but `www` can never be `no_record` (the observation mapping forbids it — 02-observation-model.md); the intended shape is pinned as `base_status='no_record' AND www_status='not_applicable' AND ns_status IN ('supported','unsupported')` (a confirmed NS status of either polarity proves the walk found a live delegated zone), scoped to publicly-ranked rows. **Decision:** the in-degree threshold is config `service_detect.indegree_threshold` (int, default 100; registry: 09-ops.md) — the design calls it "a tuning item once phase-5 data exists". **Decision:** heuristic (c) (hostname patterns from the curated `service_domains.yml`) is NOT a tick step: that list is applied at `v6ctl disable --service-list` import time (v6ctl spec); the tick computes only (a) and (b). Heuristic (b) returns zero rows until phase 5 populates `resource_host` — correct and harmless. Review is CLI-only: `v6ctl service-candidates list|confirm|dismiss`; a weekly webhook digest reports open candidates (09-ops.md).
 
-5. **Campaign sync** — `lock.Run(JobCampaignSync, wait=5*time.Minute, campaign.Sync(...))` — a **nested blocking** lock acquisition: the tick waits out a concurrently webhook-triggered sync rather than silently skipping the daily guarantee. Sync internals: 06-ingest.md.
+5. **Campaign sync** — `lock.Run(JobCampaignSync, wait=5*time.Minute, campaign.Sync(...))` — a **nested blocking** lock acquisition: the tick waits out a concurrent operator-run sync rather than silently skipping the daily guarantee. Sync internals: 06-ingest.md.
 6. **check_job purge** — `DELETE FROM check_job WHERE created_at < now() - $1;` with `$1` = `live_check.retention` (interval, default 720h = 30d; key owned by 07-api.md; registry: 09-ops.md). Changing the config key changes the purge window — no literal.
 7. **Ops summary + heartbeat** — send the ops-webhook summary: domains scanned in the last 24h, confirmed transitions, error rate, queue depth (§15's `queue_depth` probe), plus **any failed steps by name**. Then ping the daily-tick healthchecks.io check (`ops.healthcheck_tick_url`) — **only if steps 1–3 all succeeded** (lifecycle and stats are the health-critical core); otherwise the missed ping is the alert.
 
@@ -403,7 +403,7 @@ const ClassID int32 = 60660 // whynoipv6 advisory-lock namespace, never change
 const (
     JobDailyTick    int32 = 1 // §9 tick, all steps, one lock for the whole sequence
     JobTrancoImport int32 = 2 // Tranco import (coordinator cycle + `v6ctl tranco import`)
-    JobCampaignSync int32 = 3 // campaign sync (tick step 5 + GitHub Actions webhook + `v6ctl campaign sync`)
+    JobCampaignSync int32 = 3 // campaign sync (tick step 5 + `v6ctl campaign sync`)
 )
 ```
 
@@ -434,7 +434,7 @@ Rules (all normative):
 - The connection holding the lock is dedicated to the lock for the job's duration; job steps may use other pool connections freely. Session lock ⇒ crash of the holding process drops the connection and frees the lock — **no lease/expiry machinery**.
 - Crawler-scheduled invocations use `TryRun`; a skip is **not** an error: log `level=info msg="singleton skipped, held elsewhere" job=<name>` and count it in the metrics checkpoint (§15, `dim_counters.singleton_skipped`). Exactly one skip per scheduled fire is the healthy steady state with 2 processes.
 - All v6ctl invocations (`tranco import`, `campaign sync`, `stats recalc`) use `Run` with a **5-minute wait, hardcoded** — no config key. The tick's nested campaign-sync step uses the same `Run(…, wait=5m, …)`.
-- Trigger resolution (pinned): the 23:15 UTC Tranco import is fired by the **crawler coordinator goroutine** under `JobTrancoImport` — NOT a systemd timer; `v6ctl tranco import` is the manual verb calling the identical import function under the identical lock. Campaign sync fires from **both** the GitHub Actions `repository_dispatch` webhook (operator CI runs `v6ctl campaign sync`) and tick step 5, serialized by `JobCampaignSync`, which covers the entire sync including the git checkout operations. The daily tick is attempted by both coordinators; one wins.
+- Trigger resolution (pinned): the 23:15 UTC Tranco import is fired by the **crawler coordinator goroutine** under `JobTrancoImport` — NOT a systemd timer; `v6ctl tranco import` is the manual verb calling the identical import function under the identical lock. Campaign sync fires from tick step 5 and from an operator running `v6ctl campaign sync`, serialized by `JobCampaignSync`, which covers the entire sync including the git checkout operations. The daily tick is attempted by both coordinators; one wins.
 - SKIP LOCKED consumers are **not** singletons and need no gating: the frontier claim loop (§3) and the `check_job` claim loop (07-api.md) run in every process by design.
 
 ## 11. Self-preflight (wiring)
