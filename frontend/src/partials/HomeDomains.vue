@@ -49,15 +49,13 @@ const domainList = computed(() => data.value ?? [])
         <!-- Button to Domain List-->
         <div class="mt-8">
           <div class="flex justify-center">
-            <nav class="flex" role="navigation" aria-label="Domain list">
-              <div class="ml-2">
-                <router-link
-                  to="/domains"
-                  class="inline-flex items-center justify-center right-2.5 bottom-2.5 focus:ring-3 focus:outline-none font-medium rounded-sm text-sm px-4 py-2 bg-fuchsia-900 hover:bg-zinc-800 focus:ring-fuchsia-800"
-                  >View all domains</router-link
-                >
-              </div>
-            </nav>
+            <div class="ml-2">
+              <router-link
+                to="/domains"
+                class="inline-flex items-center justify-center right-2.5 bottom-2.5 focus:ring-3 focus:outline-none font-medium rounded-sm text-sm px-4 py-2 bg-fuchsia-900 hover:bg-zinc-800 focus:ring-fuchsia-800"
+                >View all domains</router-link
+              >
+            </div>
           </div>
         </div>
       </div>
