@@ -510,6 +510,19 @@ func writeRealIPShim(t *testing.T, dir string) string {
 	return out
 }
 
+// writeLogProbe logs both views of the path to the container's stdout. The
+// vhosts define no log_format, so production's columns live with the host and
+// the drill test needs its own to see what nginx holds at log time.
+func writeLogProbe(t *testing.T, dir string) string {
+	t.Helper()
+	out := filepath.Join(dir, "logprobe.conf")
+	body := "log_format probe 'uri=$uri req=$request_uri';\naccess_log /dev/stdout probe;\n"
+	if err := os.WriteFile(out, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return out
+}
+
 // browserUA stands in for an ordinary visitor. It matters that this is set
 // explicitly: Go's default User-Agent contains no crawler token, but relying on
 // that would make every "human" assertion depend on a default staying benign.
@@ -522,8 +535,8 @@ const browserUA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/5
 //
 // Status codes are asserted explicitly, not just headers. The failure mode this
 // guards is a silent 200 carrying correct signal headers — and the one that
-// actually happened in development: error_page does an internal redirect that
-// re-runs the server rewrite phase, so the gate fired a second time and, with
+// actually happened in development: a URI error_page target does an internal
+// redirect that re-runs the rewrite phase, so the gate fired a second time and, with
 // recursive_error_pages off, nginx answered with its own 503 body and none of
 // the headers. Asserting the body is therefore load-bearing. Skips when docker
 // is unavailable.
@@ -560,9 +573,9 @@ func TestNginxIPv4OutageDrill(t *testing.T) {
 		// Bait for the bypass case below. It has to be a real file: for a URI
 		// with nothing behind it, try_files internally redirects to the shell,
 		// that redirect re-runs the rewrite phase, and the gate fires again —
-		// so an unanchored exemption would still answer 503 and the test would
-		// prove nothing.
-		"__ipv4-unavailable-x": "served despite the drill",
+		// so an exemption would still answer 503 and the test would prove
+		// nothing.
+		"__ipv4-unavailable-html": "served despite the drill",
 	} {
 		if err := os.WriteFile(filepath.Join(root, path), []byte(body), 0o644); err != nil {
 			t.Fatal(err)
@@ -574,6 +587,7 @@ func TestNginxIPv4OutageDrill(t *testing.T) {
 		"-p", "127.0.0.1:0:443",
 		"-v", writeVhost(t, dir, "on")+":/etc/nginx/conf.d/site.conf:ro",
 		"-v", writeRealIPShim(t, dir)+":/etc/nginx/conf.d/00-realip.conf:ro",
+		"-v", writeLogProbe(t, dir)+":/etc/nginx/conf.d/00-logprobe.conf:ro",
 		"-v", certDir+":/etc/ssl/cloudflare:ro",
 		"-v", root+":/var/www/whynoipv6.com:ro",
 		"nginx:alpine")
@@ -745,14 +759,33 @@ func TestNginxIPv4OutageDrill(t *testing.T) {
 		}
 	})
 
-	// The gate clears itself for the error_page handlers so the rewrite phase
-	// does not fire twice. That exemption is anchored to the two real handler
-	// URIs — an unanchored prefix would hand every IPv4 client a way to opt
-	// out of the drill by guessing the stem.
-	t.Run("the handler exemption cannot be used to bypass the gate", func(t *testing.T) {
-		resp, body := get("/__ipv4-unavailable-x", v4, acceptHT)
-		if resp.StatusCode == http.StatusOK {
-			t.Errorf("bypassed the drill: 200 with %.60q", body)
+	// The handlers are named locations, so nothing about the gate depends on a
+	// URI any more. Their old URLs are ordinary paths, gated like the rest.
+	t.Run("the old handler URL cannot be used to bypass the gate", func(t *testing.T) {
+		resp, body := get("/__ipv4-unavailable-html", v4, acceptHT)
+		if resp.StatusCode != http.StatusServiceUnavailable {
+			t.Errorf("status = %d, want 503: %.60q", resp.StatusCode, body)
+		}
+	})
+
+	// The first drill lost what 7,502 blocked requests wanted, because the
+	// handler replaced the path in the log. The JSON handler no longer does.
+	// The HTML one still must: a named location cannot take `alias`, and serving
+	// a file through try_files sets $uri to that file. So $request_uri is the
+	// only column that names the requested path for a browser.
+	t.Run("the access log records what a blocked request wanted", func(t *testing.T) {
+		for _, c := range []struct{ path, accept, want string }{
+			{"/domains/logged-html", acceptHT, "uri=/ipv4-unavailable.html req=/domains/logged-html"},
+			{"/domains/logged-json", acceptPJ, "uri=/domains/logged-json req=/domains/logged-json"},
+		} {
+			get(c.path, v4, c.accept)
+			out, err := exec.Command("docker", "logs", name).CombinedOutput()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(string(out), c.want) {
+				t.Errorf("access log lacks %q:\n%s", c.want, out)
+			}
 		}
 	})
 
