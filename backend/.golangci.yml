@@ -77,8 +77,10 @@ linters:
           - gosec
           - unparam
           - noctx
-      # The harness helpers (getJSON, fetch, get) close the body before they
-      # return the response, which bodyclose cannot see across the call.
+      # The harness helpers return a response whose body they already closed
+      # (getJSON, fetch, getAs) or close in t.Cleanup (postCheck), which
+      # bodyclose cannot see across the call. A new helper has to do the same:
+      # this exclusion also hides a real leak in these files.
       - path: _integration_test\.go
         linters:
           - bodyclose

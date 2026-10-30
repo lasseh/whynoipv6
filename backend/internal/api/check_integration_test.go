@@ -38,6 +38,9 @@ func postCheck(t *testing.T, srv *httptest.Server, ip, body string) *http.Respon
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Most callers only read the status; the ones that decode the body close it
+	// first, and a second Close is harmless.
+	t.Cleanup(func() { _ = resp.Body.Close() })
 	return resp
 }
 
