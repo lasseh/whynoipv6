@@ -30,6 +30,7 @@ make frontend-lint     # type-check + eslint + prettier
    `backend/internal/api/gen/`, `backend/internal/postgres/db/`, or
    `openapi/schema.ts`. Change the source (`openapi/openapi.yaml` or
    `backend/db/query/*.sql`) and run `make generate` — CI fails if the tree drifts.
+   It needs `npm ci` in `frontend/` first, for `openapi-typescript`.
 3. **API changes start in the contract.** Edit `openapi/openapi.yaml` first; both
    the Go server and the frontend types are generated from it.
 4. **Commit style**: imperative, lowercase, `<type>: <description>` with
