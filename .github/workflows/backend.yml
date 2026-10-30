@@ -50,7 +50,7 @@ jobs:
           # analyzers on a release we did not choose, so a PR that changes
           # nothing goes red. This is the version the repo passes today; bump
           # it with the dependency updates, not by surprise.
-          version: v2.13.1
+          version: v2.15.0
           working-directory: backend
 
       # sqlc is NOT installed here: it rides in go.mod through the `tool`
