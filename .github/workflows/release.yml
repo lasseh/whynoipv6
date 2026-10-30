@@ -117,7 +117,7 @@ jobs:
       # vulnerabilities Trivy reports here live in the distroless base and the
       # Go binaries, neither of which differs by architecture.
       - name: Build amd64 for scanning
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: ./backend
           push: false
@@ -138,7 +138,7 @@ jobs:
       # Only now. Same context and the same checkout, so the sha tag names
       # the commit that was scanned.
       - name: Push
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: ./backend
           push: true
