@@ -606,6 +606,8 @@ next_check_at   = now() + interval '24 hours'
 
   Observations are left alone: the next scan of each domain re-rolls `resources` from the links that remain.
 
+  The cutoff applies to every domain, scanned recently or not. A real link goes too on a domain with no `ok` scan since the cutoff: `dead`/`delisted` rows on the slow lane return it on their next `ok` scan, and `service`/`manual` rows leave the frontier, so theirs does not come back. Those domains are outside the rankings, but `dependent_count` falls by their links as well.
+
 ---
 
 ## 6. GeoIP / ASN attribution
