@@ -36,9 +36,12 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      # stable, not go.mod: the go directive is a minimum and nothing raises it,
+      # so reading it held CI on 1.27.0 and failed vulncheck on stdlib advisories
+      # that a newer patch release had already fixed.
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version-file: backend/go.mod
+          go-version: stable
           cache-dependency-path: backend/go.sum
 
       # Pinned action instead of curl|sh from HEAD: cached, and the linter
@@ -48,9 +51,9 @@ jobs:
         with:
           # Pinned, unlike everything else here: `latest` picks up new default
           # analyzers on a release we did not choose, so a PR that changes
-          # nothing goes red. This is the version the repo passes today; bump
-          # it with the dependency updates, not by surprise.
-          version: v2.15.0
+          # nothing goes red. The file is shared with `make lint`, which refuses
+          # any other local version, so a local pass means the same thing here.
+          version-file: .golangci-lint-version
           working-directory: backend
 
       # sqlc is NOT installed here: it rides in go.mod through the `tool`

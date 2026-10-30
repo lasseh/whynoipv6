@@ -1360,6 +1360,8 @@ mapper/commit/classify vectors, OpenAPI contract + response tests for `internal/
 artifacts consumed by the Ansible deploy, §6). Any stale generated output, untidy
 go.mod, lint finding, or test failure fails the build.
 
+_Erratum 2026-10-30: CI and release builds use `go-version: stable`, not the `go` directive, which is a minimum nothing raises; holding CI on it failed `make vulncheck` on standard library advisories already fixed upstream. The golangci-lint version lives in `backend/.golangci-lint-version`, read by the CI action and enforced by `make lint`, so §14.1's plain `golangci-lint run ./...` recipe gains a version check._
+
 ---
 
 ## 15. Acceptance criteria

@@ -12,6 +12,9 @@ PGTEST_CONTAINER ?= whynoipv6-testdb
 PGTEST_PORT      ?= 15433
 PGTEST_DSN       ?= postgres://postgres:integration@127.0.0.1:$(PGTEST_PORT)/postgres?sslmode=disable
 
+# CI installs this version too (backend.yml); `make lint` refuses any other.
+GOLANGCI_VERSION := $(shell cat .golangci-lint-version)
+
 GOTESTSUM := $(shell command -v gotestsum 2>/dev/null)
 ifdef GOTESTSUM
   TEST_CMD := gotestsum --format testdox --
@@ -42,6 +45,8 @@ test: ## Run tests (race detector always on)
 	$(TEST_CMD) -race ./...
 
 lint: ## Run golangci-lint (vet, fmt, imports included)
+	@v=$$(golangci-lint version --short); test "$$v" = "$(GOLANGCI_VERSION)" || \
+	  (echo "golangci-lint $$v is installed but .golangci-lint-version says $(GOLANGCI_VERSION): install that version, or bump the file to move CI too" && exit 1)
 	golangci-lint run ./...
 
 # -count=1 because these tests read things go's cache does not track: the nginx
