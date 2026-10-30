@@ -9,9 +9,13 @@ WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH go build -ldflags="-s -w" -o /api     ./cmd/api && \
-    CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH go build -ldflags="-s -w" -o /crawler ./cmd/crawler && \
-    CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH go build -ldflags="-s -w" -o /v6ctl   ./cmd/v6ctl
+# The context has no .git, so the toolchain cannot stamp the revision. Below the
+# module download so a new commit keeps that layer cached.
+ARG REVISION
+ENV LDFLAGS="-s -w -X github.com/lasseh/whynoipv6/internal/buildinfo.stamped=$REVISION"
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH go build -ldflags="$LDFLAGS" -o /api     ./cmd/api && \
+    CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH go build -ldflags="$LDFLAGS" -o /crawler ./cmd/crawler && \
+    CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH go build -ldflags="$LDFLAGS" -o /v6ctl   ./cmd/v6ctl
 
 FROM gcr.io/distroless/static-debian13:nonroot
 COPY --from=build /api /crawler /v6ctl /

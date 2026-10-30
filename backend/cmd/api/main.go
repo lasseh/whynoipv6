@@ -17,6 +17,7 @@ import (
 	"github.com/lasseh/whynoipv6/internal/postgres"
 
 	"github.com/lasseh/whynoipv6/internal/api"
+	"github.com/lasseh/whynoipv6/internal/buildinfo"
 	"github.com/lasseh/whynoipv6/internal/config"
 )
 
@@ -37,6 +38,7 @@ func run() error {
 		return err
 	}
 	defer flushLogs()
+	log.Info("build", buildinfo.Attrs()...)
 	cfg.LogSummary(log, slog.LevelInfo)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

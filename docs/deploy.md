@@ -217,6 +217,17 @@ Long-running services:
 | `whynoipv6-crawler.service` | `/opt/whynoipv6/bin/crawler` (after postgresql + both unbounds; 90s stop budget for the drain) |
 | `unbound@1.service`, `unbound@2.service` | the two bulk recursors ([`deploy/unbound/`](../deploy/unbound/): `127.0.0.1:53` and `:5353`, remote-control on `8953`/`8954`) |
 
+To see which commit a service is running, read its `build` line, logged first thing at
+startup with `revision` and `dirty`:
+
+```sh
+journalctl -u whynoipv6-crawler -g revision -n 1
+```
+
+For a binary on disk, `go version -m /opt/whynoipv6/bin/crawler | grep vcs` answers the same
+question. Docker images log the revision they were built with, or `unknown` without the
+`REVISION` build argument (compose does not pass one).
+
 Timers (each oneshot alerts the ops webhook via `whynoipv6-notify@` on failure):
 
 | Timer | Schedule | Runs |

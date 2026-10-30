@@ -18,6 +18,7 @@ import (
 
 	"github.com/lasseh/whynoipv6/internal/postgres"
 
+	"github.com/lasseh/whynoipv6/internal/buildinfo"
 	"github.com/lasseh/whynoipv6/internal/campaign"
 	"github.com/lasseh/whynoipv6/internal/checker"
 	"github.com/lasseh/whynoipv6/internal/config"
@@ -131,6 +132,9 @@ func run() error {
 		return err
 	}
 	defer flushLogs()
+	// Ahead of everything that can fail: a stale binary that dies in preflight
+	// is exactly the case this line exists for.
+	log.Info("build", buildinfo.Attrs()...)
 	cfg.LogSummary(log, slog.LevelInfo)
 	if err := validateBounds(cfg); err != nil {
 		return err
