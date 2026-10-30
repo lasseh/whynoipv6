@@ -10,7 +10,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/lasseh/taillight/pkg/logshipper v0.0.0-20260629210330-fd60a6e3db9a
-	github.com/miekg/dns v1.1.72
+	github.com/miekg/dns v1.1.73
 	github.com/moby/moby/api v1.55.0
 	github.com/oapi-codegen/runtime v1.4.2
 	github.com/oschwald/maxminddb-golang/v2 v2.3.0
