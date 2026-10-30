@@ -1,6 +1,6 @@
 module github.com/lasseh/whynoipv6
 
-go 1.27.0
+go 1.27.3
 
 require (
 	github.com/Masterminds/squirrel v1.5.4
