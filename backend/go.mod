@@ -12,7 +12,7 @@ require (
 	github.com/lasseh/taillight/pkg/logshipper v0.0.0-20260629210330-fd60a6e3db9a
 	github.com/miekg/dns v1.1.73
 	github.com/moby/moby/api v1.55.0
-	github.com/oapi-codegen/runtime v1.4.2
+	github.com/oapi-codegen/runtime v1.8.0
 	github.com/oschwald/maxminddb-golang/v2 v2.3.0
 	github.com/parquet-go/parquet-go v0.32.0
 	github.com/rs/cors v1.11.1
