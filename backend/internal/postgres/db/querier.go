@@ -274,6 +274,17 @@ type Querier interface {
 	// The §5.5 manual verbs. The (xmax = 0) probe distinguishes a genuine
 	// insert (bump dependent_count) from a conflict update (don't).
 	ResourceManualUpsert(ctx context.Context, arg ResourceManualUpsertParams) error
+	// `v6ctl resource prune` (§5.5): the discovered links no scan has seen since
+	// @cutoff, per host. The dry run and the real run both read this.
+	ResourcePruneCandidates(ctx context.Context, cutoff pgtype.Timestamptz) ([]ResourcePruneCandidatesRow, error)
+	// One host per statement, and subtract what was deleted: unlike the per-domain
+	// prune and remove above, this deletes many rows for one host, so a flat - 1
+	// would strand the counter. Keeping it per host also keeps the lock order safe
+	// against a live commit, which can hold one host's counter while it wants
+	// another host's link: a single statement over every host could deadlock with
+	// that, and this one only ever holds links of the counter it wants. last_seen is
+	// re-tested here, so a link a scan refreshed since the candidates were read stays.
+	ResourcePruneHost(ctx context.Context, arg ResourcePruneHostParams) (int32, error)
 	// The sweep claim (06 §5.2): the schedule bump IS the crash lease.
 	//
 	// The bump backs off for hosts that never answer (review issue 56). A

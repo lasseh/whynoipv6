@@ -1,10 +1,15 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"io"
+	"os"
+	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/spf13/cobra"
 
 	"github.com/lasseh/whynoipv6/internal/domain"
@@ -127,5 +132,82 @@ func resourceCmd() *cobra.Command {
 			return nil
 		},
 	})
+
+	var (
+		before string
+		dryRun bool
+	)
+	pruneCmd := &cobra.Command{
+		Use:   "prune --before <RFC3339>",
+		Short: "Delete discovered links no scan has seen since a cutoff (manual links are kept)",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			cutoff, err := parseCutoff(before, time.Now())
+			if err != nil {
+				return err
+			}
+			pool, err := newPool(cmd)
+			if err != nil {
+				return err
+			}
+			defer pool.Close()
+			return resourcePrune(cmd.Context(), pool, os.Stdout, cutoff, dryRun)
+		},
+	}
+	pruneCmd.Flags().StringVar(&before, "before", "", "delete links last seen before this RFC 3339 time, with its zone")
+	pruneCmd.Flags().BoolVar(&dryRun, "dry-run", false, "report what would go without deleting anything")
+	_ = pruneCmd.MarkFlagRequired("before")
+	cmd.AddCommand(pruneCmd)
 	return cmd
+}
+
+// parseCutoff insists on a zone and on the past. A cutoff at or after now
+// matches every discovered link in the table, including ones a scan refreshed
+// a second ago.
+func parseCutoff(s string, now time.Time) (time.Time, error) {
+	cutoff, err := time.Parse(time.RFC3339, s)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("--before: %w", err)
+	}
+	if !cutoff.Before(now) {
+		return time.Time{}, fmt.Errorf("--before %s is not in the past: it would delete every discovered link", s)
+	}
+	return cutoff, nil
+}
+
+// resourcePrune is `v6ctl resource prune` (06 §5.5). It takes no advisory lock:
+// the writer it races is the per-domain commit, which holds none, and the one
+// lock it could share, JobDailyTick, would make the 03:30 coordinators skip the
+// day's tick while a prune ran. Each host is one statement that re-tests
+// last_seen and subtracts what it deleted, so a stop partway leaves every
+// counter exact and a re-run finishes the job.
+func resourcePrune(ctx context.Context, pool *pgxpool.Pool, w io.Writer, cutoff time.Time, dryRun bool) error {
+	q := db.New(pool)
+	ts := postgres.TS(cutoff)
+	hosts, err := q.ResourcePruneCandidates(ctx, ts)
+	if err != nil {
+		return err
+	}
+	if len(hosts) == 0 {
+		_, err := fmt.Fprintln(w, "nothing to prune")
+		return err
+	}
+	var total int32
+	for _, h := range hosts {
+		links := h.Links
+		if !dryRun {
+			links, err = q.ResourcePruneHost(ctx, db.ResourcePruneHostParams{ResourceHostID: h.ID, Cutoff: ts})
+			if err != nil {
+				return fmt.Errorf("prune %s: %w", h.Host, err)
+			}
+		}
+		total += links
+		// A broken pipe must not stop a prune halfway through the hosts.
+		_, _ = fmt.Fprintf(w, "%8d  %s\n", links, h.Host)
+	}
+	_, _ = fmt.Fprintf(w, "%d links across %d hosts\n", total, len(hosts))
+	if dryRun {
+		_, _ = fmt.Fprintln(w, "dry run: nothing written")
+	}
+	return nil
 }

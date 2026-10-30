@@ -119,6 +119,7 @@ docker compose run --rm --entrypoint /v6ctl migrate <verb> [args...]
 | `domain retld [--dry-run]` | recompute `domain.tld` from the single public-suffix derivation; idempotent, safe after a PSL bump |
 | `service-candidates list` / `confirm <host>` / `dismiss <host>` | triage auto-detected service domains |
 | `resource add <domain> <host> [--advisory]` / `remove` | curate manual page-resource links |
+| `resource prune --before <RFC3339> [--dry-run]` | delete discovered links no scan has seen since the cutoff |
 | `stats recalc` | re-run today's stats snapshots and counters |
 | `export` | write the nightly static dataset snapshots (CSV.gz + Parquet) |
 | `ops unbound-stats` | scrape both Unbound instances into `unbound_stats` |

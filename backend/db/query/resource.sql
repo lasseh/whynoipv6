@@ -93,3 +93,35 @@ WITH del AS (
 )
 UPDATE resource_host SET dependent_count = dependent_count - 1
 WHERE id IN (SELECT resource_host_id FROM del);
+
+-- `v6ctl resource prune` (§5.5): the discovered links no scan has seen since
+-- @cutoff, per host. The dry run and the real run both read this.
+-- name: ResourcePruneCandidates :many
+SELECT rh.id, rh.host, count(*)::int AS links
+FROM domain_resource dr
+JOIN resource_host rh ON rh.id = dr.resource_host_id
+WHERE dr.source = 'discovered' AND dr.last_seen < @cutoff::timestamptz
+GROUP BY rh.id, rh.host
+ORDER BY links DESC, rh.host;
+
+-- One host per statement, and subtract what was deleted: unlike the per-domain
+-- prune and remove above, this deletes many rows for one host, so a flat - 1
+-- would strand the counter. Keeping it per host also keeps the lock order safe
+-- against a live commit, which can hold one host's counter while it wants
+-- another host's link: a single statement over every host could deadlock with
+-- that, and this one only ever holds links of the counter it wants. last_seen is
+-- re-tested here, so a link a scan refreshed since the candidates were read stays.
+-- name: ResourcePruneHost :one
+WITH del AS (
+  DELETE FROM domain_resource
+  WHERE resource_host_id = @resource_host_id
+    AND source = 'discovered'
+    AND last_seen < @cutoff::timestamptz
+  RETURNING 1
+), deleted AS (
+  SELECT count(*)::int AS links FROM del
+)
+UPDATE resource_host SET dependent_count = dependent_count - deleted.links
+FROM deleted
+WHERE id = @resource_host_id
+RETURNING deleted.links;

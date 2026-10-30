@@ -981,7 +981,7 @@ Every table, its writers, its readers, and the spec files that quote DML against
 | `campaign_domain` | campaign sync membership diff (06) | campaign endpoints, campaign changelog/scan joins (07); lifecycle sweep linkage (06); stats snapshot (06) | 06, 07 |
 | `curated_subdomain` | subdomain-list sync membership diff (06) | lifecycle sweep linkage (04 §8, 06) | 04, 06 |
 | `resource_host` | discovery upsert (inside scan commit, 03/06); sweep worker confirm (06) | roll-up read (03); `/domain/{domain}/resources`, `/resource/{host}/dependents` (07); service-candidate heuristic (06) | 03, 06, 07 |
-| `domain_resource` | discovery link/refresh/prune (06); `v6ctl resource add/remove` | roll-up read (03); resource endpoints (07) | 03, 06, 07 |
+| `domain_resource` | discovery link/refresh/prune (06); `v6ctl resource add/remove/prune` | roll-up read (03); resource endpoints (07) | 03, 06, 07 |
 | `service_candidate` | tick candidate detection (`ON CONFLICT DO NOTHING`, 06); `v6ctl service-candidates confirm/dismiss` | `v6ctl service-candidates list`; weekly webhook digest (09-ops.md) | 06 |
 | `check_job` | `POST /check` enqueue (07); consumer claim/complete (07); tick 30d purge (06) | `GET /check/{id}` (07); reaper + rate-limit counts (07) | 06, 07 |
 | `top_shame` | `v6ctl shame add/remove`; phase-4 `top_shame` re-seed (08) | `/shame` editorial pick (07) | 07, 08 |

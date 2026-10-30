@@ -152,7 +152,7 @@ func runV6ctl(t *testing.T, ctx context.Context, args ...string) error {
 			return nil
 		},
 	}
-	root.AddCommand(statsCmd())
+	root.AddCommand(statsCmd(), resourceCmd())
 	root.SetArgs(args)
 	root.SetOut(os.Stderr)
 	return root.ExecuteContext(ctx)

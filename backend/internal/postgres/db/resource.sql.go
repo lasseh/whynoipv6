@@ -213,6 +213,78 @@ func (q *Queries) ResourceManualUpsert(ctx context.Context, arg ResourceManualUp
 	return err
 }
 
+const ResourcePruneCandidates = `-- name: ResourcePruneCandidates :many
+SELECT rh.id, rh.host, count(*)::int AS links
+FROM domain_resource dr
+JOIN resource_host rh ON rh.id = dr.resource_host_id
+WHERE dr.source = 'discovered' AND dr.last_seen < $1::timestamptz
+GROUP BY rh.id, rh.host
+ORDER BY links DESC, rh.host
+`
+
+type ResourcePruneCandidatesRow struct {
+	ID    int64  `json:"id"`
+	Host  string `json:"host"`
+	Links int32  `json:"links"`
+}
+
+// `v6ctl resource prune` (§5.5): the discovered links no scan has seen since
+// @cutoff, per host. The dry run and the real run both read this.
+func (q *Queries) ResourcePruneCandidates(ctx context.Context, cutoff pgtype.Timestamptz) ([]ResourcePruneCandidatesRow, error) {
+	rows, err := q.db.Query(ctx, ResourcePruneCandidates, cutoff)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ResourcePruneCandidatesRow{}
+	for rows.Next() {
+		var i ResourcePruneCandidatesRow
+		if err := rows.Scan(&i.ID, &i.Host, &i.Links); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const ResourcePruneHost = `-- name: ResourcePruneHost :one
+WITH del AS (
+  DELETE FROM domain_resource
+  WHERE resource_host_id = $1
+    AND source = 'discovered'
+    AND last_seen < $2::timestamptz
+  RETURNING 1
+), deleted AS (
+  SELECT count(*)::int AS links FROM del
+)
+UPDATE resource_host SET dependent_count = dependent_count - deleted.links
+FROM deleted
+WHERE id = $1
+RETURNING deleted.links
+`
+
+type ResourcePruneHostParams struct {
+	ResourceHostID int64              `json:"resource_host_id"`
+	Cutoff         pgtype.Timestamptz `json:"cutoff"`
+}
+
+// One host per statement, and subtract what was deleted: unlike the per-domain
+// prune and remove above, this deletes many rows for one host, so a flat - 1
+// would strand the counter. Keeping it per host also keeps the lock order safe
+// against a live commit, which can hold one host's counter while it wants
+// another host's link: a single statement over every host could deadlock with
+// that, and this one only ever holds links of the counter it wants. last_seen is
+// re-tested here, so a link a scan refreshed since the candidates were read stays.
+func (q *Queries) ResourcePruneHost(ctx context.Context, arg ResourcePruneHostParams) (int32, error) {
+	row := q.db.QueryRow(ctx, ResourcePruneHost, arg.ResourceHostID, arg.Cutoff)
+	var links int32
+	err := row.Scan(&links)
+	return links, err
+}
+
 const ResourceSweepClaim = `-- name: ResourceSweepClaim :many
 UPDATE resource_host
 SET next_check_at = now() + CASE

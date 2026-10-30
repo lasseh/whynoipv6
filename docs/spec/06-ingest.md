@@ -14,7 +14,7 @@ _Frozen 2026-08 — historical design record. The shipped code is the implementa
 - `internal/crawler/resourcesweep.go` — resource-host sweep worker (runs inside `cmd/crawler`)
 - resource discovery/prune/counter statements executed inside the per-domain commit transaction (transaction machinery owned by 03-state-machine.md)
 - `db/query/stats.sql`, `db/query/country.sql`, `db/query/asn.sql` — the four `stats_*` snapshot upserts and the ported `update_country_metrics`/`update_asn_metrics` counter recomputes (§10), called by the daily tick steps 2–3 (04-lifecycle-scheduling.md — The daily tick) and by `v6ctl stats recalc`
-- `cmd/v6ctl` verbs: `tranco import`, `tranco status`, `campaign sync`, `campaign validate`, `resource add`, `resource remove`, `shame add|remove|list`, `provider add|remove|list`, `stats recalc`
+- `cmd/v6ctl` verbs: `tranco import`, `tranco status`, `campaign sync`, `campaign validate`, `resource add`, `resource remove`, `resource prune`, `shame add|remove|list`, `provider add|remove|list`, `stats recalc`
 
 **Companion files:** 05-schema.md (all DDL: `domain`, `campaign`, `campaign_domain`, `resource_host`, `domain_resource`, `tranco_import`, `asn`, `country`, `top_shame`, the Tranco staging table), 02-observation-model.md (bulk-resolver seam and bogon filter used by the resource sweep, the attribution answer-set ordering, and the resources roll-up algorithm that turns confirmed host statuses into the `resources` observation), 03-state-machine.md (the per-domain commit transaction the discovery statements run inside; it consumes the roll-up's observation), 04-lifecycle-scheduling.md (daily tick step order, lifecycle sweep, advisory-lock package `internal/lock`), 07-api.md (the `/stats/*`, `/stats/overview`, `/asns`, `/countries` serializers that read the §10 snapshot/counter columns, and the `v6_ready`/`top_heroes`/`top_nameserver`/`count_v4` read-side formulas), 09-ops.md (config-key registry, systemd timers, ops webhook), 00-overview.md (canonical sizing constants), 10-testing.md (all fixtures and test vectors named here).
 
@@ -585,6 +585,26 @@ next_check_at   = now() + interval '24 hours'
   ```
 
   0 rows deleted → print `"no such link"`, exit 0. Removal is the **only** way to delete a `manual` link.
+- **`v6ctl resource prune --before <RFC3339> [--dry-run]`** — delete `discovered` links whose `last_seen` is older than the cutoff, for when §5.1 step 3's fixed 30-day window is too slow (a link the crawler has stopped recording, after a fix to what it records). The cutoff needs an explicit zone and must be in the past: a later one matches every discovered link. `--dry-run` prints the same per-host counts without deleting. Manual links are never touched.
+
+  It works one host per statement, largest first, and subtracts the count it deleted:
+
+  ```sql
+  WITH del AS (
+    DELETE FROM domain_resource
+    WHERE resource_host_id = $1 AND source = 'discovered' AND last_seen < $2
+    RETURNING 1
+  ), deleted AS (
+    SELECT count(*)::int AS links FROM del
+  )
+  UPDATE resource_host SET dependent_count = dependent_count - deleted.links
+  FROM deleted WHERE id = $1
+  RETURNING deleted.links;
+  ```
+
+  **Decision:** it takes no advisory lock. The writer it can race is the per-domain commit, which holds none, so a lock would serialize against nothing, and sharing `JobDailyTick` would make the coordinators skip the 03:30 tick while a prune ran. Safety comes from the statement: the delete re-tests `last_seen`, so a link a scan just refreshed stays; both writers change the counter relatively; and one host per statement means it only waits on the counter of the links it holds, where one statement over every host could deadlock with a commit holding another host's counter. A run stopped partway leaves every counter exact, and re-running finishes it.
+
+  Observations are left alone: the next scan of each domain re-rolls `resources` from the links that remain.
 
 ---
 
