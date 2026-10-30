@@ -221,7 +221,7 @@ func TestChangeStats(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	notModified.Body.Close()
+	_ = notModified.Body.Close()
 	if notModified.StatusCode != http.StatusNotModified {
 		t.Errorf("unchanged window = %d, want 304", notModified.StatusCode)
 	}

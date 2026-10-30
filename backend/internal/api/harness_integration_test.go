@@ -45,7 +45,7 @@ func getJSON(t *testing.T, url string, out any) *http.Response {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
 		t.Fatalf("decode %s: %v", url, err)
 	}
@@ -58,7 +58,7 @@ func fetch(t *testing.T, url string) (*http.Response, []byte) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		t.Fatal(err)
@@ -68,7 +68,7 @@ func fetch(t *testing.T, url string) (*http.Response, []byte) {
 
 func decodeBody(t *testing.T, resp *http.Response, out any) {
 	t.Helper()
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
 		t.Fatal(err)
 	}

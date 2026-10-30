@@ -588,7 +588,7 @@ func conditionalGet(t *testing.T, url, etag string) int {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	return resp.StatusCode
 }
 
@@ -660,7 +660,7 @@ func TestAcceptIsIgnored(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer resp.Body.Close()
+			defer func() { _ = resp.Body.Close() }()
 			if resp.StatusCode != http.StatusOK {
 				t.Errorf("status = %d, want 200", resp.StatusCode)
 			}

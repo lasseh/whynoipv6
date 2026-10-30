@@ -1,4 +1,7 @@
 version: "2"
+run:
+  build-tags:
+    - integration
 linters:
   enable:
     - bodyclose
@@ -74,6 +77,11 @@ linters:
           - gosec
           - unparam
           - noctx
+      # The harness helpers (getJSON, fetch, get) close the body before they
+      # return the response, which bodyclose cannot see across the call.
+      - path: _integration_test\.go
+        linters:
+          - bodyclose
     paths:
       - third_party$
       - builtin$

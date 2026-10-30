@@ -105,7 +105,7 @@ func TestDatasetExport(t *testing.T) {
 			t.Fatal(err)
 		}
 		records, err := csv.NewReader(gz).ReadAll()
-		f.Close()
+		_ = f.Close()
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -130,7 +130,7 @@ func TestDatasetExport(t *testing.T) {
 	full, _ := os.Open(filepath.Join(snap, "whynoipv6-full.csv.gz"))
 	gz, _ := gzip.NewReader(full)
 	records, _ := csv.NewReader(gz).ReadAll()
-	full.Close()
+	_ = full.Close()
 	foundCamp := false
 	for _, rec := range records[1:] {
 		if rec[0] == "camp.example" {

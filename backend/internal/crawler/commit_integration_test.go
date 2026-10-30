@@ -236,7 +236,7 @@ func TestCommitPivots(t *testing.T) {
 	snap2 := reclaim()
 	if res, err = c.Commit(ctx, &CommitInput{
 		Snapshot: snap2, Obs: stableObs(domain.DimBase, domain.ObsSupported),
-		Details:  []byte(`{"results":{}}`), T: time.Now().UTC(),
+		Details: []byte(`{"results":{}}`), T: time.Now().UTC(),
 	}); err != nil || res.LeaseLost {
 		t.Fatalf("deferred commit: %+v err=%v", res, err)
 	}
@@ -252,8 +252,8 @@ func TestCommitPivots(t *testing.T) {
 	}
 	if res, err = c.Commit(ctx, &CommitInput{
 		Snapshot: snap3, Obs: stableObs(domain.DimBase, domain.ObsSupported),
-		Pivots:   &Pivots{StampDNS: true, DNSProvider: nil, Hosting: nil},
-		Details:  []byte(`{"results":{}}`), T: time.Now().UTC(),
+		Pivots:  &Pivots{StampDNS: true, DNSProvider: nil, Hosting: nil},
+		Details: []byte(`{"results":{}}`), T: time.Now().UTC(),
 	}); err != nil || !res.LeaseLost {
 		t.Fatalf("stale commit: %+v err=%v", res, err)
 	}

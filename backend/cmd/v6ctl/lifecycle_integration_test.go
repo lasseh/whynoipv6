@@ -84,7 +84,7 @@ func TestRetldBackfill(t *testing.T) {
 
 	// Two rows with a wrong tld, one already correct.
 	for _, f := range []struct{ host, tld string }{
-		{"bbc.co.uk", "uk"},   // the x/net-vs-weppos disagreement shape
+		{"bbc.co.uk", "uk"}, // the x/net-vs-weppos disagreement shape
 		{"foo.example.com", "example.com"},
 		{"dnb.no", "no"}, // correct already
 	} {

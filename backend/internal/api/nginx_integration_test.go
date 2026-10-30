@@ -106,14 +106,14 @@ func TestNginxDatasetsSplit(t *testing.T) {
 
 	// Dated snapshot: from disk, immutable.
 	resp := get("/datasets/2026-07-10/whynoipv6-top1m.csv.gz")
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != 200 || !strings.Contains(resp.Header.Get("Cache-Control"), "immutable") {
 		t.Errorf("dated snapshot: %d cc=%q", resp.StatusCode, resp.Header.Get("Cache-Control"))
 	}
 
 	// latest/ alias: mutable short TTL.
 	resp2 := get("/datasets/latest/whynoipv6-top1m.csv.gz")
-	defer resp2.Body.Close()
+	defer func() { _ = resp2.Body.Close() }()
 	if resp2.StatusCode != 200 || resp2.Header.Get("Cache-Control") != "public, max-age=3600" {
 		t.Errorf("latest alias: %d cc=%q", resp2.StatusCode, resp2.Header.Get("Cache-Control"))
 	}
@@ -121,7 +121,7 @@ func TestNginxDatasetsSplit(t *testing.T) {
 	// Exact /datasets proxies to the API upstream — no upstream in this
 	// container, so a 502 proves it left the static tree.
 	resp3 := get("/datasets")
-	defer resp3.Body.Close()
+	defer func() { _ = resp3.Body.Close() }()
 	if resp3.StatusCode != 502 {
 		t.Errorf("=/datasets should proxy (502 without upstream), got %d", resp3.StatusCode)
 	}
@@ -304,7 +304,7 @@ func TestNginxSiteCanonicalRedirects(t *testing.T) {
 	} {
 		t.Run("301 "+tc.host+tc.path, func(t *testing.T) {
 			resp := get(tc.host, tc.path)
-			defer resp.Body.Close()
+			defer func() { _ = resp.Body.Close() }()
 			if resp.StatusCode != http.StatusMovedPermanently {
 				t.Errorf("status = %d, want 301", resp.StatusCode)
 			}
@@ -324,7 +324,7 @@ func TestNginxSiteCanonicalRedirects(t *testing.T) {
 	} {
 		t.Run("200 "+path, func(t *testing.T) {
 			resp := get("whynoipv6.com", path)
-			defer resp.Body.Close()
+			defer func() { _ = resp.Body.Close() }()
 			if resp.StatusCode != http.StatusOK {
 				t.Errorf("status = %d, want 200 (Location: %q)", resp.StatusCode, resp.Header.Get("Location"))
 			}
@@ -341,7 +341,7 @@ func TestNginxSiteCanonicalRedirects(t *testing.T) {
 	} {
 		t.Run("noindex "+path, func(t *testing.T) {
 			resp := get("whynoipv6.com", path)
-			defer resp.Body.Close()
+			defer func() { _ = resp.Body.Close() }()
 			if resp.StatusCode != http.StatusOK {
 				t.Errorf("status = %d, want 200", resp.StatusCode)
 			}
@@ -356,7 +356,7 @@ func TestNginxSiteCanonicalRedirects(t *testing.T) {
 	for _, path := range []string{"/robots.txt", "/sitemap.xml"} {
 		t.Run("served "+path, func(t *testing.T) {
 			resp := get("whynoipv6.com", path)
-			defer resp.Body.Close()
+			defer func() { _ = resp.Body.Close() }()
 			if resp.StatusCode != http.StatusOK {
 				t.Errorf("status = %d, want 200", resp.StatusCode)
 			}
@@ -364,7 +364,7 @@ func TestNginxSiteCanonicalRedirects(t *testing.T) {
 	}
 	t.Run("unnamed xml falls through to the shell", func(t *testing.T) {
 		resp := get("whynoipv6.com", "/sitemap-index.xml")
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 		// Not one of the named files, so it falls through to the SPA shell —
 		// documented here so a future move to a sitemap index notices.
 		if resp.StatusCode != http.StatusOK {
@@ -614,7 +614,7 @@ func TestNginxIPv4OutageDrill(t *testing.T) {
 			resp, lastErr = client.Do(req)
 			if lastErr == nil {
 				body, _ := io.ReadAll(resp.Body)
-				resp.Body.Close()
+				_ = resp.Body.Close()
 				return resp, string(body)
 			}
 			time.Sleep(250 * time.Millisecond)
@@ -824,7 +824,7 @@ func TestNginxIPv4OutageOff(t *testing.T) {
 	if resp == nil {
 		t.Fatal("no response")
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("status = %d, want 200 with the drill off", resp.StatusCode)
 	}
