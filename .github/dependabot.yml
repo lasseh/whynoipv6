@@ -8,6 +8,12 @@ updates:
     directory: /frontend
     schedule:
       interval: weekly
+    # TS 7.0 ships no JS API, which vue-tsc, typescript-eslint and
+    # openapi-typescript all need. 7.1 still opens a PR.
+    ignore:
+      - dependency-name: typescript
+        versions:
+          - '~7.0.0'
   - package-ecosystem: github-actions
     directory: /
     schedule:
