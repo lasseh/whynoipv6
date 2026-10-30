@@ -37,7 +37,7 @@
     "eslint-plugin-vue": "^10.9.2",
     "globals": "^17.6.0",
     "jsdom": "^29.1.1",
-    "markdown-it": "^15.0.0",
+    "markdown-it": "^15.0.3",
     "prettier": "^3.8.3",
     "tailwindcss": "^4.3.2",
     "typescript": "~6.0",
