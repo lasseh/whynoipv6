@@ -34,8 +34,11 @@ concurrency:
   group: backend-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+# Separate jobs so each result stands alone: a failing integration suite no
+# longer hides whether vulncheck and the release build pass, and a re-run repeats
+# only what failed. No `needs:` between them, for the same reason.
 jobs:
-  backend:
+  lint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -60,17 +63,15 @@ jobs:
           version-file: .golangci-lint-version
           working-directory: backend
 
-      # sqlc is NOT installed here: it rides in go.mod through the `tool`
-      # directive, so `make generate`'s drift gate compares the committed
-      # output against a generator version that is itself committed. A new
-      # sqlc release used to turn every open PR red with a diff nobody wrote.
-      # govulncheck and gotestsum stay rolling on purpose — neither decides
-      # whether a diff is stale.
-      - name: Install tools
-        run: |
-          go install golang.org/x/vuln/cmd/govulncheck@latest
-          go install gotest.tools/gotestsum@latest
-          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+  codegen:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: stable
+          cache-dependency-path: backend/go.sum
 
       - name: Tidy
         run: make tidy
@@ -88,22 +89,85 @@ jobs:
         run: npm ci --ignore-scripts
         working-directory: frontend
 
+      # sqlc is NOT installed here: it rides in go.mod through the `tool`
+      # directive, so `make generate`'s drift gate compares the committed
+      # output against a generator version that is itself committed. A new
+      # sqlc release used to turn every open PR red with a diff nobody wrote.
       - name: Generate (staleness gate)
         run: make generate
 
       - name: OpenAPI spec lint (Spectral)
         run: make spec-lint
 
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: stable
+          cache-dependency-path: backend/go.sum
+
+      # gotestsum and govulncheck stay rolling on purpose: neither decides
+      # whether a diff is stale.
+      - name: Install gotestsum
+        run: |
+          go install gotest.tools/gotestsum@latest
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
       - name: Unit tests
         run: make test
+
+  integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: stable
+          cache-dependency-path: backend/go.sum
+
+      - name: Install gotestsum
+        run: |
+          go install gotest.tools/gotestsum@latest
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
 
       # Boots one TimescaleDB container for the whole run and dumps its status
       # and logs if anything fails — see backend/Makefile testdb-up.
       - name: Integration tests
         run: make test-integration
 
+  # Its own job: an advisory published upstream is the one failure here that has
+  # nothing to do with the commit, and it should not take the build down with it.
+  vulncheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: stable
+          cache-dependency-path: backend/go.sum
+
+      - name: Install govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
       - name: Vulnerability scan
         run: make vulncheck
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: stable
+          cache-dependency-path: backend/go.sum
 
       - name: Release build
         run: make build-linux
