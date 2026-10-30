@@ -358,4 +358,29 @@ describe('LiveCheck page', () => {
     expect(wrapper.text()).toContain('Saint')
     expect(wrapper.find('a[href="/domains/example.com"]').exists()).toBe(true)
   })
+
+  it('does not show a disabled domain’s classification as current', async () => {
+    createCheck.mockResolvedValue({
+      ...doneEnvelope,
+      cached: true,
+      confirmed: {
+        classification: 'hero',
+        class_flags: [],
+        saint: true,
+        status: {},
+        as_of: '2026-07-27T03:30:00Z',
+        disabled: true,
+        disabled_reason: 'dead',
+      },
+    })
+
+    const wrapper = await mountPage()
+    await submitHost(wrapper, 'example.com')
+
+    expect(wrapper.text()).toContain('No longer tracked')
+    expect(wrapper.text()).toContain('stopped resolving')
+    expect(wrapper.text()).not.toContain('Tracked status')
+    expect(wrapper.text()).not.toContain('Saint')
+    expect(wrapper.find('a[href="/domains/example.com"]').exists()).toBe(true)
+  })
 })

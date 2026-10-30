@@ -39,6 +39,23 @@ const INFO_CHECKS: [string, string][] = [
 // Shapes come from the generated schema — no hand-written re-declarations.
 type CheckResult = NonNullable<CheckEnvelope['result']>
 
+// A disabled row's confirmed block is from before it was disabled (openapi
+// CheckConfirmed), so the reason replaces the classification instead of
+// sitting beside it.
+const DISABLED_REASONS: Record<
+  NonNullable<NonNullable<CheckEnvelope['confirmed']>['disabled_reason']>,
+  string
+> = {
+  dead: 'the domain stopped resolving',
+  delisted: 'it dropped out of the rankings',
+  service: 'it is a service domain',
+  manual: 'it was removed from tracking',
+}
+const disabledReason = computed(() => {
+  const reason = props.envelope.confirmed?.disabled_reason
+  return reason ? DISABLED_REASONS[reason] : null
+})
+
 const checks = computed<NonNullable<CheckResult['checks']>>(
   () => props.envelope.result?.checks ?? {},
 )
@@ -148,7 +165,10 @@ async function copyLink() {
       v-if="envelope.confirmed"
       class="mt-4 p-3 rounded bg-gray-800/50 border border-gray-700/50 text-sm flex items-center justify-between"
     >
-      <span class="text-gray-400">
+      <span v-if="envelope.confirmed.disabled" class="text-gray-400">
+        No longer tracked<template v-if="disabledReason"> — {{ disabledReason }}</template>
+      </span>
+      <span v-else class="text-gray-400">
         Tracked status:
         <span class="text-gray-200 capitalize">{{ envelope.confirmed.classification }}</span>
         <span v-if="envelope.confirmed.saint" class="text-emerald-500"> · Saint</span>
