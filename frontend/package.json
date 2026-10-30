@@ -46,5 +46,10 @@
     "vitest": "^4.1.12",
     "vue-eslint-parser": "^10.4.1",
     "vue-tsc": "^3.2.8"
+  },
+  "overrides": {
+    "@tailwindcss/typography": {
+      "postcss-selector-parser": "^6.1.5"
+    }
   }
 }
