@@ -78,7 +78,7 @@ jobs:
       # openapi-typescript rides in the frontend lockfile for the same reason
       # sqlc rides in go.mod. Its package.json is in this workflow's paths: a
       # bump that changes schema.ts must fail its own PR, not the next one.
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: lts/*
           cache: npm
