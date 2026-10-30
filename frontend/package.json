@@ -40,7 +40,7 @@
     "markdown-it": "^15.0.3",
     "openapi-typescript": "^7.13.0",
     "prettier": "^3.8.3",
-    "tailwindcss": "^4.3.2",
+    "tailwindcss": "^4.3.3",
     "typescript": "~6.0",
     "typescript-eslint": "^8.72.1",
     "vite": "^8.3.5",
